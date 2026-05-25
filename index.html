@@ -366,7 +366,7 @@ footer{background:#0e0e0e;border-top:1px solid rgba(244,180,0,0.12);padding:2.5r
       </div>
     </div>
     <div>
-      <form class="contact-form" id="contactForm" action="https://formspree.io/f/xredylyn" method="POST">
+      <form class="contact-form" action="https://formspree.io/f/xredylyn" method="POST">
         <div class="form-row">
           <div class="form-group"><label>Nombre</label><input type="text" name="nombre" placeholder="Tu nombre" required></div>
           <div class="form-group"><label>Empresa</label><input type="text" name="empresa" placeholder="Empresa"></div>
@@ -804,35 +804,7 @@ function switchTab(id,btn){
 }
 document.getElementById('admin-overlay').addEventListener('click',function(e){if(e.target===this)closeAdmin()});
 
-function handleSubmit(e){
-  e.preventDefault();
-  const btn=e.target.querySelector('.form-submit');
-  const msg=document.getElementById('formMsg');
-  btn.textContent='Enviando...';btn.disabled=true;
-  const formData=new FormData(e.target);
-  fetch('https://formspree.io/f/xredylyn',{
-    method:'POST',
-    body:formData,
-    headers:{'Accept':'application/json'}
-  }).then(r=>{
-    if(r.ok){
-      msg.className='form-msg success';
-      msg.textContent='✓ Consulta recibida. Nos contactamos a la brevedad.';
-      btn.textContent='Enviado ✓';
-      e.target.reset();
-    } else {
-      msg.className='form-msg success';
-      msg.style.borderColor='#c00';msg.style.color='#f99';
-      msg.textContent='Error al enviar. Escribinos directamente a bellandoemmanuel@outlook.com';
-      btn.textContent='Enviar consulta →';btn.disabled=false;
-    }
-  }).catch(()=>{
-    msg.className='form-msg success';
-    msg.style.display='block';
-    msg.textContent='Error de conexión. Escribinos a bellandoemmanuel@outlook.com';
-    btn.textContent='Enviar consulta →';btn.disabled=false;
-  });
-}
+// formulario enviado via Formspree directo
 
 const obs=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible')}),{threshold:0.1});
 document.querySelectorAll('.reveal').forEach(r=>obs.observe(r));
