@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MEB Machinery Solutions</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--yellow:#F4B400;--black:#1A1A1A;--gray:#6E6E6E;--blue:#003B70;--white:#F5F2EC}
+html{scroll-behavior:smooth}
+body{background:var(--black);color:var(--white);font-family:'Barlow',sans-serif;overflow-x:hidden}
+
+nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:1.2rem 3rem;background:rgba(26,26,26,0.88);backdrop-filter:blur(8px);border-bottom:1px solid rgba(244,180,0,0.15);transition:border-color 0.3s}
+.nav-logo-img{height:42px;width:auto;object-fit:contain;display:block}
+.nav-logo-text{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:0.08em;color:var(--yellow)}
+.nav-logo-text span{color:var(--white)}
+.nav-links{display:flex;gap:2rem;list-style:none}
+.nav-links a{color:rgba(245,242,236,0.7);text-decoration:none;font-size:0.85rem;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;transition:color 0.2s}
+.nav-links a:hover{color:var(--yellow)}
+.nav-cta{background:var(--yellow);color:var(--black);padding:0.6rem 1.4rem;font-size:0.82rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;text-decoration:none;transition:background 0.2s}
+.nav-cta:hover{background:#e0a500}
+.hamburger{display:none;flex-direction:column;gap:5px;cursor:pointer;background:none;border:none;padding:4px}
+.hamburger span{width:24px;height:2px;background:var(--white)}
+
+/* HERO — video B&N de fondo */
+.hero{position:relative;height:100vh;min-height:600px;display:flex;align-items:center;overflow:hidden}
+.hero-video-wrap{position:absolute;inset:0;overflow:hidden;background:#0a0a0a}
+.hero-video-wrap video{position:absolute;top:50%;left:50%;min-width:100%;min-height:100%;width:auto;height:auto;transform:translate(-50%,-50%);object-fit:cover;filter:grayscale(100%) brightness(0.45) contrast(1.1)}
+.hero-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(26,26,26,1) 0%,rgba(26,26,26,0.5) 55%,rgba(26,26,26,0.15) 100%)}
+/* lineas de textura sutil */
+.hero-overlay::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none}
+.hero-content{position:relative;z-index:2;padding:2rem 3rem;margin-top:var(--hero-offset,180px)}
+.hero-tag{display:inline-block;background:var(--yellow);color:var(--black);font-size:0.72rem;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;padding:0.3rem 0.8rem;margin-bottom:1.2rem}
+.hero-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(3.5rem,9vw,8rem);line-height:0.92;letter-spacing:0.02em;margin-bottom:1.5rem}
+.hero-title .accent{color:var(--yellow)}
+.hero-sub{font-size:1.05rem;color:rgba(245,242,236,0.7);max-width:520px;line-height:1.6;margin-bottom:2.5rem}
+.hero-actions{display:flex;gap:1rem;flex-wrap:wrap}
+.btn-primary{background:var(--yellow);color:var(--black);padding:0.9rem 2rem;font-size:0.85rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;text-decoration:none;display:inline-block;transition:all 0.2s}
+.btn-primary:hover{background:#e0a500;transform:translateY(-2px)}
+.btn-outline{border:1.5px solid rgba(245,242,236,0.4);color:var(--white);padding:0.9rem 2rem;font-size:0.85rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;text-decoration:none;display:inline-block;transition:all 0.2s}
+.btn-outline:hover{border-color:var(--yellow);color:var(--yellow)}
+.hero-scroll{position:absolute;bottom:2rem;right:3rem;z-index:2;display:flex;flex-direction:column;align-items:center;gap:6px;color:rgba(245,242,236,0.4);font-size:0.7rem;letter-spacing:0.14em;text-transform:uppercase}
+.scroll-line{width:1px;height:48px;background:linear-gradient(to bottom,var(--yellow),transparent);animation:scrollpulse 1.8s ease infinite}
+@keyframes scrollpulse{0%,100%{opacity:0.4}50%{opacity:1}}
+
+.stats-bar{background:var(--yellow);padding:1.2rem 3rem;display:flex;justify-content:space-around;flex-wrap:wrap}
+.stat{text-align:center;padding:0.5rem 1.5rem}
+.stat-num{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;color:var(--black);line-height:1}
+.stat-label{font-size:0.72rem;font-weight:600;color:rgba(26,26,26,0.65);letter-spacing:0.12em;text-transform:uppercase;margin-top:2px}
+
+section{padding:6rem 3rem}
+.section-tag{font-size:0.72rem;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:var(--yellow);margin-bottom:0.8rem}
+.section-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(2rem,5vw,3.5rem);letter-spacing:0.03em;line-height:1;margin-bottom:1.5rem}
+.section-title .accent{color:var(--yellow)}
+.highlight-line{width:48px;height:3px;background:var(--yellow);margin-bottom:1.5rem}
+
+/* ABOUT — imagen con forma difuminada */
+.about{display:grid;grid-template-columns:1fr 1fr;gap:5rem;align-items:center}
+.about-text p{color:rgba(245,242,236,0.72);line-height:1.8;margin-bottom:1.2rem;font-size:1rem}
+.about-img-wrap{position:relative;display:flex;align-items:center;justify-content:center;padding:2rem}
+.about-img-wrap::before{content:'';position:absolute;width:80%;height:80%;background:var(--yellow);opacity:0.07;border-radius:50%;filter:blur(48px);z-index:0}
+.about-img-inner{position:relative;z-index:1;width:100%;overflow:hidden;border-radius:12px;
+  -webkit-mask-image:radial-gradient(ellipse 88% 88% at 50% 50%,black 55%,transparent 100%);
+  mask-image:radial-gradient(ellipse 88% 88% at 50% 50%,black 55%,transparent 100%)}
+.about-img-inner img{width:100%;height:420px;object-fit:cover;display:block;filter:grayscale(15%) brightness(0.9);transition:filter 0.4s}
+.about-img-inner:hover img{filter:grayscale(0%) brightness(1)}
+.about-badge{position:absolute;bottom:1.5rem;right:1.5rem;z-index:2;background:var(--yellow);color:var(--black);padding:0.6rem 1rem;font-size:0.78rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase}
+
+/* SERVICIOS */
+.services{background:#111}
+.services-header{text-align:center;margin-bottom:4rem}
+.services-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1px;background:rgba(244,180,0,0.1)}
+.service-card{background:#111;padding:2.5rem 2rem;transition:background 0.25s;position:relative;overflow:hidden}
+.service-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:0;background:var(--yellow);transition:height 0.35s}
+.service-card:hover{background:rgba(244,180,0,0.05)}
+.service-card:hover::before{height:100%}
+.service-card--highlight{background:rgba(244,180,0,0.04);border-left:3px solid var(--yellow)}
+.service-card--highlight::before{height:100%!important}
+.service-icon{font-size:2rem;margin-bottom:1.2rem}
+.service-name{font-family:'Barlow Condensed',sans-serif;font-size:1.25rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.7rem}
+.service-desc{font-size:0.88rem;color:rgba(245,242,236,0.55);line-height:1.7}
+
+/* EN RUTA — video B&N */
+.en-ruta{display:grid;grid-template-columns:1fr 1fr;gap:5rem;align-items:center}
+.ruta-video-wrap{position:relative;overflow:hidden;border-radius:0 60px 0 60px}
+.ruta-video-wrap::before{content:'';position:absolute;inset:0;z-index:1;background:linear-gradient(135deg,rgba(26,26,26,0.3) 0%,transparent 60%)}
+.ruta-video-wrap video{width:100%;height:340px;object-fit:cover;display:block;filter:grayscale(100%) brightness(0.6) contrast(1.1)}
+.ruta-badge{position:absolute;bottom:1.5rem;left:1.5rem;z-index:2;background:var(--blue);color:var(--white);padding:0.8rem 1.2rem;font-size:0.78rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;line-height:1.5}
+.ruta-steps{display:flex;flex-direction:column;gap:1.5rem;margin-top:2rem}
+.ruta-step{display:flex;gap:1.2rem;align-items:flex-start}
+.step-num{min-width:36px;height:36px;background:var(--yellow);color:var(--black);font-family:'Bebas Neue',sans-serif;font-size:1.1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.step-content h4{font-size:0.9rem;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.3rem}
+.step-content p{font-size:0.83rem;color:rgba(245,242,236,0.55);line-height:1.6}
+
+/* GALERÍA — formas difuminadas */
+.galeria{background:#0e0e0e;overflow:hidden}
+.galeria-grid{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:auto auto;gap:12px;margin-top:3rem}
+.galeria-item{position:relative;overflow:hidden;border-radius:16px}
+/* forma redondeada asimétrica en cada imagen */
+.galeria-item{border-radius:16px}
+.galeria-item img,.galeria-item video{width:100%;height:220px;object-fit:cover;object-position:center;display:block;transition:transform 0.5s ease,filter 0.4s;filter:brightness(0.82) grayscale(25%);border-radius:0;
+  -webkit-mask-image:radial-gradient(ellipse 90% 90% at 50% 50%,black 50%,transparent 100%);
+  mask-image:radial-gradient(ellipse 90% 90% at 50% 50%,black 50%,transparent 100%)}
+.galeria-item:hover img{transform:scale(1.05);filter:brightness(1) grayscale(0%);
+  -webkit-mask-image:radial-gradient(ellipse 95% 95% at 50% 50%,black 70%,transparent 100%);
+  mask-image:radial-gradient(ellipse 95% 95% at 50% 50%,black 70%,transparent 100%)}
+.galeria-item::after{content:'';position:absolute;inset:0;border-radius:16px;pointer-events:none}
+.galeria-item.tall img{height:452px}
+.galeria-item.wide{grid-column:span 2}
+.galeria-item.wide img{height:220px}
+
+.marcas{background:#111;text-align:center}
+.marcas-title{font-size:0.78rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:rgba(245,242,236,0.35);margin-bottom:2.5rem}
+.marcas-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:1rem 2.5rem}
+.marca-tag{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:rgba(245,242,236,0.2);transition:color 0.25s;cursor:default}
+.marca-tag:hover{color:var(--yellow)}
+
+/* CONTACTO */
+.contact-wrap{display:grid;grid-template-columns:1fr 1fr;gap:5rem;align-items:start}
+.contact-detail{display:flex;align-items:flex-start;gap:1rem;margin-bottom:1.5rem}
+.contact-icon{width:44px;height:44px;background:var(--yellow);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:1.2rem;color:var(--black)}
+.contact-label{font-size:0.72rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--yellow);margin-bottom:0.2rem}
+.contact-value{font-size:1rem;font-weight:500}
+.contact-value a{color:var(--white);text-decoration:none}
+.contact-form{display:flex;flex-direction:column;gap:1rem}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.form-group{display:flex;flex-direction:column;gap:0.4rem}
+.form-group label{font-size:0.72rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(245,242,236,0.45)}
+.form-group input,.form-group textarea,.form-group select{background:rgba(245,242,236,0.05);border:1px solid rgba(244,180,0,0.18);color:var(--white);padding:0.75rem 1rem;font-family:'Barlow',sans-serif;font-size:0.92rem;outline:none;transition:border-color 0.2s;width:100%;-webkit-appearance:none;border-radius:4px}
+.form-group input:focus,.form-group textarea:focus,.form-group select:focus{border-color:var(--yellow)}
+.form-group select option{background:var(--black)}
+.form-group textarea{resize:vertical;min-height:130px}
+.form-submit{background:var(--yellow);color:var(--black);border:none;padding:1rem 2rem;font-family:'Barlow',sans-serif;font-size:0.88rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;transition:all 0.2s;align-self:flex-start;border-radius:2px}
+.form-submit:hover{background:#e0a500;transform:translateY(-1px)}
+.form-msg{display:none;padding:0.8rem 1rem;font-size:0.85rem;margin-top:0.5rem;border-radius:4px}
+.form-msg.success{background:rgba(0,59,112,0.3);border:1px solid var(--blue);color:#7ab3e0;display:block}
+
+/* WhatsApp flotante */
+.wa-btn{position:fixed;bottom:72px;right:18px;width:54px;height:54px;background:#25D366;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:998;box-shadow:0 4px 20px rgba(37,211,102,0.35);transition:transform 0.2s;text-decoration:none;font-size:26px}
+.wa-btn:hover{transform:scale(1.1)}
+
+footer{background:#0e0e0e;border-top:1px solid rgba(244,180,0,0.12);padding:2.5rem 3rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+.footer-logo{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:0.08em;color:var(--yellow)}
+.footer-logo span{color:rgba(245,242,236,0.35)}
+.footer-copy{font-size:0.78rem;color:rgba(245,242,236,0.28);letter-spacing:0.06em}
+.footer-links{display:flex;gap:1.5rem}
+.footer-links a{font-size:0.78rem;color:rgba(245,242,236,0.3);text-decoration:none;letter-spacing:0.08em;text-transform:uppercase;transition:color 0.2s}
+.footer-links a:hover{color:var(--yellow)}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity 0.7s ease,transform 0.7s ease}
+.reveal.visible{opacity:1;transform:none}
+
+@media(max-width:768px){
+  nav{padding:1rem 1.2rem}
+  .nav-links,.nav-cta{display:none}
+  .hamburger{display:flex}
+  nav.open .nav-links{display:flex;flex-direction:column;position:fixed;top:62px;left:0;right:0;background:rgba(26,26,26,0.98);padding:2rem;gap:1.5rem;border-bottom:1px solid rgba(244,180,0,0.2)}
+  nav.open .nav-cta{display:inline-block;margin:0 2rem 2rem}
+  .hero-content{padding:1.5rem;margin-top:var(--hero-offset,140px)}
+  .stats-bar{padding:1rem}
+  section{padding:4rem 1.5rem}
+  .about,.en-ruta,.contact-wrap{grid-template-columns:1fr;gap:2.5rem}
+  .form-row{grid-template-columns:1fr}
+  .galeria-grid{grid-template-columns:1fr 1fr}
+  .galeria-item.tall img,.galeria-item img{height:160px}
+  .galeria-item.wide{grid-column:span 2}
+  footer{flex-direction:column;text-align:center;padding:2rem 1.5rem}
+}
+
+/* ADMIN */
+#admin-trigger{position:fixed;bottom:18px;right:18px;width:32px;height:32px;background:rgba(244,180,0,0.06);border:1px solid rgba(244,180,0,0.1);border-radius:50%;cursor:pointer;z-index:999;display:flex;align-items:center;justify-content:center;font-size:13px;color:rgba(244,180,0,0.2);transition:all 0.2s}
+#admin-trigger:hover{background:rgba(244,180,0,0.15);color:var(--yellow)}
+#admin-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;overflow-y:auto;padding:2rem 1rem}
+#admin-overlay.open{display:flex;align-items:flex-start;justify-content:center}
+#admin-panel{background:#1e1e1e;border:1px solid rgba(244,180,0,0.2);width:100%;max-width:700px;border-radius:6px;overflow:hidden;margin:auto}
+.admin-header{background:var(--yellow);color:var(--black);padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between}
+.admin-header h2{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:0.06em}
+.admin-close{background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--black);line-height:1}
+.admin-tabs{display:flex;border-bottom:1px solid rgba(244,180,0,0.12);flex-wrap:wrap}
+.admin-tab{padding:0.75rem 1.25rem;font-size:0.78rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;color:rgba(245,242,236,0.35);border:none;background:none;border-bottom:2px solid transparent;transition:all 0.2s}
+.admin-tab.active{color:var(--yellow);border-bottom-color:var(--yellow)}
+.admin-body{padding:1.5rem}
+.admin-section{display:none}
+.admin-section.active{display:block}
+.admin-field{margin-bottom:1.2rem}
+.admin-field label{display:block;font-size:0.7rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(245,242,236,0.4);margin-bottom:0.4rem}
+.admin-field input,.admin-field textarea{width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(244,180,0,0.18);color:var(--white);padding:0.65rem 0.9rem;font-family:'Barlow',sans-serif;font-size:0.9rem;outline:none;transition:border-color 0.2s;border-radius:4px}
+.admin-field input:focus,.admin-field textarea:focus{border-color:var(--yellow)}
+.admin-field textarea{resize:vertical;min-height:80px}
+.admin-save{background:var(--yellow);color:var(--black);border:none;padding:0.75rem 1.8rem;font-family:'Barlow',sans-serif;font-size:0.82rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;margin-top:0.5rem;transition:background 0.2s;border-radius:3px}
+.admin-save:hover{background:#e0a500}
+.admin-saved{display:inline-block;margin-left:1rem;font-size:0.8rem;color:#7ab3e0;opacity:0;transition:opacity 0.3s}
+.logo-preview{width:120px;height:60px;background:rgba(255,255,255,0.04);border:1px solid rgba(244,180,0,0.18);display:flex;align-items:center;justify-content:center;margin-bottom:0.8rem;border-radius:4px;overflow:hidden}
+.logo-preview img{max-width:100%;max-height:100%;object-fit:contain}
+.logo-upload-btn{background:transparent;border:1px solid rgba(244,180,0,0.3);color:var(--yellow);padding:0.5rem 1rem;font-size:0.78rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border-radius:3px}
+.admin-hint{font-size:0.72rem;color:rgba(245,242,236,0.28);margin-top:0.4rem;line-height:1.5}
+#admin-login{padding:2rem}
+#admin-login h3{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--yellow);margin-bottom:1.2rem;letter-spacing:0.06em}
+#admin-login input{width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(244,180,0,0.18);color:var(--white);padding:0.75rem 1rem;font-family:'Barlow',sans-serif;font-size:1rem;outline:none;margin-bottom:1rem;border-radius:4px}
+#admin-login input:focus{border-color:var(--yellow)}
+#login-error{color:#f99;font-size:0.82rem;margin-bottom:0.8rem;display:none}
+</style>
+</head>
+<body>
+
+<nav id="navbar">
+  <a href="#" style="text-decoration:none">
+    <img id="nav-logo-img" src="" alt="MEB Logo" class="nav-logo-img" style="display:none">
+    <div id="nav-logo-text" class="nav-logo-text"><span id="empresa-nombre">MEB Machinery Solutions</span></div>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#nosotros">Nosotros</a></li>
+    <li><a href="#servicios">Servicios</a></li>
+    <li><a href="#en-ruta">Cómo trabajamos</a></li>
+    <li><a href="#galeria">Galería</a></li>
+    <li><a href="#contacto">Contacto</a></li>
+  </ul>
+  <a href="#contacto" class="nav-cta">Cotizar</a>
+  <button class="hamburger" aria-label="Menú" onclick="document.getElementById('navbar').classList.toggle('open')">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<!-- HERO video B&N -->
+<section class="hero">
+  <div class="hero-video-wrap">
+    <video autoplay muted loop playsinline>
+      <source src="https://videos.pexels.com/video-files/13619351/13619351-hd_1920_1080_30fps.mp4" type="video/mp4">
+      <source src="https://videos.pexels.com/video-files/1590780/1590780-hd_1920_1080_30fps.mp4" type="video/mp4">
+    </video>
+  </div>
+  <div class="hero-overlay"></div>
+  <div class="hero-content">
+    <div class="hero-tag" id="hero-tag">Servicio móvil · Todas las marcas</div>
+    <h1 class="hero-title" id="hero-title">Tu máquina<br>parada es<br><span class="accent">tiempo perdido.</span></h1>
+    <p class="hero-sub" id="hero-sub">Diagnóstico computarizado, reparación precisa y acompañamiento personalizado. Vamos hasta donde está tu máquina.</p>
+    <div class="hero-actions">
+      <a href="#contacto" class="btn-primary">Pedir presupuesto</a>
+      <a href="#servicios" class="btn-outline">Ver servicios</a>
+    </div>
+  </div>
+  <div class="hero-scroll"><div class="scroll-line"></div>scroll</div>
+</section>
+
+<div class="stats-bar">
+  <div class="stat"><div class="stat-num" id="stat1-num">100%</div><div class="stat-label" id="stat1-label">Servicio móvil</div></div>
+  <div class="stat"><div class="stat-num" id="stat2-num">Todas</div><div class="stat-label" id="stat2-label">Las marcas</div></div>
+  <div class="stat"><div class="stat-num" id="stat3-num">+10</div><div class="stat-label" id="stat3-label">Años de experiencia</div></div>
+  <div class="stat"><div class="stat-num" id="stat4-num">24/7</div><div class="stat-label" id="stat4-label">Disponibilidad</div></div>
+</div>
+
+<section id="nosotros">
+  <div class="about reveal">
+    <div class="about-text">
+      <div class="section-tag">Sobre MEB</div>
+      <div class="highlight-line"></div>
+      <h2 class="section-title">Diagnóstico real.<br><span class="accent">Soluciones reales.</span></h2>
+      <p id="about-p1">MEB Machinery Solutions es una empresa de servicio integral especializada en el diagnóstico, reparación y mantenimiento de maquinaria pesada de construcción. Operamos bajo un modelo de servicio móvil: llegamos hasta donde está la máquina.</p>
+      <p id="about-p2">Fundada por Marcos Emmanuel Bellando, técnico con trayectoria reconocida en el sector y cero antecedentes negativos. Empresas constructoras y municipios confían en MEB porque cada trabajo se firma con nombre propio.</p>
+      <p id="about-slogan" style="color:var(--yellow);font-weight:600;font-size:1rem;margin-top:1.5rem">Donde otros tardan, nosotros resolvemos.</p>
+    </div>
+    <div class="about-img-wrap">
+      <div class="about-img-inner">
+        <img src="https://images.pexels.com/photos/1078884/pexels-photo-1078884.jpeg?auto=compress&cs=tinysrgb&w=800" id="g2" alt="Técnico en maquinaria">
+      </div>
+      <div class="about-badge">🔧 Diagnóstico computarizado</div>
+    </div>
+  </div>
+</section>
+
+<section id="servicios" class="services">
+  <div class="services-header reveal">
+    <div class="section-tag">Qué hacemos</div>
+    <h2 class="section-title">Nuestros <span class="accent">Servicios</span></h2>
+    <p style="color:rgba(245,242,236,0.5);max-width:520px;margin:0 auto;line-height:1.7">Ciclo completo: presupuesto → diagnóstico → reparación → prueba → seguimiento.</p>
+  </div>
+  <div class="services-grid reveal">
+    <div class="service-card"><div class="service-icon">🖥️</div><div class="service-name" id="s1-name">Diagnóstico computarizado</div><p class="service-desc" id="s1-desc">Lectura de códigos de falla, análisis de parámetros y diagnóstico exacto con equipamiento de vanguardia.</p></div>
+    <div class="service-card"><div class="service-icon">⚙️</div><div class="service-name" id="s2-name">Reparación de maquinaria</div><p class="service-desc" id="s2-desc">Excavadoras, retroexcavadoras, minicargadoras, motoniveladoras y palas cargadoras. Reparación efectiva con garantía.</p></div>
+    <div class="service-card"><div class="service-icon">🚐</div><div class="service-name" id="s3-name">Servicio en obra</div><p class="service-desc" id="s3-desc">Nos desplazamos hasta donde se encuentra la máquina. Sin traslados costosos, sin tiempos muertos innecesarios.</p></div>
+    <div class="service-card"><div class="service-icon">📋</div><div class="service-name" id="s4-name">Presupuestación in situ</div><p class="service-desc" id="s4-desc">Diagnóstico, presupuesto y acuerdo de fechas en el lugar. Transparencia total antes de arrancar cualquier intervención.</p></div>
+    <div class="service-card"><div class="service-icon">🌾</div><div class="service-name" id="s5-name">Maquinaria agrícola</div><p class="service-desc" id="s5-desc">Servicio complementario para maquinaria del sector agropecuario. La misma precisión técnica aplicada al campo.</p></div>
+    <div class="service-card"><div class="service-icon">📊</div><div class="service-name" id="s6-name">Seguimiento post-reparación</div><p class="service-desc" id="s6-desc">El trabajo no termina con la reparación. Seguimiento posterior para asegurar el funcionamiento óptimo.</p></div>
+    <div class="service-card"><div class="service-icon">⏱️</div><div class="service-name">Contratos de mantenimiento</div><p class="service-desc">Protegé tu inversión con un plan a medida. Contratos por 1.000 y 2.000 horas que incluyen servicios cada 250 horas, filtros y generación de historial técnico completo. Menos paradas no programadas, más vida útil para tu máquina.</p></div>
+    <div class="service-card service-card--highlight"><div class="service-icon">🧰</div><div class="service-name">Cajas de herramientas</div><p class="service-desc">Tu tiempo vale. Tené todo organizado, a la vista y protegido. Cajas diseñadas para resistir el uso rudo, con cierres de seguridad y el espacio exacto que necesitás. <strong style="color:var(--yellow);display:block;margin-top:0.8rem">Tu taller, donde vayas.</strong></p><a href="#contacto" style="display:inline-block;margin-top:1.2rem;background:var(--yellow);color:var(--black);padding:0.5rem 1.2rem;font-size:0.78rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;text-decoration:none">Solicitá tu cotización →</a></div>
+  </div>
+</section>
+
+<section class="marcas">
+  <p class="marcas-title">Trabajamos con todas las marcas</p>
+  <div class="marcas-grid">
+    <span class="marca-tag">Caterpillar</span><span class="marca-tag">Komatsu</span><span class="marca-tag">Volvo</span><span class="marca-tag">John Deere</span><span class="marca-tag">Hitachi</span><span class="marca-tag">JCB</span><span class="marca-tag">Case</span><span class="marca-tag">Liebherr</span><span class="marca-tag">New Holland</span><span class="marca-tag">Doosan</span>
+  </div>
+</section>
+
+<section id="en-ruta">
+  <div class="en-ruta reveal">
+    <div class="ruta-video-wrap">
+      <video autoplay muted loop playsinline>
+        <source src="https://videos.pexels.com/video-files/11839348/11839348-hd_1920_1080_25fps.mp4" type="video/mp4">
+        <source src="https://videos.pexels.com/video-files/1590780/1590780-hd_1920_1080_30fps.mp4" type="video/mp4">
+      </video>
+      <div class="ruta-badge">Servicio móvil · Llegamos hasta vos</div>
+    </div>
+    <div>
+      <div class="section-tag">Cómo trabajamos</div>
+      <h2 class="section-title">De la llamada<br>a la <span class="accent">solución.</span></h2>
+      <p style="color:rgba(245,242,236,0.6);line-height:1.7;margin-bottom:2rem">Sin traslados, sin esperas, sin intermediarios. El técnico va hasta donde está la máquina y resuelve en el lugar.</p>
+      <div class="ruta-steps">
+        <div class="ruta-step"><div class="step-num">1</div><div class="step-content"><h4>Llamado y coordinación</h4><p>Contacto directo, acuerdo de visita y fecha.</p></div></div>
+        <div class="ruta-step"><div class="step-num">2</div><div class="step-content"><h4>Diagnóstico en obra</h4><p>Equipamiento completo. Diagnóstico computarizado in situ.</p></div></div>
+        <div class="ruta-step"><div class="step-num">3</div><div class="step-content"><h4>Presupuesto y aprobación</h4><p>Claro y transparente antes de arrancar. Sin sorpresas.</p></div></div>
+        <div class="ruta-step"><div class="step-num">4</div><div class="step-content"><h4>Reparación y prueba</h4><p>Ejecución, prueba funcional y verificación del resultado.</p></div></div>
+        <div class="ruta-step"><div class="step-num">5</div><div class="step-content"><h4>Seguimiento</h4><p>Acompañamiento posterior para garantizar el funcionamiento.</p></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- GALERÍA con formas -->
+<section id="galeria" class="galeria">
+  <div class="reveal">
+    <div class="section-tag">Galería</div>
+    <h2 class="section-title">Nuestro <span class="accent">trabajo.</span></h2>
+    <p style="color:rgba(245,242,236,0.45);line-height:1.7;max-width:480px">Cada intervención, un compromiso. Cada máquina reparada, una historia de confianza.</p>
+  </div>
+  <div class="galeria-grid reveal">
+    <div class="galeria-item tall">
+      <img src="https://images.pexels.com/photos/5835359/pexels-photo-5835359.jpeg?auto=compress&cs=tinysrgb&w=800" id="g1" alt="Maquinaria en obra">
+    </div>
+    <div class="galeria-item">
+      <img src="https://images.pexels.com/photos/1078884/pexels-photo-1078884.jpeg?auto=compress&cs=tinysrgb&w=800" id="g2" alt="Técnico trabajando">
+    </div>
+    <div class="galeria-item">
+      <img src="https://images.pexels.com/photos/1216589/pexels-photo-1216589.jpeg?auto=compress&cs=tinysrgb&w=800" id="g3" alt="Excavadora en construcción">
+    </div>
+    <div class="galeria-item wide">
+      <img src="https://images.pexels.com/photos/585419/pexels-photo-585419.jpeg?auto=compress&cs=tinysrgb&w=1200" id="g4" alt="Trabajo en obra" style="object-fit:cover">
+    </div>
+    <div class="galeria-item">
+      <img src="caja.jpg.jpg" id="g5" style="object-fit:contain;background:#111;height:220px" alt="Maquinaria agrícola">
+    </div>
+  </div>
+</section>
+
+<section id="contacto" style="background:#111">
+  <div class="contact-wrap reveal">
+    <div class="contact-info">
+      <div class="section-tag">Contacto</div>
+      <h2 class="section-title">Hablemos de<br>tu <span class="accent">máquina.</span></h2>
+      <p style="color:rgba(245,242,236,0.6);line-height:1.7;margin-bottom:2.5rem">Presupuesto sin cargo. Respondemos rápido porque sabemos que tu máquina parada no espera.</p>
+      <div class="contact-detail">
+        <div class="contact-icon">📞</div>
+        <div><div class="contact-label">Teléfono / WhatsApp</div><div class="contact-value"><a id="contact-tel-link" href="tel:+5411000000"><span id="contact-tel">+54 11 0000-0000</span></a></div></div>
+      </div>
+      <div class="contact-detail">
+        <div class="contact-icon">📧</div>
+        <div><div class="contact-label">Email</div><div class="contact-value"><a id="contact-email-link" href="mailto:contacto@mebmachinery.com"><span id="contact-email">contacto@mebmachinery.com</span></a></div></div>
+      </div>
+      <div class="contact-detail">
+        <div class="contact-icon">📍</div>
+        <div><div class="contact-label">Zona de cobertura</div><div class="contact-value"><span id="contact-zona">Buenos Aires y Gran Buenos Aires</span></div></div>
+      </div>
+    </div>
+    <div>
+      <form class="contact-form" id="contactForm" onsubmit="handleSubmit(event)">
+        <div class="form-row">
+          <div class="form-group"><label>Nombre</label><input type="text" placeholder="Tu nombre" required></div>
+          <div class="form-group"><label>Empresa</label><input type="text" placeholder="Empresa"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Teléfono</label><input type="tel" placeholder="+54 11..." required></div>
+          <div class="form-group"><label>Email</label><input type="email" placeholder="correo@empresa.com"></div>
+        </div>
+        <div class="form-group"><label>Tipo de consulta</label>
+          <select><option value="">Seleccioná un servicio</option><option>Diagnóstico computarizado</option><option>Reparación de maquinaria pesada</option><option>Mantenimiento preventivo</option><option>Maquinaria agrícola</option><option>Presupuesto general</option></select>
+        </div>
+        <div class="form-group"><label>Máquina / Marca / Modelo</label><input type="text" placeholder="Ej: Excavadora CAT 320..."></div>
+        <div class="form-group"><label>Descripción del problema</label><textarea placeholder="Contanos qué está pasando con la máquina..." required></textarea></div>
+        <button type="submit" class="form-submit">Enviar consulta →</button>
+        <div class="form-msg" id="formMsg"></div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-logo"><span id="footer-nombre">MEB</span><span> Machinery Solutions</span></div>
+  <p class="footer-copy">© 2025 MEB Machinery Solutions · Diagnóstico y Reparación de Maquinaria Pesada</p>
+  <div class="footer-links"><a href="#nosotros">Nosotros</a><a href="#servicios">Servicios</a><a href="#contacto">Contacto</a></div>
+</footer>
+
+<a id="wa-float" href="https://wa.me/5411000000" target="_blank" class="wa-btn" title="WhatsApp">💬</a>
+<button id="admin-trigger" title="Admin" onclick="openAdmin()">⚙</button>
+
+<!-- ADMIN -->
+<div id="admin-overlay">
+  <div id="admin-panel">
+    <div id="admin-login">
+      <h3>🔐 Panel de administración</h3>
+      <p style="font-size:0.82rem;color:rgba(245,242,236,0.4);margin-bottom:1.2rem">Ingresá la contraseña para editar el contenido.</p>
+      <div id="login-error">Contraseña incorrecta.</div>
+      <input type="password" id="admin-pass" placeholder="Contraseña" onkeydown="if(event.key==='Enter')checkPass()">
+      <button class="admin-save" onclick="checkPass()">Ingresar</button>
+      <button onclick="closeAdmin()" style="background:none;border:none;color:rgba(245,242,236,0.3);margin-left:1rem;cursor:pointer;font-size:0.82rem">Cancelar</button>
+    </div>
+    <div id="admin-content" style="display:none">
+      <div class="admin-header">
+        <h2>⚙ Editar contenido</h2>
+        <button class="admin-close" onclick="closeAdmin()">×</button>
+      </div>
+      <div class="admin-tabs">
+        <button class="admin-tab active" onclick="switchTab('tab-contacto',this)">Contacto</button>
+        <button class="admin-tab" onclick="switchTab('tab-textos',this)">Textos</button>
+        <button class="admin-tab" onclick="switchTab('tab-logo',this)">Logo</button>
+        <button class="admin-tab" onclick="switchTab('tab-stats',this)">Estadísticas</button>
+        <button class="admin-tab" onclick="switchTab('tab-servicios',this)">Servicios</button>
+        <button class="admin-tab" onclick="switchTab('tab-galeria',this)">Galería</button>
+      </div>
+      <div class="admin-body">
+        <div class="admin-section active" id="tab-contacto">
+          <div class="admin-field"><label>Teléfono / WhatsApp (también actualiza el botón flotante)</label><input type="text" id="edit-tel" placeholder="+54 11 0000-0000"></div>
+          <div class="admin-field"><label>Email</label><input type="email" id="edit-email"></div>
+          <div class="admin-field"><label>Zona de cobertura</label><input type="text" id="edit-zona"></div>
+          <div class="admin-field"><label>Nombre de la empresa (aparece en el nav)</label><input type="text" id="edit-nombre" placeholder="MEB Machinery Solutions"></div>
+          <button class="admin-save" onclick="saveSection('contacto')">Guardar</button>
+          <span class="admin-saved" id="saved-contacto">✓ Guardado</span>
+        </div>
+        <div class="admin-section" id="tab-textos">
+          <div class="admin-field"><label>Posición vertical del texto (movelo arriba o abajo)</label>
+<div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+  <input type="range" id="edit-hero-offset" min="60" max="400" value="180" step="10" style="flex:1" oninput="previewOffset(this.value)">
+  <span id="offset-val" style="font-size:0.82rem;color:rgba(245,242,236,0.6);min-width:40px">180px</span>
+</div>
+<div class="admin-hint">Arrastrá para subir o bajar el texto del inicio. Guardá cuando quede bien.</div>
+</div>
+<div class="admin-field"><label>Etiqueta pequeña arriba del título</label><input type="text" id="edit-hero-tag" placeholder="Servicio móvil · Todas las marcas"></div>
+          <div class="admin-field"><label>Título gigante del inicio — escribí cada línea separada. La ÚLTIMA línea queda en amarillo</label><textarea id="edit-hero-title" rows="3" placeholder="Tu máquina&#10;parada es&#10;tiempo perdido."></textarea><div class="admin-hint">Ejemplo: 3 líneas → la última en amarillo automáticamente</div></div>
+          <div class="admin-field"><label>Texto chico debajo del título gigante</label><textarea id="edit-hero-sub" rows="2" placeholder="Diagnóstico computarizado, reparación precisa..."></textarea></div>
+          <div class="admin-field"><label>Sección NOSOTROS — Párrafo 1 (descripción de la empresa)</label><textarea id="edit-about-p1" rows="3" placeholder="MEB Machinery Solutions es una empresa..."></textarea></div>
+          <div class="admin-field"><label>Sección NOSOTROS — Párrafo 2 (sobre Marcos y la trayectoria)</label><textarea id="edit-about-p2" rows="3" placeholder="Fundada por Marcos Emmanuel Bellando..."></textarea></div>
+          <div class="admin-field"><label>Frase destacada en amarillo (sección Nosotros)</label><input type="text" id="edit-slogan" placeholder="Donde otros tardan, nosotros resolvemos."></div>
+          <button class="admin-save" onclick="saveSection('textos')">Guardar</button>
+          <span class="admin-saved" id="saved-textos">✓ Guardado</span>
+        </div>
+        <div class="admin-section" id="tab-logo">
+          <p style="font-size:0.82rem;color:rgba(245,242,236,0.4);margin-bottom:1.2rem;line-height:1.6">Subí tu logo PNG o SVG con fondo transparente. Reemplaza el texto "MEB Machinery" en el nav.</p>
+          <div class="logo-preview" id="logo-preview-box"><span style="font-size:0.72rem;color:rgba(245,242,236,0.2)">Sin logo</span></div>
+          <input type="file" id="logo-file-input" accept="image/*" style="display:none" onchange="handleLogoUpload(event)">
+          <button class="logo-upload-btn" onclick="document.getElementById('logo-file-input').click()">📁 Subir logo</button>
+          <div class="admin-hint" style="margin-top:0.8rem">PNG o SVG · fondo transparente · mínimo 300×100px</div>
+          <div style="margin-top:1.5rem;display:flex;gap:0.8rem;flex-wrap:wrap">
+            <button class="admin-save" onclick="saveLogo()">Aplicar logo</button>
+            <button onclick="removeLogo()" style="background:none;border:1px solid rgba(245,242,236,0.18);color:rgba(245,242,236,0.45);padding:0.65rem 1.2rem;font-size:0.78rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border-radius:3px">Quitar logo</button>
+          </div>
+          <span class="admin-saved" id="saved-logo">✓ Logo actualizado</span>
+        </div>
+        <div class="admin-section" id="tab-servicios">
+          <p style="font-size:0.82rem;color:rgba(245,242,236,0.4);margin-bottom:1.2rem;line-height:1.6">Editá el texto de cada tarjeta de servicio.</p>
+          <div class="admin-field"><label>Servicio 1 — Título</label><input type="text" id="es1n" placeholder="Diagnóstico computarizado"></div>
+          <div class="admin-field"><label>Servicio 1 — Descripción</label><textarea id="es1d" rows="2"></textarea></div>
+          <div class="admin-field"><label>Servicio 2 — Título</label><input type="text" id="es2n" placeholder="Reparación de maquinaria"></div>
+          <div class="admin-field"><label>Servicio 2 — Descripción</label><textarea id="es2d" rows="2"></textarea></div>
+          <div class="admin-field"><label>Servicio 3 — Título</label><input type="text" id="es3n" placeholder="Servicio en obra"></div>
+          <div class="admin-field"><label>Servicio 3 — Descripción</label><textarea id="es3d" rows="2"></textarea></div>
+          <div class="admin-field"><label>Servicio 4 — Título</label><input type="text" id="es4n" placeholder="Presupuestación in situ"></div>
+          <div class="admin-field"><label>Servicio 4 — Descripción</label><textarea id="es4d" rows="2"></textarea></div>
+          <div class="admin-field"><label>Servicio 5 — Título</label><input type="text" id="es5n" placeholder="Maquinaria agrícola"></div>
+          <div class="admin-field"><label>Servicio 5 — Descripción</label><textarea id="es5d" rows="2"></textarea></div>
+          <div class="admin-field"><label>Servicio 6 — Título</label><input type="text" id="es6n" placeholder="Seguimiento post-reparación"></div>
+          <div class="admin-field"><label>Servicio 6 — Descripción</label><textarea id="es6d" rows="2"></textarea></div>
+          <div style="border-top:1px solid rgba(244,180,0,0.15);margin-top:1.5rem;padding-top:1.5rem">
+            <p style="font-size:0.78rem;color:rgba(244,180,0,0.8);margin-bottom:1rem;font-weight:600">➕ AGREGAR SERVICIO NUEVO</p>
+            <div class="admin-field"><label>Título del nuevo servicio</label><input type="text" id="new-s-name" placeholder="Ej: Soldadura especializada"></div>
+            <div class="admin-field"><label>Descripción</label><textarea id="new-s-desc" rows="2" placeholder="Describí el servicio..."></textarea></div>
+            <div class="admin-field"><label>Ícono (copiá un emoji)</label><input type="text" id="new-s-icon" placeholder="🔩" style="width:80px"></div>
+            <button class="admin-save" onclick="addService()">Agregar servicio</button>
+            <span class="admin-saved" id="saved-new-serv">✓ Agregado</span>
+          </div>
+          <button class="admin-save" onclick="saveSection('servicios')" style="margin-top:1rem">Guardar todo</button>
+          <span class="admin-saved" id="saved-servicios">✓ Guardado</span>
+        </div>
+        <div class="admin-section" id="tab-galeria">
+          <p style="font-size:0.82rem;color:rgba(245,242,236,0.4);margin-bottom:1rem;line-height:1.6">Subí tus fotos o videos. Formatos: JPG, PNG, MP4. Podés quitar lo que subiste y reemplazarlo cuando quieras.</p>
+          <div style="display:flex;flex-direction:column;gap:1rem">
+            <div id="gcard1" class="admin-field" style="border:1px solid rgba(244,180,0,0.15);border-radius:4px;padding:0.8rem">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+                <label style="font-size:0.7rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(245,242,236,0.4)">Foto 1 — imagen vertical grande (izquierda)</label>
+                <button onclick="clearGallery(1)" style="background:none;border:1px solid rgba(245,100,100,0.3);color:rgba(245,100,100,0.6);padding:2px 8px;font-size:0.7rem;cursor:pointer;border-radius:3px">✕ Quitar</button>
+              </div>
+              <input type="file" id="gf1" accept="image/*,video/mp4" onchange="previewGallery(1,this)" style="background:transparent;border:none;color:rgba(245,242,236,0.6);padding:0;width:100%">
+              <div id="gthumb1" style="margin-top:0.5rem"></div>
+            </div>
+            <div id="gcard2" class="admin-field" style="border:1px solid rgba(244,180,0,0.15);border-radius:4px;padding:0.8rem">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+                <label style="font-size:0.7rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(245,242,236,0.4)">Foto 2 — fila derecha arriba</label>
+                <button onclick="clearGallery(2)" style="background:none;border:1px solid rgba(245,100,100,0.3);color:rgba(245,100,100,0.6);padding:2px 8px;font-size:0.7rem;cursor:pointer;border-radius:3px">✕ Quitar</button>
+              </div>
+              <input type="file" id="gf2" accept="image/*,video/mp4" onchange="previewGallery(2,this)" style="background:transparent;border:none;color:rgba(245,242,236,0.6);padding:0;width:100%">
+              <div id="gthumb2" style="margin-top:0.5rem"></div>
+            </div>
+            <div id="gcard3" class="admin-field" style="border:1px solid rgba(244,180,0,0.15);border-radius:4px;padding:0.8rem">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+                <label style="font-size:0.7rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(245,242,236,0.4)">Foto 3 — fila derecha arriba</label>
+                <button onclick="clearGallery(3)" style="background:none;border:1px solid rgba(245,100,100,0.3);color:rgba(245,100,100,0.6);padding:2px 8px;font-size:0.7rem;cursor:pointer;border-radius:3px">✕ Quitar</button>
+              </div>
+              <input type="file" id="gf3" accept="image/*,video/mp4" onchange="previewGallery(3,this)" style="background:transparent;border:none;color:rgba(245,242,236,0.6);padding:0;width:100%">
+              <div id="gthumb3" style="margin-top:0.5rem"></div>
+            </div>
+            <div id="gcard4" class="admin-field" style="border:1px solid rgba(244,180,0,0.15);border-radius:4px;padding:0.8rem">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+                <label style="font-size:0.7rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(245,242,236,0.4)">Foto/Video 4 — imagen ancha (ocupa 2 columnas)</label>
+                <button onclick="clearGallery(4)" style="background:none;border:1px solid rgba(245,100,100,0.3);color:rgba(245,100,100,0.6);padding:2px 8px;font-size:0.7rem;cursor:pointer;border-radius:3px">✕ Quitar</button>
+              </div>
+              <input type="file" id="gf4" accept="image/*,video/mp4" onchange="previewGallery(4,this)" style="background:transparent;border:none;color:rgba(245,242,236,0.6);padding:0;width:100%">
+              <div id="gthumb4" style="margin-top:0.5rem"></div>
+            </div>
+            <div id="gcard5" class="admin-field" style="border:1px solid rgba(244,180,0,0.15);border-radius:4px;padding:0.8rem">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+                <label style="font-size:0.7rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(245,242,236,0.4)">Foto/Video 5 — abajo derecha</label>
+                <button onclick="clearGallery(5)" style="background:none;border:1px solid rgba(245,100,100,0.3);color:rgba(245,100,100,0.6);padding:2px 8px;font-size:0.7rem;cursor:pointer;border-radius:3px">✕ Quitar</button>
+              </div>
+              <input type="file" id="gf5" accept="image/*,video/mp4" onchange="previewGallery(5,this)" style="background:transparent;border:none;color:rgba(245,242,236,0.6);padding:0;width:100%">
+              <div id="gthumb5" style="margin-top:0.5rem"></div>
+            </div>
+          </div>
+          <button class="admin-save" onclick="saveGallery()" style="margin-top:1rem">Guardar todo</button>
+          <span class="admin-saved" id="saved-galeria">✓ Guardado</span>
+          <div class="admin-hint" style="margin-top:0.8rem">Los archivos se guardan en este navegador. Máximo recomendado por foto: 2MB.</div>
+        </div>
+        <div class="admin-section" id="tab-stats">
+          <p style="font-size:0.82rem;color:rgba(245,242,236,0.4);margin-bottom:1.2rem;line-height:1.6">Editá los 4 números y etiquetas de la barra amarilla.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+            <div class="admin-field"><label>Número 1</label><input type="text" id="edit-s1n" placeholder="100%"></div>
+            <div class="admin-field"><label>Etiqueta 1</label><input type="text" id="edit-s1l" placeholder="Servicio móvil"></div>
+            <div class="admin-field"><label>Número 2</label><input type="text" id="edit-s2n" placeholder="Todas"></div>
+            <div class="admin-field"><label>Etiqueta 2</label><input type="text" id="edit-s2l" placeholder="Las marcas"></div>
+            <div class="admin-field"><label>Número 3</label><input type="text" id="edit-s3n" placeholder="+10"></div>
+            <div class="admin-field"><label>Etiqueta 3</label><input type="text" id="edit-s3l" placeholder="Años de experiencia"></div>
+            <div class="admin-field"><label>Número 4</label><input type="text" id="edit-s4n" placeholder="24/7"></div>
+            <div class="admin-field"><label>Etiqueta 4</label><input type="text" id="edit-s4l" placeholder="Disponibilidad"></div>
+          </div>
+          <button class="admin-save" onclick="saveSection('stats')">Guardar</button>
+          <span class="admin-saved" id="saved-stats">✓ Guardado</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const ADMIN_PASS='meb2025';
+const SK='meb_site_data';
+function getData(){try{return JSON.parse(localStorage.getItem(SK)||'{}')}catch(e){return{}}}
+function setData(d){localStorage.setItem(SK,JSON.stringify(d))}
+
+function applyData(){
+  const d=getData();
+  if(d.tel){
+    document.getElementById('contact-tel').textContent=d.tel;
+    document.getElementById('contact-tel-link').href='tel:'+d.tel.replace(/\s/g,'');
+    const wa=document.getElementById('wa-float');
+    if(wa)wa.href='https://wa.me/'+d.tel.replace(/[^\d]/g,'');
+  }
+  if(d.email){document.getElementById('contact-email').textContent=d.email;document.getElementById('contact-email-link').href='mailto:'+d.email;}
+  if(d.zona)document.getElementById('contact-zona').textContent=d.zona;
+  if(d.heroOffset){document.documentElement.style.setProperty('--hero-offset',d.heroOffset+'px');}
+  if(d.heroTag)document.getElementById('hero-tag').textContent=d.heroTag;
+  if(d.heroSub)document.getElementById('hero-sub').textContent=d.heroSub;
+  if(d.heroTitle){
+    const lines=d.heroTitle.split('\n');const last=lines.pop();
+    document.getElementById('hero-title').innerHTML=(lines.length?lines.join('<br>')+'<br>':'')+'<span class="accent">'+last+'</span>';
+  }
+  if(d.aboutP1)document.getElementById('about-p1').textContent=d.aboutP1;
+  if(d.aboutP2)document.getElementById('about-p2').textContent=d.aboutP2;
+  if(d.slogan)document.getElementById('about-slogan').textContent=d.slogan;
+  if(d.nombre){
+    const el=document.getElementById('empresa-nombre');
+    if(el)el.textContent=d.nombre;
+    const fel=document.getElementById('footer-nombre');
+    if(fel)fel.textContent=d.nombre;
+  }
+  if(d.s1n) document.getElementById('stat1-num').textContent=d.s1n;
+  if(d.s1l) document.getElementById('stat1-label').textContent=d.s1l;
+  if(d.s2n) document.getElementById('stat2-num').textContent=d.s2n;
+  if(d.s2l) document.getElementById('stat2-label').textContent=d.s2l;
+  if(d.s3n) document.getElementById('stat3-num').textContent=d.s3n;
+  if(d.s3l) document.getElementById('stat3-label').textContent=d.s3l;
+  if(d.s4n) document.getElementById('stat4-num').textContent=d.s4n;
+  if(d.s4l) document.getElementById('stat4-label').textContent=d.s4l;
+  if(d.extraServices&&d.extraServices.length){
+    const grid=document.getElementById('services-grid');
+    d.extraServices.forEach(s=>{
+      const card=document.createElement('div');
+      card.className='service-card';
+      card.innerHTML='<div class="service-icon">'+(s.icon||'🔧')+'</div><div class="service-name">'+s.name+'</div><p class="service-desc">'+s.desc+'</p>';
+      grid.appendChild(card);
+    });
+  }
+  ['1','2','3','4','5','6'].forEach(i=>{
+    if(d['srv'+i+'n']){const el=document.getElementById('s'+i+'-name');if(el)el.textContent=d['srv'+i+'n'];}
+    if(d['srv'+i+'d']){const el=document.getElementById('s'+i+'-desc');if(el)el.textContent=d['srv'+i+'d'];}
+  });
+  for(let i=1;i<=5;i++){
+    if(d['g'+i]){
+      const el=document.getElementById('g'+i);
+      if(!el)continue;
+      const data=d['g'+i];
+      if(data.startsWith('data:video')){
+        el.outerHTML='<video id="g'+i+'" autoplay muted loop playsinline style="width:100%;height:220px;object-fit:cover;display:block;filter:brightness(0.9)"><source src="'+data+'" type="video/mp4"></video>';
+      } else {
+        el.src=data;
+      }
+    }
+  }
+  if(d.logoData){
+    const img=document.getElementById('nav-logo-img');
+    img.src=d.logoData;img.style.display='block';
+    document.getElementById('nav-logo-text').style.display='none';
+    document.getElementById('logo-preview-box').innerHTML='<img src="'+d.logoData+'" style="max-width:100%;max-height:100%;object-fit:contain">';
+  }
+}
+
+function populateAdmin(){
+  const d=getData();
+  document.getElementById('edit-tel').value=d.tel||'';
+  document.getElementById('edit-nombre').value=d.nombre||'';
+  document.getElementById('edit-email').value=d.email||'';
+  document.getElementById('edit-zona').value=d.zona||'';
+  document.getElementById('edit-hero-tag').value=d.heroTag||'';
+  const off=d.heroOffset||'180';
+  document.getElementById('edit-hero-offset').value=off;
+  document.getElementById('offset-val').textContent=off+'px';
+  document.getElementById('edit-hero-title').value=d.heroTitle||'Tu máquina\nparada es\ntiempo perdido.';
+  document.getElementById('edit-hero-sub').value=d.heroSub||'';
+  document.getElementById('edit-about-p1').value=d.aboutP1||'';
+  document.getElementById('edit-about-p2').value=d.aboutP2||'';
+  document.getElementById('edit-slogan').value=d.slogan||'';
+  ['1','2','3','4','5','6'].forEach(i=>{
+    const ni=document.getElementById('es'+i+'n');
+    const di=document.getElementById('es'+i+'d');
+    const nel=document.getElementById('s'+i+'-name');
+    const del2=document.getElementById('s'+i+'-desc');
+    if(ni&&nel)ni.value=d['srv'+i+'n']||nel.textContent||'';
+    if(di&&del2)di.value=d['srv'+i+'d']||del2.textContent||'';
+  });
+  document.getElementById('edit-s1n').value=d.s1n||'';
+  document.getElementById('edit-s1l').value=d.s1l||'';
+  document.getElementById('edit-s2n').value=d.s2n||'';
+  document.getElementById('edit-s2l').value=d.s2l||'';
+  document.getElementById('edit-s3n').value=d.s3n||'';
+  document.getElementById('edit-s3l').value=d.s3l||'';
+  document.getElementById('edit-s4n').value=d.s4n||'';
+  document.getElementById('edit-s4l').value=d.s4l||'';
+}
+
+function saveSection(sec){
+  const d=getData();
+  if(sec==='contacto'){
+    const t=document.getElementById('edit-tel').value.trim();
+    const e=document.getElementById('edit-email').value.trim();
+    const z=document.getElementById('edit-zona').value.trim();
+    if(t)d.tel=t;if(e)d.email=e;if(z)d.zona=z;
+    const n=document.getElementById('edit-nombre').value.trim();
+    if(n)d.nombre=n;
+  }
+  if(sec==='textos'){
+    d.heroOffset=document.getElementById('edit-hero-offset').value;
+    d.heroTag=document.getElementById('edit-hero-tag').value.trim();
+    d.heroTitle=document.getElementById('edit-hero-title').value.trim();
+    d.heroSub=document.getElementById('edit-hero-sub').value.trim();
+    d.aboutP1=document.getElementById('edit-about-p1').value.trim();
+    d.aboutP2=document.getElementById('edit-about-p2').value.trim();
+    d.slogan=document.getElementById('edit-slogan').value.trim();
+  }
+  if(sec==='servicios'){
+    ['1','2','3','4','5','6'].forEach(i=>{
+      const nv=document.getElementById('es'+i+'n').value.trim();
+      const dv=document.getElementById('es'+i+'d').value.trim();
+      if(nv)d['srv'+i+'n']=nv;
+      if(dv)d['srv'+i+'d']=dv;
+    });
+  }
+  if(sec==='stats'){
+    d.s1n=document.getElementById('edit-s1n').value.trim();
+    d.s1l=document.getElementById('edit-s1l').value.trim();
+    d.s2n=document.getElementById('edit-s2n').value.trim();
+    d.s2l=document.getElementById('edit-s2l').value.trim();
+    d.s3n=document.getElementById('edit-s3n').value.trim();
+    d.s3l=document.getElementById('edit-s3l').value.trim();
+    d.s4n=document.getElementById('edit-s4n').value.trim();
+    d.s4l=document.getElementById('edit-s4l').value.trim();
+  }
+  setData(d);applyData();
+  const el=document.getElementById('saved-'+sec);
+  el.style.opacity='1';setTimeout(()=>el.style.opacity='0',2200);
+}
+
+let pendingLogo=null;
+function handleLogoUpload(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    pendingLogo=ev.target.result;
+    document.getElementById('logo-preview-box').innerHTML='<img src="'+pendingLogo+'" style="max-width:100%;max-height:100%;object-fit:contain">';
+  };
+  reader.readAsDataURL(file);
+}
+function saveLogo(){
+  if(!pendingLogo)return;
+  const d=getData();d.logoData=pendingLogo;setData(d);applyData();
+  const el=document.getElementById('saved-logo');el.style.opacity='1';setTimeout(()=>el.style.opacity='0',2200);
+}
+function previewOffset(val){
+  document.getElementById('offset-val').textContent=val+'px';
+  document.documentElement.style.setProperty('--hero-offset',val+'px');
+}
+function previewGallery(n,input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const img=document.getElementById('g'+n);
+    if(img)img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function addService(){
+  const name=document.getElementById('new-s-name').value.trim();
+  const desc=document.getElementById('new-s-desc').value.trim();
+  const icon=document.getElementById('new-s-icon').value.trim()||'🔧';
+  if(!name)return;
+  const grid=document.getElementById('services-grid');
+  const card=document.createElement('div');
+  card.className='service-card';
+  card.innerHTML='<div class="service-icon">'+icon+'</div><div class="service-name">'+name+'</div><p class="service-desc">'+desc+'</p>';
+  grid.appendChild(card);
+  const d=getData();
+  if(!d.extraServices)d.extraServices=[];
+  d.extraServices.push({name,desc,icon});
+  setData(d);
+  document.getElementById('new-s-name').value='';
+  document.getElementById('new-s-desc').value='';
+  document.getElementById('new-s-icon').value='';
+  const el=document.getElementById('saved-new-serv');
+  el.style.opacity='1';setTimeout(()=>el.style.opacity='0',2200);
+}
+function saveGallery(){
+  const d=getData();
+  for(let i=1;i<=5;i++){
+    const input=document.getElementById('gf'+i);
+    if(input&&input.files&&input.files[0]){
+      const file=input.files[0];
+      const reader=new FileReader();
+      reader.onloadend=(ev=>{
+        const idx=i;
+        d['g'+idx]=ev.target.result;
+        setData(d);
+      });
+      reader.readAsDataURL(file);
+    }
+  }
+  setTimeout(()=>{
+    const el=document.getElementById('saved-galeria');
+    el.style.opacity='1';setTimeout(()=>el.style.opacity='0',2200);
+  },800);
+}
+function removeLogo(){
+  const d=getData();delete d.logoData;setData(d);
+  document.getElementById('nav-logo-img').style.display='none';
+  document.getElementById('nav-logo-text').style.display='block';
+  document.getElementById('logo-preview-box').innerHTML='<span style="font-size:0.72rem;color:rgba(245,242,236,0.2)">Sin logo</span>';
+  pendingLogo=null;
+}
+
+function openAdmin(){
+  document.getElementById('admin-overlay').classList.add('open');
+  document.getElementById('admin-pass').value='';
+  document.getElementById('login-error').style.display='none';
+  document.getElementById('admin-login').style.display='block';
+  document.getElementById('admin-content').style.display='none';
+  setTimeout(()=>document.getElementById('admin-pass').focus(),100);
+}
+function closeAdmin(){document.getElementById('admin-overlay').classList.remove('open')}
+function checkPass(){
+  if(document.getElementById('admin-pass').value===ADMIN_PASS){
+    document.getElementById('admin-login').style.display='none';
+    document.getElementById('admin-content').style.display='block';
+    populateAdmin();
+  }else{
+    document.getElementById('login-error').style.display='block';
+    document.getElementById('admin-pass').value='';
+    document.getElementById('admin-pass').focus();
+  }
+}
+function switchTab(id,btn){
+  document.querySelectorAll('.admin-section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');btn.classList.add('active');
+}
+document.getElementById('admin-overlay').addEventListener('click',function(e){if(e.target===this)closeAdmin()});
+
+function handleSubmit(e){
+  e.preventDefault();
+  const btn=e.target.querySelector('.form-submit');
+  btn.textContent='Enviando...';btn.disabled=true;
+  setTimeout(()=>{
+    document.getElementById('formMsg').className='form-msg success';
+    document.getElementById('formMsg').textContent='✓ Consulta recibida. Nos contactamos a la brevedad.';
+    btn.textContent='Enviado ✓';e.target.reset();
+  },1200);
+}
+
+const obs=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible')}),{threshold:0.1});
+document.querySelectorAll('.reveal').forEach(r=>obs.observe(r));
+window.addEventListener('scroll',()=>{document.getElementById('navbar').style.borderBottomColor=window.scrollY>60?'rgba(244,180,0,0.3)':'rgba(244,180,0,0.15)'});
+
+applyData();
+</script>
+</body>
+</html>
