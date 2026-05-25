@@ -366,21 +366,23 @@ footer{background:#0e0e0e;border-top:1px solid rgba(244,180,0,0.12);padding:2.5r
       </div>
     </div>
     <div>
-      <form class="contact-form" id="contactForm" onsubmit="handleSubmit(event)" action="https://formspree.io/f/bellandoemmanuel@outlook.com" method="POST">
+      <form class="contact-form" id="contactForm" action="https://formspree.io/f/xredylyn" method="POST">
         <div class="form-row">
-          <div class="form-group"><label>Nombre</label><input type="text" placeholder="Tu nombre" required></div>
-          <div class="form-group"><label>Empresa</label><input type="text" placeholder="Empresa"></div>
+          <div class="form-group"><label>Nombre</label><input type="text" name="nombre" placeholder="Tu nombre" required></div>
+          <div class="form-group"><label>Empresa</label><input type="text" name="empresa" placeholder="Empresa"></div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label>Teléfono</label><input type="tel" placeholder="+54 11..." required></div>
-          <div class="form-group"><label>Email</label><input type="email" placeholder="correo@empresa.com"></div>
+          <div class="form-group"><label>Teléfono</label><input type="tel" name="telefono" placeholder="+54 11..." required></div>
+          <div class="form-group"><label>Email</label><input type="email" name="email" placeholder="correo@empresa.com"></div>
         </div>
         <div class="form-group"><label>Tipo de consulta</label>
           <select><option value="">Seleccioná un servicio</option><option>Diagnóstico computarizado</option><option>Reparación de maquinaria pesada</option><option>Mantenimiento preventivo</option><option>Maquinaria agrícola</option><option>Presupuesto general</option></select>
         </div>
-        <div class="form-group"><label>Máquina / Marca / Modelo</label><input type="text" placeholder="Ej: Excavadora CAT 320..."></div>
-        <div class="form-group"><label>Descripción del problema</label><textarea placeholder="Contanos qué está pasando con la máquina..." required></textarea></div>
+        <div class="form-group"><label>Máquina / Marca / Modelo</label><input type="text" name="maquina" placeholder="Ej: Excavadora CAT 320..."></div>
+        <div class="form-group"><label>Descripción del problema</label><textarea name="mensaje" placeholder="Contanos qué está pasando con la máquina..." required></textarea></div>
         <button type="submit" class="form-submit">Enviar consulta →</button>
+<input type="hidden" name="_next" value="https://meb-machinery.github.io/meb-machinery">
+<input type="hidden" name="_subject" value="Nueva consulta desde MEB Machinery">
         <div class="form-msg" id="formMsg"></div>
       </form>
     </div>
