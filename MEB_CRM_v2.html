@@ -815,7 +815,7 @@ function renderTrabajos() {
       <td><span class="badge badge-blue">${t.tipo||'—'}</span></td>
       <td>${badgeEstado(t.estado)}</td>
       <td>${t.estadoMaquina?badgeEstado(t.estadoMaquina.toLowerCase()):'—'}</td>
-      <td><span style="color:${ganancia>=0?'var(--green)':'var(--red)';};font-family:'Bebas Neue';font-size:14px">${fmtMonto(ganancia)}</span> <span class="td-muted">${margen}%</span></td>
+      <td><span style="color:${ganancia>=0?'var(--green)':'var(--red)'};font-family:'Bebas Neue';font-size:14px">${fmtMonto(ganancia)}</span> <span class="td-muted">${margen}%</span></td>
       <td><div class="actions">
         <button class="btn-secondary" onclick="cambiarEstado('trabajos','${t.id}',['pendiente','en curso','completado','cancelado'])">Estado</button>
         <button class="btn-danger" onclick="eliminar('trabajos','${t.id}')">✕</button>
