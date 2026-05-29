@@ -464,9 +464,10 @@ function loadLocal() { try { const d=localStorage.getItem('meb_crm_v2'); if(d) D
 // LOGIN
 // ============================================================
 function doLogin() {
-  const u=document.getElementById('loginUser').value.trim().toLowerCase();
-  const p=document.getElementById('loginPass').value;
-  if(USERS[u]===p) {
+  const u = document.getElementById('loginUser').value.trim().toLowerCase().replace(/\s/g,'');
+  const p = document.getElementById('loginPass').value.trim().replace(/\s/g,'');
+  const ok = (u === 'meb' || u === 'admin') && p === 'meb2025';
+  if(ok) {
     document.getElementById('loginScreen').style.display='none';
     document.getElementById('appTopbar').style.display='flex';
     document.getElementById('appSidebar').style.display='flex';
@@ -475,6 +476,7 @@ function doLogin() {
     showToast('Bienvenido a MEB CRM','success');
   } else {
     document.getElementById('loginError').style.display='block';
+    document.getElementById('loginError').textContent='Usuario: meb · Contraseña: meb2025';
   }
 }
 function doLogout() {
