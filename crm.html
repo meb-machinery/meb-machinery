@@ -854,21 +854,22 @@ function renderPresupuestos() {
 // ============================================================
 function renderPipeline() {
   const board=document.getElementById('pipelineBoard');
+  const clientesConTrabajoCompletado=new Set(DB.trabajos.filter(t=>t.estado==='completado').map(t=>t.clienteId));
+  const clientesEnCurso=new Set(DB.trabajos.filter(t=>t.estado==='en curso').map(t=>t.clienteId));
   board.innerHTML=PIPELINE_STAGES.map((stage,si)=>{
-    const items=DB.presupuestos.filter(p=>{
-      if(stage==='Contacto') return p.estado==='pendiente';
-      if(stage==='Cotización') return p.estado==='pendiente';
-      if(stage==='Aprobado') return p.estado==='aprobado';
-      if(stage==='Sin avance') return p.estado==='rechazado';
-      return false;
-    });
-    const trabajosStage=DB.trabajos.filter(t=>{
-      if(stage==='En ejecución') return t.estado==='en curso';
-      if(stage==='Finalizado') return t.estado==='completado';
-      return false;
-    });
-    const allItems=[...items,...trabajosStage];
-    const total=allItems.reduce((s,i)=>s+Number(i.monto||i.montoCobrado||0),0);
+    let allItems=[];
+    if(stage==='Contacto'||stage==='Cotización'){
+      allItems=DB.presupuestos.filter(p=>p.estado==='pendiente'&&!clientesConTrabajoCompletado.has(p.clienteId)&&!clientesEnCurso.has(p.clienteId));
+    } else if(stage==='Aprobado'){
+      allItems=DB.presupuestos.filter(p=>p.estado==='aprobado');
+    } else if(stage==='En ejecución'){
+      allItems=DB.presupuestos.filter(p=>clientesEnCurso.has(p.clienteId));
+    } else if(stage==='Finalizado'){
+      allItems=DB.presupuestos.filter(p=>clientesConTrabajoCompletado.has(p.clienteId));
+    } else if(stage==='Sin avance'){
+      allItems=DB.presupuestos.filter(p=>p.estado==='rechazado');
+    }
+    const total=allItems.reduce((s,i)=>s+Number(i.monto||0),0);
     return `<div class="pipeline-col">
       <div class="pipeline-header">
         <div style="display:flex;align-items:center;gap:6px">
