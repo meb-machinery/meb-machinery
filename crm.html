@@ -234,7 +234,7 @@ select option { background:var(--dark); }
   <div class="login-box">
     <div class="login-logo">
       <div class="lb"><span>MEB</span></div>
-      <div class="lt"><div class="l1">Machinery</div><div class="l2">Solutions · CRM</div></div>
+      <div class="lt"><div class="l1">Machinery Solutions</div><div class="l2">Sistema interno · CRM</div></div>
     </div>
     <h2>ACCESO AL SISTEMA</h2>
     <input type="text" id="loginUser" placeholder="Usuario" value=""/>
@@ -249,7 +249,7 @@ select option { background:var(--dark); }
 <div class="topbar" id="appTopbar" style="display:none">
   <div class="topbar-logo">
     <div class="logo-box"><span>MEB</span></div>
-    <span class="logo-label">Machinery</span>
+    <span class="logo-label">Machinery Solutions</span>
     <span class="logo-sub">CRM</span>
   </div>
   <div class="topbar-right">
@@ -927,13 +927,14 @@ function resolverAlerta(id) {
 // ============================================================
 function renderEstadisticas() {
   // KPIs
-  const totalCobrado=DB.trabajos.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
-  const totalGastos=DB.trabajos.reduce((s,t)=>s+Number(t.montoGastos||0),0);
-  const presAprobados=DB.presupuestos.filter(p=>p.estado==='aprobado').length;
+  // Ingresos desde presupuestos aprobados
+  const presAprobados=DB.presupuestos.filter(p=>p.estado==='aprobado');
   const presTotal=DB.presupuestos.length;
-  const conversion=presTotal?Math.round(presAprobados/presTotal*100):0;
-  const trabajosConMonto=DB.trabajos.filter(t=>t.montoCobrado>0);
-  const ticketProm=trabajosConMonto.length?Math.round(totalCobrado/trabajosConMonto.length):0;
+  const totalCobrado=presAprobados.reduce((s,p)=>s+Number(p.monto||0),0);
+  const totalGastos=DB.trabajos.reduce((s,t)=>s+Number(t.montoGastos||0),0);
+  const conversion=presTotal?Math.round(presAprobados.length/presTotal*100):0;
+  const presConMonto=presAprobados.filter(p=>Number(p.monto||0)>0);
+  const ticketProm=presConMonto.length?Math.round(totalCobrado/presConMonto.length):0;
   const rentabilidad=totalCobrado>0?Math.round((totalCobrado-totalGastos)/totalCobrado*100):0;
 
   document.getElementById('e-ingresos').textContent=fmtMonto(totalCobrado);
