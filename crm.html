@@ -403,9 +403,19 @@ select option { background:var(--dark); }
       <div class="stat-card blue"><div class="stat-val" id="e-ticket">$0</div><div class="stat-label">Ticket promedio</div><div class="stat-icon">📊</div></div>
       <div class="stat-card orange"><div class="stat-val" id="e-rentabilidad">0%</div><div class="stat-label">Rentabilidad</div><div class="stat-icon">📈</div></div>
     </div>
+    <div class="stats-grid" style="margin-top:-8px">
+      <div class="stat-card green"><div class="stat-val" id="e-mano-obra">$0</div><div class="stat-label">Ganancia mano de obra</div><div class="stat-icon">🔧</div><div class="stat-sub">Cobrado por trabajo técnico</div></div>
+      <div class="stat-card blue"><div class="stat-val" id="e-comision-rep">$0</div><div class="stat-label">Comisión repuestos</div><div class="stat-icon">⚙️</div><div class="stat-sub">Markup sobre costo de repuesto</div></div>
+      <div class="stat-card orange"><div class="stat-val" id="e-costo-rep">$0</div><div class="stat-label">Costo repuestos</div><div class="stat-icon">📦</div><div class="stat-sub">Lo que MEB pagó en repuestos</div></div>
+      <div class="stat-card yellow"><div class="stat-val" id="e-rep-facturado">$0</div><div class="stat-label">Repuestos facturados</div><div class="stat-icon">🧾</div><div class="stat-sub">Lo que se cobró al cliente</div></div>
+    </div>
     <div class="charts-grid">
       <div class="chart-card"><div class="chart-title">TRABAJOS POR ESTADO</div><div class="chart-wrap"><canvas id="chartEstados"></canvas></div></div>
       <div class="chart-card"><div class="chart-title">PRESUPUESTOS POR ESTADO</div><div class="chart-wrap"><canvas id="chartPresup"></canvas></div></div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card"><div class="chart-title">DESGLOSE DE INGRESOS</div><div class="chart-wrap"><canvas id="chartDesglose"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">REPUESTO: COSTO VS FACTURADO</div><div class="chart-wrap"><canvas id="chartRepuestos"></canvas></div></div>
     </div>
     <div class="charts-grid">
       <div class="chart-card"><div class="chart-title">CLIENTES POR ZONA</div><div class="chart-wrap"><canvas id="chartZonas"></canvas></div></div>
@@ -566,7 +576,11 @@ async function syncAll() {
       titulo:r.TITULO||'', tipo:r.TIPO||'', estado:(r.ESTADO||'pendiente').toLowerCase(),
       estadoMaquina:r.ESTADO_MAQUINA||'', fechaInicio:r.FECHA_INICIO||'',
       fechaFin:r.FECHA_FIN||'', montoCobrado:parseFloat(r.MONTO_COBRADO)||0,
-      montoGastos:parseFloat(r.MONTO_GASTOS)||0, notas:r.NOTAS||'', fotoUrl:r.FOTO_URL||''
+      montoGastos:parseFloat(r.MONTO_GASTOS)||0,
+      costoRepuesto:parseFloat(r.COSTO_REPUESTO)||0,
+      precioRepuestoFacturado:parseFloat(r.PRECIO_REPUESTO_FACTURADO)||0,
+      manoObraCobrada:parseFloat(r.MANO_OBRA_COBRADA)||0,
+      notas:r.NOTAS||'', fotoUrl:r.FOTO_URL||''
     }));
     if(pr.length) DB.presupuestos = pr.map((r,i)=>({
       id:r.ID||uid(), num:i+1, clienteId:r.CLIENTE_ID||r['CLIENTE_ID']||'',
@@ -815,7 +829,11 @@ function renderTrabajos() {
       <td><span class="badge badge-blue">${t.tipo||'—'}</span></td>
       <td>${badgeEstado(t.estado)}</td>
       <td>${t.estadoMaquina?badgeEstado(t.estadoMaquina.toLowerCase()):'—'}</td>
-      <td><span style="color:${ganancia>=0?'var(--green)':'var(--red)'};font-family:'Bebas Neue';font-size:14px">${fmtMonto(ganancia)}</span> <span class="td-muted">${margen}%</span></td>
+      <td>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:3px">MO: <span style="color:var(--green)">${fmtMonto(t.manoObraCobrada||0)}</span></div>
+        <div style="font-size:11px;color:var(--muted)">Rep: <span style="color:var(--blue-light)">${fmtMonto((t.precioRepuestoFacturado||0)-(t.costoRepuesto||0))}</span></div>
+        <div style="font-family:'Bebas Neue';font-size:14px;color:${ganancia>=0?'var(--yellow)':'var(--red)'}">Total: ${fmtMonto(ganancia)}</div>
+      </td>
       <td><div class="actions">
         <button class="btn-secondary" onclick="cambiarEstado('trabajos','${t.id}',['pendiente','en curso','completado','cancelado'])">Estado</button>
         <button class="btn-danger" onclick="eliminar('trabajos','${t.id}')">✕</button>
@@ -930,6 +948,7 @@ function renderEstadisticas() {
   // Ingresos desde presupuestos aprobados
   const presAprobados=DB.presupuestos.filter(p=>p.estado==='aprobado');
   const presTotal=DB.presupuestos.length;
+  // Ingresos desde presupuestos aprobados
   const totalCobrado=presAprobados.reduce((s,p)=>s+Number(p.monto||0),0);
   const totalGastos=DB.trabajos.reduce((s,t)=>s+Number(t.montoGastos||0),0);
   const conversion=presTotal?Math.round(presAprobados.length/presTotal*100):0;
@@ -937,10 +956,21 @@ function renderEstadisticas() {
   const ticketProm=presConMonto.length?Math.round(totalCobrado/presConMonto.length):0;
   const rentabilidad=totalCobrado>0?Math.round((totalCobrado-totalGastos)/totalCobrado*100):0;
 
+  // Desglose económico desde trabajos
+  const totalManoObra=DB.trabajos.reduce((s,t)=>s+Number(t.manoObraCobrada||0),0);
+  const totalCostoRep=DB.trabajos.reduce((s,t)=>s+Number(t.costoRepuesto||0),0);
+  const totalRepFacturado=DB.trabajos.reduce((s,t)=>s+Number(t.precioRepuestoFacturado||0),0);
+  const totalComisionRep=totalRepFacturado-totalCostoRep;
+
   document.getElementById('e-ingresos').textContent=fmtMonto(totalCobrado);
   document.getElementById('e-conversion').textContent=conversion+'%';
   document.getElementById('e-ticket').textContent=fmtMonto(ticketProm);
   document.getElementById('e-rentabilidad').textContent=rentabilidad+'%';
+
+  // Update desglose cards if exist
+  const dmo=document.getElementById('e-mano-obra'); if(dmo) dmo.textContent=fmtMonto(totalManoObra);
+  const dcr=document.getElementById('e-comision-rep'); if(dcr) dcr.textContent=fmtMonto(totalComisionRep);
+  const dcp=document.getElementById('e-costo-rep'); if(dcp) dcp.textContent=fmtMonto(totalCostoRep);
 
   // Chart config
   Chart.defaults.color='#666';
@@ -985,6 +1015,43 @@ function renderEstadisticas() {
     data:{labels:['Ingresos','Gastos','Ganancia'],datasets:[{data:[totalCobrado,totalGastos,totalCobrado-totalGastos],backgroundColor:['rgba(46,204,113,0.7)','rgba(231,76,60,0.7)','rgba(244,180,0,0.7)'],borderWidth:0,borderRadius:4}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}
   });
+
+  // Desglose de ingresos: mano de obra vs comision repuesto
+  destroyChart('desglose');
+  if(document.getElementById('chartDesglose')) {
+    charts.desglose=new Chart(document.getElementById('chartDesglose'),{
+      type:'doughnut',
+      data:{
+        labels:['Mano de obra','Comisión repuestos'],
+        datasets:[{
+          data:[totalManoObra, totalComisionRep],
+          backgroundColor:['rgba(244,180,0,0.8)','rgba(0,59,112,0.8)'],
+          borderWidth:0
+        }]
+      },
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:12,color:'#aaa'}}}}
+    });
+  }
+
+  // Repuesto: costo vs facturado
+  destroyChart('repuestos');
+  if(document.getElementById('chartRepuestos')) {
+    charts.repuestos=new Chart(document.getElementById('chartRepuestos'),{
+      type:'bar',
+      data:{
+        labels:['Costo MEB','Facturado cliente','Comisión'],
+        datasets:[{
+          data:[totalCostoRep, totalRepFacturado, totalComisionRep],
+          backgroundColor:['rgba(231,76,60,0.7)','rgba(46,204,113,0.7)','rgba(244,180,0,0.7)'],
+          borderWidth:0,borderRadius:4
+        }]
+      },
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}
+    });
+  }
+
+  // Update rep facturado card
+  const drf=document.getElementById('e-rep-facturado'); if(drf) drf.textContent=fmtMonto(totalRepFacturado);
 
   // Tabla rentabilidad
   const trs=[...DB.trabajos].filter(t=>t.montoCobrado>0).map(t=>{
@@ -1067,10 +1134,14 @@ function openModal(type, data={}) {
       <div class="form-group"><label>Fecha fin</label><input id="f-tfechafin" type="date" value="${data.fechaFin||''}"/></div>
       <div class="form-group"><label>Monto cobrado ($)</label><input id="f-tcobrado" type="number" value="${data.montoCobrado||0}"/></div>
       <div class="form-group"><label>Monto gastos ($)</label><input id="f-tgastos" type="number" value="${data.montoGastos||0}"/></div>
-      <div class="form-group full"><label>URL foto del trabajo (Google Drive)</label><input id="f-tfoto" value="${data.fotoUrl||''}" placeholder="https://drive.google.com/..."/></div>
+      <div class="form-group full" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><label style="color:var(--yellow);font-size:11px;letter-spacing:2px">DESGLOSE ECONÓMICO</label></div>
+      <div class="form-group"><label>Costo repuesto ($) — lo que pagó MEB</label><input id="f-tcostoRep" type="number" value="${data.costoRepuesto||0}"/></div>
+      <div class="form-group"><label>Repuesto facturado al cliente ($)</label><input id="f-tprecioRep" type="number" value="${data.precioRepuestoFacturado||0}"/></div>
+      <div class="form-group"><label>Mano de obra cobrada ($)</label><input id="f-tmanoObra" type="number" value="${data.manoObraCobrada||0}"/></div>
+      <div class="form-group"><label>URL foto del trabajo (Google Drive)</label><input id="f-tfoto" value="${data.fotoUrl||''}" placeholder="https://drive.google.com/..."/></div>
       <div class="form-group full"><label>Notas</label><textarea id="f-tnotas">${data.notas||''}</textarea></div>
     </div>`;
-    onSave=()=>guardar('trabajos',{id:data.id||uid(),titulo:gv('f-ttit'),clienteId:gv('f-tcli'),maquinaId:gv('f-tmaq'),tipo:gv('f-ttipo'),estado:gv('f-testado'),estadoMaquina:gv('f-tmaqestado'),fechaInicio:gv('f-tfecha'),fechaFin:gv('f-tfechafin'),montoCobrado:parseFloat(gv('f-tcobrado'))||0,montoGastos:parseFloat(gv('f-tgastos'))||0,fotoUrl:gv('f-tfoto'),notas:gv('f-tnotas')},'titulo');
+    onSave=()=>guardar('trabajos',{id:data.id||uid(),titulo:gv('f-ttit'),clienteId:gv('f-tcli'),maquinaId:gv('f-tmaq'),tipo:gv('f-ttipo'),estado:gv('f-testado'),estadoMaquina:gv('f-tmaqestado'),fechaInicio:gv('f-tfecha'),fechaFin:gv('f-tfechafin'),montoCobrado:parseFloat(gv('f-tcobrado'))||0,montoGastos:parseFloat(gv('f-tgastos'))||0,costoRepuesto:parseFloat(gv('f-tcostoRep'))||0,precioRepuestoFacturado:parseFloat(gv('f-tprecioRep'))||0,manoObraCobrada:parseFloat(gv('f-tmanoObra'))||0,fotoUrl:gv('f-tfoto'),notas:gv('f-tnotas')},'titulo');
   }
 
   else if(type==='presupuesto') {
