@@ -514,31 +514,14 @@ async function analizar() {
 
 function fetchML(query) {
   return new Promise((resolve, reject) => {
-    const callbackName = 'mlcb_' + Date.now();
-    const script = document.createElement('script');
-    const timeout = setTimeout(() => {
-      cleanup();
-      reject(new Error('Tiempo de espera agotado. Intentá de nuevo.'));
-    }, 10000);
-
-    function cleanup() {
-      clearTimeout(timeout);
-      delete window[callbackName];
-      if (script.parentNode) script.parentNode.removeChild(script);
-    }
-
-    window[callbackName] = function(data) {
-      cleanup();
-      resolve(data);
-    };
-
-    const url = `https://api.mercadolibre.com/sites/MLA/search?q=${encodeURIComponent(query)}&limit=20&sort=sold_quantity_desc&callback=${callbackName}`;
-    script.src = url;
-    script.onerror = () => {
-      cleanup();
-      reject(new Error('Error al conectar con MercadoLibre.'));
-    };
-    document.head.appendChild(script);
+    const url = 'https://script.google.com/macros/s/AKfycbwjm05Dd9JV9xIqv06fOkqTuYzL48PSAmtDT4AFJKIeSOPeL3J0n5nkPrA9IWrb99M4/exec?q=' + encodeURIComponent(query);
+    fetch(url)
+      .then(res => {
+        if (!res.ok) throw new Error('Error en el servidor');
+        return res.json();
+      })
+      .then(data => resolve(data))
+      .catch(err => reject(new Error('No se pudo conectar. Intentá de nuevo en unos segundos.')));
   });
 }
 
