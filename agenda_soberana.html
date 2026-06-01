@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agenda · Soberana</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --arcilla: #F0E6DF;
+    --arcilla-deep: #EDD5C8;
+    --terracota: #C4622D;
+    --terracota-dark: #2E1F1A;
+    --terracota-mid: #D4927A;
+    --text-dark: #2E1F1A;
+    --text-mid: #6B4A3D;
+    --text-light: #9B7060;
+    --nerviosa-green: #3D6B4F;
+    --nerviosa-violet: #7B5EA7;
+    --nerviosa-bg: #EDE8F5;
+    --white: #ffffff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; background:var(--arcilla); color:var(--text-dark); min-height:100vh; }
+
+  /* HEADER */
+  .header { background:var(--terracota-dark); padding:1.2rem 2rem; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; z-index:100; }
+  .header-brand { font-family:'Playfair Display',serif; font-size:20px; color:var(--arcilla); letter-spacing:0.08em; }
+  .header-right { text-align:right; }
+  .header-date { font-size:13px; color:var(--arcilla); font-weight:500; }
+  .header-time { font-size:11px; color:var(--terracota-mid); }
+
+  /* TABS */
+  .tabs { display:flex; gap:0; background:var(--terracota-dark); padding:0 2rem; border-top:0.5px solid rgba(255,255,255,0.1); }
+  .tab { padding:0.6rem 1.2rem; font-size:12px; color:var(--terracota-mid); cursor:pointer; border-bottom:2px solid transparent; transition:all 0.2s; font-weight:500; letter-spacing:0.03em; }
+  .tab.active { color:var(--arcilla); border-bottom-color:var(--terracota); }
+  .tab:hover { color:var(--arcilla); }
+
+  /* ALERTAS */
+  .alert-bar { background:var(--terracota); padding:0.6rem 2rem; display:flex; align-items:center; gap:10px; font-size:12px; color:white; }
+  .alert-bar.hidden { display:none; }
+  .alert-dot { width:8px; height:8px; border-radius:50%; background:white; flex-shrink:0; animation:pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* CONTAINER */
+  .container { max-width:1100px; margin:0 auto; padding:1.5rem; }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+
+  .grid { display:grid; grid-template-columns:1fr 300px; gap:1.25rem; }
+  @media(max-width:768px){ .grid{grid-template-columns:1fr;} }
+
+  .section-label { font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-light); margin-bottom:0.75rem; margin-top:1.25rem; display:flex; align-items:center; gap:8px; }
+  .section-label:first-child { margin-top:0; }
+  .section-label::after { content:''; flex:1; height:0.5px; background:var(--terracota-mid); opacity:0.25; }
+
+  /* SEMANA */
+  .week-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+  .day-card { background:white; border-radius:12px; padding:0.85rem 0.7rem; border:0.5px solid rgba(196,98,45,0.12); }
+  .day-card.today { background:var(--terracota-dark); }
+  .day-card.today .day-name { color:var(--terracota-mid); }
+  .day-card.today .day-num { color:var(--arcilla); }
+  .day-card.today .day-item { color:var(--arcilla-deep); }
+  .day-name { font-size:9px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-light); margin-bottom:2px; }
+  .day-num { font-family:'Playfair Display',serif; font-size:22px; color:var(--text-dark); line-height:1; margin-bottom:6px; }
+  .day-tag { display:inline-block; font-size:9px; padding:2px 6px; border-radius:20px; font-weight:500; margin:1px 1px 4px 0; }
+  .tag-nl { background:#FAECE7; color:var(--terracota); }
+  .tag-sob { background:var(--arcilla-deep); color:var(--text-mid); }
+  .tag-nerv { background:var(--nerviosa-bg); color:var(--nerviosa-violet); }
+  .tag-pin { background:#FBEAF0; color:#B0174D; }
+  .tag-off { background:#F0F0F0; color:#aaa; }
+  .day-item { font-size:10px; color:var(--text-mid); line-height:1.4; margin-bottom:2px; padding-left:8px; position:relative; }
+  .day-item::before { content:'·'; position:absolute; left:0; color:var(--terracota); }
+
+  /* PUBLICACIONES */
+  .pub-list { display:flex; flex-direction:column; gap:8px; }
+  .pub-card { background:white; border-radius:12px; padding:0.9rem 1.1rem; border:0.5px solid rgba(196,98,45,0.12); display:flex; gap:10px; align-items:flex-start; cursor:pointer; transition:all 0.2s; }
+  .pub-card:hover { border-color:var(--terracota-mid); }
+  .pub-card.done { opacity:0.45; }
+  .pub-card.done .pub-title { text-decoration:line-through; }
+  .pub-check { width:20px; height:20px; border-radius:50%; border:1.5px solid var(--terracota-mid); display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; transition:all 0.2s; }
+  .pub-card.done .pub-check { background:var(--terracota); border-color:var(--terracota); }
+  .pub-check::after { content:''; display:none; }
+  .pub-card.done .pub-check::after { content:'✓'; display:block; font-size:11px; color:white; }
+  .pub-body { flex:1; }
+  .pub-meta { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:4px; }
+  .pub-title { font-size:13px; font-weight:500; color:var(--text-dark); margin-bottom:3px; line-height:1.4; }
+  .pub-desc { font-size:11px; color:var(--text-mid); line-height:1.55; }
+  .pub-date { font-size:10px; color:var(--text-light); margin-top:4px; }
+  .pub-alert { font-size:10px; color:var(--terracota); font-weight:500; margin-top:3px; }
+
+  /* SIDEBAR WIDGETS */
+  .sidebar { display:flex; flex-direction:column; gap:1rem; }
+  .widget { background:white; border-radius:14px; padding:1rem 1.1rem; border:0.5px solid rgba(196,98,45,0.12); }
+
+  /* STOCK NERVIOSA */
+  .stock-bar { background:var(--nerviosa-bg); border-radius:8px; padding:8px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+  .stock-label { font-size:11px; color:var(--nerviosa-violet); font-weight:500; }
+  .stock-count { font-family:'Playfair Display',serif; font-size:20px; color:var(--nerviosa-violet); }
+  .nerviosa-item { background:var(--nerviosa-bg); border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:12px; color:var(--text-dark); line-height:1.45; border-left:2.5px solid var(--nerviosa-violet); }
+  .nerviosa-item:last-child { margin-bottom:0; }
+  .nerviosa-item-label { font-size:9px; text-transform:uppercase; letter-spacing:0.07em; color:var(--nerviosa-violet); margin-bottom:2px; font-weight:500; }
+  .nerviosa-item.confesion { border-left-color:var(--nerviosa-green); }
+  .nerviosa-item.confesion .nerviosa-item-label { color:var(--nerviosa-green); }
+  .nerviosa-item.humor { border-left-color:var(--terracota); }
+  .nerviosa-item.humor .nerviosa-item-label { color:var(--terracota); }
+
+  /* NOTAS */
+  .nota-area { width:100%; border:none; outline:none; font-family:'DM Sans',sans-serif; font-size:12px; color:var(--text-dark); line-height:1.65; resize:none; background:transparent; min-height:90px; }
+  .nota-area::placeholder { color:var(--text-light); }
+  .nota-save { margin-top:6px; background:var(--terracota-dark); color:var(--arcilla); border:none; border-radius:8px; padding:6px 14px; font-size:12px; font-family:'DM Sans',sans-serif; cursor:pointer; width:100%; }
+  .nota-save:hover { background:var(--terracota); }
+  .nota-saved { background:var(--arcilla); border-radius:8px; padding:7px 10px; margin-top:5px; font-size:11px; color:var(--text-mid); position:relative; }
+  .nota-saved-date { font-size:9px; color:var(--text-light); margin-bottom:2px; }
+  .nota-del { position:absolute; top:5px; right:8px; cursor:pointer; color:var(--text-light); font-size:14px; }
+
+  /* PINTEREST TIPS */
+  .tip-item { padding:7px 0; border-bottom:0.5px solid rgba(196,98,45,0.1); font-size:11px; color:var(--text-mid); line-height:1.5; display:flex; gap:6px; }
+  .tip-item:last-child { border-bottom:none; }
+  .tip-icon { flex-shrink:0; font-size:13px; }
+
+  /* HOOKS */
+  .hook-item { padding:7px 0; border-bottom:0.5px solid rgba(196,98,45,0.1); cursor:pointer; }
+  .hook-item:last-child { border-bottom:none; }
+  .hook-num { font-size:9px; color:var(--terracota); font-weight:500; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:2px; }
+  .hook-text { font-family:'Playfair Display',serif; font-style:italic; font-size:12px; color:var(--text-dark); line-height:1.4; }
+
+  /* BOTONES */
+  .add-btn { background:none; border:1.5px dashed var(--terracota-mid); border-radius:8px; padding:7px; width:100%; font-size:11px; color:var(--text-mid); font-family:'DM Sans',sans-serif; cursor:pointer; margin-top:6px; }
+  .add-btn:hover { background:var(--arcilla); }
+
+  /* TOAST */
+  .toast { position:fixed; bottom:1.5rem; right:1.5rem; background:var(--terracota-dark); color:var(--arcilla); padding:9px 16px; border-radius:10px; font-size:12px; opacity:0; transition:opacity 0.3s; pointer-events:none; z-index:999; }
+  .toast.show { opacity:1; }
+
+  /* RECORDATORIOS */
+  .rec-item { background:var(--arcilla); border-radius:8px; padding:8px 10px; margin-bottom:5px; font-size:11px; color:var(--text-mid); border-left:2.5px solid var(--terracota); }
+  .rec-item.nerv { border-left-color:var(--nerviosa-violet); }
+  .rec-item strong { color:var(--text-dark); }
+
+  /* NEWSLETTER PREVIEW */
+  .nl-preview { background:var(--terracota-dark); border-radius:10px; padding:0.9rem 1rem; margin-top:6px; }
+  .nl-eyebrow { font-size:9px; text-transform:uppercase; letter-spacing:0.1em; color:var(--terracota-mid); margin-bottom:4px; }
+  .nl-title { font-family:'Playfair Display',serif; font-size:13px; color:var(--arcilla); line-height:1.35; margin-bottom:5px; }
+  .nl-status { font-size:10px; color:var(--arcilla-deep); display:flex; align-items:center; gap:5px; }
+  .nl-dot { width:6px; height:6px; border-radius:50%; background:var(--terracota-mid); }
+
+  /* STATS */
+  .stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .stat-item { text-align:center; padding:8px 4px; background:var(--arcilla); border-radius:8px; }
+  .stat-num { font-family:'Playfair Display',serif; font-size:20px; color:var(--terracota); }
+  .stat-label { font-size:9px; color:var(--text-light); text-transform:uppercase; letter-spacing:0.05em; margin-top:1px; }
+
+  /* ROTACION */
+  .rota-card { background:linear-gradient(135deg,var(--nerviosa-bg),#F5F0FC); border-radius:10px; padding:0.9rem; border:0.5px solid rgba(123,94,167,0.2); margin-bottom:8px; }
+  .rota-title { font-size:12px; font-weight:500; color:var(--nerviosa-violet); margin-bottom:6px; }
+  .rota-row { display:flex; gap:4px; flex-wrap:wrap; }
+  .rota-dot { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:500; color:white; flex-shrink:0; }
+  .rd-d { background:var(--nerviosa-violet); }
+  .rd-c { background:var(--nerviosa-green); }
+  .rd-h { background:var(--terracota); }
+  .rota-legend { display:flex; gap:8px; margin-top:6px; flex-wrap:wrap; }
+  .rota-leg { font-size:9px; color:var(--text-light); display:flex; align-items:center; gap:3px; }
+  .rota-leg-dot { width:8px; height:8px; border-radius:50%; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-brand">SOBERANA · Agenda</div>
+  <div class="header-right">
+    <div class="header-date" id="fecha-actual"></div>
+    <div class="header-time" id="hora-actual"></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('semana')">Esta semana</div>
+  <div class="tab" onclick="showTab('junio')">Junio completo</div>
+  <div class="tab" onclick="showTab('nerviosa')">Nerviosa · Stock</div>
+  <div class="tab" onclick="showTab('pinterest')">Pinterest · Tips</div>
+  <div class="tab" onclick="showTab('notas')">Notas</div>
+</div>
+
+<div class="alert-bar" id="alert-bar">
+  <div class="alert-dot"></div>
+  <span id="alert-msg">Cargando alertas...</span>
+</div>
+
+<!-- TAB: SEMANA -->
+<div class="container tab-content active" id="tab-semana">
+  <div class="grid">
+    <div class="main">
+      <div class="section-label">Semana actual · Junio 2026</div>
+      <div class="week-grid" id="week-grid"></div>
+
+      <div class="section-label">Publicaciones de esta semana</div>
+      <div class="pub-list" id="pub-semana"></div>
+    </div>
+    <div class="sidebar">
+      <div class="widget">
+        <div class="section-label">Estado Soberana</div>
+        <div class="stats-row">
+          <div class="stat-item"><div class="stat-num">1</div><div class="stat-label">Newsletters</div></div>
+          <div class="stat-item"><div class="stat-num" id="stat-sub">0</div><div class="stat-label">Suscriptoras</div></div>
+          <div class="stat-item"><div class="stat-num">1</div><div class="stat-label">Pins</div></div>
+        </div>
+      </div>
+      <div class="widget">
+        <div class="section-label">Próximo newsletter</div>
+        <div class="nl-preview">
+          <div class="nl-eyebrow">Soberana · Edición #002 · 10 junio</div>
+          <div class="nl-title">Lo que heredaste sin saberlo</div>
+          <div class="nl-status"><div class="nl-dot"></div>En preparación</div>
+        </div>
+      </div>
+      <div class="widget">
+        <div class="section-label">Recordatorios fijos</div>
+        <div class="rec-item">📨 <strong>Martes</strong> · Newsletter Substack + pin Pinterest</div>
+        <div class="rec-item nerv">😂 <strong>Miércoles</strong> · Publicar Nerviosa Financiera</div>
+        <div class="rec-item nerv">😂 <strong>Sábado</strong> · Segunda publicación Nerviosa</div>
+        <div class="rec-item">✍️ <strong>Viernes</strong> · Frase o dato LATAM Soberana</div>
+      </div>
+      <div class="widget">
+        <div class="section-label">Hooks para grabar (cuando puedas)</div>
+        <div class="hook-item"><div class="hook-num">Hook 01</div><div class="hook-text">"El problema no es que no sabés ahorrar. Es que tu cuerpo aprendió que el dinero no es seguro."</div></div>
+        <div class="hook-item"><div class="hook-num">Hook 02</div><div class="hook-text">"Abrís el closet. Está lleno. Y no tenés nada que ponerte. Eso no es desorden. Es una herida."</div></div>
+        <div class="hook-item"><div class="hook-num">Hook 03</div><div class="hook-text">"¿Sabés cuándo empezó tu relación con el dinero? Antes de que pudieras hablar."</div></div>
+        <div class="hook-item"><div class="hook-num">Hook 04</div><div class="hook-text">"Ahorrás con disciplina. Y cada año tenés menos. No sos vos. Es el sistema."</div></div>
+        <div class="hook-item"><div class="hook-num">Hook 05</div><div class="hook-text">"La próxima vez que gastes sin necesitar, preguntate qué querías callar."</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: JUNIO COMPLETO -->
+<div class="container tab-content" id="tab-junio">
+  <div class="section-label">Junio 2026 · Plan completo</div>
+  <div id="junio-grid"></div>
+</div>
+
+<!-- TAB: NERVIOSA STOCK -->
+<div class="container tab-content" id="tab-nerviosa">
+  <div class="grid">
+    <div class="main">
+      <div class="section-label">Sistema de rotación · Cada 5 publicaciones</div>
+      <div class="rota-card">
+        <div class="rota-title">Patrón recomendado por bloque de 5</div>
+        <div class="rota-row">
+          <div class="rota-dot rd-d" title="Diagnóstico">D</div>
+          <div class="rota-dot rd-d" title="Diagnóstico">D</div>
+          <div class="rota-dot rd-h" title="Humor">H</div>
+          <div class="rota-dot rd-d" title="Diagnóstico">D</div>
+          <div class="rota-dot rd-c" title="Confesión">C</div>
+        </div>
+        <div class="rota-legend">
+          <div class="rota-leg"><div class="rota-leg-dot" style="background:var(--nerviosa-violet)"></div>Diagnóstico</div>
+          <div class="rota-leg"><div class="rota-leg-dot" style="background:var(--nerviosa-green)"></div>Confesión</div>
+          <div class="rota-leg"><div class="rota-leg-dot" style="background:var(--terracota)"></div>Humor puro</div>
+        </div>
+      </div>
+
+      <div class="section-label">Stock de contenido listo · Diagnósticos</div>
+      <div class="nerviosa-item">
+        <div class="nerviosa-item-label">Diagnóstico #1</div>
+        Pagás en cuotas el perfume caro. Comparás el precio del aceite. Las dos sos vos.<br>
+        <strong>Veredicto:</strong> Absuelta por confusión financiera heredada.
+      </div>
+      <div class="nerviosa-item">
+        <div class="nerviosa-item-label">Diagnóstico #2</div>
+        Tenés tres apps de delivery, dos de streaming y una suscripción al gimnasio que no usás.<br>
+        <strong>Veredicto:</strong> Culpable de gastar en posibilidades en lugar de realidades.
+      </div>
+      <div class="nerviosa-item">
+        <div class="nerviosa-item-label">Diagnóstico #3</div>
+        Guardás lo mejor para después. La vajilla cara, el perfume nuevo, el vestido de etiqueta.<br>
+        <strong>Veredicto:</strong> Síndrome del "después" severo. Tratamiento: usarlo hoy.
+      </div>
+      <div class="nerviosa-item">
+        <div class="nerviosa-item-label">Diagnóstico #4</div>
+        Abrís el home banking, cerrás el home banking, abrís el home banking otra vez.<br>
+        <strong>Veredicto:</strong> Ansiedad financiera en fase crónica. Causa: el número no cambia de mirar.
+      </div>
+      <div class="nerviosa-item">
+        <div class="nerviosa-item-label">Diagnóstico #5</div>
+        Empezás el mes con presupuesto. El día 8 ya "arrancás de nuevo el mes que viene".<br>
+        <strong>Veredicto:</strong> El mes que viene lleva 47 intentos esperando.
+      </div>
+
+      <div class="section-label" style="margin-top:1.25rem;">Stock · Confesiones</div>
+      <div class="nerviosa-item confesion">
+        <div class="nerviosa-item-label">Confesión #1</div>
+        "Me gasté el aguinaldo en 48hs sin comprar nada importante."<br>
+        Testigo: mi cuenta bancaria. Prueba: el estado de ánimo del día 49.
+      </div>
+      <div class="nerviosa-item confesion">
+        <div class="nerviosa-item-label">Confesión #2</div>
+        "Revisé el precio de algo 17 veces antes de comprarlo. Después lo compré en el primer lugar."<br>
+        Tiempo invertido: 3 horas. Dinero ahorrado: $0.
+      </div>
+      <div class="nerviosa-item confesion">
+        <div class="nerviosa-item-label">Confesión #3</div>
+        "Agregué cosas al carrito para ver cuánto gastaría. No compré nada. Me quedé con la sensación igual."<br>
+        Diagnóstico: el scroll de compras como terapia no reembolsable.
+      </div>
+
+      <div class="section-label" style="margin-top:1.25rem;">Stock · Humor puro</div>
+      <div class="nerviosa-item humor">
+        <div class="nerviosa-item-label">Humor #1</div>
+        ¿Te lavás las manos después de tocar dinero?<br>
+        Yo: ¿cuál dinero?
+      </div>
+      <div class="nerviosa-item humor">
+        <div class="nerviosa-item-label">Humor #2</div>
+        El banco: "Detectamos un gasto inusual."<br>
+        Yo: Sí, comí.
+      </div>
+      <div class="nerviosa-item humor">
+        <div class="nerviosa-item-label">Humor #3</div>
+        Ahorro para emergencias.<br>
+        Emergencia: vi algo lindo.
+      </div>
+      <div class="nerviosa-item humor">
+        <div class="nerviosa-item-label">Humor #4</div>
+        Mi relación con el dinero es complicada.<br>
+        Él se va. Yo lo dejo ir. Lloramos los dos.
+      </div>
+      <button class="add-btn" onclick="agregarStock()">+ Agregar contenido al stock</button>
+    </div>
+    <div class="sidebar">
+      <div class="widget">
+        <div class="section-label">Contador de stock</div>
+        <div class="stock-bar"><span class="stock-label">Diagnósticos</span><span class="stock-count">5</span></div>
+        <div class="stock-bar"><span class="stock-label">Confesiones</span><span class="stock-count">3</span></div>
+        <div class="stock-bar"><span class="stock-label">Humor puro</span><span class="stock-count">4</span></div>
+        <div style="margin-top:8px;background:var(--arcilla);border-radius:8px;padding:8px 10px;font-size:11px;color:var(--text-mid);">
+          💡 <strong style="color:var(--text-dark);">Regla de oro:</strong> Cada 5 publicaciones debe haber 1 confesión. Mantiene la cuenta humana y real.
+        </div>
+      </div>
+      <div class="widget">
+        <div class="section-label">Próximas publicaciones Nerviosa</div>
+        <div style="font-size:11px;color:var(--text-mid);line-height:1.6;">
+          <div style="padding:5px 0;border-bottom:0.5px solid rgba(196,98,45,0.1);">📅 <strong>Mié 4/6</strong> · Diagnóstico #1</div>
+          <div style="padding:5px 0;border-bottom:0.5px solid rgba(196,98,45,0.1);">📅 <strong>Sáb 7/6</strong> · Diagnóstico #2</div>
+          <div style="padding:5px 0;border-bottom:0.5px solid rgba(196,98,45,0.1);">📅 <strong>Mié 11/6</strong> · Humor #1</div>
+          <div style="padding:5px 0;border-bottom:0.5px solid rgba(196,98,45,0.1);">📅 <strong>Sáb 14/6</strong> · Diagnóstico #3</div>
+          <div style="padding:5px 0;">📅 <strong>Mié 18/6</strong> · ⚠️ Confesión #1 (cada 5ta pub)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: PINTEREST -->
+<div class="container tab-content" id="tab-pinterest">
+  <div class="grid">
+    <div class="main">
+      <div class="section-label">Cómo crecer en Pinterest · Guía práctica</div>
+      <div class="widget" style="margin-bottom:1rem;">
+        <div class="section-label">Lo básico que funciona</div>
+        <div class="tip-item"><span class="tip-icon">📌</span><div><strong>Publicá entre 3 y 5 pines por semana.</strong> No hace falta más. Pinterest premia la consistencia, no el volumen. Un pin bueno por semana durante 6 meses gana a 10 pines mediocres en un mes.</div></div>
+        <div class="tip-item"><span class="tip-icon">🔍</span><div><strong>Las palabras clave son todo.</strong> Antes de publicar, buscá en Pinterest: "ansiedad financiera mujer", "dinero y emociones", "finanzas personales latina". Fijate qué pines aparecen primero y usá esas mismas palabras en tu descripción.</div></div>
+        <div class="tip-item"><span class="tip-icon">📐</span><div><strong>Formato vertical siempre.</strong> El tamaño ideal es 1000x1500px. Las imágenes de Canva que creamos ya son verticales. Perfecto.</div></div>
+        <div class="tip-item"><span class="tip-icon">🔗</span><div><strong>Cada pin debe tener el link a Substack.</strong> Sin link, Pinterest no lleva tráfico. Cada vez que subas un pin, pegá la URL de ese newsletter específico en el campo de destino.</div></div>
+        <div class="tip-item"><span class="tip-icon">🗂️</span><div><strong>Creá tableros temáticos.</strong> No todo en uno. Tablero 1: "Soberana Newsletter". Tablero 2: "Dinero y sistema nervioso". Tablero 3: "Frases finanzas mujer latina". Así Pinterest entiende de qué trata tu cuenta.</div></div>
+      </div>
+      <div class="widget" style="margin-bottom:1rem;">
+        <div class="section-label">Qué mirar cada semana</div>
+        <div class="tip-item"><span class="tip-icon">📊</span><div><strong>Analíticas de Pinterest:</strong> Mirá cuáles pines tienen más "impresiones" (cuánta gente los vio). Los que funcionan, republicalos con otra imagen distinta. El mismo contenido, otra estética.</div></div>
+        <div class="tip-item"><span class="tip-icon">👁️</span><div><strong>Mirar a cuentas similares:</strong> Buscá "finanzas personales mujer" o "money mindset latina" y fijate qué pines tienen más guardados. Eso te dice qué quiere ver tu audiencia.</div></div>
+        <div class="tip-item"><span class="tip-icon">⏰</span><div><strong>Mejor horario para publicar:</strong> Viernes a la tarde y sábado a la mañana. La audiencia de Pinterest es más activa en el fin de semana cuando tiene tiempo para navegar e inspirarse.</div></div>
+        <div class="tip-item"><span class="tip-icon">♻️</span><div><strong>Un pin nunca muere.</strong> A diferencia de Instagram, un pin puede traer tráfico durante años. No te preocupés si el primer mes no ves resultados. El tráfico crece exponencialmente después del mes 3.</div></div>
+      </div>
+      <div class="widget">
+        <div class="section-label">Tableros que tenés que crear ya</div>
+        <div class="tip-item"><span class="tip-icon">📋</span><div><strong>Soberana · Newsletter</strong> — Acá van todos los pines de cada edición.</div></div>
+        <div class="tip-item"><span class="tip-icon">📋</span><div><strong>Dinero y sistema nervioso</strong> — Frases e imágenes sobre la relación emocional con el dinero.</div></div>
+        <div class="tip-item"><span class="tip-icon">📋</span><div><strong>Mujer latinoamericana y finanzas</strong> — Contenido más amplio para captar búsquedas generales.</div></div>
+        <div class="tip-item"><span class="tip-icon">📋</span><div><strong>Frases que tocan algo</strong> — Solo frases. Las más poderosas del newsletter y de Soberana.</div></div>
+      </div>
+    </div>
+    <div class="sidebar">
+      <div class="widget">
+        <div class="section-label">Checklist semanal Pinterest</div>
+        <div id="pinterest-checks"></div>
+      </div>
+      <div class="widget">
+        <div class="section-label">Palabras clave para usar siempre</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;">
+          <span style="background:var(--arcilla);border-radius:20px;padding:3px 10px;font-size:10px;color:var(--text-mid);">finanzas mujer latina</span>
+          <span style="background:var(--arcilla);border-radius:20px;padding:3px 10px;font-size:10px;color:var(--text-mid);">ansiedad y dinero</span>
+          <span style="background:var(--arcilla);border-radius:20px;padding:3px 10px;font-size:10px;color:var(--text-mid);">dinero y emociones</span>
+          <span style="background:var(--arcilla);border-radius:20px;padding:3px 10px;font-size:10px;color:var(--text-mid);">libertad financiera</span>
+          <span style="background:var(--arcilla);border-radius:20px;padding:3px 10px;font-size:10px;color:var(--text-mid);">newsletter finanzas</span>
+          <span style="background:var(--arcilla);border-radius:20px;padding:3px 10px;font-size:10px;color:var(--text-mid);">sistema nervioso dinero</span>
+          <span style="background:var(--arcilla);border-radius:20px;padding:3px 10px;font-size:10px;color:var(--text-mid);">trauma financiero</span>
+          <span style="background:var(--arcilla);border-radius:20px;padding:3px 10px;font-size:10px;color:var(--text-mid);">mujer y finanzas</span>
+          <span style="background:var(--arcilla);border-radius:20px;padding:3px 10px;font-size:10px;color:var(--text-mid);">soberana financiera</span>
+          <span style="background:var(--arcilla);border-radius:20px;padding:3px 10px;font-size:10px;color:var(--text-mid);">LATAM dinero</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: NOTAS -->
+<div class="container tab-content" id="tab-notas">
+  <div class="grid">
+    <div class="main">
+      <div class="section-label">Notas rápidas · Ideas que no querés perder</div>
+      <div class="widget">
+        <textarea class="nota-area" id="nota" placeholder="Anotá una idea, una frase que se te ocurrió, algo que viste y querés usar..."></textarea>
+        <button class="nota-save" onclick="guardarNota()">Guardar nota</button>
+      </div>
+      <div class="section-label">Notas guardadas</div>
+      <div id="notas-guardadas"></div>
+    </div>
+    <div class="sidebar">
+      <div class="widget">
+        <div class="section-label">Ideas para newsletters futuros</div>
+        <div class="hook-item"><div class="hook-num">Edición #003</div><div class="hook-text">El efecto Diderot: por qué una compra siempre trae otra</div></div>
+        <div class="hook-item"><div class="hook-num">Edición #004</div><div class="hook-text">¿Cuándo fue la última vez que el dinero no te generó ansiedad?</div></div>
+        <div class="hook-item"><div class="hook-num">Edición #005</div><div class="hook-text">El lujo no es tener mucho. El lujo es usar lo mejor hoy.</div></div>
+        <div class="hook-item"><div class="hook-num">Edición #006</div><div class="hook-text">La inflación bajó. La sensación de escasez, no.</div></div>
+        <div class="hook-item"><div class="hook-num">Edición #007</div><div class="hook-text">Tu abuela también tuvo miedo de guardar</div></div>
+        <div class="hook-item"><div class="hook-num">Edición #008</div><div class="hook-text">No te falta disciplina. Te falta un sistema nervioso en calma.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// FECHA Y HORA
+function updateDateTime() {
+  const now = new Date();
+  const dias = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  document.getElementById('fecha-actual').textContent = `${dias[now.getDay()]} ${now.getDate()} de ${meses[now.getMonth()]}`;
+  document.getElementById('hora-actual').textContent = now.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+}
+updateDateTime();
+setInterval(updateDateTime, 1000);
+
+// TABS
+function showTab(id) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ALERTAS
+function checkAlerts() {
+  const now = new Date();
+  const day = now.getDay();
+  const hour = now.getHours();
+  const alerts = {
+    2: '📨 HOY ES MARTES · Publicar newsletter en Substack y subir pin a Pinterest',
+    3: '😂 HOY ES MIÉRCOLES · Publicar contenido en Nerviosa Financiera',
+    5: '✍️ HOY ES VIERNES · Publicar frase o dato LATAM en Soberana',
+    6: '😂 HOY ES SÁBADO · Segunda publicación semanal de Nerviosa Financiera',
+  };
+  const bar = document.getElementById('alert-bar');
+  const msg = document.getElementById('alert-msg');
+  if (alerts[day]) {
+    bar.classList.remove('hidden');
+    msg.textContent = alerts[day];
+  } else {
+    bar.classList.add('hidden');
+  }
+}
+checkAlerts();
+
+// SEMANA
+const semanaPubs = [
+  { tags:['tag-nl','tag-pin'], titulo:'Edición #001 · El dólar subió. Tu cuerpo lo sintió antes.', desc:'Ya publicada en Substack. Confirmar que el pin de Pinterest tiene el link correcto.', fecha:'Publicado · 27 mayo', alert:'✅ Subir pin a Pinterest si aún no lo hiciste', done: true },
+  { tags:['tag-nerv'], titulo:'Nerviosa · Diagnóstico #1 · La que paga en cuotas el perfume', desc:'Pagás en cuotas el perfume caro. Comparás el precio del aceite. Las dos sos vos. Veredicto: absuelta.', fecha:'Miércoles 4 junio', alert:'' },
+  { tags:['tag-sob'], titulo:'Soberana · Frase rediseñada en estética Arcilla', desc:'"No es falta de disciplina. Es historia." — Fondo oscuro, tipografía serif, sin texto extra. Diseñar en Canva.', fecha:'Viernes 6 junio', alert:'' },
+  { tags:['tag-nerv'], titulo:'Nerviosa · Diagnóstico #2 · Las tres apps de delivery', desc:'Tenés tres apps de delivery, dos de streaming y una suscripción al gimnasio que no usás. Veredicto: culpable.', fecha:'Sábado 7 junio', alert:'' },
+  { tags:['tag-nl','tag-pin'], titulo:'Edición #002 · Lo que heredaste sin saberlo', desc:'Trauma, epigenética y el dinero que viene de más lejos que tu sueldo. Dato LATAM: brecha de género en la región.', fecha:'Martes 10 junio', alert:'⚠️ Preparar texto esta semana' },
+];
+
+function buildSemana() {
+  const list = document.getElementById('pub-semana');
+  list.innerHTML = '';
+  const saved = JSON.parse(localStorage.getItem('pub_done') || '{}');
+  semanaPubs.forEach((p, i) => {
+    const isDone = saved[i] || p.done;
+    const tagLabels = {'tag-nl':'Newsletter','tag-sob':'Soberana','tag-nerv':'Nerviosa','tag-pin':'Pinterest'};
+    const card = document.createElement('div');
+    card.className = 'pub-card' + (isDone ? ' done' : '');
+    card.innerHTML = `
+      <div class="pub-check"></div>
+      <div class="pub-body">
+        <div class="pub-meta">${p.tags.map(t=>`<span class="day-tag ${t}">${tagLabels[t]}</span>`).join('')}</div>
+        <div class="pub-title">${p.titulo}</div>
+        <div class="pub-desc">${p.desc}</div>
+        <div class="pub-date">${p.fecha}</div>
+        ${p.alert ? `<div class="pub-alert">${p.alert}</div>` : ''}
+      </div>`;
+    card.onclick = () => {
+      card.classList.toggle('done');
+      saved[i] = card.classList.contains('done');
+      localStorage.setItem('pub_done', JSON.stringify(saved));
+      showToast(card.classList.contains('done') ? '✓ Marcado como publicado' : 'Desmarcado');
+    };
+    list.appendChild(card);
+  });
+}
+buildSemana();
+
+// SEMANA VISUAL
+function buildWeek() {
+  const days = ['Lun','Mar','Mié','Jue','Vie'];
+  const contents = [
+    { tags:['tag-sob'], items:['Soberana · frase Arcilla','TikTok + IG'] },
+    { tags:['tag-nl','tag-pin'], items:['Newsletter Substack','Pin Pinterest'] },
+    { tags:['tag-nerv'], items:['Nerviosa · Diagnóstico','o Humor puro'] },
+    { tags:['tag-sob'], items:['Soberana · frase o dato','TikTok + IG'] },
+    { tags:['tag-nerv'], items:['Nerviosa · segunda pub','Sáb si no Vie'] },
+  ];
+  const tagLabels = {'tag-nl':'Newsletter','tag-sob':'Soberana','tag-nerv':'Nerviosa','tag-pin':'Pinterest'};
+  const now = new Date();
+  const todayDay = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - (todayDay===0?6:todayDay-1));
+  const grid = document.getElementById('week-grid');
+  grid.innerHTML = '';
+  days.forEach((day, i) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate()+i);
+    const isToday = date.toDateString()===now.toDateString();
+    const c = contents[i];
+    const card = document.createElement('div');
+    card.className = 'day-card'+(isToday?' today':'');
+    card.innerHTML = `
+      <div class="day-name">${day}</div>
+      <div class="day-num">${date.getDate()}</div>
+      ${c.tags.map(t=>`<span class="day-tag ${t}">${tagLabels[t]}</span>`).join('')}
+      <div style="margin-top:5px;">${c.items.map(item=>`<div class="day-item">${item}</div>`).join('')}</div>`;
+    grid.appendChild(card);
+  });
+}
+buildWeek();
+
+// JUNIO COMPLETO
+const junioData = [
+  { semana:'Semana 1 · 2–8 junio', pubs:[
+    { dia:'Lun 2', tipo:'tag-sob', tit:'Soberana · Frase Arcilla', desc:'"La privación relativa no es envidia." Rediseñada en nueva estética.' },
+    { dia:'Mar 3', tipo:'tag-nl', tit:'Sin newsletter esta semana', desc:'El #001 fue el 27 mayo. El #002 es el 10 junio. Semana de preparación.' },
+    { dia:'Mié 4', tipo:'tag-nerv', tit:'Nerviosa · Diagnóstico #1', desc:'La que paga en cuotas el perfume caro. Veredicto: absuelta.' },
+    { dia:'Vie 6', tipo:'tag-sob', tit:'Soberana · Dato LATAM', desc:'Un dato económico de la semana + una pregunta para la audiencia.' },
+    { dia:'Sáb 7', tipo:'tag-nerv', tit:'Nerviosa · Diagnóstico #2', desc:'Las tres apps de delivery y el gym que no usás. Veredicto: culpable.' },
+  ]},
+  { semana:'Semana 2 · 9–15 junio', pubs:[
+    { dia:'Lun 9', tipo:'tag-sob', tit:'Soberana · Hook · Frase rescatada', desc:'"Tu cerebro no está roto. Está respondiendo." Nueva estética Arcilla.' },
+    { dia:'Mar 10', tipo:'tag-nl', tit:'Newsletter #002 · Lo que heredaste sin saberlo', desc:'Trauma, epigenética, el dinero que viene de más lejos que tu sueldo. + Pin Pinterest.' },
+    { dia:'Mié 11', tipo:'tag-nerv', tit:'Nerviosa · Humor #1', desc:'¿Te lavás las manos después de tocar dinero? Yo: ¿cuál dinero?' },
+    { dia:'Vie 13', tipo:'tag-sob', tit:'Soberana · Frase Arcilla', desc:'"Sanar la relación con el dinero no empieza con un número. Empieza con una pregunta."' },
+    { dia:'Sáb 14', tipo:'tag-nerv', tit:'Nerviosa · Diagnóstico #3', desc:'Guardás lo mejor para después. Síndrome del "después".' },
+  ]},
+  { semana:'Semana 3 · 16–22 junio', pubs:[
+    { dia:'Lun 16', tipo:'tag-sob', tit:'Soberana · Frase Arcilla', desc:'"Compraste algo que no necesitabas justo después de un día agotador. No fue debilidad. Fue biología."' },
+    { dia:'Mar 17', tipo:'tag-nl', tit:'Newsletter #003 · El Efecto Diderot', desc:'Por qué una compra siempre trae otra. Dato LATAM: consumo en e-commerce regional. + Pin Pinterest.' },
+    { dia:'Mié 18', tipo:'tag-nerv', tit:'Nerviosa · ⚠️ CONFESIÓN #1', desc:'Cada 5 publicaciones va una confesión. "Me gasté el aguinaldo en 48hs sin comprar nada importante."' },
+    { dia:'Vie 20', tipo:'tag-sob', tit:'Soberana · Pregunta a la comunidad', desc:'"¿Cuándo fue la última vez que el dinero no te generó ansiedad?" Invitar a responder en comentarios.' },
+    { dia:'Sáb 21', tipo:'tag-nerv', tit:'Nerviosa · Diagnóstico #4', desc:'Abrís el home banking, cerrás, abrís otra vez. Ansiedad financiera en fase crónica.' },
+  ]},
+  { semana:'Semana 4 · 23–30 junio', pubs:[
+    { dia:'Lun 23', tipo:'tag-sob', tit:'Soberana · Frase Arcilla', desc:'"Hay una diferencia enorme entre no comprar porque no podés y no comprar porque decidís."' },
+    { dia:'Mar 24', tipo:'tag-nl', tit:'Newsletter #004 · ¿Cuándo empezó tu relación con el dinero?', desc:'Antes de que pudieras hablar. Memoria corporal y finanzas. + Pin Pinterest.' },
+    { dia:'Mié 25', tipo:'tag-nerv', tit:'Nerviosa · Humor #2', desc:'El banco: "Detectamos un gasto inusual." Yo: Sí, comí.' },
+    { dia:'Vie 27', tipo:'tag-sob', tit:'Soberana · Resumen del mes', desc:'4 newsletters publicados. Lo más leído. Lo que viene en julio. Invitar a suscribirse.' },
+    { dia:'Sáb 28', tipo:'tag-nerv', tit:'Nerviosa · Diagnóstico #5', desc:'Empezás el mes con presupuesto. El día 8 ya "arrancás el mes que viene". 47 intentos esperando.' },
+  ]},
+];
+
+function buildJunio() {
+  const container = document.getElementById('junio-grid');
+  container.innerHTML = '';
+  const tagLabels = {'tag-nl':'Newsletter','tag-sob':'Soberana','tag-nerv':'Nerviosa','tag-pin':'Pinterest'};
+  const tagColors = {'tag-nl':'#FAECE7;color:#C4622D','tag-sob':'#EDD5C8;color:#6B4A3D','tag-nerv':'#EDE8F5;color:#7B5EA7','tag-pin':'#FBEAF0;color:#B0174D'};
+  junioData.forEach(semana => {
+    const block = document.createElement('div');
+    block.style.marginBottom = '1.5rem';
+    block.innerHTML = `<div class="section-label">${semana.semana}</div>`;
+    const list = document.createElement('div');
+    list.className = 'pub-list';
+    semana.pubs.forEach(p => {
+      const item = document.createElement('div');
+      item.className = 'pub-card';
+      const isAlert = p.tit.includes('⚠️');
+      item.innerHTML = `
+        <div class="pub-check"></div>
+        <div class="pub-body">
+          <div class="pub-meta">
+            <span style="font-size:11px;font-weight:500;color:var(--text-light);">${p.dia}</span>
+            <span class="day-tag ${p.tipo}">${tagLabels[p.tipo]||p.tipo}</span>
+            ${isAlert?'<span class="day-tag" style="background:#FFF3CD;color:#856404;">Confesión</span>':''}
+          </div>
+          <div class="pub-title">${p.tit}</div>
+          <div class="pub-desc">${p.desc}</div>
+        </div>`;
+      item.onclick = () => {
+        item.classList.toggle('done');
+        showToast(item.classList.contains('done') ? '✓ Publicado' : 'Desmarcado');
+      };
+      list.appendChild(item);
+    });
+    block.appendChild(list);
+    container.appendChild(block);
+  });
+}
+buildJunio();
+
+// PINTEREST CHECKLIST
+function buildPinterestChecks() {
+  const checks = [
+    '¿Subí el pin de esta semana?',
+    '¿El pin tiene el link al newsletter?',
+    '¿Usé palabras clave en la descripción?',
+    '¿Revisé qué pines tuvieron más impresiones?',
+    '¿Miré qué busca mi audiencia esta semana?',
+  ];
+  const container = document.getElementById('pinterest-checks');
+  container.innerHTML = '';
+  checks.forEach((c, i) => {
+    const item = document.createElement('div');
+    item.style.cssText = 'display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:0.5px solid rgba(196,98,45,0.1);cursor:pointer;font-size:11px;color:var(--text-mid);';
+    item.innerHTML = `<div id="pcheck-${i}" style="width:16px;height:16px;border-radius:50%;border:1.5px solid var(--terracota-mid);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;margin-top:1px;"></div><span>${c}</span>`;
+    item.onclick = () => {
+      const dot = document.getElementById(`pcheck-${i}`);
+      const isDone = dot.style.background === 'rgb(196, 98, 45)';
+      dot.style.background = isDone ? '' : 'var(--terracota)';
+      dot.style.borderColor = isDone ? 'var(--terracota-mid)' : 'var(--terracota)';
+      dot.textContent = isDone ? '' : '✓';
+      dot.style.color = 'white';
+    };
+    container.appendChild(item);
+  });
+}
+buildPinterestChecks();
+
+// NOTAS
+function guardarNota() {
+  const nota = document.getElementById('nota').value.trim();
+  if (!nota) return;
+  const saved = JSON.parse(localStorage.getItem('soberana_notas')||'[]');
+  saved.unshift({ texto:nota, fecha:new Date().toLocaleDateString('es-AR') });
+  localStorage.setItem('soberana_notas', JSON.stringify(saved.slice(0,20)));
+  document.getElementById('nota').value = '';
+  renderNotas();
+  showToast('Nota guardada ✓');
+}
+
+function renderNotas() {
+  const saved = JSON.parse(localStorage.getItem('soberana_notas')||'[]');
+  const container = document.getElementById('notas-guardadas');
+  if (!container) return;
+  if (saved.length===0) { container.innerHTML = '<div style="font-size:12px;color:var(--text-light);padding:8px;">Todavía no hay notas guardadas.</div>'; return; }
+  container.innerHTML = saved.map((n,i) => `
+    <div class="nota-saved">
+      <div class="nota-saved-date">${n.fecha}</div>
+      ${n.texto}
+      <span class="nota-del" onclick="borrarNota(${i})">×</span>
+    </div>`).join('');
+}
+
+function borrarNota(i) {
+  const saved = JSON.parse(localStorage.getItem('soberana_notas')||'[]');
+  saved.splice(i,1);
+  localStorage.setItem('soberana_notas', JSON.stringify(saved));
+  renderNotas();
+}
+
+renderNotas();
+
+// STOCK NERVIOSA
+function agregarStock() {
+  const idea = prompt('¿Cuál es la idea para Nerviosa?');
+  if (!idea) return;
+  const tipo = prompt('Tipo: diagnóstico / confesión / humor');
+  if (!tipo) return;
+  const container = document.querySelector('#tab-nerviosa .main');
+  const btn = container.querySelector('.add-btn');
+  const item = document.createElement('div');
+  item.className = `nerviosa-item ${tipo.toLowerCase().includes('confes')?'confesion':tipo.toLowerCase().includes('humor')?'humor':''}`;
+  item.innerHTML = `<div class="nerviosa-item-label">${tipo}</div>${idea}`;
+  container.insertBefore(item, btn);
+  showToast('Agregado al stock ✓');
+}
+
+// TOAST
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>
