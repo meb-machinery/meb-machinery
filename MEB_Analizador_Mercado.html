@@ -491,13 +491,10 @@ async function analizar() {
   document.getElementById('loadingText').textContent = `Buscando "${query}" en MercadoLibre Argentina...`;
 
   try {
-    // Search ML
-    const url = `${ML_API}/sites/${SITE_ID}/search?q=${encodeURIComponent(query)}&limit=20&sort=sold_quantity_desc`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Error en la API de MercadoLibre');
-    const data = await res.json();
-
+    // Usar JSONP via script tag para evitar CORS
+    const data = await fetchML(query);
     const items = data.results || [];
+    
     if (!items.length) {
       showLoading(false);
       mostrarSinResultados(query);
@@ -513,6 +510,45 @@ async function analizar() {
     showLoading(false);
     mostrarError(e.message);
   }
+}
+
+function fetchML(query) {
+  return new Promise((resolve, reject) => {
+    // Usar proxy CORS gratuito
+    const proxies = [
+      `https://corsproxy.io/?${encodeURIComponent(`https://api.mercadolibre.com/sites/MLA/search?q=${encodeURIComponent(query)}&limit=20&sort=sold_quantity_desc`)}`,
+      `https://api.allorigins.win/get?url=${encodeURIComponent(`https://api.mercadolibre.com/sites/MLA/search?q=${encodeURIComponent(query)}&limit=20&sort=sold_quantity_desc`)}`
+    ];
+    
+    let attempts = 0;
+    
+    function tryProxy(idx) {
+      if (idx >= proxies.length) {
+        reject(new Error('No se pudo conectar con MercadoLibre. Intentá de nuevo en unos segundos.'));
+        return;
+      }
+      
+      fetch(proxies[idx])
+        .then(res => {
+          if (!res.ok) throw new Error('Proxy error');
+          return res.json();
+        })
+        .then(data => {
+          // allorigins devuelve { contents: "..." }
+          if (data.contents) {
+            resolve(JSON.parse(data.contents));
+          } else {
+            // corsproxy devuelve directo
+            resolve(data);
+          }
+        })
+        .catch(() => {
+          tryProxy(idx + 1);
+        });
+    }
+    
+    tryProxy(0);
+  });
 }
 
 // ============================================================
