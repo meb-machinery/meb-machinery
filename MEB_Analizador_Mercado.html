@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MEB — Analizador de Mercado</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --yellow: #F4B400;
+  --black: #0a0a0a;
+  --dark: #111;
+  --panel: #161616;
+  --border: #222;
+  --border2: #2e2e2e;
+  --blue: #003B70;
+  --blue-light: #7bb3e0;
+  --text: #e8e8e8;
+  --muted: #666;
+  --muted2: #3a3a3a;
+  --green: #00c97a;
+  --red: #ff4444;
+  --orange: #ff8c00;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--black);
+  color: var(--text);
+  font-family: 'Barlow', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* BG GRID */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(244,180,0,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(244,180,0,0.025) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none; z-index: 0;
+}
+
+/* TOPBAR */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(10,10,10,0.95);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  padding: 0 28px; height: 54px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.topbar-logo { display: flex; align-items: center; gap: 10px; }
+.logo-box { background: var(--yellow); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 2px; }
+.logo-box span { font-family: 'Bebas Neue'; font-size: 14px; color: var(--black); }
+.logo-text { font-family: 'Bebas Neue'; font-size: 17px; color: var(--yellow); letter-spacing: 3px; }
+.logo-sub { font-size: 10px; color: var(--muted); letter-spacing: 2px; margin-left: 4px; }
+.topbar-badge { background: var(--blue); color: var(--blue-light); font-size: 10px; padding: 3px 10px; border-radius: 2px; letter-spacing: 1px; text-transform: uppercase; }
+
+/* MAIN */
+.main {
+  position: relative; z-index: 1;
+  max-width: 1100px; margin: 0 auto;
+  padding: 82px 24px 48px;
+}
+
+/* HERO */
+.hero { margin-bottom: 40px; }
+.hero-label { font-size: 10px; color: var(--yellow); letter-spacing: 4px; text-transform: uppercase; margin-bottom: 10px; }
+.hero-title { font-family: 'Bebas Neue'; font-size: 52px; color: var(--text); letter-spacing: 3px; line-height: 1; margin-bottom: 8px; }
+.hero-title span { color: var(--yellow); }
+.hero-sub { font-size: 14px; color: var(--muted); letter-spacing: 1px; max-width: 600px; line-height: 1.6; }
+
+/* SEARCH BOX */
+.search-section { margin-bottom: 32px; }
+.search-card {
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 24px 28px;
+}
+.search-card-title { font-family: 'Bebas Neue'; font-size: 16px; color: var(--yellow); letter-spacing: 2px; margin-bottom: 16px; }
+.search-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.search-group { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 200px; }
+.search-group label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+.search-input {
+  background: var(--dark); border: 1px solid var(--border2);
+  color: var(--text); padding: 11px 14px;
+  border-radius: 4px; font-family: 'Barlow'; font-size: 14px;
+  outline: none; transition: border-color 0.2s;
+  width: 100%;
+}
+.search-input:focus { border-color: var(--yellow); }
+.search-select {
+  background: var(--dark); border: 1px solid var(--border2);
+  color: var(--text); padding: 11px 14px;
+  border-radius: 4px; font-family: 'Barlow'; font-size: 13px;
+  outline: none; width: 100%; cursor: pointer;
+}
+.search-select option { background: var(--dark); }
+.btn-analizar {
+  background: var(--yellow); color: var(--black);
+  border: none; padding: 12px 28px;
+  font-family: 'Bebas Neue'; font-size: 16px; letter-spacing: 2px;
+  border-radius: 4px; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  transition: all 0.2s; white-space: nowrap;
+  min-width: 160px; justify-content: center;
+}
+.btn-analizar:hover { background: #ffc72c; transform: translateY(-1px); }
+.btn-analizar:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* QUICK TAGS */
+.quick-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.quick-tag {
+  background: transparent; border: 1px solid var(--border2);
+  color: var(--muted); font-size: 11px; padding: 4px 12px;
+  border-radius: 20px; cursor: pointer; letter-spacing: 1px;
+  transition: all 0.15s; font-family: 'Barlow';
+}
+.quick-tag:hover { border-color: var(--yellow); color: var(--yellow); }
+
+/* LOADING */
+.loading-bar {
+  display: none; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--yellow), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+  border-radius: 2px; margin: 20px 0;
+}
+.loading-bar.show { display: block; }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+
+.loading-text { text-align: center; font-size: 12px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; padding: 20px; display: none; }
+.loading-text.show { display: block; }
+
+/* RESULTS */
+.results-section { display: none; }
+.results-section.show { display: block; }
+
+/* SUMMARY CARDS */
+.summary-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
+.sum-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 6px; padding: 16px 18px; position: relative; overflow: hidden;
+}
+.sum-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+.sum-card.y::before { background: var(--yellow); }
+.sum-card.g::before { background: var(--green); }
+.sum-card.b::before { background: var(--blue); }
+.sum-card.o::before { background: var(--orange); }
+.sum-val { font-family: 'Bebas Neue'; font-size: 28px; color: var(--text); letter-spacing: 1px; line-height: 1; }
+.sum-label { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
+.sum-sub { font-size: 11px; color: var(--muted2); margin-top: 6px; }
+
+/* RECOMMENDATION BOX */
+.rec-box {
+  border-radius: 6px; padding: 16px 20px; margin-bottom: 20px;
+  display: flex; align-items: flex-start; gap: 14px;
+  border: 1px solid;
+}
+.rec-box.good { background: rgba(0,201,122,0.06); border-color: rgba(0,201,122,0.3); }
+.rec-box.ok { background: rgba(244,180,0,0.06); border-color: rgba(244,180,0,0.3); }
+.rec-box.bad { background: rgba(255,68,68,0.06); border-color: rgba(255,68,68,0.3); }
+.rec-icon { font-size: 24px; flex-shrink: 0; }
+.rec-content .rec-title { font-family: 'Bebas Neue'; font-size: 16px; letter-spacing: 2px; margin-bottom: 4px; }
+.rec-content .rec-text { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.rec-box.good .rec-title { color: var(--green); }
+.rec-box.ok .rec-title { color: var(--yellow); }
+.rec-box.bad .rec-title { color: var(--red); }
+
+/* TABS */
+.tabs { display: flex; gap: 2px; margin-bottom: 16px; background: var(--panel); border-radius: 6px; padding: 4px; border: 1px solid var(--border); }
+.tab {
+  flex: 1; padding: 8px 12px; text-align: center;
+  font-family: 'Bebas Neue'; font-size: 13px; letter-spacing: 2px;
+  cursor: pointer; border-radius: 4px; color: var(--muted);
+  transition: all 0.15s;
+}
+.tab:hover { color: var(--text); }
+.tab.active { background: var(--yellow); color: var(--black); }
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* TABLE */
+.results-card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.results-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.results-title { font-family: 'Bebas Neue'; font-size: 15px; color: var(--yellow); letter-spacing: 2px; }
+.results-count { font-size: 11px; color: var(--muted); letter-spacing: 1px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th { padding: 10px 14px; font-size: 9px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; border-bottom: 1px solid var(--border); background: var(--dark); text-align: left; white-space: nowrap; }
+td { padding: 11px 14px; font-size: 13px; color: var(--text); border-bottom: 1px solid var(--border); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,0.015); }
+.badge { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
+.badge-green { background: rgba(0,201,122,0.12); color: var(--green); }
+.badge-yellow { background: rgba(244,180,0,0.12); color: var(--yellow); }
+.badge-red { background: rgba(255,68,68,0.12); color: var(--red); }
+.badge-blue { background: rgba(0,59,112,0.35); color: var(--blue-light); }
+.price-ml { font-family: 'Bebas Neue'; font-size: 16px; color: var(--yellow); letter-spacing: 1px; }
+.price-china { font-family: 'Bebas Neue'; font-size: 14px; color: var(--blue-light); }
+.margin-val { font-family: 'Bebas Neue'; font-size: 15px; }
+.margin-val.high { color: var(--green); }
+.margin-val.mid { color: var(--yellow); }
+.margin-val.low { color: var(--red); }
+.vendor-name { font-weight: 600; font-size: 12px; }
+.sold-count { color: var(--muted); font-size: 12px; }
+.product-link { color: var(--yellow); text-decoration: none; font-size: 11px; }
+.product-link:hover { text-decoration: underline; }
+
+/* ALIBABA SECTION */
+.alibaba-card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 20px; }
+.alibaba-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.alibaba-icon { font-size: 24px; }
+.alibaba-title { font-family: 'Bebas Neue'; font-size: 16px; color: var(--yellow); letter-spacing: 2px; }
+.alibaba-sub { font-size: 11px; color: var(--muted); margin-top: 2px; letter-spacing: 1px; }
+.alibaba-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
+.ali-item { background: var(--dark); border: 1px solid var(--border2); border-radius: 4px; padding: 14px; }
+.ali-qty { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+.ali-price { font-family: 'Bebas Neue'; font-size: 20px; color: var(--blue-light); letter-spacing: 1px; }
+.ali-price-ars { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.ali-margin { font-size: 12px; margin-top: 6px; }
+.ali-note { font-size: 11px; color: var(--muted); line-height: 1.6; background: rgba(0,59,112,0.1); border: 1px solid rgba(0,59,112,0.3); border-radius: 4px; padding: 10px 14px; margin-top: 8px; }
+
+/* MESSAGES */
+.msg-btn {
+  background: var(--panel); border: 1px solid var(--border2);
+  color: var(--text); padding: 10px 16px; border-radius: 4px;
+  font-family: 'Barlow'; font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  transition: all 0.15s; margin-bottom: 10px; width: 100%;
+  text-align: left;
+}
+.msg-btn:hover { border-color: var(--yellow); color: var(--yellow); }
+.msg-content {
+  display: none; background: var(--dark); border: 1px solid var(--border2);
+  border-radius: 4px; padding: 16px; margin-bottom: 14px;
+  font-size: 13px; line-height: 1.8; color: var(--text);
+  white-space: pre-wrap;
+}
+.msg-content.show { display: block; }
+.copy-btn {
+  background: var(--yellow); color: var(--black); border: none;
+  padding: 6px 14px; border-radius: 3px; font-family: 'Bebas Neue';
+  font-size: 12px; letter-spacing: 1px; cursor: pointer; margin-top: 10px;
+}
+
+/* HISTORY */
+.history-section { margin-top: 24px; }
+.history-title { font-family: 'Bebas Neue'; font-size: 14px; color: var(--muted); letter-spacing: 2px; margin-bottom: 12px; }
+.history-list { display: flex; flex-direction: column; gap: 8px; }
+.history-item {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 4px; padding: 12px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; transition: border-color 0.15s;
+}
+.history-item:hover { border-color: var(--yellow); }
+.history-item .hi-product { font-size: 13px; font-weight: 600; color: var(--text); }
+.history-item .hi-date { font-size: 11px; color: var(--muted); }
+.history-item .hi-badge { font-family: 'Bebas Neue'; font-size: 12px; color: var(--yellow); letter-spacing: 1px; }
+
+/* EMPTY */
+.empty-state { text-align: center; padding: 48px 24px; color: var(--muted); }
+.empty-icon { font-size: 40px; opacity: 0.2; margin-bottom: 14px; }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--dark); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .summary-grid { grid-template-columns: repeat(2,1fr); }
+  .alibaba-grid { grid-template-columns: 1fr; }
+  .hero-title { font-size: 36px; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-logo">
+    <div class="logo-box"><span>MEB</span></div>
+    <span class="logo-text">Machinery Solutions</span>
+    <span class="logo-sub">· Analizador de Mercado</span>
+  </div>
+  <div class="topbar-badge">MercadoLibre API · En vivo</div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-label">Inteligencia comercial</div>
+    <div class="hero-title">Análisis de <span>mercado</span><br>en tiempo real</div>
+    <div class="hero-sub">Buscá cualquier repuesto industrial, compará precios de MercadoLibre con estimaciones de China y calculá tu margen de ganancia al instante.</div>
+  </div>
+
+  <!-- SEARCH -->
+  <div class="search-section">
+    <div class="search-card">
+      <div class="search-card-title">🔍 NUEVA BÚSQUEDA</div>
+      <div class="search-row">
+        <div class="search-group" style="flex:2">
+          <label>Producto a analizar</label>
+          <input class="search-input" id="searchInput" placeholder="Ej: rodamiento 6205, correa A50, filtro hidráulico..." onkeydown="if(event.key==='Enter')analizar()">
+        </div>
+        <div class="search-group">
+          <label>Categoría</label>
+          <select class="search-select" id="categorySelect">
+            <option value="">Todas las categorías</option>
+            <option value="Herramientas e Industria">Herramientas e Industria</option>
+            <option value="Industrias y Oficinas">Industrias y Oficinas</option>
+            <option value="Autos, Motos y Otros">Autos y Maquinaria</option>
+          </select>
+        </div>
+        <div class="search-group">
+          <label>Tipo de cambio USD</label>
+          <input class="search-input" id="tipoCambio" type="number" value="1200" placeholder="1200">
+        </div>
+        <button class="btn-analizar" id="btnAnalizar" onclick="analizar()">
+          ▶ ANALIZAR
+        </button>
+      </div>
+      <div class="quick-tags">
+        <span class="quick-tag" onclick="buscarRapido('rodamiento 6205')">Rodamiento 6205</span>
+        <span class="quick-tag" onclick="buscarRapido('rodamiento 6208')">Rodamiento 6208</span>
+        <span class="quick-tag" onclick="buscarRapido('correa industrial A50')">Correa A50</span>
+        <span class="quick-tag" onclick="buscarRapido('filtro hidráulico industrial')">Filtro hidráulico</span>
+        <span class="quick-tag" onclick="buscarRapido('reten aceite industrial')">Retén de aceite</span>
+        <span class="quick-tag" onclick="buscarRapido('o-ring kit industrial')">Kit O-rings</span>
+        <span class="quick-tag" onclick="buscarRapido('bomba hidráulica')">Bomba hidráulica</span>
+        <span class="quick-tag" onclick="buscarRapido('caja de herramientas profesional')">Caja herramientas</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOADING -->
+  <div class="loading-bar" id="loadingBar"></div>
+  <div class="loading-text" id="loadingText">Consultando MercadoLibre en tiempo real...</div>
+
+  <!-- RESULTS -->
+  <div class="results-section" id="resultsSection">
+
+    <!-- SUMMARY -->
+    <div class="summary-grid" id="summaryGrid"></div>
+
+    <!-- RECOMMENDATION -->
+    <div id="recBox"></div>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('ml')">📊 MERCADOLIBRE</div>
+      <div class="tab" onclick="switchTab('china')">🇨🇳 ESTIMACIÓN CHINA</div>
+      <div class="tab" onclick="switchTab('mensajes')">✉ MENSAJES</div>
+    </div>
+
+    <!-- TAB ML -->
+    <div class="tab-content active" id="tab-ml">
+      <div class="results-card">
+        <div class="results-header">
+          <span class="results-title" id="resultTitle">RESULTADOS</span>
+          <span class="results-count" id="resultCount"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Producto</th>
+                <th>Vendedor</th>
+                <th>Precio ML</th>
+                <th>Unidades vendidas</th>
+                <th>Precio est. China</th>
+                <th>Margen local</th>
+                <th>Margen import.</th>
+                <th>Recomendación</th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB CHINA -->
+    <div class="tab-content" id="tab-china">
+      <div class="alibaba-card">
+        <div class="alibaba-header">
+          <div class="alibaba-icon">🏭</div>
+          <div>
+            <div class="alibaba-title">ESTIMACIÓN DE PRECIOS — CHINA (ALIBABA)</div>
+            <div class="alibaba-sub">Basado en promedios históricos de importación Argentina · Los precios reales varían por proveedor y cantidad</div>
+          </div>
+        </div>
+        <div class="alibaba-grid" id="alibabaGrid"></div>
+        <div class="ali-note" id="aliNote"></div>
+      </div>
+    </div>
+
+    <!-- TAB MENSAJES -->
+    <div class="tab-content" id="tab-mensajes">
+      <div class="alibaba-card">
+        <div class="alibaba-header">
+          <div class="alibaba-icon">✉</div>
+          <div>
+            <div class="alibaba-title">MENSAJES LISTOS PARA ENVIAR</div>
+            <div class="alibaba-sub">Copiá y pegá en Alibaba o WhatsApp</div>
+          </div>
+        </div>
+        <div id="mensajesContent"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- HISTORIAL -->
+  <div class="history-section" id="historySection" style="display:none">
+    <div class="history-title">BÚSQUEDAS RECIENTES</div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const ML_API = 'https://api.mercadolibre.com';
+const SITE_ID = 'MLA'; // Argentina
+
+// Factores estimados de precio China vs Argentina
+// Basado en promedios históricos de importación
+const CHINA_FACTOR = { min: 0.12, mid: 0.18, max: 0.25 };
+const MARKUP_LOCAL = 0.50; // markup promedio comprando local
+const COSTO_IMPORTACION_USD = 1200; // costo fijo aprox por pedido chico
+
+let searchHistory = JSON.parse(localStorage.getItem('meb_market_history') || '[]');
+let currentResults = [];
+let currentProduct = '';
+
+// ============================================================
+// UTILS
+// ============================================================
+function fmtARS(n) {
+  return '$' + Math.round(n).toLocaleString('es-AR');
+}
+function fmtUSD(n) {
+  return 'USD ' + n.toFixed(2);
+}
+function getTC() {
+  return parseFloat(document.getElementById('tipoCambio').value) || 1200;
+}
+
+function showLoading(show) {
+  document.getElementById('loadingBar').classList.toggle('show', show);
+  document.getElementById('loadingText').classList.toggle('show', show);
+  document.getElementById('btnAnalizar').disabled = show;
+  if(show) document.getElementById('resultsSection').classList.remove('show');
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+function buscarRapido(term) {
+  document.getElementById('searchInput').value = term;
+  analizar();
+}
+
+// ============================================================
+// MERCADOLIBRE API
+// ============================================================
+async function analizar() {
+  const query = document.getElementById('searchInput').value.trim();
+  if (!query) { document.getElementById('searchInput').focus(); return; }
+
+  currentProduct = query;
+  showLoading(true);
+  document.getElementById('loadingText').textContent = `Buscando "${query}" en MercadoLibre Argentina...`;
+
+  try {
+    // Search ML
+    const url = `${ML_API}/sites/${SITE_ID}/search?q=${encodeURIComponent(query)}&limit=20&sort=sold_quantity_desc`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Error en la API de MercadoLibre');
+    const data = await res.json();
+
+    const items = data.results || [];
+    if (!items.length) {
+      showLoading(false);
+      mostrarSinResultados(query);
+      return;
+    }
+
+    currentResults = items;
+    showLoading(false);
+    mostrarResultados(items, query);
+    guardarHistorial(query, items.length, items[0]?.price || 0);
+
+  } catch(e) {
+    showLoading(false);
+    mostrarError(e.message);
+  }
+}
+
+// ============================================================
+// DISPLAY RESULTS
+// ============================================================
+function mostrarResultados(items, query) {
+  const tc = getTC();
+  const section = document.getElementById('resultsSection');
+  section.classList.add('show');
+
+  // Calcular estadísticas
+  const precios = items.map(i => i.price).filter(p => p > 0);
+  const precioMin = Math.min(...precios);
+  const precioMax = Math.max(...precios);
+  const precioMed = precios.reduce((a,b) => a+b, 0) / precios.length;
+  const totalVentas = items.reduce((s, i) => s + (i.sold_quantity || 0), 0);
+
+  // Precio estimado China (medio)
+  const precioChina_usd = precioMed * CHINA_FACTOR.mid / tc;
+  const precioChina_ars = precioMed * CHINA_FACTOR.mid;
+  const margenLocal = Math.round(MARKUP_LOCAL * 100);
+  const margenImport = precioMed > 0 ? Math.round((precioMed - precioChina_ars) / precioMed * 100) : 0;
+
+  // SUMMARY CARDS
+  document.getElementById('summaryGrid').innerHTML = `
+    <div class="sum-card y">
+      <div class="sum-val">${fmtARS(precioMed)}</div>
+      <div class="sum-label">Precio promedio ML</div>
+      <div class="sum-sub">Rango: ${fmtARS(precioMin)} – ${fmtARS(precioMax)}</div>
+    </div>
+    <div class="sum-card g">
+      <div class="sum-val">${margenImport}%</div>
+      <div class="sum-label">Margen importando</div>
+      <div class="sum-sub">Comprando en China y vendiendo al precio ML</div>
+    </div>
+    <div class="sum-card b">
+      <div class="sum-val">${fmtARS(precioChina_ars)}</div>
+      <div class="sum-label">Precio est. China</div>
+      <div class="sum-sub">≈ ${fmtUSD(precioChina_usd)} · Estimación basada en promedios</div>
+    </div>
+    <div class="sum-card o">
+      <div class="sum-val">${totalVentas.toLocaleString('es-AR')}</div>
+      <div class="sum-label">Unidades vendidas</div>
+      <div class="sum-sub">Entre los ${items.length} primeros resultados</div>
+    </div>
+  `;
+
+  // RECOMMENDATION
+  let recClass, recIcon, recTitle, recText;
+  if (margenImport >= 60) {
+    recClass = 'good'; recIcon = '🟢';
+    recTitle = 'MUY RENTABLE — CONVIENE IMPORTAR';
+    recText = `Con un margen estimado del ${margenImport}%, importar desde China es muy conveniente. El precio local de ${fmtARS(precioMed)} vs el costo estimado de importación de ${fmtARS(precioChina_ars)} deja un margen sólido. Recomendamos hacer un pedido de prueba para validar la calidad.`;
+  } else if (margenImport >= 35) {
+    recClass = 'ok'; recIcon = '🟡';
+    recTitle = 'RENTABLE — EVALUAR SEGÚN VOLUMEN';
+    recText = `El margen del ${margenImport}% es aceptable. Conviene importar si el volumen mensual justifica el pedido mínimo y los costos de aduana. Para cantidades bajas, la compra local con markup del ${margenLocal}% puede ser más práctica.`;
+  } else {
+    recClass = 'bad'; recIcon = '🔴';
+    recTitle = 'MARGEN BAJO — MEJOR COMPRA LOCAL';
+    recText = `El margen importando (${margenImport}%) es bajo para este producto. El precio en MercadoLibre es muy competitivo. Recomendamos comprar local y aplicar un markup del ${margenLocal}% para mantenerse competitivo sin el riesgo de importación.`;
+  }
+
+  document.getElementById('recBox').innerHTML = `
+    <div class="rec-box ${recClass}">
+      <div class="rec-icon">${recIcon}</div>
+      <div class="rec-content">
+        <div class="rec-title">${recTitle}</div>
+        <div class="rec-text">${recText}</div>
+      </div>
+    </div>
+  `;
+
+  // TABLE
+  document.getElementById('resultTitle').textContent = `RESULTADOS PARA "${query.toUpperCase()}"`;
+  document.getElementById('resultCount').textContent = `${items.length} publicaciones analizadas`;
+
+  const tbody = document.getElementById('resultsBody');
+  tbody.innerHTML = items.slice(0, 15).map((item, i) => {
+    const precio = item.price || 0;
+    const chinaEst = precio * CHINA_FACTOR.mid;
+    const margenL = Math.round(MARKUP_LOCAL * 100);
+    const margenI = precio > 0 ? Math.round((precio - chinaEst) / precio * 100) : 0;
+    const margenClass = margenI >= 60 ? 'high' : margenI >= 35 ? 'mid' : 'low';
+    const recTag = margenI >= 60 ? '<span class="badge badge-green">Importar</span>' :
+                   margenI >= 35 ? '<span class="badge badge-yellow">Evaluar</span>' :
+                   '<span class="badge badge-blue">Local</span>';
+
+    const seller = item.seller?.nickname || '—';
+    const sold = item.sold_quantity > 0 ? item.sold_quantity.toLocaleString('es-AR') : '—';
+    const title = item.title?.length > 45 ? item.title.slice(0, 45) + '...' : item.title;
+
+    return `<tr>
+      <td style="color:var(--muted);font-size:12px">${i+1}</td>
+      <td>
+        <div style="font-size:13px;font-weight:600;margin-bottom:3px">${title}</div>
+        <a href="${item.permalink}" target="_blank" class="product-link">Ver en MercadoLibre ↗</a>
+      </td>
+      <td><div class="vendor-name">${seller}</div></td>
+      <td><div class="price-ml">${fmtARS(precio)}</div></td>
+      <td><div class="sold-count">${sold} u.</div></td>
+      <td><div class="price-china">${fmtARS(chinaEst)}</div><div style="font-size:10px;color:var(--muted)">≈ ${fmtUSD(chinaEst/tc)}</div></td>
+      <td><div class="margin-val mid">${margenL}%</div></td>
+      <td><div class="margin-val ${margenClass}">${margenI}%</div></td>
+      <td>${recTag}</td>
+    </tr>`;
+  }).join('');
+
+  // ALIBABA TAB
+  mostrarAlibabaEstimacion(query, precioMed, tc);
+
+  // MENSAJES TAB
+  mostrarMensajes(query, precioChina_usd);
+}
+
+// ============================================================
+// ALIBABA ESTIMACION
+// ============================================================
+function mostrarAlibabaEstimacion(query, precioML, tc) {
+  const factores = [
+    { qty: '50 – 100 unidades', factor: CHINA_FACTOR.max, label: 'Pedido pequeño' },
+    { qty: '100 – 500 unidades', factor: CHINA_FACTOR.mid, label: 'Pedido mediano' },
+    { qty: '500+ unidades', factor: CHINA_FACTOR.min, label: 'Pedido grande' },
+  ];
+
+  const costoImportFijo_ars = COSTO_IMPORTACION_USD * tc;
+
+  document.getElementById('alibabaGrid').innerHTML = factores.map(f => {
+    const precioUSD = (precioML * f.factor) / tc;
+    const precioARS = precioML * f.factor;
+    const margen = Math.round((precioML - precioARS) / precioML * 100);
+    const margenClass = margen >= 60 ? 'var(--green)' : margen >= 35 ? 'var(--yellow)' : 'var(--red)';
+
+    return `<div class="ali-item">
+      <div class="ali-qty">${f.label}</div>
+      <div class="ali-qty" style="margin-bottom:8px">${f.qty}</div>
+      <div class="ali-price">${fmtUSD(precioUSD)}</div>
+      <div class="ali-price-ars">${fmtARS(precioARS)} por unidad</div>
+      <div class="ali-margin" style="color:${margenClass}">Margen estimado: ${margen}%</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('aliNote').innerHTML = `
+    <strong style="color:var(--blue-light)">⚠ Importante sobre estas estimaciones:</strong><br>
+    Los precios de China se calculan como un porcentaje del precio de ML Argentina (entre 12% y 25%) basado en datos históricos del mercado industrial. Para obtener precios reales: buscá "<strong>${query}</strong>" en Alibaba.com, pedí cotización a 5 proveedores con el filtro "Verified Supplier" activo, y solicitá muestras antes de un pedido grande.<br><br>
+    <strong>Costo adicional de importación estimado:</strong> USD ${COSTO_IMPORTACION_USD} por pedido (flete + aduana + despachante). Incluilo en el cálculo si el pedido es pequeño.
+  `;
+}
+
+// ============================================================
+// MENSAJES
+// ============================================================
+function mostrarMensajes(query, precioChina_usd) {
+  const msgEN = `Hello,
+
+I am interested in purchasing ${query} for industrial machinery maintenance.
+
+Could you please provide:
+- Unit price for: 50 units / 100 units / 500 units
+- Minimum order quantity (MOQ)
+- Lead time for production and shipping
+- Available certifications (ISO, etc.)
+- Shipping cost to Argentina (Buenos Aires port)
+
+We are a machinery maintenance company in Argentina and are looking for a reliable long-term supplier.
+
+Thank you,
+MEB Machinery Solutions`;
+
+  const msgES = `Hola,
+
+Estoy buscando ${query} para mantenimiento de maquinaria industrial en Argentina.
+
+Necesito que me informen:
+- Precio unitario para: 50 / 100 / 500 unidades
+- Cantidad mínima de pedido (MOQ)
+- Tiempo de producción y envío
+- Costo de envío a Argentina (puerto de Buenos Aires)
+- Certificaciones disponibles
+
+Somos una empresa de mantenimiento de maquinaria y buscamos proveedor a largo plazo.
+
+Gracias,
+MEB Machinery Solutions`;
+
+  const msgWA = `Hola! Te escribo de MEB Machinery Solutions.
+Estoy buscando *${query}* para maquinaria industrial.
+¿Tenés en stock? ¿Cuál es tu mejor precio por cantidad?
+Muchas gracias 🙏`;
+
+  const mensajes = [
+    { id: 'msg-en', icon: '🇺🇸', label: 'Mensaje en inglés — para proveedores de Alibaba', content: msgEN },
+    { id: 'msg-es', icon: '🇦🇷', label: 'Mensaje en español — para distribuidores locales', content: msgES },
+    { id: 'msg-wa', icon: '📱', label: 'Mensaje corto — para WhatsApp', content: msgWA },
+  ];
+
+  document.getElementById('mensajesContent').innerHTML = mensajes.map(m => `
+    <button class="msg-btn" onclick="toggleMsg('${m.id}')">
+      ${m.icon} ${m.label} <span style="margin-left:auto;color:var(--muted);font-size:12px">▼ Ver mensaje</span>
+    </button>
+    <div class="msg-content" id="${m.id}">${m.content}
+      <br><button class="copy-btn" onclick="copiarMsg('${m.id}')">📋 COPIAR</button>
+    </div>
+  `).join('');
+}
+
+function toggleMsg(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('show');
+}
+
+function copiarMsg(id) {
+  const text = document.getElementById(id).innerText.replace('📋 COPIAR', '').trim();
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('Mensaje copiado al portapapeles');
+  });
+}
+
+// ============================================================
+// HISTORIAL
+// ============================================================
+function guardarHistorial(query, count, precio) {
+  const entry = { query, count, precio, date: new Date().toLocaleDateString('es-AR'), ts: Date.now() };
+  searchHistory = [entry, ...searchHistory.filter(h => h.query !== query)].slice(0, 10);
+  localStorage.setItem('meb_market_history', JSON.stringify(searchHistory));
+  renderHistorial();
+}
+
+function renderHistorial() {
+  if (!searchHistory.length) return;
+  const section = document.getElementById('historySection');
+  section.style.display = 'block';
+  document.getElementById('historyList').innerHTML = searchHistory.map(h => `
+    <div class="history-item" onclick="buscarRapido('${h.query}')">
+      <div>
+        <div class="hi-product">${h.query}</div>
+        <div class="hi-date">${h.date} · ${h.count} resultados</div>
+      </div>
+      <div class="hi-badge">$${Math.round(h.precio).toLocaleString('es-AR')}</div>
+    </div>
+  `).join('');
+}
+
+function mostrarSinResultados(query) {
+  document.getElementById('resultsSection').classList.add('show');
+  document.getElementById('summaryGrid').innerHTML = '';
+  document.getElementById('recBox').innerHTML = `<div class="rec-box bad"><div class="rec-icon">🔴</div><div class="rec-content"><div class="rec-title" style="color:var(--red)">SIN RESULTADOS</div><div class="rec-text">No se encontraron resultados para "<strong>${query}</strong>" en MercadoLibre Argentina. Probá con términos más generales o verificá la ortografía.</div></div></div>`;
+  document.getElementById('resultsBody').innerHTML = '';
+}
+
+function mostrarError(msg) {
+  document.getElementById('resultsSection').classList.add('show');
+  document.getElementById('summaryGrid').innerHTML = '';
+  document.getElementById('recBox').innerHTML = `<div class="rec-box bad"><div class="rec-icon">⚠</div><div class="rec-content"><div class="rec-title" style="color:var(--red)">ERROR DE CONEXIÓN</div><div class="rec-text">${msg}<br><br>La API de MercadoLibre requiere conexión a internet. Verificá tu conexión y volvé a intentar.</div></div></div>`;
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function showToast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) { t = document.createElement('div'); t.id='toast'; t.style.cssText='position:fixed;bottom:24px;right:24px;background:#1a1a1a;border:1px solid #333;border-left:3px solid #F4B400;padding:12px 18px;border-radius:4px;z-index:999;font-size:13px;color:#e8e8e8;transition:opacity 0.3s;'; document.body.appendChild(t); }
+  t.textContent = msg; t.style.opacity = '1';
+  setTimeout(() => { t.style.opacity = '0'; }, 2500);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+renderHistorial();
+document.getElementById('searchInput').focus();
+</script>
+</body>
+</html>
