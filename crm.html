@@ -275,6 +275,8 @@ select option { background:var(--dark); }
     <div class="nav-item" onclick="showPage('pipeline')"><span class="nav-icon">🎯</span> Pipeline</div>
     <div class="nav-item" onclick="showPage('alertas')"><span class="nav-icon">🔔</span> Alertas <span class="nav-badge red" id="badge-alertas">0</span></div>
     <div class="nav-item" onclick="showPage('estadisticas')"><span class="nav-icon">📈</span> Estadísticas</div>
+    <div class="nav-item" onclick="showPage('repuestos')"><span class="nav-icon">🔩</span> Repuestos</div>
+    <div class="nav-item" onclick="showPage('mapa')"><span class="nav-icon">🗺️</span> Mapa clientes</div>
   </div>
   <div class="sidebar-footer">
     <p>mebmachinerysolutions<br>@gmail.com<br><br>v2.0 · Google Sheets</p>
@@ -394,6 +396,46 @@ select option { background:var(--dark); }
     <div class="card"><div id="lista-alertas"></div></div>
   </div>
 
+  <!-- REPUESTOS MÁS USADOS -->
+  <div class="page" id="page-repuestos">
+    <div class="page-header"><div class="page-title">REPUESTOS <span>MÁS USADOS</span></div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="card">
+        <div class="card-header"><span class="card-title">🏆 RANKING DE REPUESTOS</span></div>
+        <div id="repuestos-ranking"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">📦 STOCKEAR PRIMERO</span></div>
+        <div id="repuestos-stock"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">📋 TODOS LOS REPUESTOS REGISTRADOS</span></div>
+      <div id="repuestos-lista"></div>
+    </div>
+  </div>
+
+  <!-- MAPA DE CLIENTES -->
+  <div class="page" id="page-mapa">
+    <div class="page-header"><div class="page-title">MAPA <span>DE CLIENTES</span></div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+      <div class="stat-card yellow"><div class="stat-val" id="mapa-total">0</div><div class="stat-label">Clientes en mapa</div></div>
+      <div class="stat-card blue"><div class="stat-val" id="mapa-zonas">0</div><div class="stat-label">Zonas activas</div></div>
+      <div class="stat-card green"><div class="stat-val" id="mapa-top">—</div><div class="stat-label">Zona con más clientes</div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><span class="card-title">📍 CLIENTES POR ZONA</span></div>
+      <div id="mapa-zonas-lista"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">🗺️ LISTADO CON UBICACIONES</span></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Cliente</th><th>Zona</th><th>Trabajos</th><th>Total facturado</th><th>Ver en Maps</th></tr></thead>
+        <tbody id="mapa-tabla"></tbody>
+      </table></div>
+    </div>
+  </div>
+
   <!-- ESTADÍSTICAS -->
   <div class="page" id="page-estadisticas">
     <div class="page-header"><div class="page-title">ESTADÍSTICAS <span>& REPORTES</span></div></div>
@@ -408,6 +450,7 @@ select option { background:var(--dark); }
       <div class="stat-card blue"><div class="stat-val" id="e-comision-rep">$0</div><div class="stat-label">Comisión repuestos</div><div class="stat-icon">⚙️</div><div class="stat-sub">Markup sobre costo de repuesto</div></div>
       <div class="stat-card orange"><div class="stat-val" id="e-costo-rep">$0</div><div class="stat-label">Costo repuestos</div><div class="stat-icon">📦</div><div class="stat-sub">Lo que MEB pagó en repuestos</div></div>
       <div class="stat-card yellow"><div class="stat-val" id="e-rep-facturado">$0</div><div class="stat-label">Repuestos facturados</div><div class="stat-icon">🧾</div><div class="stat-sub">Lo que se cobró al cliente</div></div>
+      <div class="stat-card blue"><div class="stat-val" id="e-movilidad">$0</div><div class="stat-label">Movilidad total</div><div class="stat-icon">🚗</div><div class="stat-sub">Traslados cobrados</div></div>
     </div>
     <div class="charts-grid">
       <div class="chart-card"><div class="chart-title">TRABAJOS POR ESTADO</div><div class="chart-wrap"><canvas id="chartEstados"></canvas></div></div>
@@ -580,6 +623,8 @@ async function syncAll() {
       costoRepuesto:parseFloat(r.COSTO_REPUESTO)||0,
       precioRepuestoFacturado:parseFloat(r.PRECIO_REPUESTO_FACTURADO)||0,
       manoObraCobrada:parseFloat(r.MANO_OBRA_COBRADA)||0,
+      movilidad:parseFloat(r.MOVILIDAD)||0,
+      repuestosDetalle:r.REPUESTOS_DETALLE||'',
       notas:r.NOTAS||'', fotoUrl:r.FOTO_URL||''
     }));
     if(pr.length) DB.presupuestos = pr.map((r,i)=>({
@@ -659,7 +704,8 @@ function showPage(name) {
   const renders={
     dashboard:renderDashboard, clientes:renderClientes, maquinas:renderMaquinas,
     trabajos:renderTrabajos, presupuestos:renderPresupuestos,
-    pipeline:renderPipeline, alertas:renderAlertas, estadisticas:renderEstadisticas
+    pipeline:renderPipeline, alertas:renderAlertas, estadisticas:renderEstadisticas,
+    repuestos:renderRepuestos, mapa:renderMapa
   };
   if(renders[name]) renders[name]();
 }
@@ -671,7 +717,8 @@ function refreshCurrentPage() {
   const renders={
     dashboard:renderDashboard, clientes:renderClientes, maquinas:renderMaquinas,
     trabajos:renderTrabajos, presupuestos:renderPresupuestos,
-    pipeline:renderPipeline, alertas:renderAlertas, estadisticas:renderEstadisticas
+    pipeline:renderPipeline, alertas:renderAlertas, estadisticas:renderEstadisticas,
+    repuestos:renderRepuestos, mapa:renderMapa
   };
   if(renders[name]) renders[name]();
 }
@@ -820,7 +867,7 @@ function renderTrabajos() {
   tbody.innerHTML=data.map(t=>{
     const cl=DB.clientes.find(c=>c.id===t.clienteId);
     const mq=DB.maquinas.find(m=>m.id===t.maquinaId);
-    const ganancia=Number(t.montoCobrado||0)-Number(t.montoGastos||0);
+    const ganancia=(Number(t.manoObraCobrada||0)+Number(t.movilidad||0)+(Number(t.precioRepuestoFacturado||0)-Number(t.costoRepuesto||0)))||Number(t.montoCobrado||0)-Number(t.montoGastos||0);
     const margen=t.montoCobrado>0?Math.round(ganancia/t.montoCobrado*100):0;
     return `<tr>
       <td><div class="td-name">${t.titulo}</div><div class="td-muted">${fmtDate(t.fechaInicio)}</div></td>
@@ -830,8 +877,9 @@ function renderTrabajos() {
       <td>${badgeEstado(t.estado)}</td>
       <td>${t.estadoMaquina?badgeEstado(t.estadoMaquina.toLowerCase()):'—'}</td>
       <td>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:3px">MO: <span style="color:var(--green)">${fmtMonto(t.manoObraCobrada||0)}</span></div>
-        <div style="font-size:11px;color:var(--muted)">Rep: <span style="color:var(--blue-light)">${fmtMonto((t.precioRepuestoFacturado||0)-(t.costoRepuesto||0))}</span></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:2px">MO: <span style="color:var(--green)">${fmtMonto(t.manoObraCobrada||0)}</span></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:2px">Rep: <span style="color:var(--blue-light)">${fmtMonto((t.precioRepuestoFacturado||0)-(t.costoRepuesto||0))}</span></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:2px">Mov: <span style="color:var(--orange)">${fmtMonto(t.movilidad||0)}</span></div>
         <div style="font-family:'Bebas Neue';font-size:14px;color:${ganancia>=0?'var(--yellow)':'var(--red)'}">Total: ${fmtMonto(ganancia)}</div>
       </td>
       <td><div class="actions">
@@ -1052,6 +1100,8 @@ function renderEstadisticas() {
 
   // Update rep facturado card
   const drf=document.getElementById('e-rep-facturado'); if(drf) drf.textContent=fmtMonto(totalRepFacturado);
+  const totalMovilidad=DB.trabajos.reduce((s,t)=>s+Number(t.movilidad||0),0);
+  const dmov=document.getElementById('e-movilidad'); if(dmov) dmov.textContent=fmtMonto(totalMovilidad);
 
   // Tabla rentabilidad
   const trs=[...DB.trabajos].filter(t=>t.montoCobrado>0).map(t=>{
@@ -1138,10 +1188,12 @@ function openModal(type, data={}) {
       <div class="form-group"><label>Costo repuesto ($) — lo que pagó MEB</label><input id="f-tcostoRep" type="number" value="${data.costoRepuesto||0}"/></div>
       <div class="form-group"><label>Repuesto facturado al cliente ($)</label><input id="f-tprecioRep" type="number" value="${data.precioRepuestoFacturado||0}"/></div>
       <div class="form-group"><label>Mano de obra cobrada ($)</label><input id="f-tmanoObra" type="number" value="${data.manoObraCobrada||0}"/></div>
+      <div class="form-group"><label>Movilidad cobrada ($)</label><input id="f-tmovilidad" type="number" value="${data.movilidad||0}" placeholder="Km · viáticos · traslado"/></div>
+      <div class="form-group full"><label>Repuestos utilizados (uno por línea)</label><textarea id="f-trepdetalle" placeholder="Ej: Rodamiento 6205&#10;Retén aceite 40x60&#10;Filtro hidráulico">${data.repuestosDetalle||''}</textarea></div>
       <div class="form-group"><label>URL foto del trabajo (Google Drive)</label><input id="f-tfoto" value="${data.fotoUrl||''}" placeholder="https://drive.google.com/..."/></div>
       <div class="form-group full"><label>Notas</label><textarea id="f-tnotas">${data.notas||''}</textarea></div>
     </div>`;
-    onSave=()=>guardar('trabajos',{id:data.id||uid(),titulo:gv('f-ttit'),clienteId:gv('f-tcli'),maquinaId:gv('f-tmaq'),tipo:gv('f-ttipo'),estado:gv('f-testado'),estadoMaquina:gv('f-tmaqestado'),fechaInicio:gv('f-tfecha'),fechaFin:gv('f-tfechafin'),montoCobrado:parseFloat(gv('f-tcobrado'))||0,montoGastos:parseFloat(gv('f-tgastos'))||0,costoRepuesto:parseFloat(gv('f-tcostoRep'))||0,precioRepuestoFacturado:parseFloat(gv('f-tprecioRep'))||0,manoObraCobrada:parseFloat(gv('f-tmanoObra'))||0,fotoUrl:gv('f-tfoto'),notas:gv('f-tnotas')},'titulo');
+    onSave=()=>guardar('trabajos',{id:data.id||uid(),titulo:gv('f-ttit'),clienteId:gv('f-tcli'),maquinaId:gv('f-tmaq'),tipo:gv('f-ttipo'),estado:gv('f-testado'),estadoMaquina:gv('f-tmaqestado'),fechaInicio:gv('f-tfecha'),fechaFin:gv('f-tfechafin'),montoCobrado:parseFloat(gv('f-tcobrado'))||0,montoGastos:parseFloat(gv('f-tgastos'))||0,costoRepuesto:parseFloat(gv('f-tcostoRep'))||0,precioRepuestoFacturado:parseFloat(gv('f-tprecioRep'))||0,manoObraCobrada:parseFloat(gv('f-tmanoObra'))||0,movilidad:parseFloat(gv('f-tmovilidad'))||0,repuestosDetalle:gv('f-trepdetalle'),fotoUrl:gv('f-tfoto'),notas:gv('f-tnotas')},'titulo');
   }
 
   else if(type==='presupuesto') {
