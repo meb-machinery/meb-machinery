@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Belén — Buscador de Empleos</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary:#7C3AED; --primary-light:#A78BFA; --primary-dark:#5B21B6;
+  --accent:#F59E0B; --black:#0a0a0a; --dark:#111; --panel:#161616;
+  --border:#222; --border2:#2e2e2e; --text:#e8e8e8; --muted:#666;
+  --green:#10B981; --red:#EF4444; --orange:#F59E0B; --blue:#3B82F6;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--black); color:var(--text); font-family:'Barlow',sans-serif; min-height:100vh; }
+body::before { content:''; position:fixed; inset:0; background-image:linear-gradient(rgba(124,58,237,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(124,58,237,0.025) 1px,transparent 1px); background-size:40px 40px; pointer-events:none; z-index:0; }
+
+.topbar { position:fixed; top:0; left:0; right:0; z-index:100; background:rgba(10,10,10,0.97); border-bottom:1px solid var(--border); backdrop-filter:blur(12px); padding:0 24px; height:54px; display:flex; align-items:center; justify-content:space-between; }
+.logo { display:flex; align-items:center; gap:10px; }
+.logo-circle { width:32px; height:32px; background:linear-gradient(135deg,var(--primary),var(--accent)); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; color:#fff; }
+.logo-text { font-family:'Bebas Neue'; font-size:18px; color:var(--primary-light); letter-spacing:3px; }
+.logo-sub { font-size:10px; color:var(--muted); letter-spacing:2px; margin-left:4px; }
+.topbar-right { display:flex; align-items:center; gap:10px; }
+.update-badge { font-size:10px; color:var(--green); letter-spacing:1px; }
+.fav-btn { background:var(--primary); color:#fff; font-size:11px; padding:5px 12px; border-radius:20px; cursor:pointer; border:none; font-family:'Barlow'; letter-spacing:1px; }
+
+.main { position:relative; z-index:1; max-width:1100px; margin:0 auto; padding:74px 24px 48px; }
+
+/* HERO */
+.hero { margin-bottom:24px; }
+.hero-label { font-size:11px; color:var(--primary-light); letter-spacing:4px; text-transform:uppercase; margin-bottom:6px; }
+.hero-title { font-family:'Bebas Neue'; font-size:42px; color:var(--text); letter-spacing:3px; line-height:1; margin-bottom:6px; }
+.hero-title span { color:var(--primary-light); }
+.hero-sub { font-size:13px; color:var(--muted); line-height:1.6; max-width:680px; }
+
+/* CV SELECTOR */
+.cv-selector { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
+.cv-card { background:var(--panel); border:2px solid var(--border); border-radius:8px; padding:14px 16px; cursor:pointer; transition:all 0.2s; }
+.cv-card:hover { border-color:var(--border2); transform:translateY(-1px); }
+.cv-card.active { border-color:var(--primary); background:rgba(124,58,237,0.08); }
+.cv-card .cv-icon { font-size:24px; margin-bottom:8px; }
+.cv-card .cv-name { font-family:'Bebas Neue'; font-size:14px; color:var(--text); letter-spacing:2px; margin-bottom:4px; }
+.cv-card .cv-desc { font-size:11px; color:var(--muted); line-height:1.5; }
+.cv-card .cv-tags { display:flex; gap:4px; flex-wrap:wrap; margin-top:8px; }
+.cv-tag { background:rgba(124,58,237,0.12); color:var(--primary-light); font-size:9px; padding:2px 7px; border-radius:10px; letter-spacing:1px; }
+.cv-card.active .cv-name { color:var(--primary-light); }
+
+/* BUSQUEDAS ACTIVAS */
+.busquedas-section { margin-bottom:20px; }
+.bs-label { font-size:10px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+.bs-label span { color:var(--green); }
+.busquedas-grid { display:flex; gap:8px; flex-wrap:wrap; }
+.busqueda-tag { background:var(--dark); border:1px solid var(--border2); color:var(--text); font-size:12px; padding:6px 14px; border-radius:20px; cursor:pointer; letter-spacing:1px; transition:all 0.15s; display:flex; align-items:center; gap:6px; }
+.busqueda-tag:hover { border-color:var(--primary); color:var(--primary-light); }
+.busqueda-tag.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+.busqueda-tag .bt-icon { font-size:13px; }
+
+/* SEARCH BAR */
+.search-bar-section { background:var(--panel); border:1px solid var(--border2); border-radius:8px; padding:16px 20px; margin-bottom:20px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.search-input { background:var(--dark); border:1px solid var(--border2); color:var(--text); padding:9px 14px; border-radius:4px; font-family:'Barlow'; font-size:13px; outline:none; flex:1; min-width:200px; }
+.search-input:focus { border-color:var(--primary); }
+.btn-buscar { background:var(--primary); color:#fff; border:none; padding:10px 22px; font-family:'Bebas Neue'; font-size:14px; letter-spacing:2px; border-radius:4px; cursor:pointer; transition:background 0.2s; white-space:nowrap; }
+.btn-buscar:hover { background:var(--primary-dark); }
+.btn-buscar:disabled { opacity:0.5; cursor:not-allowed; }
+.btn-all { background:transparent; color:var(--primary-light); border:1px solid var(--primary); padding:9px 16px; font-family:'Bebas Neue'; font-size:13px; letter-spacing:2px; border-radius:4px; cursor:pointer; white-space:nowrap; }
+
+/* LOADING */
+.loading-bar { display:none; height:2px; background:linear-gradient(90deg,transparent,var(--primary),var(--accent),transparent); background-size:200% 100%; animation:shimmer 1.2s infinite; margin:12px 0; }
+.loading-bar.show { display:block; }
+@keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+.loading-text { text-align:center; font-size:12px; color:var(--muted); letter-spacing:2px; padding:12px; display:none; }
+.loading-text.show { display:block; }
+
+/* STATS BAR */
+.stats-bar { display:flex; gap:16px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+.stat-item { font-size:12px; color:var(--muted); letter-spacing:1px; }
+.stat-item strong { color:var(--primary-light); }
+.filter-tabs { display:flex; gap:6px; margin-left:auto; }
+.filter-tab { padding:4px 12px; border-radius:20px; font-size:11px; letter-spacing:1px; cursor:pointer; border:1px solid var(--border2); color:var(--muted); background:transparent; transition:all 0.15s; }
+.filter-tab:hover { border-color:var(--primary); color:var(--primary-light); }
+.filter-tab.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+
+/* JOB CARDS */
+.jobs-grid { display:flex; flex-direction:column; gap:10px; }
+.job-card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:18px 20px; transition:all 0.2s; position:relative; overflow:hidden; }
+.job-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--primary); opacity:0; transition:opacity 0.2s; }
+.job-card:hover { border-color:var(--border2); box-shadow:0 4px 20px rgba(124,58,237,0.08); }
+.job-card:hover::before { opacity:1; }
+.job-card.saved { border-color:rgba(245,158,11,0.3); }
+.job-card.saved::before { opacity:1; background:var(--accent); }
+
+.job-header { display:flex; gap:12px; align-items:flex-start; }
+.job-logo { width:40px; height:40px; border-radius:6px; background:var(--dark); border:1px solid var(--border2); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; overflow:hidden; }
+.job-logo img { width:100%; height:100%; object-fit:cover; }
+.job-info { flex:1; }
+.job-title { font-size:15px; font-weight:600; color:var(--text); margin-bottom:3px; }
+.job-company { font-size:12px; color:var(--primary-light); margin-bottom:6px; }
+.job-meta { display:flex; gap:6px; flex-wrap:wrap; }
+.badge { display:inline-flex; align-items:center; gap:3px; padding:3px 8px; border-radius:3px; font-size:10px; letter-spacing:1px; text-transform:uppercase; font-weight:600; }
+.badge-remote { background:rgba(16,185,129,0.1); color:var(--green); }
+.badge-cat { background:rgba(124,58,237,0.1); color:var(--primary-light); }
+.badge-date { background:rgba(100,100,100,0.1); color:var(--muted); }
+.badge-salary { background:rgba(245,158,11,0.1); color:var(--accent); }
+.badge-match { background:rgba(16,185,129,0.15); color:var(--green); border:1px solid rgba(16,185,129,0.3); }
+
+.job-actions { display:flex; flex-direction:column; align-items:flex-end; gap:8px; flex-shrink:0; }
+.btn-fav { background:none; border:1px solid var(--border2); color:var(--muted); width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center; transition:all 0.2s; }
+.btn-fav:hover { border-color:var(--accent); color:var(--accent); }
+.btn-fav.saved { background:rgba(245,158,11,0.1); border-color:var(--accent); color:var(--accent); }
+.btn-apply { background:var(--primary); color:#fff; border:none; padding:7px 14px; border-radius:4px; font-family:'Bebas Neue'; font-size:12px; letter-spacing:2px; cursor:pointer; text-decoration:none; display:inline-block; }
+.btn-apply:hover { background:var(--primary-dark); }
+
+.job-desc { font-size:12px; color:var(--muted); line-height:1.6; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+
+/* MATCH SCORE */
+.match-bar { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+.match-label { font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; flex-shrink:0; }
+.match-track { flex:1; height:4px; background:var(--border2); border-radius:2px; overflow:hidden; }
+.match-fill { height:100%; border-radius:2px; transition:width 0.5s; }
+.match-pct { font-size:11px; font-weight:600; flex-shrink:0; }
+
+/* FAV PANEL */
+.fav-panel { display:none; position:fixed; top:54px; right:0; bottom:0; width:340px; background:var(--dark); border-left:1px solid var(--border); z-index:95; overflow-y:auto; padding:20px; }
+.fav-panel.open { display:block; }
+.fav-title { font-family:'Bebas Neue'; font-size:18px; color:var(--primary-light); letter-spacing:2px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; }
+.fav-close { background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; }
+.fav-item { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:13px; margin-bottom:9px; }
+.fi-title { font-size:13px; font-weight:600; color:var(--text); margin-bottom:3px; }
+.fi-company { font-size:11px; color:var(--primary-light); margin-bottom:8px; }
+.fi-actions { display:flex; gap:6px; }
+.btn-fi-apply { background:var(--primary); color:#fff; border:none; padding:4px 12px; border-radius:3px; font-size:11px; cursor:pointer; font-family:'Bebas Neue'; letter-spacing:1px; text-decoration:none; display:inline-block; }
+.btn-fi-remove { background:none; border:1px solid var(--red); color:var(--red); padding:4px 10px; border-radius:3px; font-size:11px; cursor:pointer; }
+
+/* EMPTY */
+.empty-state { text-align:center; padding:48px 24px; color:var(--muted); }
+.empty-icon { font-size:48px; opacity:0.2; margin-bottom:14px; }
+.empty-title { font-family:'Bebas Neue'; font-size:22px; letter-spacing:2px; margin-bottom:8px; color:var(--text); }
+
+/* TOAST */
+.toast { position:fixed; bottom:24px; right:24px; background:var(--panel); border:1px solid var(--border2); border-left:3px solid var(--primary); padding:12px 18px; border-radius:4px; z-index:999; font-size:13px; color:var(--text); opacity:0; transition:opacity 0.3s; pointer-events:none; max-width:300px; }
+.toast.show { opacity:1; }
+
+::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-track { background:var(--dark); } ::-webkit-scrollbar-thumb { background:var(--border2); border-radius:2px; }
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-circle">B</div>
+    <span class="logo-text">Belén</span>
+    <span class="logo-sub">· Buscador de Empleos</span>
+  </div>
+  <div class="topbar-right">
+    <span class="update-badge" id="updateBadge"></span>
+    <button class="fav-btn" onclick="toggleFavPanel()">⭐ Guardados <span id="favCount">0</span></button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main" id="mainContent">
+
+  <div class="hero">
+    <div class="hero-label">Búsqueda inteligente · Basada en tus CVs</div>
+    <div class="hero-title">Empleos <span>para tu perfil</span></div>
+    <div class="hero-sub">Seleccioná el CV con el que querés buscar — el sistema usa tus palabras clave reales para encontrar las mejores ofertas remotas en tiempo real.</div>
+  </div>
+
+  <!-- CV SELECTOR -->
+  <div class="cv-selector" id="cvSelector">
+    <div class="cv-card active" onclick="selectCV(0,this)">
+      <div class="cv-icon">🎓</div>
+      <div class="cv-name">CV Onboarding & Training</div>
+      <div class="cv-desc">Capacitación corporativa, onboarding de clientes, Customer Success, implementación digital</div>
+      <div class="cv-tags">
+        <span class="cv-tag">Onboarding</span>
+        <span class="cv-tag">Training</span>
+        <span class="cv-tag">Customer Success</span>
+        <span class="cv-tag">People Ops</span>
+      </div>
+    </div>
+    <div class="cv-card" onclick="selectCV(1,this)">
+      <div class="cv-icon">💼</div>
+      <div class="cv-name">CV Perfil Comercial</div>
+      <div class="cv-desc">Atención al cliente, gestión comercial B2B, coordinación operativa, resolución de problemas</div>
+      <div class="cv-tags">
+        <span class="cv-tag">Customer Success</span>
+        <span class="cv-tag">Account Manager</span>
+        <span class="cv-tag">B2B</span>
+        <span class="cv-tag">Ventas</span>
+      </div>
+    </div>
+    <div class="cv-card" onclick="selectCV(2,this)">
+      <div class="cv-icon">👥</div>
+      <div class="cv-name">CV RRHH & People Ops</div>
+      <div class="cv-desc">Selección de personal, People Operations, gestión de proyectos formativos, análisis de competencias</div>
+      <div class="cv-tags">
+        <span class="cv-tag">RRHH</span>
+        <span class="cv-tag">Reclutamiento</span>
+        <span class="cv-tag">People Ops</span>
+        <span class="cv-tag">Talent</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BUSQUEDAS ACTIVAS -->
+  <div class="busquedas-section">
+    <div class="bs-label">Búsquedas para este CV <span id="autoSearchLabel">· Cargando...</span></div>
+    <div class="busquedas-grid" id="busquedasGrid"></div>
+  </div>
+
+  <!-- SEARCH BAR -->
+  <div class="search-bar-section">
+    <input class="search-input" id="searchInput" placeholder="Búsqueda personalizada..." onkeydown="if(event.key==='Enter')buscarCustom()">
+    <button class="btn-buscar" id="btnBuscar" onclick="buscarCustom()">🔍 BUSCAR</button>
+    <button class="btn-all" onclick="buscarAll()">VER TODO</button>
+  </div>
+
+  <!-- LOADING -->
+  <div class="loading-bar" id="loadingBar"></div>
+  <div class="loading-text" id="loadingText"></div>
+
+  <!-- STATS -->
+  <div class="stats-bar" id="statsBar" style="display:none">
+    <div class="stat-item">Encontré <strong id="totalJobs">0</strong> ofertas</div>
+    <div class="stat-item">Buscando por: <strong id="searchedFor">—</strong></div>
+    <div class="filter-tabs">
+      <button class="filter-tab active" onclick="setFilter('todos',this)">Todos</button>
+      <button class="filter-tab" onclick="setFilter('recientes',this)">Últimos 7 días</button>
+      <button class="filter-tab" onclick="setFilter('guardados',this)">Guardados ⭐</button>
+    </div>
+  </div>
+
+  <!-- JOBS -->
+  <div class="jobs-grid" id="jobsGrid">
+    <div class="empty-state">
+      <div class="empty-icon">💼</div>
+      <div class="empty-title">Seleccioná tu CV</div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.6">Elegí el CV con el que querés buscar arriba<br>y el sistema carga las ofertas automáticamente.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- FAV PANEL -->
+<div class="fav-panel" id="favPanel">
+  <div class="fav-title">⭐ GUARDADOS <button class="fav-close" onclick="toggleFavPanel()">✕</button></div>
+  <div id="favList"></div>
+</div>
+
+<script>
+// ============================================================
+// PERFILES DE CV — Basados en los CVs reales de Belén
+// ============================================================
+const CVS = [
+  {
+    nombre: 'Onboarding & Training',
+    icon: '🎓',
+    busquedas: [
+      { label: 'Client Onboarding', query: 'client onboarding', icon: '🚀' },
+      { label: 'Customer Success', query: 'customer success', icon: '🎯' },
+      { label: 'Training Specialist', query: 'training specialist', icon: '📚' },
+      { label: 'Implementation', query: 'implementation specialist', icon: '⚙️' },
+      { label: 'L&D', query: 'learning development', icon: '🧠' },
+      { label: 'People Ops', query: 'people operations', icon: '👥' },
+    ],
+    keywords: ['onboarding', 'customer success', 'training', 'implementation', 'learning', 'people ops', 'enablement']
+  },
+  {
+    nombre: 'Perfil Comercial',
+    icon: '💼',
+    busquedas: [
+      { label: 'Account Manager', query: 'account manager', icon: '💼' },
+      { label: 'Customer Success', query: 'customer success manager', icon: '🤝' },
+      { label: 'Sales Coordinator', query: 'sales coordinator', icon: '📈' },
+      { label: 'Business Dev', query: 'business development', icon: '🚀' },
+      { label: 'Client Relations', query: 'client relations', icon: '🌐' },
+      { label: 'Operations', query: 'operations coordinator', icon: '⚡' },
+    ],
+    keywords: ['account manager', 'customer success', 'sales', 'client', 'business development', 'operations', 'coordinator']
+  },
+  {
+    nombre: 'RRHH & People Ops',
+    icon: '👥',
+    busquedas: [
+      { label: 'HR Specialist', query: 'hr specialist', icon: '👥' },
+      { label: 'Talent Acquisition', query: 'talent acquisition', icon: '🔍' },
+      { label: 'People Ops', query: 'people operations', icon: '🎯' },
+      { label: 'Recruiter', query: 'recruiter remote', icon: '📋' },
+      { label: 'HR Coordinator', query: 'hr coordinator', icon: '🗂️' },
+      { label: 'Talent Manager', query: 'talent manager', icon: '⭐' },
+    ],
+    keywords: ['hr', 'human resources', 'talent', 'recruiter', 'people', 'coordinator', 'specialist']
+  }
+];
+
+let currentCV = 0;
+let allJobs = [];
+let favorites = JSON.parse(localStorage.getItem('belen_favs_v2') || '[]');
+let currentFilter = 'todos';
+let currentSearch = '';
+
+// ============================================================
+// CV SELECTOR
+// ============================================================
+function selectCV(idx, el) {
+  currentCV = idx;
+  document.querySelectorAll('.cv-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderBusquedas();
+  // Auto-buscar con primera búsqueda del CV
+  const cv = CVS[idx];
+  buscar(cv.busquedas[0].query, cv.busquedas[0].label);
+  // Activar primera tag
+  setTimeout(() => {
+    const tags = document.querySelectorAll('.busqueda-tag');
+    tags.forEach(t => t.classList.remove('active'));
+    if (tags[0]) tags[0].classList.add('active');
+  }, 100);
+}
+
+function renderBusquedas() {
+  const cv = CVS[currentCV];
+  document.getElementById('autoSearchLabel').textContent = `· Basadas en tu CV de ${cv.nombre}`;
+  document.getElementById('busquedasGrid').innerHTML = cv.busquedas.map((b,i) =>
+    `<div class="busqueda-tag ${i===0?'active':''}" onclick="buscarTag('${b.query}','${b.label}',this)">
+      <span class="bt-icon">${b.icon}</span>${b.label}
+    </div>`
+  ).join('');
+}
+
+// ============================================================
+// BUSCAR
+// ============================================================
+function buscarTag(query, label, el) {
+  document.querySelectorAll('.busqueda-tag').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  buscar(query, label);
+}
+
+function buscarCustom() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) return;
+  buscar(q, q);
+}
+
+function buscarAll() {
+  document.getElementById('searchInput').value = '';
+  buscar('', 'Todas las ofertas remotas');
+}
+
+async function buscar(query, label) {
+  currentSearch = label || query;
+  showLoading(true, `Buscando "${label || query}"...`);
+
+  try {
+    let url = 'https://remotive.com/api/remote-jobs?limit=50';
+    if (query) url += `&search=${encodeURIComponent(query)}`;
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Error');
+    const data = await res.json();
+
+    allJobs = (data.jobs || []).map(j => ({
+      ...j,
+      matchScore: calcMatch(j)
+    })).sort((a,b) => b.matchScore - a.matchScore);
+
+    showLoading(false);
+    renderJobs(allJobs);
+    document.getElementById('updateBadge').textContent = '↻ ' + new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+
+  } catch(e) {
+    showLoading(false);
+    showError();
+  }
+}
+
+// ============================================================
+// MATCH SCORE — Basado en las habilidades del CV
+// ============================================================
+function calcMatch(job) {
+  const cv = CVS[currentCV];
+  const text = (job.title + ' ' + job.description + ' ' + job.category).toLowerCase();
+  let score = 0;
+  cv.keywords.forEach(kw => { if (text.includes(kw)) score += 15; });
+  // Bonus por categorías relevantes
+  if (job.category?.toLowerCase().includes('hr') || job.category?.toLowerCase().includes('people')) score += 20;
+  if (job.category?.toLowerCase().includes('customer') || job.category?.toLowerCase().includes('success')) score += 20;
+  if (job.category?.toLowerCase().includes('project') || job.category?.toLowerCase().includes('management')) score += 15;
+  return Math.min(score, 99);
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function renderJobs(jobs) {
+  const statsBar = document.getElementById('statsBar');
+  let filtered = jobs;
+
+  if (currentFilter === 'recientes') {
+    const week = Date.now() - 7*24*60*60*1000;
+    filtered = jobs.filter(j => new Date(j.publication_date).getTime() > week);
+  } else if (currentFilter === 'guardados') {
+    filtered = jobs.filter(j => favorites.some(f => f.id === j.id));
+  }
+
+  document.getElementById('totalJobs').textContent = filtered.length;
+  document.getElementById('searchedFor').textContent = currentSearch;
+  statsBar.style.display = filtered.length ? 'flex' : 'none';
+
+  const grid = document.getElementById('jobsGrid');
+  if (!filtered.length) {
+    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">Sin resultados</div><div style="font-size:13px;color:var(--muted)">Probá con otra búsqueda o cambiá el CV.</div></div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(job => {
+    const isSaved = favorites.some(f => f.id === job.id);
+    const date = new Date(job.publication_date);
+    const daysAgo = Math.floor((Date.now() - date.getTime()) / (1000*60*60*24));
+    const dateLabel = daysAgo === 0 ? 'Hoy' : daysAgo === 1 ? 'Ayer' : `Hace ${daysAgo} días`;
+    const desc = job.description ? job.description.replace(/<[^>]*>/g,'').slice(0,180)+'...' : '';
+    const logo = job.company_logo_url ? `<img src="${job.company_logo_url}" alt="" onerror="this.parentElement.innerHTML='🏢'">` : '🏢';
+    const matchColor = job.matchScore >= 60 ? 'var(--green)' : job.matchScore >= 30 ? 'var(--accent)' : 'var(--muted)';
+
+    return `<div class="job-card ${isSaved?'saved':''}">
+      <div class="job-header">
+        <div class="job-logo">${logo}</div>
+        <div class="job-info">
+          <div class="job-title">${job.title}</div>
+          <div class="job-company">${job.company_name}</div>
+          <div class="job-meta">
+            <span class="badge badge-remote">🌍 Remoto</span>
+            <span class="badge badge-cat">${job.category}</span>
+            <span class="badge badge-date">${dateLabel}</span>
+            ${job.salary ? `<span class="badge badge-salary">💰 ${job.salary}</span>` : ''}
+            ${job.matchScore > 0 ? `<span class="badge badge-match">✓ ${job.matchScore}% match</span>` : ''}
+          </div>
+        </div>
+        <div class="job-actions">
+          <button class="btn-fav ${isSaved?'saved':''}" onclick="toggleFav(event,${job.id})">${isSaved?'⭐':'☆'}</button>
+          <a class="btn-apply" href="${job.url}" target="_blank">APLICAR ↗</a>
+        </div>
+      </div>
+      ${desc ? `<div class="job-desc">${desc}</div>` : ''}
+      ${job.matchScore > 0 ? `<div class="match-bar">
+        <span class="match-label">Match con tu CV</span>
+        <div class="match-track"><div class="match-fill" style="width:${job.matchScore}%;background:${matchColor}"></div></div>
+        <span class="match-pct" style="color:${matchColor}">${job.matchScore}%</span>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// FAVORITOS
+// ============================================================
+function toggleFav(e, jobId) {
+  e.stopPropagation();
+  const job = allJobs.find(j => j.id === jobId);
+  if (!job) return;
+  const idx = favorites.findIndex(f => f.id === jobId);
+  if (idx >= 0) { favorites.splice(idx,1); showToast('Eliminado de guardados'); }
+  else { favorites.push({id:job.id,title:job.title,company:job.company_name,url:job.url}); showToast('⭐ Guardado'); }
+  localStorage.setItem('belen_favs_v2', JSON.stringify(favorites));
+  updateFavCount(); renderJobs(allJobs); renderFavPanel();
+}
+
+function updateFavCount() { document.getElementById('favCount').textContent = favorites.length; }
+
+function toggleFavPanel() {
+  const p = document.getElementById('favPanel');
+  p.classList.toggle('open');
+  document.getElementById('mainContent').style.marginRight = p.classList.contains('open') ? '340px' : '0';
+  if (p.classList.contains('open')) renderFavPanel();
+}
+
+function renderFavPanel() {
+  const list = document.getElementById('favList');
+  if (!favorites.length) { list.innerHTML = `<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">Guardá ofertas con ☆ para verlas acá.</div>`; return; }
+  list.innerHTML = favorites.map(f => `
+    <div class="fav-item">
+      <div class="fi-title">${f.title}</div>
+      <div class="fi-company">${f.company}</div>
+      <div class="fi-actions">
+        <a class="btn-fi-apply" href="${f.url}" target="_blank">APLICAR ↗</a>
+        <button class="btn-fi-remove" onclick="removeFav(${f.id})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function removeFav(id) {
+  favorites = favorites.filter(f => f.id !== id);
+  localStorage.setItem('belen_favs_v2', JSON.stringify(favorites));
+  updateFavCount(); renderFavPanel(); renderJobs(allJobs);
+}
+
+// ============================================================
+// FILTER & UI
+// ============================================================
+function setFilter(f, el) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderJobs(allJobs);
+}
+
+function showLoading(show, text='') {
+  document.getElementById('loadingBar').classList.toggle('show', show);
+  const lt = document.getElementById('loadingText');
+  lt.textContent = text; lt.classList.toggle('show', show);
+  document.getElementById('btnBuscar').disabled = show;
+  if (show) { document.getElementById('jobsGrid').innerHTML = ''; document.getElementById('statsBar').style.display = 'none'; }
+}
+
+function showError() {
+  document.getElementById('jobsGrid').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Error de conexión</div><div style="font-size:13px;color:var(--muted)">Verificá tu internet y volvé a intentar.</div></div>`;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ============================================================
+// INIT — Auto-busca al abrir con el primer CV
+// ============================================================
+updateFavCount();
+renderBusquedas();
+// Auto-busca con el CV de Onboarding al abrir
+buscar(CVS[0].busquedas[0].query, CVS[0].busquedas[0].label);
+</script>
+</body>
+</html>
