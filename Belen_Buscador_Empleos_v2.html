@@ -35,7 +35,7 @@ body::before { content:''; position:fixed; inset:0; background-image:linear-grad
 .hero-sub { font-size:13px; color:var(--muted); line-height:1.6; max-width:680px; }
 
 /* CV SELECTOR */
-.cv-selector { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
+.cv-selector { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:20px; }
 .cv-card { background:var(--panel); border:2px solid var(--border); border-radius:8px; padding:14px 16px; cursor:pointer; transition:all 0.2s; }
 .cv-card:hover { border-color:var(--border2); transform:translateY(-1px); }
 .cv-card.active { border-color:var(--primary); background:rgba(124,58,237,0.08); }
@@ -167,7 +167,7 @@ body::before { content:''; position:fixed; inset:0; background-image:linear-grad
   <div class="hero">
     <div class="hero-label">Búsqueda inteligente · Basada en tus CVs</div>
     <div class="hero-title">Empleos <span>para tu perfil</span></div>
-    <div class="hero-sub">Seleccioná el CV con el que querés buscar — el sistema usa tus palabras clave reales para encontrar las mejores ofertas remotas en tiempo real.</div>
+    <div class="hero-sub">Seleccioná el CV con el que querés buscar — el sistema usa tus palabras clave reales para encontrar las mejores ofertas remotas en tiempo real. <span style="color:var(--accent)">💡 Tip: las ofertas de empresas globales suelen estar en inglés pero contratan hispanohablantes.</span></div>
   </div>
 
   <!-- CV SELECTOR -->
@@ -203,6 +203,17 @@ body::before { content:''; position:fixed; inset:0; background-image:linear-grad
         <span class="cv-tag">Reclutamiento</span>
         <span class="cv-tag">People Ops</span>
         <span class="cv-tag">Talent</span>
+      </div>
+    </div>
+    <div class="cv-card" onclick="selectCV(3,this)">
+      <div class="cv-icon">📱</div>
+      <div class="cv-name">CV Marketing & Contenido</div>
+      <div class="cv-desc">Contenido digital, redes sociales, identidad de marca, diseño visual, Community Manager</div>
+      <div class="cv-tags">
+        <span class="cv-tag">Social Media</span>
+        <span class="cv-tag">Contenido</span>
+        <span class="cv-tag">Branding</span>
+        <span class="cv-tag">Canva</span>
       </div>
     </div>
   </div>
@@ -295,6 +306,19 @@ const CVS = [
       { label: 'Talent Manager', query: 'talent manager', icon: '⭐' },
     ],
     keywords: ['hr', 'human resources', 'talent', 'recruiter', 'people', 'coordinator', 'specialist']
+  },
+  {
+    nombre: 'Marketing & Contenido',
+    icon: '📱',
+    busquedas: [
+      { label: 'Social Media', query: 'social media manager', icon: '📱' },
+      { label: 'Community Manager', query: 'community manager', icon: '🌐' },
+      { label: 'Content Creator', query: 'content creator', icon: '✍️' },
+      { label: 'Brand Manager', query: 'brand manager', icon: '🎨' },
+      { label: 'Digital Marketing', query: 'digital marketing', icon: '📈' },
+      { label: 'Content Strategist', query: 'content strategist', icon: '🧠' },
+    ],
+    keywords: ['social media', 'community', 'content', 'brand', 'marketing', 'digital', 'creative', 'design', 'canva', 'instagram']
   }
 ];
 
