@@ -356,6 +356,7 @@ select option { background:var(--dark); }
       <button class="filter-tab" onclick="setFilter('trabajos','en curso',this)">En curso</button>
       <button class="filter-tab" onclick="setFilter('trabajos','completado',this)">Completados</button>
       <button class="filter-tab" onclick="setFilter('trabajos','pendiente',this)">Pendientes</button>
+      <button class="filter-tab" onclick="setFilter('trabajos','no aprobado',this)">No aprobados</button>
     </div>
     <div class="card"><div class="table-wrap"><table>
       <thead><tr><th>Trabajo</th><th>Cliente</th><th>Máquina</th><th>Tipo</th><th>Estado</th><th>Estado máquina</th><th>Rentabilidad</th><th>Acciones</th></tr></thead>
@@ -373,7 +374,8 @@ select option { background:var(--dark); }
       <button class="filter-tab active" onclick="setFilter('presup','todos',this)">Todos</button>
       <button class="filter-tab" onclick="setFilter('presup','pendiente',this)">Pendientes</button>
       <button class="filter-tab" onclick="setFilter('presup','aprobado',this)">Aprobados</button>
-      <button class="filter-tab" onclick="setFilter('presup','rechazado',this)">Rechazados</button>
+      <button class="filter-tab" onclick="setFilter('presup','en curso',this)">En curso</button>
+      <button class="filter-tab" onclick="setFilter('presup','no aprobado',this)">No aprobados</button>
     </div>
     <div class="card"><div class="table-wrap"><table>
       <thead><tr><th>#</th><th>Cliente</th><th>Descripción</th><th>Monto</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
@@ -562,13 +564,14 @@ async function fetchSheet(sheetName) {
 function parseCSV(text) {
   const lines = text.split('\n').filter(l=>l.trim());
   if(lines.length < 2) return [];
-  const headers = parseCSVLine(lines[0]).map(h=>h.trim().replace(/^"|"$/g,'').toUpperCase().replace(/ /g,'_'));
+  // trim cada header individualmente para manejar "ID " con espacio
+  const headers = parseCSVLine(lines[0]).map(h=>h.trim().replace(/^"|"$/g,'').trim().toUpperCase().replace(/ /g,'_'));
   return lines.slice(1).map(line=>{
     const vals = parseCSVLine(line);
     const obj = {};
     headers.forEach((h,i)=>{ obj[h] = (vals[i]||'').replace(/^"|"$/g,'').trim(); });
     return obj;
-  }).filter(r=>r.ID||r.NOMBRE||r.TITULO);
+  }).filter(r=>Object.values(r).some(v=>v&&v.trim()));
 }
 
 function parseCSVLine(line) {
@@ -607,45 +610,46 @@ async function syncAll() {
     if(cl.length) DB.clientes = cl.map(r=>({
       id:String(r.ID||uid()).trim(), nombre:r.NOMBRE||'', empresa:r.EMPRESA||'',
       telefono:r.TELEFONO||'', email:r.EMAIL||'', zona:r.ZONA||'',
-      estado:(r.ESTADO||'activo').toLowerCase().trim(), ultimoContacto:r.ULTIMO_CONTACTO||'',
+      estado:(r.ESTADO||'activo').toLowerCase().trim(), ultimoContacto:r.ULTIMO_CONTACTO||r.ULTIMO_CONTACTO_||'',
       notas:r.NOTAS||''
     }));
     if(mq.length) DB.maquinas = mq.map(r=>({
       id:String(r.ID||uid()).trim(), clienteId:String(r.CLIENTE_ID||'').trim(), marca:r.MARCA||'',
       modelo:r.MODELO||'', serie:r.SERIE||'', tipo:r.TIPO||'', notas:r.NOTAS||''
-    }));
+    })); else if(!DB.maquinas.length) DB.maquinas=[];
     if(tr.length) DB.trabajos = tr.map(r=>({
       id:String(r.ID||uid()).trim(), clienteId:String(r.CLIENTE_ID||'').trim(), maquinaId:String(r.MAQUINA_ID||'').trim(),
-      titulo:r.TITULO||'', tipo:r.TIPO||'', estado:(r.ESTADO||'pendiente').toLowerCase().trim(),
+      titulo:r.TITULO||r.DESCRIPCION||'', tipo:r.TIPO||'', estado:(r.ESTADO||'pendiente').toLowerCase().trim(),
       estadoMaquina:r.ESTADO_MAQUINA||'', fechaInicio:r.FECHA_INICIO||'',
-      fechaFin:r.FECHA_FIN||'', montoCobrado:parseFloat(r.MONTO_COBRADO)||0,
-      montoGastos:parseFloat(r.MONTO_GASTOS)||0,
-      costoRepuesto:parseFloat(r.COSTO_REPUESTO)||0,
-      precioRepuestoFacturado:parseFloat(r.PRECIO_REPUESTO_FACTURADO)||0,
-      manoObraCobrada:parseFloat(r.MANO_OBRA_COBRADA)||0,
-      movilidad:parseFloat(r.MOVILIDAD)||0,
+      fechaFin:r.FECHA_FIN||'', montoCobrado:parseMonto(r.MONTO_COBRADO),
+      montoGastos:parseMonto(r.MONTO_GASTOS),
+      costoRepuesto:parseMonto(r.COSTO_REPUESTO),
+      precioRepuestoFacturado:parseMonto(r.PRECIO_REPUESTO_FACTURADO),
+      manoObraCobrada:parseMonto(r.MANO_OBRA_COBRADA),
+      movilidad:parseMonto(r.MOVILIDAD),
       repuestosDetalle:r.REPUESTOS_DETALLE||'',
       notas:r.NOTAS||'', fotoUrl:r.FOTO_URL||''
-    }));
+    })); else if(!DB.trabajos.length) DB.trabajos=[];
     if(pr.length) DB.presupuestos = pr.map((r,i)=>({
-      id:String(r.ID||uid()).trim(), num:i+1, clienteId:String(r.CLIENTE_ID||r['CLIENTE_ID']||'').trim(),
+      id:String(r.ID||uid()).trim(), num:r.NUMERO||i+1, clienteId:String(r.CLIENTE_ID||r['CLIENTE_ID']||'').trim(),
       descripcion:r.DESCRIPCION||r.DECSRIPCION||r.TITULO||'',
       titulo:r.TITULO||r.DESCRIPCION||r.DECSRIPCION||'',
-      monto:parseFloat(r.MONTO)||0, estado:(r.ESTADO||'pendiente').toLowerCase().trim(),
+      monto:parseMonto(r.MONTO), estado:(r.ESTADO||'pendiente').toLowerCase().trim(),
       fecha:r.FECHA||'', notas:r.NOTAS||''
-    }));
+    })); else if(!DB.presupuestos.length) DB.presupuestos=[];
     if(al.length) DB.alertas = al.map(r=>({
-      id:r.ID||uid(), titulo:r.TITULO||'', clienteId:r.CLIENTE_ID||'',
+      id:String(r.ID||uid()).trim(), titulo:r.TITULO||'', clienteId:String(r.CLIENTE_ID||'').trim(),
       fecha:r.FECHA||'', prioridad:(r.PRIORIDAD||'media').toLowerCase(),
       descripcion:r.DESCRIPCION||'', resuelta:r.RESUELTA==='TRUE'||r.RESUELTA==='true'||r.RESUELTA==='1'
-    }));
+    })); else if(!DB.alertas.length) DB.alertas=[];
 
     saveLocal();
     status.textContent='● Conectado'; status.style.color='var(--green)';
-    showToast('Datos sincronizados correctamente','success');
+    showToast(`Sincronizado — ${DB.clientes.length} clientes · ${DB.maquinas.length} máquinas · ${DB.trabajos.length} trabajos · ${DB.presupuestos.length} presupuestos`,'success');
   } catch(e) {
-    status.textContent='● Sin conexión'; status.style.color='var(--red)';
-    showToast('Error de sincronización — usando datos locales','error');
+    status.textContent='● Error sync'; status.style.color='var(--red)';
+    showToast('Error: '+e.message+' — verificá que el Sheet esté público','error');
+    console.error('SyncAll error:', e);
   }
 
   hideLoading();
@@ -658,15 +662,38 @@ async function syncAll() {
 // ============================================================
 function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
 function today() { return new Date().toISOString().split('T')[0]; }
-function fmtDate(d) { if(!d) return '—'; const p=d.split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
-function fmtMonto(n) { return '$'+Number(n||0).toLocaleString('es-AR'); }
+function fmtDate(d) {
+  if(!d) return '—';
+  // DD/MM/YYYY (formato Sheets argentino)
+  if(/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(d)) return d;
+  // YYYY-MM-DD
+  const p=d.split('-');
+  if(p.length===3) return `${p[2]}/${p[1]}/${p[0]}`;
+  return d;
+}
+// Parsear montos con coma decimal (formato argentino del Sheet)
+function parseMonto(v) {
+  if(!v) return 0;
+  // "1.234.567,89" o "1234567,89" o "1234567.89"
+  const s = String(v).trim();
+  // Si tiene coma y la coma parece separador decimal (últimos 1-2 dígitos después)
+  if(s.includes(',')) {
+    // Eliminar puntos de miles, reemplazar coma por punto
+    return parseFloat(s.replace(/\./g,'').replace(',','.')) || 0;
+  }
+  return parseFloat(s) || 0;
+}
+function fmtMonto(n) { return '$'+Number(n||0).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}); }
 function gv(id) { return document.getElementById(id)?.value?.trim()||''; }
 
 function badgeEstado(e) {
-  const m={activo:'badge-green',prospecto:'badge-blue',inactivo:'badge-gray',
-    pendiente:'badge-orange',aprobado:'badge-green',rechazado:'badge-red',
-    'en curso':'badge-yellow',completado:'badge-green',cancelado:'badge-red',
-    funcionando:'badge-green','no funciona':'badge-red','parcial':'badge-orange'};
+  const m={
+    activo:'badge-green', prospecto:'badge-blue', inactivo:'badge-gray',
+    pendiente:'badge-orange', aprobado:'badge-green', rechazado:'badge-red',
+    'no aprobado':'badge-red', 'en curso':'badge-yellow',
+    completado:'badge-green', cancelado:'badge-red',
+    funcionando:'badge-green','no funciona':'badge-red','parcial':'badge-orange'
+  };
   return `<span class="badge ${m[e]||'badge-gray'}">${e||'—'}</span>`;
 }
 
@@ -677,13 +704,14 @@ function updateTopbar() {
 function updateBadges() {
   document.getElementById('badge-clientes').textContent=DB.clientes.length;
   document.getElementById('badge-maquinas').textContent=DB.maquinas.length;
-  document.getElementById('badge-trabajos').textContent=DB.trabajos.filter(t=>t.estado==='en curso').length;
+  const enCurso=DB.trabajos.filter(t=>t.estado==='en curso').length;
+  document.getElementById('badge-trabajos').textContent=enCurso;
   document.getElementById('badge-presup').textContent=DB.presupuestos.length;
   const al=DB.alertas.filter(a=>!a.resuelta).length;
   document.getElementById('badge-alertas').textContent=al;
   document.getElementById('s-clientes').textContent=DB.clientes.length;
   document.getElementById('s-presup').textContent=DB.presupuestos.length;
-  document.getElementById('s-trabajos').textContent=DB.trabajos.filter(t=>t.estado==='en curso').length;
+  document.getElementById('s-trabajos').textContent=enCurso;
   document.getElementById('s-alertas').textContent=al;
   const activos=DB.clientes.filter(c=>c.estado==='activo').length;
   document.getElementById('s-clientes-sub').textContent=`${activos} activos`;
@@ -1153,6 +1181,128 @@ function renderEstadisticas() {
       <td><span class="badge ${t.margen>=50?'badge-green':t.margen>=20?'badge-orange':'badge-red'}">${t.margen}%</span></td>
     </tr>`;
   }).join(''):`<tr><td colspan="6"><div class="empty-state"><div class="icon">📊</div><p>Sin datos de rentabilidad aún</p></div></td></tr>`;
+}
+
+// ============================================================
+// REPUESTOS MÁS USADOS
+// ============================================================
+function renderRepuestos() {
+  // Extraer todos los repuestos de los detalles de trabajos
+  const conteo = {};
+  DB.trabajos.forEach(t => {
+    if(!t.repuestosDetalle) return;
+    t.repuestosDetalle.split('\n').forEach(rep => {
+      const r = rep.trim();
+      if(r) conteo[r] = (conteo[r]||0) + 1;
+    });
+  });
+
+  const ranking = Object.entries(conteo).sort((a,b)=>b[1]-a[1]);
+
+  const elRanking = document.getElementById('repuestos-ranking');
+  const elStock = document.getElementById('repuestos-stock');
+  const elLista = document.getElementById('repuestos-lista');
+
+  if(!ranking.length) {
+    const empty = `<div class="empty-state"><div class="icon">🔩</div><p>Sin repuestos registrados</p><p style="font-size:11px;color:var(--muted2);margin-top:6px">Cargalos en el detalle de cada trabajo</p></div>`;
+    if(elRanking) elRanking.innerHTML = empty;
+    if(elStock) elStock.innerHTML = empty;
+    if(elLista) elLista.innerHTML = empty;
+    return;
+  }
+
+  const top5 = ranking.slice(0,5);
+  const colores = ['#F4B400','#7bb3e0','#2ecc71','#e67e22','#9b59b6'];
+
+  if(elRanking) elRanking.innerHTML = `<div style="padding:12px">` + top5.map(([ rep, cnt ], i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="font-family:'Bebas Neue';font-size:22px;color:${colores[i]};width:28px;text-align:center">${i+1}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${rep}</div>
+        <div style="font-size:10px;color:var(--muted)">${cnt} uso${cnt>1?'s':''}</div>
+      </div>
+      <div style="background:${colores[i]};color:var(--black);font-family:'Bebas Neue';font-size:13px;padding:3px 10px;border-radius:10px">${cnt}x</div>
+    </div>`).join('') + `</div>`;
+
+  if(elStock) elStock.innerHTML = `<div style="padding:12px">
+    <div style="font-size:11px;color:var(--muted2);margin-bottom:10px;letter-spacing:1px">Repuestos que conviene tener en stock según frecuencia de uso:</div>
+    ${top5.map(([rep,cnt],i)=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:12px;color:var(--text)">📦 ${rep}</div>
+      <div style="font-size:10px;color:var(--muted)">×${cnt}</div>
+    </div>`).join('')}
+    </div>`;
+
+  if(elLista) elLista.innerHTML = `<div style="padding:12px">
+    ${ranking.map(([rep,cnt])=>`
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:12px;color:var(--text)">🔩 ${rep}</span>
+      <span style="font-size:11px;color:var(--muted);font-family:'Bebas Neue';letter-spacing:1px">${cnt} vez${cnt>1?'es':''}</span>
+    </div>`).join('')}
+    </div>`;
+}
+
+// ============================================================
+// MAPA DE CLIENTES
+// ============================================================
+function renderMapa() {
+  // Estadísticas por zona
+  const zonaMap = {};
+  DB.clientes.forEach(c => {
+    const z = c.zona||'Sin zona';
+    if(!zonaMap[z]) zonaMap[z] = { clientes:[], trabajos:0, facturado:0 };
+    zonaMap[z].clientes.push(c);
+  });
+  DB.trabajos.forEach(t => {
+    const cl = DB.clientes.find(c=>c.id===t.clienteId);
+    if(!cl) return;
+    const z = cl.zona||'Sin zona';
+    if(zonaMap[z]) {
+      zonaMap[z].trabajos++;
+      zonaMap[z].facturado += Number(t.montoCobrado||0);
+    }
+  });
+
+  const zonas = Object.entries(zonaMap).sort((a,b)=>b[1].clientes.length-a[1].clientes.length);
+  const totalConZona = DB.clientes.filter(c=>c.zona).length;
+  const topZona = zonas[0]?zonas[0][0]:'—';
+
+  const elTotal = document.getElementById('mapa-total');
+  const elZonas = document.getElementById('mapa-zonas');
+  const elTop = document.getElementById('mapa-top');
+  const elLista = document.getElementById('mapa-zonas-lista');
+  const elTabla = document.getElementById('mapa-tabla');
+
+  if(elTotal) elTotal.textContent = totalConZona;
+  if(elZonas) elZonas.textContent = zonas.length;
+  if(elTop) elTop.textContent = topZona;
+
+  const colores = ['#F4B400','#7bb3e0','#2ecc71','#e67e22','#9b59b6','#e74c3c','#95a5a6'];
+  if(elLista) elLista.innerHTML = zonas.length ? `<div style="padding:12px;display:flex;flex-wrap:wrap;gap:10px">` +
+    zonas.map(([zona,d],i)=>`
+    <div style="background:var(--dark);border:1px solid var(--border2);border-radius:6px;padding:12px 16px;min-width:160px;flex:1">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="width:10px;height:10px;border-radius:50%;background:${colores[i%colores.length]}"></div>
+        <div style="font-family:'Bebas Neue';font-size:15px;color:var(--text);letter-spacing:1px">${zona}</div>
+      </div>
+      <div style="font-size:12px;color:var(--muted)"><span style="color:var(--yellow);font-weight:700">${d.clientes.length}</span> cliente${d.clientes.length!==1?'s':''}</div>
+      <div style="font-size:12px;color:var(--muted)"><span style="color:var(--green)">${d.trabajos}</span> trabajo${d.trabajos!==1?'s':''}</div>
+      <div style="font-size:11px;color:var(--muted2);margin-top:4px">${fmtMonto(d.facturado)} facturado</div>
+    </div>`).join('') + `</div>` :
+    `<div class="empty-state"><div class="icon">🗺️</div><p>Sin zonas registradas</p></div>`;
+
+  if(elTabla) elTabla.innerHTML = DB.clientes.length ? DB.clientes.map(c => {
+    const trs = DB.trabajos.filter(t=>t.clienteId===c.id);
+    const total = trs.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
+    const query = encodeURIComponent((c.zona||c.empresa||c.nombre)+' Argentina');
+    return `<tr>
+      <td><div class="td-name">${c.nombre}</div><div class="td-muted">${c.empresa||''}</div></td>
+      <td>${c.zona||'<span style="color:var(--muted2)">Sin zona</span>'}</td>
+      <td><span class="badge badge-yellow">${trs.length}</span></td>
+      <td><span class="monto">${fmtMonto(total)}</span></td>
+      <td><a href="https://maps.google.com/?q=${query}" target="_blank" style="color:var(--blue-light);font-size:12px;text-decoration:none">📍 Ver mapa</a></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="5"><div class="empty-state"><div class="icon">🗺️</div><p>Sin clientes</p></div></td></tr>`;
 }
 
 // ============================================================
