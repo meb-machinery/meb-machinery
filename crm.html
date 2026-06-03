@@ -279,6 +279,7 @@ select option { background:var(--dark); }
     <div class="nav-item" onclick="showPage('estadisticas',this)"><span class="nav-icon">📈</span> Estadísticas</div>
     <div class="nav-item" onclick="showPage('repuestos',this)"><span class="nav-icon">🔩</span> Repuestos</div>
     <div class="nav-item" onclick="showPage('mapa',this)"><span class="nav-icon">🗺️</span> Mapa clientes</div>
+    <div class="nav-item" onclick="showPage('calendario',this)"><span class="nav-icon">📅</span> Calendario</div>
   </div>
   <div class="sidebar-footer">
     <p>mebmachinerysolutions<br>@gmail.com<br><br>v2.0 · Google Sheets</p>
@@ -361,7 +362,7 @@ select option { background:var(--dark); }
       <button class="filter-tab" onclick="setFilter('trabajos','no aprobado',this)">No aprobados</button>
     </div>
     <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>Trabajo</th><th>Cliente</th><th>Máquina</th><th>Tipo</th><th>Estado</th><th>Estado máquina</th><th>Rentabilidad</th><th>Acciones</th></tr></thead>
+      <thead><tr><th>Trabajo</th><th>Cliente</th><th>Máquina</th><th>Tipo</th><th>Estado</th><th>Estado máquina</th><th>Monto Cobrado</th><th>Fact. Terceros</th><th>Costos</th><th>Rentabilidad</th><th>Acciones</th></tr></thead>
       <tbody id="tabla-trabajos"></tbody>
     </table></div></div>
   </div>
@@ -496,6 +497,52 @@ select option { background:var(--dark); }
   <div id="detailContent"></div>
 </div>
 
+
+  <!-- CALENDARIO -->
+  <div class="page" id="page-calendario">
+    <div class="page-header">
+      <div class="page-title">CALENDARIO <span>DE TRABAJOS</span></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-secondary" onclick="calPrev()">◀ Anterior</button>
+        <span id="cal-mes-label" style="font-family:'Bebas Neue';font-size:18px;color:var(--yellow);align-self:center;min-width:200px;text-align:center">—</span>
+        <button class="btn-secondary" onclick="calNext()">Siguiente ▶</button>
+        <button class="btn-primary" onclick="openModal('calEvento')">+ EVENTO</button>
+      </div>
+    </div>
+    <!-- Alertas de próximo cambio de repuesto -->
+    <div id="repuesto-alertas-panel" style="margin-bottom:14px"></div>
+    <!-- Grilla del calendario -->
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:0">
+        <div style="text-align:center;padding:8px;font-size:11px;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--border)">LUN</div>
+        <div style="text-align:center;padding:8px;font-size:11px;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--border)">MAR</div>
+        <div style="text-align:center;padding:8px;font-size:11px;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--border)">MIÉ</div>
+        <div style="text-align:center;padding:8px;font-size:11px;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--border)">JUE</div>
+        <div style="text-align:center;padding:8px;font-size:11px;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--border)">VIE</div>
+        <div style="text-align:center;padding:8px;font-size:11px;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--border)">SÁB</div>
+        <div style="text-align:center;padding:8px;font-size:11px;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--border)">DOM</div>
+      </div>
+      <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:0"></div>
+    </div>
+    <!-- Lista detalle del día seleccionado -->
+    <div class="card" id="cal-detalle-card" style="display:none">
+      <div class="card-header"><span class="card-title" id="cal-detalle-titulo">—</span>
+        <button class="btn-secondary" style="font-size:11px" onclick="document.getElementById('cal-detalle-card').style.display='none'">✕</button>
+      </div>
+      <div id="cal-detalle-body"></div>
+    </div>
+  </div>
+
+  <!-- FOTOS MODAL (adicional) -->
+  <div class="modal-overlay" id="fotosOverlay" onclick="closeFotos(event)" style="display:none">
+    <div class="modal" id="fotosBox" style="max-width:700px">
+      <div class="modal-header"><span class="modal-title" id="fotosTitle">FOTOS DEL TRABAJO</span>
+        <button class="modal-close" onclick="document.getElementById('fotosOverlay').style.display='none'">✕</button>
+      </div>
+      <div class="modal-body" id="fotosBody"></div>
+    </div>
+  </div>
+
 <!-- MODAL -->
 <div class="modal-overlay" id="modalOverlay" onclick="closeModalOut(event)">
   <div class="modal" id="modalBox">
@@ -521,12 +568,12 @@ const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71
 // ============================================================
 // LOCAL STORAGE (fallback y cache)
 // ============================================================
-let DB = { clientes:[], maquinas:[], trabajos:[], presupuestos:[], alertas:[], presupCounter:1 };
+let DB = { clientes:[], maquinas:[], trabajos:[], presupuestos:[], alertas:[], calendarioEventos:[], alertasRepuesto:[], presupCounter:1 };
 let filters = { clientes:'todos', trabajos:'todos', presup:'todos' };
 let charts = {};
 
 function saveLocal() { try { localStorage.setItem('meb_crm_v2', JSON.stringify(DB)); } catch(e){} }
-function loadLocal() { try { const d=localStorage.getItem('meb_crm_v2'); if(d) DB=JSON.parse(d); if(!DB.presupCounter) DB.presupCounter=1; } catch(e){} }
+function loadLocal() { try { const d=localStorage.getItem('meb_crm_v2'); if(d) DB=JSON.parse(d); if(!DB.presupCounter) DB.presupCounter=1; if(!DB.calendarioEventos) DB.calendarioEventos=[]; if(!DB.alertasRepuesto) DB.alertasRepuesto=[]; } catch(e){} }
 
 // ============================================================
 // LOGIN
@@ -748,7 +795,7 @@ function showPage(name, el) {
     dashboard:renderDashboard, clientes:renderClientes, maquinas:renderMaquinas,
     trabajos:renderTrabajos, presupuestos:renderPresupuestos,
     pipeline:renderPipeline, alertas:renderAlertas, estadisticas:renderEstadisticas,
-    repuestos:renderRepuestos, mapa:renderMapa
+    repuestos:renderRepuestos, mapa:renderMapa, calendario:renderCalendario
   };
   if(renders[name]) renders[name]();
 }
@@ -761,7 +808,7 @@ function refreshCurrentPage() {
     dashboard:renderDashboard, clientes:renderClientes, maquinas:renderMaquinas,
     trabajos:renderTrabajos, presupuestos:renderPresupuestos,
     pipeline:renderPipeline, alertas:renderAlertas, estadisticas:renderEstadisticas,
-    repuestos:renderRepuestos, mapa:renderMapa
+    repuestos:renderRepuestos, mapa:renderMapa, calendario:renderCalendario
   };
   if(renders[name]) renders[name]();
 }
@@ -906,12 +953,20 @@ function renderTrabajos() {
   let data=DB.trabajos;
   if(filters.trabajos!=='todos') data=data.filter(t=>t.estado===filters.trabajos);
   const tbody=document.getElementById('tabla-trabajos');
-  if(!data.length){tbody.innerHTML=`<tr><td colspan="8"><div class="empty-state"><div class="icon">🔧</div><p>Sin trabajos</p></div></td></tr>`;return;}
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="icon">🔧</div><p>Sin trabajos</p></div></td></tr>`;return;}
   tbody.innerHTML=data.map(t=>{
     const cl=DB.clientes.find(c=>c.id===t.clienteId);
     const mq=DB.maquinas.find(m=>m.id===t.maquinaId);
-    const ganancia=(Number(t.manoObraCobrada||0)+Number(t.movilidad||0)+(Number(t.precioRepuestoFacturado||0)-Number(t.costoRepuesto||0)))||Number(t.montoCobrado||0)-Number(t.montoGastos||0);
-    const margen=t.montoCobrado>0?Math.round(ganancia/t.montoCobrado*100):0;
+    // Monto cobrado real del Sheet
+    const montoCobrado=Number(t.montoCobrado||0);
+    // Facturación de terceros = precio repuesto facturado al cliente
+    const factTerceros=Number(t.precioRepuestoFacturado||0);
+    // Costos = costo real del repuesto + gastos
+    const costos=Number(t.costoRepuesto||0)+Number(t.montoGastos||0);
+    // Rentabilidad = MO + movilidad + margen repuesto
+    const ganancia=(Number(t.manoObraCobrada||0)+Number(t.movilidad||0)+(factTerceros-Number(t.costoRepuesto||0)))||montoCobrado-costos;
+    const margen=montoCobrado>0?Math.round(ganancia/montoCobrado*100):(factTerceros>0?Math.round(ganancia/factTerceros*100):0);
+    const margenColor=margen>=30?'var(--green)':margen>=10?'var(--yellow)':'var(--red)';
     return `<tr>
       <td><div class="td-name">${t.titulo}</div><div class="td-muted">${fmtDate(t.fechaInicio)}</div></td>
       <td>${cl?cl.nombre:'—'}</td>
@@ -919,14 +974,23 @@ function renderTrabajos() {
       <td><span class="badge badge-blue">${t.tipo||'—'}</span></td>
       <td>${badgeEstado(t.estado)}</td>
       <td>${t.estadoMaquina?badgeEstado(t.estadoMaquina.toLowerCase()):'—'}</td>
+      <td><span class="monto" style="color:var(--yellow)">${montoCobrado>0?fmtMonto(montoCobrado):'<span style="color:var(--muted)">—</span>'}</span></td>
       <td>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:2px">MO: <span style="color:var(--green)">${fmtMonto(t.manoObraCobrada||0)}</span></div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:2px">Rep: <span style="color:var(--blue-light)">${fmtMonto((t.precioRepuestoFacturado||0)-(t.costoRepuesto||0))}</span></div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:2px">Mov: <span style="color:var(--orange)">${fmtMonto(t.movilidad||0)}</span></div>
-        <div style="font-family:'Bebas Neue';font-size:14px;color:${ganancia>=0?'var(--yellow)':'var(--red)'}">Total: ${fmtMonto(ganancia)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:1px">Repuestos facturados</div>
+        <span class="monto" style="color:var(--blue-light);font-size:13px">${factTerceros>0?fmtMonto(factTerceros):'—'}</span>
+      </td>
+      <td>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:1px">Rep+Gastos</div>
+        <span style="color:var(--red);font-size:13px;font-weight:600">${costos>0?fmtMonto(costos):'—'}</span>
+      </td>
+      <td>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:1px">MO+Mov+Margen</div>
+        <div style="font-family:'Bebas Neue';font-size:14px;color:${ganancia>=0?'var(--yellow)':'var(--red)'}">${fmtMonto(ganancia)}</div>
+        <div style="font-size:10px;color:${margenColor}">${margen}% margen</div>
       </td>
       <td><div class="actions">
-        <button class="btn-secondary" onclick="cambiarEstado('trabajos','${t.id}',['pendiente','en curso','completado','cancelado'])">Estado</button>
+        <button class="btn-secondary" onclick="cambiarEstado('trabajos','${t.id}',['pendiente','en curso','completado','cancelado','no aprobado'])">Estado</button>
+        <button class="btn-secondary" onclick="verFotos('${t.id}')">📷</button>
         <button class="btn-danger" onclick="eliminar('trabajos','${t.id}')">✕</button>
       </div></td>
     </tr>`;
@@ -1504,6 +1568,24 @@ function openModal(type, data={}) {
     </div>`;
     onSave=()=>guardar('alertas',{id:data.id||uid(),titulo:gv('f-atit'),clienteId:gv('f-acli'),fecha:gv('f-afecha'),prioridad:gv('f-aprio'),descripcion:gv('f-adesc'),resuelta:false},'titulo');
   }
+  else if(type==='calEvento') {
+    title='NUEVO EVENTO DE CALENDARIO';
+    body=`<div class="form-grid">
+      <div class="form-group full"><label>Título *</label><input id="f-cetit" placeholder="Ej: Visita Marcalba, Operario Juan, Recordatorio..."/></div>
+      <div class="form-group"><label>Fecha *</label><input id="f-cefecha" type="date" value="${data.fecha||today()}"/></div>
+      <div class="form-group"><label>Cliente (opcional)</label><select id="f-cecli"><option value="">Sin cliente</option>${clienteOptions(data.clienteId)}</select></div>
+      <div class="form-group full"><label>Notas / Descripción</label><textarea id="f-cedesc" placeholder="Operario asignado, instrucciones, recordatorio...">${data.descripcion||''}</textarea></div>
+    </div>`;
+    onSave=()=>{
+      const ev={id:uid(),titulo:gv('f-cetit'),fecha:gv('f-cefecha'),clienteId:gv('f-cecli'),descripcion:gv('f-cedesc')};
+      if(!ev.titulo||!ev.fecha){showToast('Título y fecha son requeridos','error');return;}
+      DB.calendarioEventos.push(ev);
+      saveLocal();
+      closeModal();
+      renderCalendario();
+      showToast('Evento guardado','success');
+    };
+  }
 
   document.getElementById('modalTitle').textContent=title;
   document.getElementById('modalBody').innerHTML=body;
@@ -1573,6 +1655,299 @@ function hideLoading() { document.getElementById('loadingOverlay').classList.rem
 loadLocal();
 updateTopbar();
 setInterval(updateTopbar, 60000);
+
+// ============================================================
+// CALENDARIO
+// ============================================================
+let calFecha = new Date();
+
+// Tabla de horas estimadas por tipo de repuesto (John Deere y genérico)
+const REPUESTO_HORAS = {
+  'filtro de aceite':       { hs: 250,  label: 'Filtro de aceite' },
+  'filtro aceite':          { hs: 250,  label: 'Filtro de aceite' },
+  'aceite':                 { hs: 500,  label: 'Aceite motor' },
+  'aceite hy-gard':         { hs: 500,  label: 'Aceite HY-GARD transmisión' },
+  'filtro hidráulico':      { hs: 500,  label: 'Filtro hidráulico' },
+  'filtro hidraulico':      { hs: 500,  label: 'Filtro hidráulico' },
+  'filtro de combustible':  { hs: 500,  label: 'Filtro de combustible' },
+  'filtro combustible':     { hs: 500,  label: 'Filtro de combustible' },
+  'filtro de aire':         { hs: 500,  label: 'Filtro de aire' },
+  'filtro aire':            { hs: 500,  label: 'Filtro de aire' },
+  'filtro transmisión':     { hs: 1000, label: 'Filtro transmisión' },
+  'filtro transmision':     { hs: 1000, label: 'Filtro transmisión' },
+  'sellos':                 { hs: 2000, label: 'Sellos hidráulicos' },
+  'sello':                  { hs: 2000, label: 'Sellos hidráulicos' },
+  'correa':                 { hs: 1000, label: 'Correa' },
+  'buje':                   { hs: 2000, label: 'Bujes' },
+  'bujes':                  { hs: 2000, label: 'Bujes' },
+  'inyector':               { hs: 3000, label: 'Inyectores' },
+  'inyectores':             { hs: 3000, label: 'Inyectores' },
+  'bomba':                  { hs: 3000, label: 'Bomba' },
+  'cilindro':               { hs: 2000, label: 'Cilindro hidráulico' },
+  'service':                { hs: 500,  label: 'Service general' },
+  'service 250hs':          { hs: 250,  label: 'Service 250hs' },
+  'service 500hs':          { hs: 500,  label: 'Service 500hs' },
+  'service 1000hs':         { hs: 1000, label: 'Service 1000hs' },
+  'service 2000hs':         { hs: 2000, label: 'Service 2000hs' },
+  'service 3000hs':         { hs: 3000, label: 'Service 3000hs' },
+};
+const HS_DIA = 8; // horas de trabajo por día hábil
+const DIAS_HAB_SEMANA = 5;
+
+function estimarProximoCambio(fechaStr, tipoStr) {
+  // Buscar el repuesto en la tabla
+  const key = Object.keys(REPUESTO_HORAS).find(k => tipoStr.toLowerCase().includes(k));
+  if (!key) return null;
+  const { hs, label } = REPUESTO_HORAS[key];
+  // Parsear fecha DD/MM/YYYY o YYYY
+  let fecha = null;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaStr)) {
+    const [d,m,y] = fechaStr.split('/');
+    fecha = new Date(y, m-1, d);
+  } else if (/^\d{4}$/.test(fechaStr)) {
+    fecha = new Date(fechaStr, 0, 1);
+  } else {
+    return null;
+  }
+  // Días hábiles estimados hasta el próximo cambio
+  const diasTotales = Math.ceil((hs / HS_DIA) * (7 / DIAS_HAB_SEMANA)); // ajustado por weekend
+  const proximaFecha = new Date(fecha.getTime() + diasTotales * 24*60*60*1000);
+  return { label, hs, diasTotales, proximaFecha, fechaBase: fecha };
+}
+
+function calcularAlertasRepuesto() {
+  const alertas = [];
+  const hoy = new Date();
+  hoy.setHours(0,0,0,0);
+  const en30dias = new Date(hoy.getTime() + 30*24*60*60*1000);
+  const en60dias = new Date(hoy.getTime() + 60*24*60*60*1000);
+
+  DB.trabajos.forEach(t => {
+    if (!t.fechaInicio || !t.titulo) return;
+    const est = estimarProximoCambio(t.fechaInicio, t.titulo);
+    if (!est) return;
+    const cl = DB.clientes.find(c=>c.id===t.clienteId);
+    const mq = DB.maquinas.find(m=>m.id===t.maquinaId);
+    const diasRestantes = Math.ceil((est.proximaFecha - hoy) / (24*60*60*1000));
+    let urgencia = null;
+    if (est.proximaFecha <= hoy) urgencia = 'vencido';
+    else if (est.proximaFecha <= en30dias) urgencia = 'urgente';
+    else if (est.proximaFecha <= en60dias) urgencia = 'próximo';
+    if (urgencia) {
+      alertas.push({
+        clienteNombre: cl?.nombre || '—',
+        maquinaDesc: mq ? `${mq.marca} ${mq.modelo}` : '—',
+        label: est.label,
+        hs: est.hs,
+        fechaBase: t.fechaInicio,
+        proximaFecha: est.proximaFecha,
+        diasRestantes,
+        urgencia,
+        trabajoTitulo: t.titulo,
+      });
+    }
+  });
+  return alertas.sort((a,b)=>a.diasRestantes-b.diasRestantes);
+}
+
+function renderAlertasRepuesto() {
+  const panel = document.getElementById('repuesto-alertas-panel');
+  if (!panel) return;
+  const alertas = calcularAlertasRepuesto();
+  if (!alertas.length) { panel.innerHTML=''; return; }
+  panel.innerHTML = `<div class="card" style="border-left:3px solid var(--orange)">
+    <div class="card-header"><span class="card-title">⚠️ PRÓXIMOS CAMBIOS DE REPUESTO (${alertas.length})</span></div>
+    <div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px">
+      ${alertas.map(a=>{
+        const col = a.urgencia==='vencido'?'var(--red)':a.urgencia==='urgente'?'var(--orange)':'var(--yellow)';
+        const label = a.urgencia==='vencido'?`VENCIDO hace ${Math.abs(a.diasRestantes)}d`:`en ${a.diasRestantes} días`;
+        return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+          <div style="width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0"></div>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600;color:var(--text)">${a.clienteNombre} · ${a.maquinaDesc}</div>
+            <div style="font-size:11px;color:var(--muted)">${a.label} (cada ${a.hs}hs) · base: ${a.fechaBase}</div>
+          </div>
+          <span style="font-family:'Bebas Neue';font-size:13px;color:${col};letter-spacing:1px">${label}</span>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+function renderCalendario() {
+  renderAlertasRepuesto();
+  const y = calFecha.getFullYear();
+  const m = calFecha.getMonth();
+  document.getElementById('cal-mes-label').textContent =
+    calFecha.toLocaleDateString('es-AR',{month:'long',year:'numeric'}).toUpperCase();
+
+  const primerDia = new Date(y, m, 1);
+  const ultimoDia = new Date(y, m+1, 0);
+  // Lunes=0, ajuste: getDay() retorna 0=Dom → convertir a Lun=0
+  let startDow = primerDia.getDay(); // 0=Dom
+  startDow = startDow === 0 ? 6 : startDow - 1; // Lun=0 … Dom=6
+
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+
+  // Agrupar eventos por YYYY-MM-DD
+  const eventosPorDia = {};
+  // Trabajos del Sheet
+  DB.trabajos.forEach(t => {
+    if (!t.fechaInicio) return;
+    const d = normalizarFecha(t.fechaInicio);
+    if (d && d.startsWith(`${y}-${String(m+1).padStart(2,'0')}`)) {
+      if (!eventosPorDia[d]) eventosPorDia[d] = [];
+      const cl = DB.clientes.find(c=>c.id===t.clienteId);
+      eventosPorDia[d].push({ tipo:'trabajo', titulo:t.titulo, cliente:cl?.nombre||'—', color:'#7bb3e0', id:t.id });
+    }
+  });
+  // Alertas de próximo repuesto en este mes
+  calcularAlertasRepuesto().forEach(a => {
+    const d = a.proximaFecha.toISOString().split('T')[0];
+    if (d.startsWith(`${y}-${String(m+1).padStart(2,'0')}`)) {
+      if (!eventosPorDia[d]) eventosPorDia[d] = [];
+      eventosPorDia[d].push({ tipo:'repuesto', titulo:`⚠️ ${a.label}`, cliente:a.clienteNombre, color:'#e67e22' });
+    }
+  });
+  // Eventos manuales del calendario
+  DB.calendarioEventos.forEach(ev => {
+    const d = ev.fecha;
+    if (d && d.startsWith(`${y}-${String(m+1).padStart(2,'0')}`)) {
+      if (!eventosPorDia[d]) eventosPorDia[d] = [];
+      eventosPorDia[d].push({ tipo:'manual', titulo:ev.titulo, cliente:ev.descripcion||'', color:'#2ecc71', id:ev.id });
+    }
+  });
+
+  const grid = document.getElementById('cal-grid');
+  let html = '';
+  // Celdas vacías antes del día 1
+  for (let i=0; i<startDow; i++) html += `<div style="min-height:90px;border:1px solid var(--border);background:var(--black);opacity:0.3"></div>`;
+  // Días del mes
+  for (let dia=1; dia<=ultimoDia.getDate(); dia++) {
+    const fechaStr = `${y}-${String(m+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+    const esHoy = new Date(y,m,dia).getTime() === hoy.getTime();
+    const evs = eventosPorDia[fechaStr] || [];
+    html += `<div onclick="calVerDia('${fechaStr}')" style="min-height:90px;border:1px solid var(--border);padding:4px;cursor:pointer;background:${esHoy?'rgba(244,180,0,0.08)':'var(--dark)'};transition:background 0.15s" onmouseover="this.style.background='rgba(244,180,0,0.05)'" onmouseout="this.style.background='${esHoy?'rgba(244,180,0,0.08)':'var(--dark)'}'">
+      <div style="font-family:'Bebas Neue';font-size:16px;color:${esHoy?'var(--yellow)':'var(--muted)'};margin-bottom:3px">${dia}</div>
+      ${evs.slice(0,3).map(ev=>`<div style="background:${ev.color}22;border-left:2px solid ${ev.color};padding:1px 4px;margin-bottom:2px;border-radius:0 2px 2px 0;font-size:9px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ev.titulo}</div>`).join('')}
+      ${evs.length>3?`<div style="font-size:9px;color:var(--muted)">+${evs.length-3} más</div>`:''}
+    </div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function normalizarFecha(str) {
+  if (!str) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) {
+    const [d,m,y] = str.split('/');
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  return null;
+}
+
+function calPrev() { calFecha.setMonth(calFecha.getMonth()-1); renderCalendario(); }
+function calNext() { calFecha.setMonth(calFecha.getMonth()+1); renderCalendario(); }
+
+function calVerDia(fechaStr) {
+  const card = document.getElementById('cal-detalle-card');
+  const titulo = document.getElementById('cal-detalle-titulo');
+  const body = document.getElementById('cal-detalle-body');
+  const [y,m,d] = fechaStr.split('-');
+  titulo.textContent = `📅 ${d}/${m}/${y}`;
+  card.style.display = 'block';
+  card.scrollIntoView({behavior:'smooth'});
+
+  const evs = [];
+  DB.trabajos.forEach(t => {
+    if (normalizarFecha(t.fechaInicio) === fechaStr) {
+      const cl = DB.clientes.find(c=>c.id===t.clienteId);
+      const mq = DB.maquinas.find(m=>m.id===t.maquinaId);
+      evs.push(`<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="background:var(--blue-light)22;border-left:3px solid var(--blue-light);padding:2px 8px;font-size:11px;color:var(--blue-light)">TRABAJO</span>
+          <span style="font-size:13px;font-weight:600;color:var(--text)">${t.titulo}</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">👤 ${cl?.nombre||'—'} · 🔧 ${mq?mq.marca+' '+mq.modelo:'—'} · ${badgeEstado(t.estado)}</div>
+        ${t.notas?`<div style="font-size:11px;color:var(--muted2);margin-top:4px;font-style:italic">${t.notas}</div>`:''}
+      </div>`);
+    }
+  });
+  DB.calendarioEventos.forEach(ev => {
+    if (ev.fecha === fechaStr) {
+      evs.push(`<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span style="background:var(--green)22;border-left:3px solid var(--green);padding:2px 8px;font-size:11px;color:var(--green)">EVENTO</span>
+            <span style="font-size:13px;font-weight:600;color:var(--text)">${ev.titulo}</span>
+          </div>
+          ${ev.descripcion?`<div style="font-size:11px;color:var(--muted);margin-top:4px">${ev.descripcion}</div>`:''}
+        </div>
+        <button class="btn-danger" style="font-size:10px;padding:2px 6px" onclick="eliminarEvento('${ev.id}')">✕</button>
+      </div>`);
+    }
+  });
+  body.innerHTML = evs.length ? `<div style="padding:0 4px">${evs.join('')}</div>` :
+    `<div class="empty-state"><div class="icon">📅</div><p>Sin eventos este día</p><button class="btn-primary" style="margin-top:8px" onclick="openModalConFecha('${fechaStr}')">+ Agregar evento</button></div>`;
+}
+
+function openModalConFecha(fecha) {
+  openModal('calEvento', {fecha});
+}
+
+function eliminarEvento(id) {
+  DB.calendarioEventos = DB.calendarioEventos.filter(e=>e.id!==id);
+  saveLocal();
+  renderCalendario();
+  document.getElementById('cal-detalle-card').style.display='none';
+}
+
+// ============================================================
+// FOTOS POR TRABAJO
+// ============================================================
+function verFotos(trabajoId) {
+  const t = DB.trabajos.find(x=>x.id===trabajoId);
+  if (!t) return;
+  const cl = DB.clientes.find(c=>c.id===t.clienteId);
+  const mq = DB.maquinas.find(m=>m.id===t.maquinaId);
+  document.getElementById('fotosTitle').textContent = `📷 ${t.titulo}`;
+  document.getElementById('fotosOverlay').style.display='flex';
+
+  // Parsear URLs de fotos (separadas por coma o newline)
+  const urls = (t.fotoUrl||'').split(/[,\n]/).map(u=>u.trim()).filter(Boolean);
+
+  document.getElementById('fotosBody').innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+      👤 ${cl?.nombre||'—'} · 🔧 ${mq?mq.marca+' '+mq.modelo:'—'} · ${fmtDate(t.fechaInicio)}
+    </div>
+    ${urls.length ? `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:16px">
+      ${urls.map((url,i)=>`
+        <div style="position:relative">
+          <img src="${url}" alt="Foto ${i+1}" style="width:100%;height:160px;object-fit:cover;border-radius:4px;border:1px solid var(--border2);cursor:pointer" onclick="window.open('${url}','_blank')" onerror="this.style.display='none';this.nextSibling.style.display='block'"/>
+          <div style="display:none;height:160px;background:var(--dark);border:1px solid var(--border2);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted)">Error al cargar imagen</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;text-align:center">Foto ${i+1}</div>
+        </div>`).join('')}
+    </div>` : `<div class="empty-state"><div class="icon">📷</div><p>Sin fotos cargadas</p><p style="font-size:11px;color:var(--muted2)">Cargá las URLs de las fotos en el campo FOTO_URL del trabajo<br>(separadas por coma)</p></div>`}
+    <div style="background:var(--dark);border:1px solid var(--border2);border-radius:4px;padding:12px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;letter-spacing:1px">AGREGAR FOTOS (URLs separadas por coma)</div>
+      <textarea id="fotos-input" style="width:100%;min-height:60px;background:var(--black);border:1px solid var(--border2);color:var(--text);padding:6px;border-radius:3px;font-size:11px;resize:vertical" placeholder="https://... , https://...">${t.fotoUrl||''}</textarea>
+      <button class="btn-primary" style="margin-top:8px" onclick="guardarFotos('${trabajoId}')">GUARDAR FOTOS</button>
+    </div>`;
+}
+
+function guardarFotos(trabajoId) {
+  const t = DB.trabajos.find(x=>x.id===trabajoId);
+  if (!t) return;
+  t.fotoUrl = document.getElementById('fotos-input').value.trim();
+  saveLocal();
+  verFotos(trabajoId);
+  showToast('Fotos guardadas','success');
+}
+
+function closeFotos(e) {
+  if(e.target.id==='fotosOverlay') document.getElementById('fotosOverlay').style.display='none';
+}
 </script>
 </body>
 </html>
