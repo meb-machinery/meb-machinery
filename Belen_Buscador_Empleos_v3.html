@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Belén — Buscador de Empleos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5f3ee;
+  --surface: #ffffff;
+  --surface2: #f0ede6;
+  --accent: #c8553d;
+  --accent2: #2d5016;
+  --spain: #c60b1e;
+  --text: #1a1a18;
+  --muted: #6b6860;
+  --border: #ddd9d0;
+  --tag-bg: #e8e4db;
+  --saved: #e8a020;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* HEADER */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.logo {
+  font-family: 'DM Serif Display', serif;
+  font-size: 22px;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+.logo span { color: var(--accent); font-style: italic; }
+.saved-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.saved-btn:hover { background: var(--surface2); }
+.saved-count {
+  background: var(--saved);
+  color: white;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* LAYOUT */
+.layout { display: flex; min-height: calc(100vh - 60px); }
+
+/* SIDEBAR */
+.sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 1.5rem 1rem;
+  position: sticky;
+  top: 60px;
+  height: calc(100vh - 60px);
+  overflow-y: auto;
+}
+.sidebar-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  padding: 0 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.cv-btn {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 4px;
+}
+.cv-btn:hover { background: var(--surface2); border-color: var(--border); }
+.cv-btn.active { background: var(--text); color: white; }
+.cv-btn.active .cv-icon { background: rgba(255,255,255,0.15); }
+.cv-btn.active .cv-label { color: rgba(255,255,255,0.7); }
+.cv-btn.active .cv-tags span { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.8); }
+.cv-header { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.cv-icon { width: 28px; height: 28px; border-radius: 6px; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+.cv-name { font-size: 13px; font-weight: 500; line-height: 1.3; }
+.cv-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; padding-left: 36px; }
+.cv-tags { display: flex; flex-wrap: wrap; gap: 3px; padding-left: 36px; }
+.cv-tags span { font-size: 10px; background: var(--tag-bg); border-radius: 4px; padding: 2px 6px; color: var(--muted); }
+
+/* SOURCE SELECTOR */
+.source-section { margin-top: 1.5rem; }
+.source-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.source-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s;
+  background: var(--surface);
+  position: relative;
+}
+.source-opt:hover { background: var(--surface2); }
+.source-opt.active { border-color: var(--accent); background: #fdf1ee; color: var(--accent); }
+.source-opt.spain.active { border-color: var(--spain); background: #fff0f1; color: var(--spain); }
+.source-flag { font-size: 16px; }
+.source-label { flex: 1; }
+.source-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+}
+.source-badge.new { background: var(--spain); }
+
+/* MAIN */
+.main { flex: 1; padding: 1.5rem; max-width: 800px; }
+
+/* SEARCH BAR */
+.search-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 1.25rem;
+  align-items: center;
+}
+.search-input-wrap {
+  flex: 1;
+  position: relative;
+}
+.search-input {
+  width: 100%;
+  padding: 10px 14px 10px 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  background: var(--surface);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 15px;
+}
+.search-btn {
+  padding: 10px 18px;
+  background: var(--text);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.2s;
+}
+.search-btn:hover { opacity: 0.85; }
+.search-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* FILTERS */
+.filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.filter-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all 0.15s;
+}
+.filter-btn:hover { background: var(--surface2); }
+.filter-btn.active { background: var(--text); color: white; border-color: var(--text); }
+.filter-btn.spain-filter.active { background: var(--spain); border-color: var(--spain); color: white; }
+
+/* STATUS */
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  font-size: 13px;
+  color: var(--muted);
+}
+.status-count strong { color: var(--text); }
+.search-query-pill {
+  background: var(--surface2);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* JOBS */
+.jobs-grid { display: flex; flex-direction: column; gap: 10px; }
+.job-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+}
+.job-card:hover { border-color: #c0bbb2; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.job-card.spain-card { border-left: 3px solid var(--spain); }
+.job-card.global-card { border-left: 3px solid var(--accent); }
+.job-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
+.job-title { font-size: 15px; font-weight: 600; color: var(--text); line-height: 1.3; flex: 1; }
+.save-job-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0;
+  color: var(--border);
+  transition: color 0.2s;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.save-job-btn.saved { color: var(--saved); }
+.save-job-btn:hover { color: var(--saved); }
+.job-company {
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+.job-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+.job-tag {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.tag-location { background: #e8f0e4; color: #2d5016; }
+.tag-type { background: #e4eaf8; color: #1a3a7a; }
+.tag-date { background: var(--tag-bg); color: var(--muted); }
+.tag-spain { background: #fff0f1; color: var(--spain); border: 1px solid #ffd0d3; }
+.tag-lang { background: #fff8e1; color: #7a5000; }
+.job-desc { font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+.job-footer { display: flex; justify-content: space-between; align-items: center; }
+.job-source {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.apply-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: opacity 0.15s;
+}
+.apply-btn:hover { opacity: 0.85; }
+.apply-global { background: var(--text); color: white; }
+.apply-spain { background: var(--spain); color: white; }
+
+/* EMPTY / LOADING */
+.state-box {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--muted);
+}
+.state-box .state-icon { font-size: 40px; margin-bottom: 1rem; }
+.state-box h3 { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--text); margin-bottom: 0.5rem; }
+.state-box p { font-size: 14px; }
+.loading-dots { display: flex; justify-content: center; gap: 6px; margin: 1rem 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: bounce 1.2s infinite; }
+.dot:nth-child(2) { animation-delay: 0.2s; }
+.dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce { 0%,80%,100%{transform:scale(0.8);opacity:0.5} 40%{transform:scale(1.1);opacity:1} }
+
+/* MODAL — MATCH ANALYSIS */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(20,20,18,0.6);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  max-width: 540px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+}
+.modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+.modal-title { font-family: 'DM Serif Display', serif; font-size: 20px; }
+.modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--muted); line-height: 1; }
+.match-score {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+.score-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.score-num { font-size: 22px; font-weight: 600; line-height: 1; }
+.score-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; }
+.score-high { background: #e8f0e4; color: var(--accent2); }
+.score-mid { background: #fff8e1; color: #7a5000; }
+.score-low { background: #fff0f1; color: var(--spain); }
+.match-verdict { flex: 1; }
+.verdict-title { font-weight: 600; font-size: 15px; margin-bottom: 2px; }
+.verdict-sub { font-size: 12px; color: var(--muted); }
+.modal-section { margin-bottom: 1rem; }
+.modal-section h4 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 6px; }
+.kw-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.kw { font-size: 12px; padding: 4px 10px; border-radius: 6px; font-weight: 500; }
+.kw-present { background: #e8f0e4; color: var(--accent2); }
+.kw-missing { background: #fff0f1; color: var(--spain); }
+.kw-add { background: #fff8e1; color: #7a5000; }
+.modal-note { font-size: 12px; color: var(--muted); line-height: 1.6; background: var(--surface2); border-radius: var(--radius-sm); padding: 0.75rem; }
+.modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+.modal-apply { flex: 1; padding: 10px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; cursor: pointer; border: none; }
+
+/* SAVED PANEL */
+.saved-panel {
+  display: none;
+  position: fixed;
+  top: 60px;
+  right: 0;
+  width: 340px;
+  height: calc(100vh - 60px);
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: 150;
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+.saved-panel.open { display: block; }
+.saved-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.saved-panel-title { font-family: 'DM Serif Display', serif; font-size: 18px; }
+.close-panel { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); }
+.saved-item { padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 6px; }
+.saved-item-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.saved-item-co { font-size: 12px; color: var(--accent); }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+@media (max-width: 700px) {
+  .sidebar { display: none; }
+  .main { padding: 1rem; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Belén <span>·</span> Empleos</div>
+  <button class="saved-btn" onclick="toggleSaved()">
+    ⭐ Guardados <span class="saved-count" id="savedCount">0</span>
+  </button>
+</header>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-title">Elegí tu CV</div>
+
+    <button class="cv-btn" id="cv-0" onclick="selectCV(0)">
+      <div class="cv-header">
+        <div class="cv-icon">🎓</div>
+        <div class="cv-name">Onboarding & Capacitación</div>
+      </div>
+      <div class="cv-label">Customer Success · People Ops</div>
+      <div class="cv-tags">
+        <span>Onboarding</span><span>Training</span><span>CS</span>
+      </div>
+    </button>
+
+    <button class="cv-btn" id="cv-1" onclick="selectCV(1)">
+      <div class="cv-header">
+        <div class="cv-icon">💼</div>
+        <div class="cv-name">Perfil Comercial</div>
+      </div>
+      <div class="cv-label">Atención al cliente · B2B · Coordinación</div>
+      <div class="cv-tags">
+        <span>CX</span><span>B2B</span><span>Ventas</span>
+      </div>
+    </button>
+
+    <button class="cv-btn" id="cv-2" onclick="selectCV(2)">
+      <div class="cv-header">
+        <div class="cv-icon">👥</div>
+        <div class="cv-name">RRHH & People Ops</div>
+      </div>
+      <div class="cv-label">Selección · Reclutamiento · Talent</div>
+      <div class="cv-tags">
+        <span>RRHH</span><span>Reclutamiento</span><span>Talent</span>
+      </div>
+    </button>
+
+    <button class="cv-btn" id="cv-3" onclick="selectCV(3)">
+      <div class="cv-header">
+        <div class="cv-icon">📱</div>
+        <div class="cv-name">Marketing & Contenido</div>
+      </div>
+      <div class="cv-label">Redes Sociales · Diseño · Branding</div>
+      <div class="cv-tags">
+        <span>Social Media</span><span>Canva</span><span>Marca</span>
+      </div>
+    </button>
+
+    <div class="source-section">
+      <div class="sidebar-title" style="margin-top:0">Fuente de búsqueda</div>
+      <div class="source-toggle">
+        <button class="source-opt active" id="src-global" onclick="setSource('global')">
+          <span class="source-flag">🌍</span>
+          <span class="source-label">Global (remoto)</span>
+          <span class="source-badge">EN</span>
+        </button>
+        <button class="source-opt spain" id="src-spain" onclick="setSource('spain')">
+          <span class="source-flag">🇪🇸</span>
+          <span class="source-label">España · Remoto</span>
+          <span class="source-badge new">ES ✦</span>
+        </button>
+        <button class="source-opt" id="src-latam" onclick="setSource('latam')">
+          <span class="source-flag">🌎</span>
+          <span class="source-label">LATAM · Remoto</span>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+
+    <div class="search-bar">
+      <div class="search-input-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" id="searchInput" type="text" placeholder="Buscar por rol, habilidad…">
+      </div>
+      <button class="search-btn" id="searchBtn" onclick="doSearch()" disabled>Buscar</button>
+    </div>
+
+    <div class="filters">
+      <button class="filter-btn active" onclick="setFilter('all', this)">Todos</button>
+      <button class="filter-btn" onclick="setFilter('7d', this)">Últimos 7 días</button>
+      <button class="filter-btn spain-filter" onclick="setFilter('spain', this)">🇪🇸 Solo España</button>
+      <button class="filter-btn" onclick="setFilter('saved', this)">⭐ Guardados</button>
+    </div>
+
+    <div class="status-bar">
+      <div class="status-count" id="statusCount">Seleccioná un CV para empezar</div>
+      <div class="search-query-pill" id="queryPill" style="display:none"></div>
+    </div>
+
+    <div class="jobs-grid" id="jobsGrid">
+      <div class="state-box">
+        <div class="state-icon">👆</div>
+        <h3>Elegí tu CV</h3>
+        <p>Seleccioná el perfil con el que querés buscar<br>y el sistema carga las ofertas automáticamente.</p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MATCH MODAL -->
+<div class="modal-overlay" id="matchModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">Análisis de match</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modalBody"></div>
+    <div class="modal-actions">
+      <button class="modal-apply apply-global" id="modalApplyBtn" onclick="openModalLink()">Aplicar ahora →</button>
+    </div>
+  </div>
+</div>
+
+<!-- SAVED PANEL -->
+<div class="saved-panel" id="savedPanel">
+  <div class="saved-panel-header">
+    <div class="saved-panel-title">Guardados ⭐</div>
+    <button class="close-panel" onclick="toggleSaved()">✕</button>
+  </div>
+  <div id="savedList"></div>
+</div>
+
+<script>
+const CVS = [
+  {
+    name: "Onboarding & Capacitación",
+    icon: "🎓",
+    skills: ["onboarding", "customer success", "capacitación", "formación", "implementación", "people ops", "LMS", "instructional design"],
+    globalKeywords: "customer success onboarding trainer remote",
+    spainKeywords: "customer success onboarding formacion remoto España",
+    latamKeywords: "customer success onboarding capacitacion remoto",
+    cv_skills_es: ["Capacitación corporativa", "Onboarding", "Diseño instruccional", "Customer Success", "People Ops", "Excel", "Power BI", "Gestión de proyectos", "Inglés intermedio-avanzado", "LMS / SIAC"]
+  },
+  {
+    name: "Perfil Comercial",
+    icon: "💼",
+    skills: ["atención al cliente", "B2B", "ventas", "gestión comercial", "CRM", "negociación", "coordinación"],
+    globalKeywords: "customer service B2B account manager remote spanish",
+    spainKeywords: "atención cliente B2B account manager remoto España hispanohablante",
+    latamKeywords: "atención cliente ventas B2B remoto",
+    cv_skills_es: ["Atención al cliente", "Gestión comercial B2B", "Negociación", "CRM Google Sheets", "Excel", "Power BI", "Comunicación empática", "Resolución de problemas", "Inglés intermedio"]
+  },
+  {
+    name: "RRHH & People Ops",
+    icon: "👥",
+    skills: ["selección", "reclutamiento", "RRHH", "talent acquisition", "people ops", "recruiting", "HR"],
+    globalKeywords: "recruiter talent acquisition HR remote spanish speaking",
+    spainKeywords: "reclutador selección de personal RRHH remoto España talent",
+    latamKeywords: "reclutamiento selección RRHH talent remoto",
+    cv_skills_es: ["Selección de personal", "Reclutamiento", "Análisis de competencias", "Boolean Search", "X-Ray Search", "Hiring Room", "People Ops", "Entrevistas por competencias", "Excel", "Inglés intermedio"]
+  },
+  {
+    name: "Marketing & Contenido",
+    icon: "📱",
+    skills: ["community manager", "redes sociales", "contenido", "diseño visual", "branding", "canva", "marketing digital"],
+    globalKeywords: "social media manager content creator remote spanish",
+    spainKeywords: "community manager marketing digital contenido redes remoto España",
+    latamKeywords: "community manager contenido digital redes sociales remoto",
+    cv_skills_es: ["Community Manager", "Diseño en Canva", "Producción de contenido visual", "Identidad de marca", "Colorimetría", "Estrategia de contenido", "Newsletter Substack", "IA generativa", "Producción de video"]
+  }
+];
+
+const SPAIN_JOBS_BY_CV = {
+  0: [
+    {
+      title: "Customer Success Specialist (Español)",
+      company: "Factorial HR",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "Empresa SaaS española líder en RRHH busca especialista para acompañar a clientes en la adopción de la plataforma. Se requiere habilidad para capacitar, detectar necesidades y hacer seguimiento. Español nativo indispensable.",
+      url: "https://factorialhr.com/careers",
+      date: "Hace 3 días",
+      source: "InfoJobs / LinkedIn ES",
+      isSpain: true,
+      keywords: ["Customer Success", "Onboarding", "SaaS", "Capacitación", "Español nativo"]
+    },
+    {
+      title: "Especialista en Formación y Desarrollo",
+      company: "Grupo Crit (ETT)",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "Búsqueda activa de profesional con experiencia en diseño e implementación de planes de formación corporativa. Valorable experiencia con herramientas LMS y reportes de desempeño.",
+      url: "https://www.grupocrit.com/empleo",
+      date: "Hace 5 días",
+      source: "InfoJobs ES",
+      isSpain: true,
+      keywords: ["Formación", "LMS", "Reporting", "Desarrollo corporativo", "Diseño instruccional"]
+    },
+    {
+      title: "Onboarding & Training Coordinator",
+      company: "Docplanner (España)",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "Plataforma líder de salud digital busca coordinador/a de onboarding para clientes hispanohablantes. Experiencia en diseño de procesos de incorporación y herramientas digitales de formación.",
+      url: "https://www.docplanner.com/careers",
+      date: "Hace 1 semana",
+      source: "LinkedIn ES",
+      isSpain: true,
+      keywords: ["Onboarding", "Training", "Coordinación", "Procesos", "Herramientas digitales"]
+    },
+    {
+      title: "Técnico/a de Formación Corporativa",
+      company: "Randstad España",
+      location: "Remoto — Madrid",
+      type: "Full-time",
+      desc: "Randstad busca técnico/a de formación para empresa cliente del sector agroindustrial. Detección de necesidades, diseño curricular, coordinación de instructores y certificación. Experiencia en entornos de estándares internacionales valorada.",
+      url: "https://www.randstad.es/empleo/",
+      date: "Hace 2 días",
+      source: "InfoJobs ES",
+      isSpain: true,
+      keywords: ["Formación", "Diseño curricular", "Certificación", "Agroindustrial", "Coordinación"]
+    },
+    {
+      title: "Customer Education Specialist (Latam & España)",
+      company: "Holded",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "Software de gestión empresarial busca especialista en educación de clientes para el mercado hispanohablante. Foco en onboarding, tutoriales y acompañamiento post-venta. Español nativo, valorable inglés.",
+      url: "https://www.holded.com/es/empleo",
+      date: "Hace 4 días",
+      source: "LinkedIn ES",
+      isSpain: true,
+      keywords: ["Customer Education", "Onboarding", "Español nativo", "SaaS", "Contenido educativo"]
+    }
+  ],
+  1: [
+    {
+      title: "Ejecutiva/o de Cuentas B2B — Remoto",
+      company: "Personio",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "Software europeo de RRHH busca account executive hispanohablante para mercado iberoamericano. Gestión de cartera, negociación y cierre de acuerdos. Español nativo requerido, inglés valorable.",
+      url: "https://www.personio.com/es/empleo/",
+      date: "Hace 2 días",
+      source: "LinkedIn ES",
+      isSpain: true,
+      keywords: ["Account Executive", "B2B", "Negociación", "Español nativo", "SaaS"]
+    },
+    {
+      title: "Atención al Cliente en Español — Teletrabajo",
+      company: "IONOS (1&1)",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "Empresa tecnológica europea busca agente de atención al cliente para mercado hispano. Resolución de consultas, seguimiento de casos, orientación al cliente. Sin requisito de inglés.",
+      url: "https://www.ionos.es/empresa/empleo/",
+      date: "Hace 6 días",
+      source: "InfoJobs ES",
+      isSpain: true,
+      keywords: ["Atención al cliente", "Teletrabajo", "Español", "Resolución de problemas", "CRM"]
+    },
+    {
+      title: "Customer Care Specialist — Español",
+      company: "Fever (Madrid)",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "Plataforma de entretenimiento busca especialista de atención al cliente hispanohablante. Gestión de incidencias, coordinación con equipos internos y seguimiento comercial. Disponibilidad horaria amplia.",
+      url: "https://feverup.com/careers",
+      date: "Hace 3 días",
+      source: "LinkedIn ES",
+      isSpain: true,
+      keywords: ["Customer Care", "Gestión de casos", "Coordinación", "Español", "Startup"]
+    },
+    {
+      title: "Coordinadora Comercial B2B — Sector Agroindustrial",
+      company: "Corteva Agriscience España",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "Empresa multinacional del sector agro busca profesional para coordinación de clientes y concesionarios. Experiencia en gestión comercial B2B y reporting ejecutivo. Inglés valorable.",
+      url: "https://jobs.corteva.com",
+      date: "Hace 1 semana",
+      source: "InfoJobs ES",
+      isSpain: true,
+      keywords: ["B2B", "Agroindustrial", "Gestión comercial", "Reporting", "Concesionarios"]
+    },
+    {
+      title: "Inside Sales Representative (Español nativo)",
+      company: "Aircall",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "Startup SaaS de telefonía en la nube busca sales rep para mercado hispanohablante. Prospección, cotización y cierre de cuentas SMB. CRM HubSpot. Español nativo indispensable.",
+      url: "https://aircall.io/jobs/",
+      date: "Hace 4 días",
+      source: "LinkedIn ES",
+      isSpain: true,
+      keywords: ["Sales", "Inside Sales", "CRM HubSpot", "Español nativo", "SMB"]
+    }
+  ],
+  2: [
+    {
+      title: "Talent Acquisition Specialist — Remoto",
+      company: "Manpower Group España",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "ETT líder busca especialista en atracción de talento para cubrir perfiles técnicos y comerciales en España y LATAM. Boolean search, entrevistas por competencias y gestión de ATS. Español nativo.",
+      url: "https://www.manpowergroup.es/empleo/",
+      date: "Hace 3 días",
+      source: "InfoJobs ES",
+      isSpain: true,
+      keywords: ["Talent Acquisition", "Boolean search", "ATS", "Entrevistas", "Reclutamiento"]
+    },
+    {
+      title: "Recruiter IT & Perfiles Digitales",
+      company: "Spring Professional (Adecco)",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "Firma especializada busca recruiter con experiencia en X-Ray Search y LinkedIn Recruiter para perfiles tecnológicos y digitales. Proyecto largo plazo con empresa cliente tecnológica.",
+      url: "https://www.springprofessional.es/empleo",
+      date: "Hace 5 días",
+      source: "InfoJobs ES",
+      isSpain: true,
+      keywords: ["Recruiter", "X-Ray Search", "LinkedIn Recruiter", "Perfiles IT", "Headhunting"]
+    },
+    {
+      title: "People Operations Coordinator",
+      company: "Remote.com (España)",
+      location: "100% Remoto",
+      type: "Full-time",
+      desc: "Empresa global de employer of record busca coordinator de People Ops para regiones de LATAM y España. Gestión de onboarding, procesos de selección y soporte a empleados. Español nativo requerido.",
+      url: "https://remote.com/jobs",
+      date: "Hace 2 días",
+      source: "LinkedIn ES",
+      isSpain: true,
+      keywords: ["People Operations", "Onboarding", "LATAM", "Español nativo", "HR Coordinator"]
+    },
+    {
+      title: "HR Generalist — Mercado Hispanohablante",
+      company: "Deel (España/LATAM)",
+      location: "100% Remoto",
+      type: "Full-time",
+      desc: "Plataforma global de RRHH busca HR Generalist para dar soporte a clientes en el mercado hispanohablante. Selección, onboarding y coordinación de operaciones de personas. Sin requisito de oficina.",
+      url: "https://www.deel.com/es/careers",
+      date: "Hace 1 semana",
+      source: "LinkedIn ES",
+      isSpain: true,
+      keywords: ["HR Generalist", "Selección", "Onboarding", "Español", "Remote-first"]
+    },
+    {
+      title: "Técnico/a RRHH — Selección y Formación",
+      company: "Adecco España",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "Adecco busca técnico/a de RRHH con experiencia en procesos de selección y programas de formación para empresa cliente del sector industrial. Manejo de ATS y herramientas de gestión.",
+      url: "https://www.adecco.es/empleo-trabajo",
+      date: "Hace 4 días",
+      source: "InfoJobs ES",
+      isSpain: true,
+      keywords: ["RRHH", "Selección", "Formación", "ATS", "Sector industrial"]
+    }
+  ],
+  3: [
+    {
+      title: "Community Manager — Español (Remoto)",
+      company: "Domestika",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "Plataforma creativa busca community manager para gestionar comunidades en Instagram, Pinterest y redes hispanohablantes. Diseño de piezas en Canva, estrategia de contenido y análisis de métricas.",
+      url: "https://www.domestika.org/es/jobs",
+      date: "Hace 2 días",
+      source: "LinkedIn ES",
+      isSpain: true,
+      keywords: ["Community Manager", "Instagram", "Canva", "Contenido", "Pinterest"]
+    },
+    {
+      title: "Social Media Manager — Startup B2B",
+      company: "Hubtype (Barcelona)",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "Startup conversacional busca social media manager para crear contenido en LinkedIn e Instagram. Diseño visual, copywriting y análisis de algoritmo. Valorable experiencia con IA generativa para contenido.",
+      url: "https://hubtype.com/careers",
+      date: "Hace 5 días",
+      source: "LinkedIn ES",
+      isSpain: true,
+      keywords: ["Social Media", "LinkedIn", "Copywriting", "IA generativa", "Startup"]
+    },
+    {
+      title: "Diseñadora/or de Contenido Visual — Teletrabajo",
+      company: "Freepik Company",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "Plataforma de recursos visuales busca creador/a de contenido visual con dominio de Canva, Illustrator y herramientas IA. Producción de piezas estáticas y animadas para redes y newsletters.",
+      url: "https://www.freepikcompany.com/jobs",
+      date: "Hace 3 días",
+      source: "InfoJobs ES",
+      isSpain: true,
+      keywords: ["Diseño visual", "Canva", "IA generativa", "Newsletter", "Animaciones"]
+    },
+    {
+      title: "Content & Brand Strategist (Español)",
+      company: "Typeform",
+      location: "Remoto — España",
+      type: "Full-time",
+      desc: "SaaS de formularios busca estratega de contenido y marca para mercado hispanohablante. Desarrollo de identidad editorial, gestión de newsletters y estrategia de contenido orientada a comunidad.",
+      url: "https://www.typeform.com/careers/",
+      date: "Hace 1 semana",
+      source: "LinkedIn ES",
+      isSpain: true,
+      keywords: ["Estrategia de contenido", "Branding", "Newsletter", "Comunidad", "Editorial"]
+    },
+    {
+      title: "Gestora de Redes Sociales — Emprendimientos",
+      company: "Wuolah (Sevilla)",
+      location: "Remoto — España",
+      type: "Part-time",
+      desc: "Plataforma para estudiantes busca gestora de redes con enfoque en Instagram y TikTok. Creación de piezas visuales, gestión de pauta y análisis de comportamiento de audiencia. Flexibilidad horaria.",
+      url: "https://wuolah.com/empleo",
+      date: "Hace 4 días",
+      source: "InfoJobs ES",
+      isSpain: true,
+      keywords: ["Redes sociales", "Instagram", "TikTok", "Pauta", "Análisis de audiencia"]
+    }
+  ]
+};
+
+const MATCH_DATA = {
+  0: {
+    high: { label: "Perfil muy sólido", color: "score-high", verb: "Match alto" },
+    keywords_present: ["Capacitación corporativa", "Onboarding", "Diseño instruccional", "Gestión de proyectos", "Excel/Power BI", "Trabajo multicultural", "Inglés"],
+    keywords_missing: ["LMS certificado", "Plataforma SaaS", "NPS / CSAT"],
+    keywords_add: ["Mencionar SIAC y Hiring Room como LMS", "Agregar métricas de retención de clientes", "Incluir palabra 'Customer Success' en perfil"],
+    note: "Tu experiencia en John Deere es directamente transferible: gestionaste onboarding real con certificación, métricas y seguimiento. Solo falta adaptar el lenguaje al mundo SaaS."
+  },
+  1: {
+    mid: { label: "Buen match con ajustes", color: "score-mid", verb: "Match medio" },
+    keywords_present: ["Gestión comercial B2B", "Negociación", "Seguimiento de cuentas", "Prospección", "CRM", "Excel", "Comunicación empática"],
+    keywords_missing: ["HubSpot CRM", "Embudo de ventas", "Cuota de ventas"],
+    keywords_add: ["Mencionar 'pipeline' y 'embudo' en tus logros", "Agregar volumen de cuentas gestionadas", "Incluir el CRM de Google Sheets como experiencia CRM"],
+    note: "Tu perfil comercial es real y comprobable. El ajuste es de vocabulario: las empresas tech usan 'pipeline', 'leads', 'cuota'. Reescribí un par de bullets con ese lenguaje y el match sube."
+  },
+  2: {
+    high: { label: "Match muy alto", color: "score-high", verb: "Match alto" },
+    keywords_present: ["Reclutamiento", "Selección de perfiles", "Análisis de competencias", "Boolean Search", "X-Ray Search", "Hiring Room", "Preselección", "Seguimiento de candidatos"],
+    keywords_missing: ["ATS (Workday, Greenhouse)", "Talent Sourcing", "Employer Branding"],
+    keywords_add: ["Nombrar Hiring Room como ATS", "Agregar cantidad de procesos gestionados por mes", "Mencionar 'sourcing' en lugar de solo 'búsqueda'"],
+    note: "Este es tu CV más fuerte para RRHH. Boolean, X-Ray, Hiring Room — las empresas que buscan recruiters en España valoran exactamente esas herramientas. Solo ajustá el lenguaje al mundo tech."
+  },
+  3: {
+    mid: { label: "Buen match — proyectos pesan mucho", color: "score-mid", verb: "Match sólido" },
+    keywords_present: ["Canva", "Contenido visual", "Estrategia de contenido", "Identidad de marca", "Colorimetría", "Newsletter", "IA generativa", "Redes sociales"],
+    keywords_missing: ["Meta Ads", "Analytics / Métricas reales", "Gestión de comunidad comprobable"],
+    keywords_add: ["Agregar follower count o engagement real de tus proyectos", "Mencionar 'pauta' si gestionaste ads", "Incluir métricas de Substack (suscriptores, open rate)"],
+    note: "Tus proyectos propios (SOBERANA, Nerviosa Financiera, MEB) son la fortaleza real. Agregalos con números: cuántos seguidores, qué engagement, qué alcance. Eso convierte proyectos en experiencia."
+  }
+};
+
+let currentCV = null;
+let currentSource = 'global';
+let currentFilter = 'all';
+let savedJobs = JSON.parse(localStorage.getItem('belenSavedJobs') || '[]');
+let allLoadedJobs = [];
+let currentJobLink = '';
+
+function selectCV(idx) {
+  currentCV = idx;
+  document.querySelectorAll('.cv-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  document.getElementById('searchBtn').disabled = false;
+  document.getElementById('searchInput').placeholder = `Buscar para "${CVS[idx].name}"…`;
+  doSearch();
+}
+
+function setSource(src) {
+  currentSource = src;
+  document.querySelectorAll('.source-opt').forEach(b => b.classList.remove('active'));
+  document.getElementById('src-' + src).classList.add('active');
+  if (currentCV !== null) doSearch();
+}
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderJobs(allLoadedJobs);
+}
+
+async function doSearch() {
+  if (currentCV === null) return;
+  const grid = document.getElementById('jobsGrid');
+  grid.innerHTML = `<div class="state-box"><div class="loading-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><p>Buscando ofertas en ${currentSource === 'spain' ? 'España 🇪🇸' : currentSource === 'latam' ? 'LATAM 🌎' : 'el mundo 🌍'}…</p></div>`;
+  document.getElementById('statusCount').textContent = 'Buscando…';
+
+  const cv = CVS[currentCV];
+  let jobs = [];
+
+  if (currentSource === 'spain') {
+    jobs = SPAIN_JOBS_BY_CV[currentCV].map(j => ({...j, isSpain: true}));
+    const extra = await fetchGlobalJobs(cv.globalKeywords);
+    jobs = [...jobs, ...extra.slice(0, 3).map(j => ({...j, isSpain: false}))];
+  } else if (currentSource === 'latam') {
+    jobs = await fetchGlobalJobs(cv.latamKeywords);
+    jobs = jobs.map(j => ({...j, isSpain: false}));
+  } else {
+    jobs = await fetchGlobalJobs(cv.globalKeywords);
+    const spainBonus = SPAIN_JOBS_BY_CV[currentCV].slice(0, 2).map(j => ({...j, isSpain: true}));
+    jobs = [...spainBonus, ...jobs];
+  }
+
+  const customQ = document.getElementById('searchInput').value.trim();
+  if (customQ) {
+    jobs = jobs.filter(j =>
+      j.title.toLowerCase().includes(customQ.toLowerCase()) ||
+      j.company.toLowerCase().includes(customQ.toLowerCase()) ||
+      (j.desc || '').toLowerCase().includes(customQ.toLowerCase())
+    );
+  }
+
+  allLoadedJobs = jobs;
+  updateQueryPill(customQ || cv.name);
+  renderJobs(jobs);
+}
+
+async function fetchGlobalJobs(query) {
+  try {
+    const url = `https://remotive.com/api/remote-jobs?search=${encodeURIComponent(query)}&limit=8`;
+    const r = await fetch(url);
+    if (!r.ok) return getFallbackJobs();
+    const data = await r.json();
+    return (data.jobs || []).slice(0, 8).map(j => ({
+      title: j.title,
+      company: j.company_name,
+      location: j.candidate_required_location || 'Remoto',
+      type: j.job_type || 'Full-time',
+      desc: stripHtml(j.description).slice(0, 180) + '…',
+      url: j.url,
+      date: formatDate(j.publication_date),
+      source: 'Remotive',
+      isSpain: false,
+      keywords: (j.tags || []).slice(0, 5)
+    }));
+  } catch(e) {
+    return getFallbackJobs();
+  }
+}
+
+function getFallbackJobs() {
+  return [];
+}
+
+function stripHtml(html) {
+  const d = document.createElement('div');
+  d.innerHTML = html;
+  return d.textContent || d.innerText || '';
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return 'Reciente';
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diff = Math.floor((now - d) / 86400000);
+  if (diff === 0) return 'Hoy';
+  if (diff === 1) return 'Ayer';
+  if (diff < 7) return `Hace ${diff} días`;
+  if (diff < 14) return 'Hace 1 semana';
+  return `Hace ${Math.floor(diff/7)} semanas`;
+}
+
+function renderJobs(jobs) {
+  let filtered = jobs;
+  if (currentFilter === '7d') {
+    filtered = jobs.filter(j => j.date && (j.date.includes('día') || j.date === 'Hoy' || j.date === 'Ayer'));
+  } else if (currentFilter === 'spain') {
+    filtered = jobs.filter(j => j.isSpain);
+  } else if (currentFilter === 'saved') {
+    filtered = jobs.filter(j => savedJobs.some(s => s.title === j.title && s.company === j.company));
+  }
+
+  const grid = document.getElementById('jobsGrid');
+  const statusEl = document.getElementById('statusCount');
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `<div class="state-box"><div class="state-icon">🔎</div><h3>Sin resultados</h3><p>Intentá cambiar el filtro o la fuente de búsqueda.</p></div>`;
+    statusEl.innerHTML = `<strong>0</strong> ofertas encontradas`;
+    return;
+  }
+
+  const spainCount = filtered.filter(j => j.isSpain).length;
+  statusEl.innerHTML = `<strong>${filtered.length}</strong> ofertas · <span style="color:var(--spain)">🇪🇸 ${spainCount} España</span>`;
+
+  grid.innerHTML = filtered.map((job, i) => {
+    const isSaved = savedJobs.some(s => s.title === job.title && s.company === job.company);
+    const cardClass = job.isSpain ? 'spain-card' : 'global-card';
+    const applyClass = job.isSpain ? 'apply-spain' : 'apply-global';
+    return `
+      <div class="job-card ${cardClass}" onclick="openMatch(${i})">
+        <div class="job-top">
+          <div class="job-title">${job.title}</div>
+          <button class="save-job-btn ${isSaved ? 'saved' : ''}"
+            onclick="event.stopPropagation(); toggleSaveJob(${i}, this)"
+            title="${isSaved ? 'Quitar de guardados' : 'Guardar'}">
+            ${isSaved ? '★' : '☆'}
+          </button>
+        </div>
+        <div class="job-company">${job.company}</div>
+        <div class="job-meta">
+          ${job.isSpain ? '<span class="job-tag tag-spain">🇪🇸 España</span>' : ''}
+          <span class="job-tag tag-location">📍 ${job.location}</span>
+          <span class="job-tag tag-type">${job.type}</span>
+          <span class="job-tag tag-date">${job.date}</span>
+          <span class="job-tag tag-lang">${job.isSpain ? '🗣 Español' : '🗣 EN/ES'}</span>
+        </div>
+        <div class="job-desc">${job.desc || ''}</div>
+        <div class="job-footer">
+          <div class="job-source">via ${job.source || 'Remotive'}</div>
+          <a class="apply-btn ${applyClass}" href="${job.url}" target="_blank" onclick="event.stopPropagation()">
+            Ver oferta →
+          </a>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function openMatch(idx) {
+  const filtered = getFilteredJobs();
+  if (!filtered[idx]) return;
+  const job = filtered[idx];
+  const match = MATCH_DATA[currentCV] || MATCH_DATA[0];
+  const scoreLevel = match.high ? 85 : match.mid ? 68 : 50;
+  const scoreClass = match.high ? 'score-high' : match.mid ? 'score-mid' : 'score-low';
+  const verdict = match.high || match.mid;
+
+  currentJobLink = job.url;
+
+  document.getElementById('modalTitle').textContent = job.title;
+  document.getElementById('modalBody').innerHTML = `
+    <div style="margin-bottom:0.75rem">
+      <div style="font-size:14px;font-weight:500;">${job.company}</div>
+      <div style="font-size:12px;color:var(--muted)">${job.location} · ${job.type}</div>
+    </div>
+
+    <div class="match-score">
+      <div class="score-circle ${scoreClass}">
+        <div class="score-num">${scoreLevel}%</div>
+        <div class="score-label">match</div>
+      </div>
+      <div class="match-verdict">
+        <div class="verdict-title">${verdict.label || 'Analizando…'}</div>
+        <div class="verdict-sub">${verdict.verb || ''} con tu CV de ${CVS[currentCV]?.name}</div>
+      </div>
+    </div>
+
+    <div class="modal-section">
+      <h4>✅ Palabras clave que ya tenés</h4>
+      <div class="kw-list">${(match.keywords_present || []).map(k => `<span class="kw kw-present">${k}</span>`).join('')}</div>
+    </div>
+
+    <div class="modal-section">
+      <h4>❌ Palabras clave que faltan</h4>
+      <div class="kw-list">${(match.keywords_missing || []).map(k => `<span class="kw kw-missing">${k}</span>`).join('')}</div>
+    </div>
+
+    <div class="modal-section">
+      <h4>💡 Cómo mejorar el match</h4>
+      <div class="kw-list">${(match.keywords_add || []).map(k => `<span class="kw kw-add">${k}</span>`).join('')}</div>
+    </div>
+
+    <div class="modal-note">📝 ${match.note || ''}</div>
+  `;
+
+  const btn = document.getElementById('modalApplyBtn');
+  btn.className = `modal-apply ${job.isSpain ? 'apply-spain' : 'apply-global'}`;
+
+  document.getElementById('matchModal').classList.add('open');
+}
+
+function getFilteredJobs() {
+  let f = allLoadedJobs;
+  if (currentFilter === '7d') f = f.filter(j => j.date && (j.date.includes('día') || j.date === 'Hoy' || j.date === 'Ayer'));
+  else if (currentFilter === 'spain') f = f.filter(j => j.isSpain);
+  else if (currentFilter === 'saved') f = f.filter(j => savedJobs.some(s => s.title === j.title && s.company === j.company));
+  return f;
+}
+
+function closeModal() {
+  document.getElementById('matchModal').classList.remove('open');
+}
+
+function openModalLink() {
+  if (currentJobLink) window.open(currentJobLink, '_blank');
+  closeModal();
+}
+
+function toggleSaveJob(idx, btn) {
+  const filtered = getFilteredJobs();
+  const job = filtered[idx];
+  if (!job) return;
+  const already = savedJobs.findIndex(s => s.title === job.title && s.company === job.company);
+  if (already >= 0) {
+    savedJobs.splice(already, 1);
+    btn.textContent = '☆';
+    btn.classList.remove('saved');
+  } else {
+    savedJobs.push({ title: job.title, company: job.company, url: job.url });
+    btn.textContent = '★';
+    btn.classList.add('saved');
+  }
+  localStorage.setItem('belenSavedJobs', JSON.stringify(savedJobs));
+  document.getElementById('savedCount').textContent = savedJobs.length;
+  renderSavedPanel();
+}
+
+function toggleSaved() {
+  document.getElementById('savedPanel').classList.toggle('open');
+  renderSavedPanel();
+}
+
+function renderSavedPanel() {
+  const list = document.getElementById('savedList');
+  document.getElementById('savedCount').textContent = savedJobs.length;
+  if (savedJobs.length === 0) {
+    list.innerHTML = '<p style="font-size:13px;color:var(--muted);padding:1rem 0;">Todavía no guardaste ninguna oferta.</p>';
+    return;
+  }
+  list.innerHTML = savedJobs.map(j => `
+    <div class="saved-item">
+      <div class="saved-item-title">${j.title}</div>
+      <div class="saved-item-co">${j.company}</div>
+      <a href="${j.url}" target="_blank" style="font-size:11px;color:var(--muted)">Ver oferta →</a>
+    </div>
+  `).join('');
+}
+
+function updateQueryPill(q) {
+  const pill = document.getElementById('queryPill');
+  pill.style.display = 'flex';
+  pill.textContent = `🔎 ${q}`;
+}
+
+document.getElementById('searchInput').addEventListener('keypress', e => {
+  if (e.key === 'Enter' && currentCV !== null) doSearch();
+});
+
+document.getElementById('matchModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('matchModal')) closeModal();
+});
+
+renderSavedPanel();
+</script>
+</body>
+</html>
