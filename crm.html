@@ -264,19 +264,19 @@ select option { background:var(--dark); }
 <div class="sidebar" id="appSidebar" style="display:none">
   <div class="nav-section">
     <div class="nav-label">Principal</div>
-    <div class="nav-item active" onclick="showPage('dashboard')"><span class="nav-icon">📊</span> Dashboard</div>
-    <div class="nav-item" onclick="showPage('clientes')"><span class="nav-icon">👥</span> Clientes <span class="nav-badge" id="badge-clientes">0</span></div>
-    <div class="nav-item" onclick="showPage('maquinas')"><span class="nav-icon">⚙️</span> Máquinas <span class="nav-badge" id="badge-maquinas">0</span></div>
-    <div class="nav-item" onclick="showPage('trabajos')"><span class="nav-icon">🔧</span> Trabajos <span class="nav-badge" id="badge-trabajos">0</span></div>
-    <div class="nav-item" onclick="showPage('presupuestos')"><span class="nav-icon">📋</span> Presupuestos <span class="nav-badge" id="badge-presup">0</span></div>
+    <div class="nav-item active" onclick="showPage('dashboard',this)"><span class="nav-icon">📊</span> Dashboard</div>
+    <div class="nav-item" onclick="showPage('clientes',this)"><span class="nav-icon">👥</span> Clientes <span class="nav-badge" id="badge-clientes">0</span></div>
+    <div class="nav-item" onclick="showPage('maquinas',this)"><span class="nav-icon">⚙️</span> Máquinas <span class="nav-badge" id="badge-maquinas">0</span></div>
+    <div class="nav-item" onclick="showPage('trabajos',this)"><span class="nav-icon">🔧</span> Trabajos <span class="nav-badge" id="badge-trabajos">0</span></div>
+    <div class="nav-item" onclick="showPage('presupuestos',this)"><span class="nav-icon">📋</span> Presupuestos <span class="nav-badge" id="badge-presup">0</span></div>
   </div>
   <div class="nav-section">
     <div class="nav-label">Gestión</div>
-    <div class="nav-item" onclick="showPage('pipeline')"><span class="nav-icon">🎯</span> Pipeline</div>
-    <div class="nav-item" onclick="showPage('alertas')"><span class="nav-icon">🔔</span> Alertas <span class="nav-badge red" id="badge-alertas">0</span></div>
-    <div class="nav-item" onclick="showPage('estadisticas')"><span class="nav-icon">📈</span> Estadísticas</div>
-    <div class="nav-item" onclick="showPage('repuestos')"><span class="nav-icon">🔩</span> Repuestos</div>
-    <div class="nav-item" onclick="showPage('mapa')"><span class="nav-icon">🗺️</span> Mapa clientes</div>
+    <div class="nav-item" onclick="showPage('pipeline',this)"><span class="nav-icon">🎯</span> Pipeline</div>
+    <div class="nav-item" onclick="showPage('alertas',this)"><span class="nav-icon">🔔</span> Alertas <span class="nav-badge red" id="badge-alertas">0</span></div>
+    <div class="nav-item" onclick="showPage('estadisticas',this)"><span class="nav-icon">📈</span> Estadísticas</div>
+    <div class="nav-item" onclick="showPage('repuestos',this)"><span class="nav-icon">🔩</span> Repuestos</div>
+    <div class="nav-item" onclick="showPage('mapa',this)"><span class="nav-icon">🗺️</span> Mapa clientes</div>
   </div>
   <div class="sidebar-footer">
     <p>mebmachinerysolutions<br>@gmail.com<br><br>v2.0 · Google Sheets</p>
@@ -605,18 +605,18 @@ async function syncAll() {
     ]);
 
     if(cl.length) DB.clientes = cl.map(r=>({
-      id:r.ID||uid(), nombre:r.NOMBRE||'', empresa:r.EMPRESA||'',
+      id:String(r.ID||uid()).trim(), nombre:r.NOMBRE||'', empresa:r.EMPRESA||'',
       telefono:r.TELEFONO||'', email:r.EMAIL||'', zona:r.ZONA||'',
-      estado:(r.ESTADO||'activo').toLowerCase(), ultimoContacto:r.ULTIMO_CONTACTO||'',
+      estado:(r.ESTADO||'activo').toLowerCase().trim(), ultimoContacto:r.ULTIMO_CONTACTO||'',
       notas:r.NOTAS||''
     }));
     if(mq.length) DB.maquinas = mq.map(r=>({
-      id:r.ID||uid(), clienteId:r.CLIENTE_ID||'', marca:r.MARCA||'',
+      id:String(r.ID||uid()).trim(), clienteId:String(r.CLIENTE_ID||'').trim(), marca:r.MARCA||'',
       modelo:r.MODELO||'', serie:r.SERIE||'', tipo:r.TIPO||'', notas:r.NOTAS||''
     }));
     if(tr.length) DB.trabajos = tr.map(r=>({
-      id:r.ID||uid(), clienteId:r.CLIENTE_ID||'', maquinaId:r.MAQUINA_ID||'',
-      titulo:r.TITULO||'', tipo:r.TIPO||'', estado:(r.ESTADO||'pendiente').toLowerCase(),
+      id:String(r.ID||uid()).trim(), clienteId:String(r.CLIENTE_ID||'').trim(), maquinaId:String(r.MAQUINA_ID||'').trim(),
+      titulo:r.TITULO||'', tipo:r.TIPO||'', estado:(r.ESTADO||'pendiente').toLowerCase().trim(),
       estadoMaquina:r.ESTADO_MAQUINA||'', fechaInicio:r.FECHA_INICIO||'',
       fechaFin:r.FECHA_FIN||'', montoCobrado:parseFloat(r.MONTO_COBRADO)||0,
       montoGastos:parseFloat(r.MONTO_GASTOS)||0,
@@ -628,9 +628,10 @@ async function syncAll() {
       notas:r.NOTAS||'', fotoUrl:r.FOTO_URL||''
     }));
     if(pr.length) DB.presupuestos = pr.map((r,i)=>({
-      id:r.ID||uid(), num:i+1, clienteId:r.CLIENTE_ID||r['CLIENTE_ID']||'',
+      id:String(r.ID||uid()).trim(), num:i+1, clienteId:String(r.CLIENTE_ID||r['CLIENTE_ID']||'').trim(),
       descripcion:r.DESCRIPCION||r.DECSRIPCION||r.TITULO||'',
-      monto:parseFloat(r.MONTO)||0, estado:(r.ESTADO||'pendiente').toLowerCase(),
+      titulo:r.TITULO||r.DESCRIPCION||r.DECSRIPCION||'',
+      monto:parseFloat(r.MONTO)||0, estado:(r.ESTADO||'pendiente').toLowerCase().trim(),
       fecha:r.FECHA||'', notas:r.NOTAS||''
     }));
     if(al.length) DB.alertas = al.map(r=>({
@@ -695,11 +696,12 @@ function updateBadges() {
 // ============================================================
 // PAGES
 // ============================================================
-function showPage(name) {
+function showPage(name, el) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
-  event?.currentTarget?.classList.add('active');
+  if(el) el.classList.add('active');
+  else event?.currentTarget?.classList.add('active');
   closeDetail();
   const renders={
     dashboard:renderDashboard, clientes:renderClientes, maquinas:renderMaquinas,
@@ -920,22 +922,50 @@ function renderPresupuestos() {
 // ============================================================
 function renderPipeline() {
   const board=document.getElementById('pipelineBoard');
-  const clientesConTrabajoCompletado=new Set(DB.trabajos.filter(t=>t.estado==='completado').map(t=>t.clienteId));
-  const clientesEnCurso=new Set(DB.trabajos.filter(t=>t.estado==='en curso').map(t=>t.clienteId));
+  if(!board) return;
+
+  // Normalizar IDs para comparación segura (siempre string lowercase trim)
+  const norm = v => String(v||'').trim().toLowerCase();
+
+  const clientesConTrabajoCompletado=new Set(
+    DB.trabajos.filter(t=>norm(t.estado)==='completado').map(t=>norm(t.clienteId))
+  );
+  const clientesEnCurso=new Set(
+    DB.trabajos.filter(t=>norm(t.estado)==='en curso').map(t=>norm(t.clienteId))
+  );
+
   board.innerHTML=PIPELINE_STAGES.map((stage,si)=>{
     let allItems=[];
-    if(stage==='Contacto'||stage==='Cotización'){
-      allItems=DB.presupuestos.filter(p=>p.estado==='pendiente'&&!clientesConTrabajoCompletado.has(p.clienteId)&&!clientesEnCurso.has(p.clienteId));
+    if(stage==='Contacto'){
+      // Presupuestos pendientes sin trabajo activo ni completado
+      allItems=DB.presupuestos.filter(p=>{
+        const cid=norm(p.clienteId);
+        return norm(p.estado)==='pendiente' && !clientesConTrabajoCompletado.has(cid) && !clientesEnCurso.has(cid);
+      });
+    } else if(stage==='Cotización'){
+      // Presupuestos pendientes de clientes en curso (recibieron cotización pero no aprobaron)
+      allItems=DB.presupuestos.filter(p=>{
+        const cid=norm(p.clienteId);
+        return norm(p.estado)==='pendiente' && clientesEnCurso.has(cid);
+      });
+    } else if(stage==='Negociación'){
+      // Presupuestos sin estado claro (vacío o 'en revisión')
+      allItems=DB.presupuestos.filter(p=>{
+        const e=norm(p.estado);
+        return e==='' || e==='en revisión' || e==='revision';
+      });
     } else if(stage==='Aprobado'){
-      allItems=DB.presupuestos.filter(p=>p.estado==='aprobado');
+      allItems=DB.presupuestos.filter(p=>norm(p.estado)==='aprobado');
     } else if(stage==='En ejecución'){
-      allItems=DB.presupuestos.filter(p=>clientesEnCurso.has(p.clienteId));
+      allItems=DB.trabajos.filter(t=>norm(t.estado)==='en curso');
     } else if(stage==='Finalizado'){
-      allItems=DB.presupuestos.filter(p=>clientesConTrabajoCompletado.has(p.clienteId));
+      allItems=DB.trabajos.filter(t=>norm(t.estado)==='completado');
     } else if(stage==='Sin avance'){
-      allItems=DB.presupuestos.filter(p=>p.estado==='rechazado');
+      allItems=DB.presupuestos.filter(p=>norm(p.estado)==='rechazado'||norm(p.estado)==='cancelado');
     }
-    const total=allItems.reduce((s,i)=>s+Number(i.monto||0),0);
+
+    const total=allItems.reduce((s,i)=>s+Number(i.monto||i.montoCobrado||0),0);
+
     return `<div class="pipeline-col">
       <div class="pipeline-header">
         <div style="display:flex;align-items:center;gap:6px">
@@ -946,11 +976,14 @@ function renderPipeline() {
       </div>
       <div class="pipeline-body">
         ${allItems.length?allItems.map(item=>{
-          const cl=DB.clientes.find(c=>c.id===(item.clienteId));
+          const cid=norm(item.clienteId);
+          const cl=DB.clientes.find(c=>norm(c.id)===cid);
+          const nombre=item.titulo||item.descripcion||item.tipo||'—';
+          const monto=item.monto||item.montoCobrado||0;
           return `<div class="pipeline-card">
-            <div class="pc-name">${item.titulo||item.descripcion||'—'}</div>
-            <div class="pc-empresa">${cl?cl.nombre:'—'}</div>
-            <div class="pc-monto">${fmtMonto(item.monto||item.montoCobrado)}</div>
+            <div class="pc-name">${nombre}</div>
+            <div class="pc-empresa">${cl?cl.nombre:item.clienteId||'—'}</div>
+            <div class="pc-monto">${fmtMonto(monto)}</div>
             <div class="pc-date">${fmtDate(item.fecha||item.fechaInicio)}</div>
           </div>`;
         }).join(''):'<div style="text-align:center;padding:20px;color:var(--muted2);font-size:12px">Vacío</div>'}
