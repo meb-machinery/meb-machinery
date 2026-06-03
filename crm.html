@@ -528,7 +528,8 @@ function doLogin() {
     document.getElementById('appSidebar').style.display='flex';
     document.getElementById('mainContent').style.display='block';
     loadLocal(); updateTopbar(); updateBadges(); renderDashboard();
-    showToast('Bienvenido a MEB CRM','success');
+    showToast('Bienvenido a MEB CRM — sincronizando datos...','success');
+    setTimeout(() => syncAll(), 800);
   } else {
     document.getElementById('loginError').style.display='block';
     document.getElementById('loginError').textContent='Usuario: meb · Contraseña: meb2025';
@@ -829,9 +830,9 @@ function renderClientes() {
 
 function verCliente(id) {
   const c=DB.clientes.find(x=>x.id===id); if(!c) return;
-  const mqs=DB.maquinas.filter(m=>m.clienteId===id);
-  const prs=DB.presupuestos.filter(p=>p.clienteId===id);
-  const trs=DB.trabajos.filter(t=>t.clienteId===id);
+  const mqs=DB.maquinas.filter(m=>String(m.clienteId)===String(id));
+  const prs=DB.presupuestos.filter(p=>String(p.clienteId)===String(id));
+  const trs=DB.trabajos.filter(t=>String(t.clienteId)===String(id));
   const totalCobrado=trs.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
   document.getElementById('detailContent').innerHTML=`
     <div class="detail-name">${c.nombre}</div>
@@ -1254,7 +1255,7 @@ function renderMapa() {
     zonaMap[z].clientes.push(c);
   });
   DB.trabajos.forEach(t => {
-    const cl = DB.clientes.find(c=>c.id===t.clienteId);
+    const cl = DB.clientes.find(c=>String(c.id)===String(t.clienteId));
     if(!cl) return;
     const z = cl.zona||'Sin zona';
     if(zonaMap[z]) {
@@ -1292,7 +1293,7 @@ function renderMapa() {
     `<div class="empty-state"><div class="icon">🗺️</div><p>Sin zonas registradas</p></div>`;
 
   if(elTabla) elTabla.innerHTML = DB.clientes.length ? DB.clientes.map(c => {
-    const trs = DB.trabajos.filter(t=>t.clienteId===c.id);
+    const trs = DB.trabajos.filter(t=>String(t.clienteId)===String(c.id));
     const total = trs.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
     const query = encodeURIComponent((c.zona||c.empresa||c.nombre)+' Argentina');
     return `<tr>
