@@ -238,9 +238,10 @@ select option { background:var(--dark); }
 <div class="login-screen" id="loginScreen">
   <div class="login-box">
     <div class="login-logo">
-      <div class="lb"><span>MEB</span></div>
-      <div class="lt"><div class="l1">Machinery Solutions</div><div class="l2">Sistema interno · CRM</div></div>
+      <img id="loginLogoImg" style="height:56px;object-fit:contain;margin-bottom:4px" alt="MEB Machinery Solutions"/>
+      <div class="lt" style="display:none"><div class="l1">Machinery Solutions</div><div class="l2">Sistema interno · CRM</div></div>
     </div>
+    <div class="l2" style="font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:20px">Sistema interno · CRM</div>
     <h2>ACCESO AL SISTEMA</h2>
     <input type="text" id="loginUser" placeholder="Usuario" value=""/>
     <input type="password" id="loginPass" placeholder="Contraseña" onkeydown="if(event.key==='Enter')doLogin()"/>
@@ -616,7 +617,10 @@ function doLogin() {
     document.getElementById('appSidebar').style.display='flex';
     document.getElementById('mainContent').style.display='block';
     loadLocal(); updateTopbar(); updateBadges(); renderDashboard();
-    // Pre-render calendario para que el grid esté listo al primer click
+    // Set logo in login screen
+    const li = document.getElementById('loginLogoImg');
+    if(li) li.src = MEB_LOGO_B64;
+    // Pre-render calendario
     setTimeout(()=>{ if(typeof renderCalendario==='function') renderCalendario(); }, 200);
     showToast('Bienvenido a MEB CRM','success');
   } else {
@@ -1667,6 +1671,7 @@ table.detalle tr:last-child td{border-bottom:none}
   w.document.close();
 }
 
+function openModal(type, data={}) {
   let title='', body='', onSave=null;
 
   if(type==='cliente') {
