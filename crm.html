@@ -1055,6 +1055,7 @@ function renderPresupuestos() {
       <td class="td-muted">${fmtDate(p.fecha)}</td>
       <td><div class="actions">
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','rechazado'])">Estado</button>
+        <button class="btn-secondary" onclick="generarPresupuestoPDF('${p.id}')">📄</button>
         <button class="btn-danger" onclick="eliminar('presupuestos','${p.id}')">✕</button>
       </div></td>
     </tr>`;
