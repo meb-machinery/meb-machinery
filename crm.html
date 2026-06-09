@@ -1676,6 +1676,12 @@ table.detalle tr:last-child td{border-bottom:none}
   w.document.close();
 }
 
+function clienteOptions(selectedId='') {
+  return DB.clientes.map(c =>
+    `<option value="${c.id}" ${c.id===selectedId?'selected':''}>${c.nombre}</option>`
+  ).join('');
+}
+
 function openModal(type, data={}) {
   let title='', body='', onSave=null;
 
