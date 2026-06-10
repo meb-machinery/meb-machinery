@@ -221,6 +221,10 @@ select option { background:var(--dark); }
 .maquina-card { background:var(--dark); border:1px solid var(--border2); border-radius:5px; padding:12px 14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
 .maquina-info .mq-name { font-size:13px; font-weight:600; color:var(--text); }
 .maquina-info .mq-sub { font-size:11px; color:var(--muted); margin-top:2px; }
+/* GLOBAL SEARCH */
+.gs-item { padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--border); transition:background 0.1s; }
+.gs-item:hover { background:rgba(244,180,0,0.06); }
+.gs-item:last-child { border-bottom:none; }
 </style>
 </head>
 <body>
@@ -260,6 +264,17 @@ select option { background:var(--dark); }
   </div>
   <div class="topbar-right">
     <span class="topbar-date" id="topbarDate"></span>
+    <!-- BUSCADOR GLOBAL -->
+    <div id="globalSearchWrap" style="position:relative;display:none">
+      <div style="display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--border2);border-radius:4px;padding:5px 10px;width:260px">
+        <span style="color:var(--muted);font-size:13px">🔍</span>
+        <input id="globalSearchInput" type="text" placeholder="Buscar clientes, máquinas, presupuestos…"
+          style="background:transparent;border:none;outline:none;color:var(--text);font-family:Barlow,sans-serif;font-size:12px;width:100%"
+          oninput="renderBusquedaGlobal(this.value)" onfocus="document.getElementById('globalSearchResults').style.display='block'"
+          onblur="setTimeout(()=>{document.getElementById('globalSearchResults').style.display='none'},200)">
+      </div>
+      <div id="globalSearchResults" style="display:none;position:absolute;top:36px;right:0;width:340px;background:var(--panel);border:1px solid var(--border2);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,0.5);z-index:300;max-height:400px;overflow-y:auto"></div>
+    </div>
     <span class="sync-status" id="syncStatus">●  Conectado</span>
     <button class="sync-btn" id="syncBtn" onclick="syncAll()">↺ SINCRONIZAR</button>
     <button class="logout-btn" onclick="doLogout()">Salir</button>
@@ -403,6 +418,8 @@ select option { background:var(--dark); }
       <div class="page-title">ALERTAS</div>
       <button class="btn-primary" onclick="openModal('alerta')">+ NUEVA ALERTA</button>
     </div>
+    <!-- Panel de alertas de mantenimiento -->
+    <div id="alertas-mantenimiento-panel" style="margin-bottom:12px"></div>
     <div class="card"><div id="lista-alertas"></div></div>
   </div>
 
@@ -511,6 +528,48 @@ select option { background:var(--dark); }
         <tbody id="tabla-rentabilidad"></tbody>
       </table></div>
     </div>
+
+    <!-- BLOQUE FINANCIERO MENSUAL -->
+    <div style="margin-top:16px">
+      <div class="page-title" style="font-size:18px;margin-bottom:12px">EVOLUCIÓN <span>MENSUAL</span></div>
+      <div class="chart-card"><div class="chart-title">COBRADO POR MES</div><div class="chart-wrap chart-wrap-tall"><canvas id="chartMensual"></canvas></div></div>
+    </div>
+
+    <!-- RENTABILIDAD POR CLIENTE -->
+    <div style="margin-top:16px">
+      <div class="page-title" style="font-size:18px;margin-bottom:12px">RENTABILIDAD <span>POR CLIENTE</span></div>
+      <div class="card">
+        <div class="table-wrap"><table>
+          <thead><tr><th>CLIENTE</th><th>TRABAJOS</th><th>COBRADO</th><th>GASTOS</th><th>GANANCIA</th><th>MARGEN</th></tr></thead>
+          <tbody id="tabla-rent-cliente"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- ÍNDICE DE ESTADO DE FLOTA -->
+    <div style="margin-top:16px">
+      <div class="page-title" style="font-size:18px;margin-bottom:12px">ÍNDICE DE <span>FLOTA</span></div>
+      <div class="stats-grid" style="margin-bottom:12px">
+        <div class="stat-card green"><div class="stat-val" id="flota-funcionando">0</div><div class="stat-label">✅ Funcionando</div></div>
+        <div class="stat-card red"><div class="stat-val" id="flota-parado">0</div><div class="stat-label">🔴 Parado</div></div>
+        <div class="stat-card yellow"><div class="stat-val" id="flota-pct">0%</div><div class="stat-label">Disponibilidad flota</div></div>
+        <div class="stat-card blue"><div class="stat-val" id="flota-total">0</div><div class="stat-label">Total máquinas activas</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">ESTADO POR CLIENTE</span></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>CLIENTE</th><th>FUNCIONANDO</th><th>PARADO</th><th>DISPONIBILIDAD</th></tr></thead>
+          <tbody id="tabla-flota-cliente"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- ALERTAS MANTENIMIENTO EN ESTADÍSTICAS -->
+    <div style="margin-top:16px">
+      <div class="page-title" style="font-size:18px;margin-bottom:12px">ALERTAS <span>MANTENIMIENTO</span></div>
+      <div id="est-alertas-mantenimiento"></div>
+    </div>
+
     <!-- BLOQUE PROVEEDORES EN ESTADÍSTICAS -->
     <div style="margin-top:16px">
       <div class="page-title" style="font-size:18px;margin-bottom:12px">PROVEEDORES <span>& COMPRAS</span></div>
@@ -542,12 +601,12 @@ select option { background:var(--dark); }
       <div class="stat-card green"><div class="stat-val" id="prov-categoria-top">—</div><div class="stat-label">Categoría mayor gasto</div><div class="stat-icon">📊</div></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-      <button class="filter-btn active" onclick="filtrarProveedores('todos',this)">TODOS</button>
-      <button class="filter-btn" onclick="filtrarProveedores('repuestos',this)">REPUESTOS</button>
-      <button class="filter-btn" onclick="filtrarProveedores('indumentaria',this)">INDUMENTARIA</button>
-      <button class="filter-btn" onclick="filtrarProveedores('herramientas',this)">HERRAMIENTAS</button>
-      <button class="filter-btn" onclick="filtrarProveedores('herreria',this)">HERRERÍA</button>
-      <button class="filter-btn" onclick="filtrarProveedores('otros',this)">OTROS</button>
+      <button class="filter-tab active" onclick="filtrarProveedores('todos',this)">TODOS</button>
+      <button class="filter-tab" onclick="filtrarProveedores('repuestos',this)">REPUESTOS</button>
+      <button class="filter-tab" onclick="filtrarProveedores('indumentaria',this)">INDUMENTARIA</button>
+      <button class="filter-tab" onclick="filtrarProveedores('herramientas',this)">HERRAMIENTAS</button>
+      <button class="filter-tab" onclick="filtrarProveedores('herreria',this)">HERRERÍA</button>
+      <button class="filter-tab" onclick="filtrarProveedores('otros',this)">OTROS</button>
     </div>
     <div class="card">
       <div class="card-header"><span class="card-title">LISTADO DE PROVEEDORES</span></div>
@@ -680,6 +739,7 @@ function doLogin() {
     document.getElementById('appTopbar').style.display='flex';
     document.getElementById('appSidebar').style.display='flex';
     document.getElementById('mainContent').style.display='block';
+    document.getElementById('globalSearchWrap').style.display='block';
     loadLocal(); updateTopbar(); updateBadges(); renderDashboard();
     // Pre-render calendario
     setTimeout(()=>{ if(typeof renderCalendario==='function') renderCalendario(); }, 200);
@@ -1125,6 +1185,7 @@ function renderPresupuestos() {
       <td class="td-muted">${fmtDate(p.fecha)}</td>
       <td><div class="actions">
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','rechazado'])">Estado</button>
+        <button class="btn-secondary" onclick="duplicarPresupuesto('${p.id}')" title="Duplicar">⧉</button>
         <button class="btn-secondary" onclick="generarPresupuestoPDF('${p.id}')">📄</button>
         <button class="btn-danger" onclick="eliminar('presupuestos','${p.id}')">✕</button>
       </div></td>
@@ -1211,9 +1272,34 @@ function renderPipeline() {
 // ALERTAS
 // ============================================================
 function renderAlertas() {
+  // Panel de mantenimiento
+  const mantPanel = document.getElementById('alertas-mantenimiento-panel');
+  if(mantPanel) {
+    const alMant = calcularAlertasRepuesto();
+    if(alMant.length) {
+      mantPanel.innerHTML = `<div class="card" style="border-left:3px solid var(--orange);margin-bottom:12px">
+        <div class="card-header"><span class="card-title">⚙️ MANTENIMIENTO PREDICTIVO (${alMant.length})</span></div>
+        <div style="padding:8px 12px">${alMant.map(a=>{
+          const col = a.urgencia==='vencido'?'var(--red)':a.urgencia==='urgente'?'var(--orange)':'var(--yellow)';
+          const label = a.urgencia==='vencido'?`VENCIDO hace ${Math.abs(a.diasRestantes)}d`:`en ${a.diasRestantes}d`;
+          return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+            <div style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></div>
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:600;color:var(--text)">${a.clienteNombre} · ${a.maquinaDesc}</div>
+              <div style="font-size:11px;color:var(--muted)">${a.label} · Base: ${a.fechaBase}</div>
+            </div>
+            <span style="font-family:'Bebas Neue';font-size:13px;color:${col}">${label}</span>
+          </div>`;
+        }).join('')}</div>
+      </div>`;
+    } else {
+      mantPanel.innerHTML = '';
+    }
+  }
+
   const el=document.getElementById('lista-alertas');
   const data=[...DB.alertas].sort((a,b)=>(a.resuelta?1:0)-(b.resuelta?1:0));
-  if(!data.length){el.innerHTML=`<div class="empty-state"><div class="icon">🔔</div><p>Sin alertas</p></div>`;return;}
+  if(!data.length){el.innerHTML=`<div class="empty-state"><div class="icon">🔔</div><p>Sin alertas manuales</p></div>`;return;}
   el.innerHTML=data.map(a=>{
     const cl=DB.clientes.find(c=>c.id===a.clienteId);
     const col=a.prioridad==='alta'?'red':a.prioridad==='media'?'orange':'yellow';
@@ -1404,16 +1490,181 @@ function renderEstadisticas() {
         <span class="monto" style="font-size:13px">${fmtMonto(c.monto)}</span>
       </div>`).join(''):`<div class="empty-state"><div class="icon">📦</div><p>Sin compras registradas</p></div>`;
   }
+
+  // ── FINANCIERO MENSUAL ──
+  destroyChart('mensual');
+  const porMes = {};
+  DB.trabajos.forEach(t=>{
+    if(!t.montoCobrado||!t.fechaInicio) return;
+    const d = t.fechaInicio.split('/');
+    if(d.length<3) return;
+    const key = `${d[2]?.length===4?d[2]:'20'+d[2]}-${(d[1]||d[0]).padStart(2,'0')}`;
+    porMes[key] = (porMes[key]||0) + Number(t.montoCobrado);
+  });
+  const mesesOrdenados = Object.keys(porMes).sort();
+  if(document.getElementById('chartMensual') && mesesOrdenados.length) {
+    charts.mensual = new Chart(document.getElementById('chartMensual'),{
+      type:'bar',
+      data:{
+        labels: mesesOrdenados.map(k=>{ const [y,m]=k.split('-'); return `${m}/${y.slice(2)}`; }),
+        datasets:[{
+          label:'Cobrado',
+          data: mesesOrdenados.map(k=>porMes[k]),
+          backgroundColor:'rgba(244,180,0,0.7)',
+          borderColor:'#F4B400',
+          borderWidth:1, borderRadius:4,
+          type:'bar'
+        }]
+      },
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+fmtMonto(ctx.raw)}}},scales:{y:{beginAtZero:true}}}
+    });
+  }
+
+  // ── RENTABILIDAD POR CLIENTE ──
+  const porCliente = {};
+  DB.trabajos.filter(t=>t.montoCobrado>0).forEach(t=>{
+    const k = t.clienteId||'sin';
+    if(!porCliente[k]) porCliente[k]={cobrado:0,gastos:0,count:0};
+    porCliente[k].cobrado += Number(t.montoCobrado||0);
+    porCliente[k].gastos  += Number(t.montoGastos||0) + Number(t.costoRepuesto||0);
+    porCliente[k].count++;
+  });
+  const rcEl = document.getElementById('tabla-rent-cliente');
+  if(rcEl) {
+    const filas = Object.entries(porCliente)
+      .map(([cid,d])=>({cl:DB.clientes.find(c=>c.id===cid),cobrado:d.cobrado,gastos:d.gastos,count:d.count,ganancia:d.cobrado-d.gastos,margen:d.cobrado?Math.round((d.cobrado-d.gastos)/d.cobrado*100):0}))
+      .sort((a,b)=>b.cobrado-a.cobrado);
+    rcEl.innerHTML = filas.length ? filas.map(f=>`<tr>
+      <td class="td-name">${f.cl?f.cl.nombre:'—'}</td>
+      <td><span class="badge badge-blue">${f.count} trab.</span></td>
+      <td><span class="monto">${fmtMonto(f.cobrado)}</span></td>
+      <td style="color:var(--red)">${fmtMonto(f.gastos)}</td>
+      <td style="color:${f.ganancia>=0?'var(--green)':'var(--red)'}"><b>${fmtMonto(f.ganancia)}</b></td>
+      <td><span class="badge ${f.margen>=50?'badge-green':f.margen>=20?'badge-orange':'badge-red'}">${f.margen}%</span></td>
+    </tr>`).join('') : `<tr><td colspan="6"><div class="empty-state"><div class="icon">👥</div><p>Sin datos</p></div></td></tr>`;
+  }
+
+  // ── ÍNDICE DE ESTADO DE FLOTA ──
+  const trabajosActivos = DB.trabajos.filter(t=>t.estadoMaquina);
+  const maqEstados = {};
+  trabajosActivos.forEach(t=>{ if(t.maquinaId) maqEstados[t.maquinaId] = (t.estadoMaquina||'').toLowerCase(); });
+  const funcionando = Object.values(maqEstados).filter(e=>e==='funcionando').length;
+  const parado = Object.values(maqEstados).filter(e=>e==='parado').length;
+  const total = Object.keys(maqEstados).length;
+  const pct = total ? Math.round(funcionando/total*100) : 0;
+  const ff=document.getElementById('flota-funcionando'); if(ff) ff.textContent=funcionando;
+  const fp=document.getElementById('flota-parado'); if(fp) fp.textContent=parado;
+  const fc=document.getElementById('flota-pct'); if(fc) fc.textContent=pct+'%';
+  const ft=document.getElementById('flota-total'); if(ft) ft.textContent=total;
+  const flotaEl = document.getElementById('tabla-flota-cliente');
+  if(flotaEl) {
+    const porClienteFlota = {};
+    Object.entries(maqEstados).forEach(([mid,est])=>{
+      const mq = DB.maquinas.find(m=>m.id===mid);
+      if(!mq) return;
+      const k = mq.clienteId;
+      if(!porClienteFlota[k]) porClienteFlota[k]={f:0,p:0};
+      if(est==='funcionando') porClienteFlota[k].f++;
+      else if(est==='parado') porClienteFlota[k].p++;
+    });
+    const filasFlota = Object.entries(porClienteFlota).map(([cid,d])=>({cl:DB.clientes.find(c=>c.id===cid),...d,tot:d.f+d.p})).sort((a,b)=>b.tot-a.tot);
+    flotaEl.innerHTML = filasFlota.length ? filasFlota.map(f=>{
+      const avail = f.tot ? Math.round(f.f/f.tot*100) : 0;
+      return `<tr>
+        <td class="td-name">${f.cl?f.cl.nombre:'—'}</td>
+        <td style="color:var(--green)">✅ ${f.f}</td>
+        <td style="color:var(--red)">🔴 ${f.p}</td>
+        <td><span class="badge ${avail>=80?'badge-green':avail>=50?'badge-orange':'badge-red'}">${avail}%</span></td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="4"><div class="empty-state"><div class="icon">🚛</div><p>Sin datos de flota</p></div></td></tr>`;
+  }
+
+  // ── ALERTAS MANTENIMIENTO EN ESTADÍSTICAS ──
+  const estAl = document.getElementById('est-alertas-mantenimiento');
+  if(estAl) {
+    const al = calcularAlertasRepuesto();
+    estAl.innerHTML = al.length ? `<div class="card" style="border-left:3px solid var(--orange)"><div class="table-wrap"><table>
+      <thead><tr><th>CLIENTE</th><th>MÁQUINA</th><th>SERVICIO</th><th>FECHA BASE</th><th>ESTADO</th></tr></thead>
+      <tbody>${al.map(a=>{
+        const col = a.urgencia==='vencido'?'var(--red)':a.urgencia==='urgente'?'var(--orange)':'var(--yellow)';
+        const label = a.urgencia==='vencido'?`⚠️ VENCIDO hace ${Math.abs(a.diasRestantes)}d`:`en ${a.diasRestantes}d`;
+        return `<tr><td class="td-name">${a.clienteNombre}</td><td>${a.maquinaDesc}</td><td style="font-size:11px">${a.label}</td><td class="td-muted">${a.fechaBase}</td><td><span style="font-family:'Bebas Neue';font-size:13px;color:${col}">${label}</span></td></tr>`;
+      }).join('')}</tbody></table></div></div>` :
+      `<div class="card"><div class="empty-state"><div class="icon">✅</div><p>Sin alertas de mantenimiento pendientes</p></div></div>`;
+  }
 }
 
 // ============================================================
 // PROVEEDORES
 // ============================================================
+// ============================================================
+// BUSCADOR GLOBAL
+// ============================================================
+function renderBusquedaGlobal(q) {
+  const res = document.getElementById('globalSearchResults');
+  if (!q || q.trim().length < 2) { res.innerHTML=''; return; }
+  q = q.toLowerCase();
+  const hits = [];
+
+  DB.clientes.filter(c=>(c.nombre+c.empresa+c.zona).toLowerCase().includes(q)).slice(0,4).forEach(c=>{
+    hits.push(`<div class="gs-item" onclick="verDetalle('clientes','${c.id}');document.getElementById('globalSearchInput').value='';document.getElementById('globalSearchResults').style.display='none'">
+      <span style="font-size:11px;color:var(--muted)">👥 CLIENTE</span>
+      <div style="font-size:13px;font-weight:600;color:var(--text)">${c.nombre}</div>
+      <div style="font-size:11px;color:var(--muted)">${c.zona||'—'}</div>
+    </div>`);
+  });
+
+  DB.maquinas.filter(m=>(m.marca+m.modelo+m.serie+m.tipo).toLowerCase().includes(q)).slice(0,4).forEach(m=>{
+    const cl = DB.clientes.find(c=>c.id===m.clienteId);
+    hits.push(`<div class="gs-item" onclick="showPage('maquinas')">
+      <span style="font-size:11px;color:var(--muted)">⚙️ MÁQUINA</span>
+      <div style="font-size:13px;font-weight:600;color:var(--text)">${m.marca} ${m.modelo}</div>
+      <div style="font-size:11px;color:var(--muted)">${cl?cl.nombre:'—'} · ${m.serie||'S/N'}</div>
+    </div>`);
+  });
+
+  DB.presupuestos.filter(p=>(p.descripcion+p.num).toString().toLowerCase().includes(q)).slice(0,4).forEach(p=>{
+    const cl = DB.clientes.find(c=>c.id===p.clienteId);
+    hits.push(`<div class="gs-item" onclick="showPage('presupuestos')">
+      <span style="font-size:11px;color:var(--muted)">📋 PRESUPUESTO</span>
+      <div style="font-size:13px;font-weight:600;color:var(--text)">#${String(p.num||0).padStart(4,'0')} · ${cl?cl.nombre:'—'}</div>
+      <div style="font-size:11px;color:var(--muted)">${(p.descripcion||'').substring(0,50)}</div>
+    </div>`);
+  });
+
+  if (!hits.length) {
+    res.innerHTML = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Sin resultados para "${q}"</div>`;
+  } else {
+    res.innerHTML = hits.join('');
+  }
+  res.style.display = 'block';
+}
+
+// ============================================================
+// DUPLICAR PRESUPUESTO
+// ============================================================
+function duplicarPresupuesto(id) {
+  const orig = DB.presupuestos.find(p=>p.id===id);
+  if (!orig) return;
+  const nuevo = {
+    ...orig,
+    id: uid(),
+    num: DB.presupCounter++,
+    estado: 'pendiente',
+    fecha: new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}).split('/').reverse().join('/'),
+    notas: (orig.notas||'') + ' [Copia]'
+  };
+  DB.presupuestos.push(nuevo);
+  saveLocal();
+  renderPresupuestos();
+  showToast(`Presupuesto duplicado → #${String(nuevo.num).padStart(4,'0')}`, 'success');
+}
+
 let filtroProveedorActual = 'todos';
 
 function filtrarProveedores(cat, btn) {
   filtroProveedorActual = cat;
-  document.querySelectorAll('#page-proveedores .filter-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#page-proveedores .filter-tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   renderProveedores();
 }
