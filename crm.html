@@ -282,6 +282,7 @@ select option { background:var(--dark); }
     <div class="nav-item" onclick="showPage('alertas',this)"><span class="nav-icon">🔔</span> Alertas <span class="nav-badge red" id="badge-alertas">0</span></div>
     <div class="nav-item" onclick="showPage('estadisticas',this)"><span class="nav-icon">📈</span> Estadísticas</div>
     <div class="nav-item" onclick="showPage('repuestos',this)"><span class="nav-icon">🔩</span> Repuestos</div>
+    <div class="nav-item" onclick="showPage('proveedores',this)"><span class="nav-icon">🏭</span> Proveedores <span class="nav-badge" id="badge-proveedores">0</span></div>
     <div class="nav-item" onclick="showPage('mapa',this)"><span class="nav-icon">🗺️</span> Mapa clientes</div>
     <div class="nav-item" onclick="showPage('calendario',this)"><span class="nav-icon">📅</span> Calendario</div>
   </div>
@@ -510,6 +511,61 @@ select option { background:var(--dark); }
         <tbody id="tabla-rentabilidad"></tbody>
       </table></div>
     </div>
+    <!-- BLOQUE PROVEEDORES EN ESTADÍSTICAS -->
+    <div style="margin-top:16px">
+      <div class="page-title" style="font-size:18px;margin-bottom:12px">PROVEEDORES <span>& COMPRAS</span></div>
+      <div class="stats-grid" style="margin-bottom:12px">
+        <div class="stat-card orange"><div class="stat-val" id="est-prov-invertido">$0</div><div class="stat-label">💸 Total invertido en compras</div></div>
+        <div class="stat-card blue"><div class="stat-val" id="est-prov-count">0</div><div class="stat-label">🏭 Proveedores registrados</div></div>
+        <div class="stat-card yellow"><div class="stat-val" id="est-compras-count">0</div><div class="stat-label">📦 Compras registradas</div></div>
+      </div>
+      <div class="charts-grid">
+        <div class="chart-card"><div class="chart-title">GASTO POR CATEGORÍA</div><div class="chart-wrap"><canvas id="chartProvCategorias"></canvas></div></div>
+        <div class="chart-card">
+          <div class="chart-title">ÚLTIMAS COMPRAS</div>
+          <div style="padding:12px" id="est-ultimas-compras"><div class="empty-state"><div class="icon">📦</div><p>Sin compras aún</p></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROVEEDORES -->
+  <div class="page" id="page-proveedores">
+    <div class="page-header">
+      <div class="page-title">PROVEEDORES <span>& COMPRAS</span></div>
+      <button class="btn-primary" onclick="openModal('nuevoProveedor')">+ NUEVO PROVEEDOR</button>
+    </div>
+    <div class="stats-grid" style="margin-bottom:12px">
+      <div class="stat-card orange"><div class="stat-val" id="prov-total-invertido">$0</div><div class="stat-label">Total invertido</div><div class="stat-icon">💸</div></div>
+      <div class="stat-card blue"><div class="stat-val" id="prov-count">0</div><div class="stat-label">Proveedores activos</div><div class="stat-icon">🏭</div></div>
+      <div class="stat-card yellow"><div class="stat-val" id="prov-compras-count">0</div><div class="stat-label">Compras registradas</div><div class="stat-icon">📦</div></div>
+      <div class="stat-card green"><div class="stat-val" id="prov-categoria-top">—</div><div class="stat-label">Categoría mayor gasto</div><div class="stat-icon">📊</div></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <button class="filter-btn active" onclick="filtrarProveedores('todos',this)">TODOS</button>
+      <button class="filter-btn" onclick="filtrarProveedores('repuestos',this)">REPUESTOS</button>
+      <button class="filter-btn" onclick="filtrarProveedores('indumentaria',this)">INDUMENTARIA</button>
+      <button class="filter-btn" onclick="filtrarProveedores('herramientas',this)">HERRAMIENTAS</button>
+      <button class="filter-btn" onclick="filtrarProveedores('herreria',this)">HERRERÍA</button>
+      <button class="filter-btn" onclick="filtrarProveedores('otros',this)">OTROS</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">LISTADO DE PROVEEDORES</span></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>#</th><th>PROVEEDOR</th><th>CATEGORÍA</th><th>CONTACTO</th><th>TOTAL INVERTIDO</th><th>ÚLTIMA COMPRA</th><th>ACCIONES</th></tr></thead>
+        <tbody id="tabla-proveedores"></tbody>
+      </table></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div class="card-header">
+        <span class="card-title">HISTORIAL DE COMPRAS</span>
+        <button class="btn-primary" style="font-size:11px;padding:6px 14px" onclick="openModal('nuevaCompra')">+ REGISTRAR COMPRA</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>FECHA</th><th>PROVEEDOR</th><th>DETALLE</th><th>CATEGORÍA</th><th>MONTO</th><th>NOTAS</th></tr></thead>
+        <tbody id="tabla-compras"></tbody>
+      </table></div>
+    </div>
   </div>
 
   <!-- CALENDARIO -->
@@ -604,7 +660,7 @@ let filters = { clientes:'todos', trabajos:'todos', presup:'todos' };
 let charts = {};
 
 function saveLocal() { try { localStorage.setItem('meb_crm_v2', JSON.stringify(DB)); } catch(e){} }
-function loadLocal() { try { const d=localStorage.getItem('meb_crm_v2'); if(d) DB=JSON.parse(d); if(!DB.presupCounter) DB.presupCounter=1; if(!DB.calendarioEventos) DB.calendarioEventos=[]; if(!DB.alertasRepuesto) DB.alertasRepuesto=[]; } catch(e){} }
+function loadLocal() { try { const d=localStorage.getItem('meb_crm_v2'); if(d) DB=JSON.parse(d); if(!DB.presupCounter) DB.presupCounter=1; if(!DB.calendarioEventos) DB.calendarioEventos=[]; if(!DB.alertasRepuesto) DB.alertasRepuesto=[]; if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; } catch(e){} }
 
 // ============================================================
 // LOGIN
@@ -701,9 +757,10 @@ async function syncAll() {
   showLoading('SINCRONIZANDO CON GOOGLE SHEETS...');
 
   try {
-    const [cl,mq,tr,pr,al] = await Promise.all([
+    const [cl,mq,tr,pr,al,pv] = await Promise.all([
       fetchSheet('CLIENTES'), fetchSheet('MAQUINAS'),
-      fetchSheet('TRABAJOS'), fetchSheet('PRESUPUESTOS'), fetchSheet('ALERTAS')
+      fetchSheet('TRABAJOS'), fetchSheet('PRESUPUESTOS'), fetchSheet('ALERTAS'),
+      fetchSheet('PROVEEDORES')
     ]);
 
     if(cl.length) DB.clientes = cl.map(r=>({
@@ -741,10 +798,23 @@ async function syncAll() {
       fecha:r.FECHA||'', prioridad:(r.PRIORIDAD||'media').toLowerCase(),
       descripcion:r.DESCRIPCION||'', resuelta:r.RESUELTA==='TRUE'||r.RESUELTA==='true'||r.RESUELTA==='1'
     })); else if(!DB.alertas.length) DB.alertas=[];
+    if(pv.length) {
+      DB.proveedores = pv.filter(r=>r.TIPO==='proveedor'||!r.TIPO||r.NOMBRE).map(r=>({
+        id:String(r.ID||uid()).trim(), nombre:r.NOMBRE||'', categoria:(r.CATEGORIA||'otros').toLowerCase(),
+        contacto:r.CONTACTO||'', telefono:r.TELEFONO||'', email:r.EMAIL||'',
+        direccion:r.DIRECCION||'', notas:r.NOTAS||'', estado:(r.ESTADO||'activo').toLowerCase()
+      }));
+      DB.compras = pv.filter(r=>r.TIPO==='compra').map(r=>({
+        id:String(r.ID||uid()).trim(), proveedorId:String(r.PROVEEDOR_ID||'').trim(),
+        proveedorNombre:r.PROVEEDOR_NOMBRE||'', detalle:r.DETALLE||'',
+        categoria:(r.CATEGORIA||'otros').toLowerCase(), monto:parseMonto(r.MONTO),
+        fecha:r.FECHA||'', notas:r.NOTAS||''
+      }));
+    } else { if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; }
 
     saveLocal();
     status.textContent='● Conectado'; status.style.color='var(--green)';
-    showToast(`Sincronizado — ${DB.clientes.length} clientes · ${DB.maquinas.length} máquinas · ${DB.trabajos.length} trabajos · ${DB.presupuestos.length} presupuestos`,'success');
+    showToast(`Sincronizado — ${DB.clientes.length} clientes · ${DB.maquinas.length} máquinas · ${DB.trabajos.length} trabajos · ${DB.presupuestos.length} presupuestos · ${DB.proveedores.length} proveedores`,'success');
   } catch(e) {
     status.textContent='● Error sync'; status.style.color='var(--red)';
     showToast('Error: '+e.message+' — verificá que el Sheet esté público','error');
@@ -834,7 +904,7 @@ function showPage(name, el) {
     dashboard:renderDashboard, clientes:renderClientes, maquinas:renderMaquinas,
     trabajos:renderTrabajos, presupuestos:renderPresupuestos,
     pipeline:renderPipeline, alertas:renderAlertas, estadisticas:renderEstadisticas,
-    repuestos:renderRepuestos, mapa:renderMapa, calendario:renderCalendario
+    repuestos:renderRepuestos, proveedores:renderProveedores, mapa:renderMapa, calendario:renderCalendario
   };
   if(renders[name]) renders[name]();
 }
@@ -847,7 +917,7 @@ function refreshCurrentPage() {
     dashboard:renderDashboard, clientes:renderClientes, maquinas:renderMaquinas,
     trabajos:renderTrabajos, presupuestos:renderPresupuestos,
     pipeline:renderPipeline, alertas:renderAlertas, estadisticas:renderEstadisticas,
-    repuestos:renderRepuestos, mapa:renderMapa, calendario:renderCalendario
+    repuestos:renderRepuestos, proveedores:renderProveedores, mapa:renderMapa, calendario:renderCalendario
   };
   if(renders[name]) renders[name]();
 }
@@ -1304,11 +1374,225 @@ function renderEstadisticas() {
       <td><span class="badge ${t.margen>=50?'badge-green':t.margen>=20?'badge-orange':'badge-red'}">${t.margen}%</span></td>
     </tr>`;
   }).join(''):`<tr><td colspan="6"><div class="empty-state"><div class="icon">📊</div><p>Sin datos de rentabilidad aún</p></div></td></tr>`;
+
+  // ── Proveedores en estadísticas ──
+  if(!DB.proveedores) DB.proveedores=[];
+  if(!DB.compras) DB.compras=[];
+  const estTotalInv = DB.compras.reduce((s,c)=>s+Number(c.monto||0),0);
+  const ep1=document.getElementById('est-prov-invertido'); if(ep1) ep1.textContent=fmtMonto(estTotalInv);
+  const ep2=document.getElementById('est-prov-count'); if(ep2) ep2.textContent=DB.proveedores.length;
+  const ep3=document.getElementById('est-compras-count'); if(ep3) ep3.textContent=DB.compras.length;
+
+  destroyChart('provCategorias');
+  const gastoCat={};
+  DB.compras.forEach(c=>{ gastoCat[c.categoria]=(gastoCat[c.categoria]||0)+Number(c.monto||0); });
+  if(document.getElementById('chartProvCategorias') && Object.keys(gastoCat).length) {
+    charts.provCategorias=new Chart(document.getElementById('chartProvCategorias'),{
+      type:'doughnut',
+      data:{labels:Object.keys(gastoCat).map(k=>k.toUpperCase()),datasets:[{data:Object.values(gastoCat),backgroundColor:['rgba(244,180,0,0.85)','rgba(231,76,60,0.85)','rgba(46,204,113,0.85)','rgba(123,179,224,0.85)','rgba(155,89,182,0.85)'],borderWidth:0}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:12,color:'#aaa'}}}}
+    });
+  }
+
+  const ucEl=document.getElementById('est-ultimas-compras');
+  if(ucEl) {
+    const ult5=[...DB.compras].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,5);
+    ucEl.innerHTML=ult5.length?ult5.map(c=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+        <div><div style="font-size:12px;color:var(--text)">${c.proveedorNombre||'—'} · ${c.detalle}</div>
+        <div class="td-sub">${fmtDate(c.fecha)} · ${c.categoria}</div></div>
+        <span class="monto" style="font-size:13px">${fmtMonto(c.monto)}</span>
+      </div>`).join(''):`<div class="empty-state"><div class="icon">📦</div><p>Sin compras registradas</p></div>`;
+  }
 }
 
 // ============================================================
-// REPUESTOS MÁS USADOS
+// PROVEEDORES
 // ============================================================
+let filtroProveedorActual = 'todos';
+
+function filtrarProveedores(cat, btn) {
+  filtroProveedorActual = cat;
+  document.querySelectorAll('#page-proveedores .filter-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderProveedores();
+}
+
+function renderProveedores() {
+  if(!DB.proveedores) DB.proveedores=[];
+  if(!DB.compras) DB.compras=[];
+
+  // KPIs
+  const totalInvertido = DB.compras.reduce((s,c)=>s+Number(c.monto||0),0);
+  const provActivos = DB.proveedores.filter(p=>p.estado==='activo').length;
+  document.getElementById('prov-total-invertido').textContent = fmtMonto(totalInvertido);
+  document.getElementById('prov-count').textContent = provActivos;
+  document.getElementById('prov-compras-count').textContent = DB.compras.length;
+  document.getElementById('badge-proveedores').textContent = DB.proveedores.length;
+
+  // Categoría top
+  const gastoPorCat = {};
+  DB.compras.forEach(c=>{ gastoPorCat[c.categoria]=(gastoPorCat[c.categoria]||0)+Number(c.monto||0); });
+  const catTop = Object.entries(gastoPorCat).sort((a,b)=>b[1]-a[1])[0];
+  document.getElementById('prov-categoria-top').textContent = catTop ? catTop[0].toUpperCase() : '—';
+
+  // Tabla proveedores filtrada
+  const provFiltrados = filtroProveedorActual==='todos'
+    ? DB.proveedores
+    : DB.proveedores.filter(p=>p.categoria===filtroProveedorActual);
+
+  const tpEl = document.getElementById('tabla-proveedores');
+  tpEl.innerHTML = provFiltrados.length ? provFiltrados.map((p,i)=>{
+    const comprasProveedor = DB.compras.filter(c=>c.proveedorId===p.id);
+    const totalProv = comprasProveedor.reduce((s,c)=>s+Number(c.monto||0),0);
+    const ultimaCompra = comprasProveedor.sort((a,b)=>b.fecha.localeCompare(a.fecha))[0];
+    const catColor = {repuestos:'badge-blue',indumentaria:'badge-orange',herramientas:'badge-yellow',herreria:'badge-green',otros:'badge-gray'}[p.categoria]||'badge-gray';
+    return `<tr>
+      <td style="color:var(--yellow);font-family:'Bebas Neue'">${i+1}</td>
+      <td><div class="td-name">${p.nombre}</div><div class="td-sub">${p.direccion||'—'}</div></td>
+      <td><span class="badge ${catColor}">${p.categoria.toUpperCase()}</span></td>
+      <td><div style="font-size:12px">${p.contacto||'—'}</div><div class="td-sub">${p.telefono||''}</div></td>
+      <td><span class="monto">${fmtMonto(totalProv)}</span></td>
+      <td class="td-muted">${ultimaCompra ? fmtDate(ultimaCompra.fecha) : '—'}</td>
+      <td><div class="actions">
+        <button class="btn-danger" onclick="eliminar('proveedores','${p.id}')">✕</button>
+      </div></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="7"><div class="empty-state"><div class="icon">🏭</div><p>Sin proveedores aún</p><p style="font-size:11px;color:var(--muted2);margin-top:6px">Agregá tu primer proveedor con el botón superior</p></div></td></tr>`;
+
+  // Tabla compras
+  const tcEl = document.getElementById('tabla-compras');
+  const comprasOrdenadas = [...DB.compras].sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  tcEl.innerHTML = comprasOrdenadas.length ? comprasOrdenadas.map(c=>{
+    const catColor = {repuestos:'badge-blue',indumentaria:'badge-orange',herramientas:'badge-yellow',herreria:'badge-green',otros:'badge-gray'}[c.categoria]||'badge-gray';
+    return `<tr>
+      <td class="td-muted">${fmtDate(c.fecha)}</td>
+      <td class="td-name">${c.proveedorNombre||'—'}</td>
+      <td>${c.detalle||'—'}</td>
+      <td><span class="badge ${catColor}">${c.categoria.toUpperCase()}</span></td>
+      <td><span class="monto">${fmtMonto(c.monto)}</span></td>
+      <td class="td-muted">${c.notas||'—'}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="6"><div class="empty-state"><div class="icon">📦</div><p>Sin compras registradas</p></div></td></tr>`;
+}
+
+function openModal(type) {
+  if(type==='nuevoProveedor') {
+    showModalProveedores();
+  } else if(type==='nuevaCompra') {
+    showModalCompra();
+  } else {
+    // otros modales existentes
+  }
+}
+
+function showModalProveedores() {
+  const m = document.createElement('div');
+  m.className = 'modal-overlay active';
+  m.id = 'modal-proveedor';
+  m.innerHTML = `<div class="modal">
+    <div class="modal-header"><span class="modal-title">NUEVO PROVEEDOR</span><button class="modal-close" onclick="document.getElementById('modal-proveedor').remove()">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>NOMBRE *</label><input id="mp-nombre" placeholder="Ej: Kingtex, Kaktus, Linco..."></div>
+      <div class="form-group"><label>CATEGORÍA *</label>
+        <select id="mp-cat">
+          <option value="repuestos">Repuestos</option>
+          <option value="indumentaria">Indumentaria</option>
+          <option value="herramientas">Herramientas</option>
+          <option value="herreria">Herrería (HARDOX, acero)</option>
+          <option value="otros">Otros</option>
+        </select>
+      </div>
+      <div class="form-group"><label>CONTACTO</label><input id="mp-contacto" placeholder="Nombre del contacto"></div>
+      <div class="form-group"><label>TELÉFONO</label><input id="mp-tel" placeholder="+54 11 ..."></div>
+      <div class="form-group"><label>EMAIL</label><input id="mp-email" type="email"></div>
+      <div class="form-group"><label>DIRECCIÓN / CIUDAD</label><input id="mp-dir" placeholder="Ej: Once, CABA · Online"></div>
+      <div class="form-group"><label>NOTAS</label><textarea id="mp-notas" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="document.getElementById('modal-proveedor').remove()">Cancelar</button>
+      <button class="btn-primary" onclick="guardarProveedor()">GUARDAR</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+function guardarProveedor() {
+  const nombre = document.getElementById('mp-nombre').value.trim();
+  if(!nombre) { showToast('Ingresá el nombre del proveedor','error'); return; }
+  if(!DB.proveedores) DB.proveedores=[];
+  DB.proveedores.push({
+    id: uid(), nombre,
+    categoria: document.getElementById('mp-cat').value,
+    contacto: document.getElementById('mp-contacto').value.trim(),
+    telefono: document.getElementById('mp-tel').value.trim(),
+    email: document.getElementById('mp-email').value.trim(),
+    direccion: document.getElementById('mp-dir').value.trim(),
+    notas: document.getElementById('mp-notas').value.trim(),
+    estado: 'activo'
+  });
+  saveLocal();
+  document.getElementById('modal-proveedor').remove();
+  renderProveedores();
+  showToast('Proveedor guardado ✓','success');
+}
+
+function showModalCompra() {
+  if(!DB.proveedores || !DB.proveedores.length) {
+    showToast('Primero agregá un proveedor','error'); return;
+  }
+  const opts = DB.proveedores.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+  const today = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}).split('/').reverse().join('-');
+  const m = document.createElement('div');
+  m.className = 'modal-overlay active';
+  m.id = 'modal-compra';
+  m.innerHTML = `<div class="modal">
+    <div class="modal-header"><span class="modal-title">REGISTRAR COMPRA</span><button class="modal-close" onclick="document.getElementById('modal-compra').remove()">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>PROVEEDOR *</label><select id="mc-prov">${opts}</select></div>
+      <div class="form-group"><label>DETALLE *</label><input id="mc-det" placeholder="Ej: 10 camisetas Servicio Técnico talle L"></div>
+      <div class="form-group"><label>CATEGORÍA</label>
+        <select id="mc-cat">
+          <option value="repuestos">Repuestos</option>
+          <option value="indumentaria">Indumentaria</option>
+          <option value="herramientas">Herramientas</option>
+          <option value="herreria">Herrería</option>
+          <option value="otros">Otros</option>
+        </select>
+      </div>
+      <div class="form-group"><label>MONTO ($)</label><input id="mc-monto" type="number" value="0"></div>
+      <div class="form-group"><label>FECHA</label><input id="mc-fecha" type="date" value="${today}"></div>
+      <div class="form-group"><label>NOTAS</label><textarea id="mc-notas" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="document.getElementById('modal-compra').remove()">Cancelar</button>
+      <button class="btn-primary" onclick="guardarCompra()">GUARDAR</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+function guardarCompra() {
+  const provId = document.getElementById('mc-prov').value;
+  const detalle = document.getElementById('mc-det').value.trim();
+  if(!detalle) { showToast('Ingresá el detalle de la compra','error'); return; }
+  const prov = DB.proveedores.find(p=>p.id===provId);
+  if(!DB.compras) DB.compras=[];
+  DB.compras.push({
+    id: uid(), proveedorId: provId,
+    proveedorNombre: prov ? prov.nombre : '',
+    detalle, categoria: document.getElementById('mc-cat').value,
+    monto: Number(document.getElementById('mc-monto').value||0),
+    fecha: document.getElementById('mc-fecha').value,
+    notas: document.getElementById('mc-notas').value.trim()
+  });
+  saveLocal();
+  document.getElementById('modal-compra').remove();
+  renderProveedores();
+  showToast('Compra registrada ✓','success');
+}
+
+
 function renderRepuestos() {
   // Extraer todos los repuestos de los detalles de trabajos
   const conteo = {};
