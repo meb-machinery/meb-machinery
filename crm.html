@@ -225,6 +225,10 @@ select option { background:var(--dark); }
 .gs-item { padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--border); transition:background 0.1s; }
 .gs-item:hover { background:rgba(244,180,0,0.06); }
 .gs-item:last-child { border-bottom:none; }
+/* COBRO BADGES */
+.badge-cobro-cobrado { background:rgba(46,204,113,0.15); color:var(--green); border:1px solid rgba(46,204,113,0.3); }
+.badge-cobro-parcial  { background:rgba(244,180,0,0.12); color:var(--yellow); border:1px solid rgba(244,180,0,0.3); }
+.badge-cobro-pendiente{ background:rgba(231,76,60,0.12); color:var(--red); border:1px solid rgba(231,76,60,0.3); }
 </style>
 </head>
 <body>
@@ -315,11 +319,17 @@ select option { background:var(--dark); }
       <div class="page-title">PANEL <span>PRINCIPAL</span></div>
       <button class="btn-primary" onclick="syncAll()">↺ ACTUALIZAR DATOS</button>
     </div>
-    <div class="stats-grid">
+    <div class="stats-grid" style="grid-template-columns:repeat(5,1fr)">
       <div class="stat-card yellow"><div class="stat-val" id="s-clientes">0</div><div class="stat-label">Clientes</div><div class="stat-icon">👥</div><div class="stat-sub" id="s-clientes-sub">—</div></div>
       <div class="stat-card blue"><div class="stat-val" id="s-presup">0</div><div class="stat-label">Presupuestos</div><div class="stat-icon">📋</div><div class="stat-sub" id="s-presup-sub">—</div></div>
       <div class="stat-card green"><div class="stat-val" id="s-trabajos">0</div><div class="stat-label">Trabajos activos</div><div class="stat-icon">🔧</div><div class="stat-sub" id="s-trabajos-sub">—</div></div>
       <div class="stat-card orange"><div class="stat-val" id="s-alertas">0</div><div class="stat-label">Alertas</div><div class="stat-icon">🔔</div><div class="stat-sub">Pendientes de acción</div></div>
+      <div class="stat-card red" style="cursor:pointer" onclick="showPage('trabajos');setTimeout(()=>filtrarPorCobrarAuto(),200)">
+        <div class="stat-val" id="s-por-cobrar">$0</div>
+        <div class="stat-label">💳 Por cobrar</div>
+        <div class="stat-icon">⚠️</div>
+        <div class="stat-sub" id="s-por-cobrar-sub">Trabajos completados sin cobrar</div>
+      </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
       <div class="card">
@@ -380,9 +390,10 @@ select option { background:var(--dark); }
       <button class="filter-tab" onclick="setFilter('trabajos','completado',this)">Completados</button>
       <button class="filter-tab" onclick="setFilter('trabajos','pendiente',this)">Pendientes</button>
       <button class="filter-tab" onclick="setFilter('trabajos','no aprobado',this)">No aprobados</button>
+      <button class="filter-tab" style="border-color:var(--red);color:var(--red)" onclick="filtrarPorCobrar(this)">🔴 Por cobrar</button>
     </div>
     <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>Trabajo</th><th>Cliente</th><th>Máquina</th><th>Tipo</th><th>Estado</th><th>Estado máquina</th><th>Monto Cobrado</th><th>Fact. Terceros</th><th>Costos</th><th>Rentabilidad</th><th>Acciones</th></tr></thead>
+      <thead><tr><th>Trabajo</th><th>Cliente</th><th>Máquina</th><th>Tipo</th><th>Estado</th><th>Estado máquina</th><th>Monto Cobrado</th><th>Fact. Terceros</th><th>Costos</th><th>Rentabilidad</th><th>💳 Cobro</th><th>Acciones</th></tr></thead>
       <tbody id="tabla-trabajos"></tbody>
     </table></div></div>
   </div>
@@ -499,6 +510,14 @@ select option { background:var(--dark); }
     <div class="stats-grid">
       <div class="stat-card blue"><div class="stat-val" id="e-conversion">0%</div><div class="stat-label">Tasa de conversión</div><div class="stat-icon">🎯</div></div>
       <div class="stat-card blue"><div class="stat-val" id="e-ticket">$0</div><div class="stat-label">Ticket promedio</div><div class="stat-icon">📊</div></div>
+    </div>
+    <!-- Fila 3: Estado de cobro -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px">
+      <div class="stat-card green"><div class="stat-val" id="e-cobro-cobrado">$0</div><div class="stat-label">✅ Ya cobrado</div><div class="stat-sub" id="e-cobro-cobrado-n">0 trabajos</div></div>
+      <div class="stat-card yellow"><div class="stat-val" id="e-cobro-parcial">$0</div><div class="stat-label">🟡 Cobrado parcial</div><div class="stat-sub" id="e-cobro-parcial-n">0 trabajos</div></div>
+      <div class="stat-card red"><div class="stat-val" id="e-cobro-pendiente">$0</div><div class="stat-label">🔴 Por cobrar</div><div class="stat-sub" id="e-cobro-pendiente-n">0 trabajos completados</div></div>
+      <div class="stat-card orange"><div class="stat-val" id="e-cobro-pct">0%</div><div class="stat-label">📈 Tasa de cobro</div><div class="stat-sub">% del completado cobrado</div></div>
+    </div>
       <div class="stat-card orange"><div class="stat-val" id="e-rentabilidad">0%</div><div class="stat-label">Rentabilidad real</div><div class="stat-icon">📈</div><div class="stat-sub">Sobre monto cobrado real</div></div>
     </div>
     <!-- Fila 3: desglose -->
@@ -719,7 +738,7 @@ let filters = { clientes:'todos', trabajos:'todos', presup:'todos' };
 let charts = {};
 
 function saveLocal() { try { localStorage.setItem('meb_crm_v2', JSON.stringify(DB)); } catch(e){} }
-function loadLocal() { try { const d=localStorage.getItem('meb_crm_v2'); if(d) DB=JSON.parse(d); if(!DB.presupCounter) DB.presupCounter=1; if(!DB.calendarioEventos) DB.calendarioEventos=[]; if(!DB.alertasRepuesto) DB.alertasRepuesto=[]; if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; } catch(e){} }
+function loadLocal() { try { const d=localStorage.getItem('meb_crm_v2'); if(d) DB=JSON.parse(d); if(!DB.presupCounter) DB.presupCounter=1; if(!DB.calendarioEventos) DB.calendarioEventos=[]; if(!DB.alertasRepuesto) DB.alertasRepuesto=[]; if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; DB.trabajos.forEach(t=>{ if(!t.estadoCobro) t.estadoCobro='pendiente'; }); } catch(e){} }
 
 // ============================================================
 // LOGIN
@@ -844,7 +863,8 @@ async function syncAll() {
       manoObraCobrada:parseMonto(r.MANO_OBRA_COBRADA),
       movilidad:parseMonto(r.MOVILIDAD),
       repuestosDetalle:r.REPUESTOS_DETALLE||'',
-      notas:r.NOTAS||'', fotoUrl:r.FOTO_URL||''
+      notas:r.NOTAS||'', fotoUrl:r.FOTO_URL||'',
+      estadoCobro:(r.ESTADO_COBRO||'pendiente').toLowerCase().trim()
     })); else if(!DB.trabajos.length) DB.trabajos=[];
     if(pr.length) DB.presupuestos = pr.map((r,i)=>({
       id:String(r.ID||uid()).trim(), num:r.NUMERO||i+1, clienteId:String(r.CLIENTE_ID||r['CLIENTE_ID']||'').trim(),
@@ -995,6 +1015,16 @@ function setFilter(type,val,el) {
 // DASHBOARD
 // ============================================================
 function renderDashboard() {
+  // Por cobrar: trabajos completados con estadoCobro != cobrado y con monto
+  const porCobrarTrabajos = DB.trabajos.filter(t=>
+    t.estado==='completado' && (t.estadoCobro||'pendiente')!=='cobrado' && Number(t.montoCobrado||0)>0
+  );
+  const montoPorCobrar = porCobrarTrabajos.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
+  const pcEl = document.getElementById('s-por-cobrar');
+  const pcSub = document.getElementById('s-por-cobrar-sub');
+  if(pcEl) pcEl.textContent = fmtMonto(montoPorCobrar);
+  if(pcSub) pcSub.textContent = `${porCobrarTrabajos.length} trabajo${porCobrarTrabajos.length!==1?'s':''} completado${porCobrarTrabajos.length!==1?'s':''} sin cobrar`;
+
   // últimos clientes
   const dc=document.getElementById('dash-clientes');
   const lc=[...DB.clientes].slice(-5).reverse();
@@ -1062,12 +1092,14 @@ function verCliente(id) {
   const prs=DB.presupuestos.filter(p=>p.clienteId===id);
   const trs=DB.trabajos.filter(t=>t.clienteId===id);
   const totalCobrado=trs.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
+  const porCobrarCliente=trs.filter(t=>t.estado==='completado'&&(t.estadoCobro||'pendiente')!=='cobrado').reduce((s,t)=>s+Number(t.montoCobrado||0),0);
   document.getElementById('detailContent').innerHTML=`
     <div class="detail-name">${c.nombre}</div>
     <div class="detail-company">${c.empresa||'Sin empresa'}</div>
     <div class="detail-section">
       <div class="detail-section-title">Contacto</div>
       <div class="detail-row"><span class="detail-key">Teléfono</span><span class="detail-val">${c.telefono||'—'}</span></div>
+      ${c.telefono?`<div class="detail-row"><span class="detail-key">WhatsApp</span><span class="detail-val"><a href="https://wa.me/${c.telefono.replace(/\D/g,'')}" target="_blank" style="color:var(--green);text-decoration:none">📱 Abrir chat</a></span></div>`:''}
       <div class="detail-row"><span class="detail-key">Email</span><span class="detail-val">${c.email||'—'}</span></div>
       <div class="detail-row"><span class="detail-key">Zona</span><span class="detail-val">${c.zona||'—'}</span></div>
       <div class="detail-row"><span class="detail-key">Estado</span><span class="detail-val">${badgeEstado(c.estado)}</span></div>
@@ -1076,6 +1108,7 @@ function verCliente(id) {
     <div class="detail-section">
       <div class="detail-section-title">Resumen económico</div>
       <div class="detail-row"><span class="detail-key">Total facturado</span><span class="detail-val" style="color:var(--yellow);font-family:'Bebas Neue';font-size:16px">${fmtMonto(totalCobrado)}</span></div>
+      ${porCobrarCliente>0?`<div class="detail-row"><span class="detail-key">⚠️ Por cobrar</span><span class="detail-val" style="color:var(--red);font-family:'Bebas Neue';font-size:15px">${fmtMonto(porCobrarCliente)}</span></div>`:''}
       <div class="detail-row"><span class="detail-key">Presupuestos</span><span class="detail-val">${prs.length} (${prs.filter(p=>p.estado==='aprobado').length} aprobados)</span></div>
       <div class="detail-row"><span class="detail-key">Trabajos</span><span class="detail-val">${trs.length} (${trs.filter(t=>t.estado==='completado').length} completados)</span></div>
     </div>
@@ -1118,9 +1151,130 @@ function renderMaquinas() {
 // ============================================================
 // TRABAJOS
 // ============================================================
+// ============================================================
+// ESTADO DE COBRO
+// ============================================================
+function badgeCobro(estado, id) {
+  const map = {
+    cobrado:   { cls:'badge-cobro-cobrado',  icon:'✅', label:'Cobrado' },
+    parcial:   { cls:'badge-cobro-parcial',  icon:'🟡', label:'Parcial' },
+    pendiente: { cls:'badge-cobro-pendiente',icon:'🔴', label:'Pendiente' },
+  };
+  const e = map[estado] || map.pendiente;
+  return `<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">
+    <span class="badge ${e.cls}">${e.icon} ${e.label}</span>
+    <select onchange="cambiarCobro('${id}',this.value)" style="font-size:10px;background:var(--dark);border:1px solid var(--border2);color:var(--muted);border-radius:3px;padding:2px 4px;cursor:pointer">
+      <option value="pendiente" ${estado==='pendiente'?'selected':''}>🔴 Pendiente</option>
+      <option value="parcial"   ${estado==='parcial'  ?'selected':''}>🟡 Parcial</option>
+      <option value="cobrado"   ${estado==='cobrado'  ?'selected':''}>✅ Cobrado</option>
+    </select>
+  </div>`;
+}
+
+function cambiarCobro(id, nuevoEstado) {
+  const t = DB.trabajos.find(x=>x.id===id);
+  if(!t) return;
+  t.estadoCobro = nuevoEstado;
+  saveLocal();
+  updateBadges();
+  renderDashboard();
+  showToast(`Estado de cobro → ${nuevoEstado}`, 'success');
+}
+
+let filtroPorCobrar = false;
+function filtrarPorCobrar(btn) {
+  filtroPorCobrar = true;
+  document.querySelectorAll('#page-trabajos .filter-tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderTrabajos();
+}
+function filtrarPorCobrarAuto() {
+  const btn = document.querySelector('#page-trabajos .filter-tab:last-child');
+  filtrarPorCobrar(btn);
+}
+
+// ============================================================
+// FICHA DETALLE DE TRABAJO
+// ============================================================
+function verTrabajo(id) {
+  const t = DB.trabajos.find(x=>x.id===id);
+  if(!t) return;
+  const cl = DB.clientes.find(c=>c.id===t.clienteId);
+  const mq = DB.maquinas.find(m=>m.id===t.maquinaId);
+  const montoCobrado = Number(t.montoCobrado||0);
+  const costoRep = Number(t.costoRepuesto||0);
+  const precioRep = Number(t.precioRepuestoFacturado||0);
+  const mobi = Number(t.movilidad||0);
+  const mo = Number(t.manoObraCobrada||0);
+  const gastos = Number(t.montoGastos||0);
+  const ganancia = montoCobrado - gastos - costoRep;
+  const margen = montoCobrado>0 ? Math.round(ganancia/montoCobrado*100) : 0;
+
+  const panel = document.getElementById('detailPanel');
+  document.getElementById('detailContent').innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-family:'Bebas Neue';font-size:22px;color:var(--text);letter-spacing:2px">${t.titulo}</div>
+      <div style="font-size:12px;color:var(--yellow);letter-spacing:1px;margin-top:2px">${t.tipo||'—'} · ${fmtDate(t.fechaInicio)}</div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">CLIENTE & MÁQUINA</div>
+      <div class="detail-row"><span class="detail-key">Cliente</span><span class="detail-val" style="color:var(--yellow)">${cl?cl.nombre:'—'}</span></div>
+      ${cl&&cl.telefono?`<div class="detail-row"><span class="detail-key">WhatsApp</span><span class="detail-val"><a href="https://wa.me/${cl.telefono.replace(/\D/g,'')}" target="_blank" style="color:var(--green)">📱 ${cl.telefono}</a></span></div>`:''}
+      <div class="detail-row"><span class="detail-key">Máquina</span><span class="detail-val">${mq?`${mq.marca} ${mq.modelo}`:'—'}</span></div>
+      ${mq&&mq.serie?`<div class="detail-row"><span class="detail-key">Serie</span><span class="detail-val" style="font-size:11px">${mq.serie}</span></div>`:''}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">ESTADO</div>
+      <div class="detail-row"><span class="detail-key">Técnico</span><span class="detail-val">${badgeEstado(t.estado)}</span></div>
+      <div class="detail-row"><span class="detail-key">Máquina</span><span class="detail-val">${t.estadoMaquina?badgeEstado(t.estadoMaquina.toLowerCase()):'—'}</span></div>
+      <div class="detail-row"><span class="detail-key">Cobro</span><span class="detail-val">${badgeCobro(t.estadoCobro||'pendiente', t.id)}</span></div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">DESGLOSE ECONÓMICO</div>
+      <div class="detail-row"><span class="detail-key">Monto cobrado total</span><span class="detail-val" style="font-family:'Bebas Neue';font-size:16px;color:var(--yellow)">${fmtMonto(montoCobrado)}</span></div>
+      <div class="detail-row"><span class="detail-key">Mano de obra cobrada</span><span class="detail-val">${mo>0?fmtMonto(mo):'—'}</span></div>
+      <div class="detail-row"><span class="detail-key">Movilidad</span><span class="detail-val">${mobi>0?fmtMonto(mobi):'—'}</span></div>
+      <div class="detail-row"><span class="detail-key">Repuestos facturados al cliente</span><span class="detail-val" style="color:var(--blue-light)">${precioRep>0?fmtMonto(precioRep):'—'}</span></div>
+      <div style="border-top:1px solid var(--border);margin:8px 0"></div>
+      <div class="detail-row"><span class="detail-key">Costo real repuestos</span><span class="detail-val" style="color:var(--red)">${costoRep>0?fmtMonto(costoRep):'—'}</span></div>
+      <div class="detail-row"><span class="detail-key">Gastos totales</span><span class="detail-val" style="color:var(--red)">${gastos>0?fmtMonto(gastos):'—'}</span></div>
+      <div style="border-top:1px solid var(--border);margin:8px 0"></div>
+      <div class="detail-row"><span class="detail-key">Ganancia neta</span><span class="detail-val" style="font-family:'Bebas Neue';font-size:16px;color:${ganancia>=0?'var(--green)':'var(--red)'}">${fmtMonto(ganancia)}</span></div>
+      <div class="detail-row"><span class="detail-key">Margen</span><span class="detail-val"><span class="badge ${margen>=30?'badge-green':margen>=10?'badge-yellow':'badge-red'}">${margen}%</span></span></div>
+    </div>
+
+    ${t.repuestosDetalle?`<div class="detail-section">
+      <div class="detail-section-title">REPUESTOS UTILIZADOS</div>
+      <div style="font-size:12px;color:var(--text);line-height:1.7">${t.repuestosDetalle}</div>
+    </div>`:''}
+
+    ${t.notas?`<div class="detail-section">
+      <div class="detail-section-title">NOTAS</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.7">${t.notas}</div>
+    </div>`:''}
+
+    ${t.fotoUrl?`<div class="detail-section">
+      <div class="detail-section-title">FOTOS</div>
+      <button class="btn-secondary" style="width:100%;margin-top:4px" onclick="verFotos('${t.id}')">📷 Ver fotos del trabajo</button>
+    </div>`:''}
+
+    <button class="btn-danger" style="width:100%;margin-top:8px" onclick="closeDetail()">✕ Cerrar</button>
+  `;
+  panel.classList.add('open');
+  document.getElementById('mainContent').style.marginRight = '370px';
+}
+
 function renderTrabajos() {
   let data=DB.trabajos;
-  if(filters.trabajos!=='todos') data=data.filter(t=>t.estado===filters.trabajos);
+  if(filtroPorCobrar) {
+    data = data.filter(t=>t.estado==='completado' && (t.estadoCobro||'pendiente')!=='cobrado');
+    filtroPorCobrar = false;
+  } else if(filters.trabajos!=='todos') {
+    data=data.filter(t=>t.estado===filters.trabajos);
+  }
   const tbody=document.getElementById('tabla-trabajos');
   if(!data.length){tbody.innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="icon">🔧</div><p>Sin trabajos</p></div></td></tr>`;return;}
   tbody.innerHTML=data.map(t=>{
@@ -1157,7 +1311,9 @@ function renderTrabajos() {
         <div style="font-family:'Bebas Neue';font-size:14px;color:${ganancia>=0?'var(--yellow)':'var(--red)'}">${fmtMonto(ganancia)}</div>
         <div style="font-size:10px;color:${margenColor}">${margen}% margen</div>
       </td>
+      <td>${badgeCobro(t.estadoCobro||'pendiente','${t.id}')}</td>
       <td><div class="actions">
+        <button class="btn-secondary" onclick="verTrabajo('${t.id}')">Ver</button>
         <button class="btn-secondary" onclick="cambiarEstado('trabajos','${t.id}',['pendiente','en curso','completado','cancelado','no aprobado'])">Estado</button>
         <button class="btn-secondary" onclick="verFotos('${t.id}')">📷</button>
         <button class="btn-danger" onclick="eliminar('trabajos','${t.id}')">✕</button>
@@ -1328,6 +1484,23 @@ function resolverAlerta(id) {
 function renderEstadisticas() {
   // ── Monto cobrado REAL desde trabajos (columna MONTO_COBRADO del Sheet)
   const totalCobradoReal = DB.trabajos.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
+
+  // ── Estado de cobro
+  const tCobrados  = DB.trabajos.filter(t=>t.estadoCobro==='cobrado');
+  const tParciales = DB.trabajos.filter(t=>t.estadoCobro==='parcial');
+  const tPendComp  = DB.trabajos.filter(t=>t.estado==='completado'&&(t.estadoCobro||'pendiente')==='pendiente');
+  const montoCobrados  = tCobrados.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
+  const montoParciales = tParciales.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
+  const montoPendComp  = tPendComp.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
+  const totalCompletado = tCobrados.length + tParciales.length + tPendComp.length;
+  const tasaCobro = totalCompletado>0 ? Math.round((tCobrados.length+tParciales.length)/totalCompletado*100) : 0;
+  const ec1=document.getElementById('e-cobro-cobrado'); if(ec1) ec1.textContent=fmtMonto(montoCobrados);
+  const ec1n=document.getElementById('e-cobro-cobrado-n'); if(ec1n) ec1n.textContent=`${tCobrados.length} trabajos`;
+  const ec2=document.getElementById('e-cobro-parcial'); if(ec2) ec2.textContent=fmtMonto(montoParciales);
+  const ec2n=document.getElementById('e-cobro-parcial-n'); if(ec2n) ec2n.textContent=`${tParciales.length} trabajos`;
+  const ec3=document.getElementById('e-cobro-pendiente'); if(ec3) ec3.textContent=fmtMonto(montoPendComp);
+  const ec3n=document.getElementById('e-cobro-pendiente-n'); if(ec3n) ec3n.textContent=`${tPendComp.length} completados sin cobrar`;
+  const ec4=document.getElementById('e-cobro-pct'); if(ec4) ec4.textContent=tasaCobro+'%';
 
   // ── Presupuestado aprobado (referencia, no necesariamente cobrado)
   const presAprobados = DB.presupuestos.filter(p=>p.estado==='aprobado');
