@@ -722,6 +722,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzBFM95IAgRUzA5yepQZ5nj6VD01tvoAv9GyGYa0ydKIQIGoqiedOCrfiU1xjaz4tO5Sw/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1171,6 +1172,25 @@ function badgeCobro(estado, id) {
   </div>`;
 }
 
+// ============================================================
+// ESCRITURA AL SHEET (Google Apps Script)
+// ============================================================
+async function writeToSheet(payload) {
+  if (!SCRIPT_URL || SCRIPT_URL === '') return;
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!data.ok) console.warn('Sheet write error:', data.error);
+    return data;
+  } catch(err) {
+    console.warn('Sheet write failed (offline?):', err);
+  }
+}
+
 function cambiarCobro(id, nuevoEstado) {
   const t = DB.trabajos.find(x=>x.id===id);
   if(!t) return;
@@ -1178,7 +1198,10 @@ function cambiarCobro(id, nuevoEstado) {
   saveLocal();
   updateBadges();
   renderDashboard();
-  showToast(`Estado de cobro → ${nuevoEstado}`, 'success');
+  // Escribir al Sheet
+  writeToSheet({ action: 'updateCobro', id: id, estadoCobro: nuevoEstado })
+    .then(r => { if(r&&r.ok) showToast(`Estado de cobro → ${nuevoEstado} ✓ guardado en Sheet`, 'success');
+                 else showToast(`Estado de cobro → ${nuevoEstado} (guardado local)`, 'success'); });
 }
 
 let filtroPorCobrar = false;
@@ -1945,7 +1968,7 @@ function guardarProveedor() {
   const nombre = document.getElementById('mp-nombre').value.trim();
   if(!nombre) { showToast('Ingresá el nombre del proveedor','error'); return; }
   if(!DB.proveedores) DB.proveedores=[];
-  DB.proveedores.push({
+  const prov = {
     id: uid(), nombre,
     categoria: document.getElementById('mp-cat').value,
     contacto: document.getElementById('mp-contacto').value.trim(),
@@ -1954,11 +1977,17 @@ function guardarProveedor() {
     direccion: document.getElementById('mp-dir').value.trim(),
     notas: document.getElementById('mp-notas').value.trim(),
     estado: 'activo'
-  });
+  };
+  DB.proveedores.push(prov);
   saveLocal();
   document.getElementById('modal-proveedor').remove();
   renderProveedores();
   showToast('Proveedor guardado ✓','success');
+  writeToSheet({ action:'addProveedor', row: {
+    ID:prov.id, TIPO:'proveedor', NOMBRE:prov.nombre, CATEGORIA:prov.categoria,
+    CONTACTO:prov.contacto, TELEFONO:prov.telefono, EMAIL:prov.email,
+    DIRECCION:prov.direccion, NOTAS:prov.notas, ESTADO:prov.estado
+  }});
 }
 
 function showModalCompra() {
@@ -2002,18 +2031,25 @@ function guardarCompra() {
   if(!detalle) { showToast('Ingresá el detalle de la compra','error'); return; }
   const prov = DB.proveedores.find(p=>p.id===provId);
   if(!DB.compras) DB.compras=[];
-  DB.compras.push({
+  const compra = {
     id: uid(), proveedorId: provId,
     proveedorNombre: prov ? prov.nombre : '',
     detalle, categoria: document.getElementById('mc-cat').value,
     monto: Number(document.getElementById('mc-monto').value||0),
     fecha: document.getElementById('mc-fecha').value,
     notas: document.getElementById('mc-notas').value.trim()
-  });
+  };
+  DB.compras.push(compra);
   saveLocal();
   document.getElementById('modal-compra').remove();
   renderProveedores();
   showToast('Compra registrada ✓','success');
+  writeToSheet({ action:'addCompra', row: {
+    ID:compra.id, TIPO:'compra', PROVEEDOR_ID:compra.proveedorId,
+    PROVEEDOR_NOMBRE:compra.proveedorNombre, DETALLE:compra.detalle,
+    CATEGORIA:compra.categoria, MONTO:compra.monto,
+    FECHA:compra.fecha, NOTAS:compra.notas
+  }});
 }
 
 
@@ -2520,10 +2556,25 @@ function closeModalOut(e) { if(e.target===document.getElementById('modalOverlay'
 function guardar(tipo, obj, campoRequerido) {
   if(campoRequerido&&!obj[campoRequerido]){showToast('Completá los campos requeridos','error');return;}
   const idx=DB[tipo].findIndex(x=>x.id===obj.id);
+  const esNuevo = idx < 0;
   if(idx>=0) DB[tipo][idx]=obj;
   else DB[tipo].push(obj);
   saveLocal(); updateBadges(); closeModal(); refreshCurrentPage();
   showToast('Guardado correctamente','success');
+  // Escribir al Sheet solo registros nuevos
+  if(esNuevo) {
+    if(tipo==='presupuestos') writeToSheet({ action:'addPresupuesto', row: {
+      ID:obj.id, NUMERO:obj.num, CLIENTE_ID:obj.clienteId,
+      DESCRIPCION:obj.descripcion, MONTO:obj.monto, ESTADO:obj.estado,
+      FECHA:obj.fecha, NOTAS:obj.notas||''
+    }});
+    if(tipo==='clientes') writeToSheet({ action:'addCliente', row: {
+      ID:obj.id, NOMBRE:obj.nombre, EMPRESA:obj.empresa||'',
+      TELEFONO:obj.telefono||'', EMAIL:obj.email||'',
+      ZONA:obj.zona||'', ESTADO:obj.estado||'activo',
+      ULTIMO_CONTACTO:obj.ultimoContacto||'', NOTAS:obj.notas||''
+    }});
+  }
 }
 
 function cambiarEstado(tipo, id, estados) {
@@ -2532,6 +2583,9 @@ function cambiarEstado(tipo, id, estados) {
   const i=estados.indexOf(item.estado);
   item.estado=estados[(i+1)%estados.length];
   saveLocal(); updateBadges(); refreshCurrentPage();
+  // Escribir al Sheet
+  if(tipo==='trabajos') writeToSheet({ action:'updateEstadoTrabajo', id:id, estado:item.estado });
+  if(tipo==='presupuestos') writeToSheet({ action:'updateEstadoPresupuesto', id:id, estado:item.estado });
 }
 
 function eliminar(tipo, id) {
