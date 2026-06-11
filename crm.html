@@ -1165,9 +1165,10 @@ function badgeCobro(estado, id) {
     pendiente: { cls:'badge-cobro-pendiente',icon:'🔴', label:'Pendiente' },
   };
   const e = map[estado] || map.pendiente;
-  return `<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">
-    <span class="badge ${e.cls}">${e.icon} ${e.label}</span>
-    <select onchange="cambiarCobro('${id}',this.value)" style="font-size:10px;background:var(--dark);border:1px solid var(--border2);color:var(--muted);border-radius:3px;padding:2px 4px;cursor:pointer">
+  const divId = `cobro-wrap-${id}`;
+  return `<div id="${divId}" style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">
+    <span id="cobro-badge-${id}" class="badge ${e.cls}">${e.icon} ${e.label}</span>
+    <select onchange="cambiarCobro('${id}',this.value,'${divId}')" style="font-size:10px;background:var(--dark);border:1px solid var(--border2);color:var(--muted);border-radius:3px;padding:2px 4px;cursor:pointer">
       <option value="pendiente" ${estado==='pendiente'?'selected':''}>🔴 Pendiente</option>
       <option value="parcial"   ${estado==='parcial'  ?'selected':''}>🟡 Parcial</option>
       <option value="cobrado"   ${estado==='cobrado'  ?'selected':''}>✅ Cobrado</option>
@@ -1181,13 +1182,27 @@ function badgeCobro(estado, id) {
 async function writeToSheet(payload) {
   if (!SCRIPT_URL || SCRIPT_URL === '') return;
   try {
-    await fetch(SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(payload)
-    });
-    // no-cors no devuelve body, asumimos éxito
+    if (!document.getElementById('_meb_sheet_writer')) {
+      const iframe = document.createElement('iframe');
+      iframe.name = '_meb_sheet_writer';
+      iframe.id = '_meb_sheet_writer';
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+    }
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = SCRIPT_URL;
+    form.target = '_meb_sheet_writer';
+    form.style.display = 'none';
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'postData';
+    input.value = JSON.stringify(payload);
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+    setTimeout(() => { try { form.remove(); } catch(e){} }, 3000);
+    console.log('Sheet write:', payload.action, payload.id || '');
     return { ok: true };
   } catch(err) {
     console.warn('Sheet write failed:', err);
@@ -1195,15 +1210,31 @@ async function writeToSheet(payload) {
   }
 }
 
-function cambiarCobro(id, nuevoEstado) {
+function cambiarCobro(id, nuevoEstado, divId) {
   const t = DB.trabajos.find(x=>x.id===id);
   if(!t) return;
   t.estadoCobro = nuevoEstado;
   saveLocal();
+
+  // Actualizar el badge visualmente sin re-renderizar toda la tabla
+  const map = {
+    cobrado:   { cls:'badge-cobro-cobrado',  icon:'✅', label:'Cobrado' },
+    parcial:   { cls:'badge-cobro-parcial',  icon:'🟡', label:'Parcial' },
+    pendiente: { cls:'badge-cobro-pendiente',icon:'🔴', label:'Pendiente' },
+  };
+  const e = map[nuevoEstado] || map.pendiente;
+  const badge = document.getElementById(`cobro-badge-${id}`);
+  if(badge) {
+    badge.className = `badge ${e.cls}`;
+    badge.textContent = `${e.icon} ${e.label}`;
+  }
+
   updateBadges();
   renderDashboard();
+
+  // Escribir al Sheet
   writeToSheet({ action: 'updateCobro', id: id, estadoCobro: nuevoEstado });
-  showToast(`Estado de cobro → ${nuevoEstado} ✓`, 'success');
+  showToast(`Cobro → ${e.label} ✓`, 'success');
 }
 
 let filtroPorCobrar = false;
