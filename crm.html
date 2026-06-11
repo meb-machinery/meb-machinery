@@ -1181,33 +1181,25 @@ function badgeCobro(estado, id) {
 // ============================================================
 async function writeToSheet(payload) {
   if (!SCRIPT_URL || SCRIPT_URL === '') return;
-  try {
-    if (!document.getElementById('_meb_sheet_writer')) {
-      const iframe = document.createElement('iframe');
-      iframe.name = '_meb_sheet_writer';
-      iframe.id = '_meb_sheet_writer';
-      iframe.style.display = 'none';
-      document.body.appendChild(iframe);
+  return new Promise((resolve) => {
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', SCRIPT_URL, true);
+      xhr.setRequestHeader('Content-Type', 'text/plain');
+      xhr.onload = () => {
+        console.log('Sheet write OK:', payload.action, payload.id || '');
+        resolve({ ok: true });
+      };
+      xhr.onerror = () => {
+        console.warn('Sheet write error');
+        resolve({ ok: false });
+      };
+      xhr.send(JSON.stringify(payload));
+    } catch(err) {
+      console.warn('Sheet write failed:', err);
+      resolve({ ok: false });
     }
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = SCRIPT_URL;
-    form.target = '_meb_sheet_writer';
-    form.style.display = 'none';
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'postData';
-    input.value = JSON.stringify(payload);
-    form.appendChild(input);
-    document.body.appendChild(form);
-    form.submit();
-    setTimeout(() => { try { form.remove(); } catch(e){} }, 3000);
-    console.log('Sheet write:', payload.action, payload.id || '');
-    return { ok: true };
-  } catch(err) {
-    console.warn('Sheet write failed:', err);
-    return { ok: false };
-  }
+  });
 }
 
 function cambiarCobro(id, nuevoEstado, divId) {
