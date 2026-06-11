@@ -604,6 +604,7 @@ select option { background:var(--dark); }
         </div>
       </div>
     </div>
+  </div>
 
   <!-- PROVEEDORES -->
   <div class="page" id="page-proveedores">
@@ -681,6 +682,7 @@ select option { background:var(--dark); }
       </div>
       <div id="cal-detalle-body" style="padding:4px 0"></div>
     </div>
+  </div>
 
 <!-- DETAIL PANEL -->
 <div class="detail-panel" id="detailPanel">
@@ -817,13 +819,6 @@ function parseCSVLine(line) {
 
 // Escribir a Google Sheets via Apps Script (requiere deploy)
 // Por ahora guarda local y muestra instrucciones
-async function writeToSheet(sheetName, row) {
-  // Guardado local inmediato
-  saveLocal();
-  // Nota: para escritura real se necesita Google Apps Script
-  // Ver instrucciones en el archivo README incluido
-}
-
 async function syncAll() {
   const btn=document.getElementById('syncBtn');
   const status=document.getElementById('syncStatus');
@@ -889,6 +884,9 @@ async function syncAll() {
     } else { if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; }
 
     saveLocal();
+    updateBadges();
+    refreshCurrentPage();
+    renderDashboard();
     status.textContent='● Conectado'; status.style.color='var(--green)';
     showToast(`Sincronizado — ${DB.clientes.length} clientes · ${DB.maquinas.length} máquinas · ${DB.trabajos.length} trabajos · ${DB.presupuestos.length} presupuestos · ${DB.proveedores.length} proveedores`,'success');
   } catch(e) {
@@ -952,7 +950,7 @@ function updateBadges() {
   const enCurso=DB.trabajos.filter(t=>t.estado==='en curso').length;
   document.getElementById('badge-trabajos').textContent=enCurso;
   document.getElementById('badge-presup').textContent=DB.presupuestos.length;
-  const al=DB.alertas.filter(a=>!a.resuelta).length;
+  const al=DB.alertas.filter(a=>!a.resuelta).length + (typeof calcularAlertasRepuesto==="function" ? calcularAlertasRepuesto().length : 0);
   document.getElementById('badge-alertas').textContent=al;
   document.getElementById('s-clientes').textContent=DB.clientes.length;
   document.getElementById('s-presup').textContent=DB.presupuestos.length;
@@ -1034,10 +1032,20 @@ function renderDashboard() {
   // alertas
   const da=document.getElementById('dash-alertas');
   const la=DB.alertas.filter(a=>!a.resuelta).slice(0,5);
-  da.innerHTML=la.length?la.map(a=>{
-    const col=a.prioridad==='alta'?'red':a.prioridad==='media'?'orange':'yellow';
-    return `<div class="alert-item"><div class="alert-dot ${col}"></div><div class="alert-text"><div class="alert-title">${a.titulo}</div><div class="alert-sub">${fmtDate(a.fecha)}</div></div></div>`;
-  }).join(''):`<div class="empty-state"><div class="icon">✅</div><p>Sin alertas</p></div>`;
+  const alMant=calcularAlertasRepuesto().slice(0,3);
+  const totalAlertas = la.length + alMant.length;
+  da.innerHTML = totalAlertas ? [
+    ...alMant.map(a=>`<div class="alert-item">
+      <div class="alert-dot ${a.urgencia==='vencido'?'red':'orange'}"></div>
+      <div class="alert-text">
+        <div class="alert-title">⚙️ ${a.clienteNombre} · ${a.maquinaDesc}</div>
+        <div class="alert-sub">${a.label} · ${a.urgencia==='vencido'?'VENCIDO hace '+Math.abs(a.diasRestantes)+'d':'en '+a.diasRestantes+'d'}</div>
+      </div></div>`),
+    ...la.map(a=>{
+      const col=a.prioridad==='alta'?'red':a.prioridad==='media'?'orange':'yellow';
+      return `<div class="alert-item"><div class="alert-dot ${col}"></div><div class="alert-text"><div class="alert-title">${a.titulo}</div><div class="alert-sub">${fmtDate(a.fecha)}</div></div></div>`;
+    })
+  ].join('') : `<div class="empty-state"><div class="icon">✅</div><p>Sin alertas</p></div>`;
 
   // presupuestos
   const dp=document.getElementById('dash-presupuestos');
@@ -1173,16 +1181,17 @@ function badgeCobro(estado, id) {
 async function writeToSheet(payload) {
   if (!SCRIPT_URL || SCRIPT_URL === '') return;
   try {
-    const res = await fetch(SCRIPT_URL, {
+    await fetch(SCRIPT_URL, {
       method: 'POST',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
-    if (!data.ok) console.warn('Sheet write error:', data.error);
-    return data;
+    // no-cors no devuelve body, asumimos éxito
+    return { ok: true };
   } catch(err) {
-    console.warn('Sheet write failed (offline?):', err);
+    console.warn('Sheet write failed:', err);
+    return { ok: false };
   }
 }
 
@@ -1193,10 +1202,8 @@ function cambiarCobro(id, nuevoEstado) {
   saveLocal();
   updateBadges();
   renderDashboard();
-  // Escribir al Sheet
-  writeToSheet({ action: 'updateCobro', id: id, estadoCobro: nuevoEstado })
-    .then(r => { if(r&&r.ok) showToast(`Estado de cobro → ${nuevoEstado} ✓ guardado en Sheet`, 'success');
-                 else showToast(`Estado de cobro → ${nuevoEstado} (guardado local)`, 'success'); });
+  writeToSheet({ action: 'updateCobro', id: id, estadoCobro: nuevoEstado });
+  showToast(`Estado de cobro → ${nuevoEstado} ✓`, 'success');
 }
 
 let filtroPorCobrar = false;
@@ -1918,16 +1925,6 @@ function renderProveedores() {
   }).join('') : `<tr><td colspan="6"><div class="empty-state"><div class="icon">📦</div><p>Sin compras registradas</p></div></td></tr>`;
 }
 
-function openModal(type) {
-  if(type==='nuevoProveedor') {
-    showModalProveedores();
-  } else if(type==='nuevaCompra') {
-    showModalCompra();
-  } else {
-    // otros modales existentes
-  }
-}
-
 function showModalProveedores() {
   const m = document.createElement('div');
   m.className = 'modal-overlay active';
@@ -2423,6 +2420,8 @@ function clienteOptions(selectedId='') {
 }
 
 function openModal(type, data={}) {
+  if(type==='nuevoProveedor') { showModalProveedores(); return; }
+  if(type==='nuevaCompra') { showModalCompra(); return; }
   let title='', body='', onSave=null;
 
   if(type==='cliente') {
