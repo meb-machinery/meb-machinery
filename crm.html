@@ -1350,7 +1350,7 @@ function renderTrabajos() {
         <div style="font-family:'Bebas Neue';font-size:14px;color:${ganancia>=0?'var(--yellow)':'var(--red)'}">${fmtMonto(ganancia)}</div>
         <div style="font-size:10px;color:${margenColor}">${margen}% margen</div>
       </td>
-      <td>${badgeCobro(t.estadoCobro||'pendiente','${t.id}')}</td>
+      <td>${badgeCobro(t.estadoCobro||'pendiente',t.id)}</td>
       <td><div class="actions">
         <button class="btn-secondary" onclick="verTrabajo('${t.id}')">Ver</button>
         <button class="btn-secondary" onclick="cambiarEstado('trabajos','${t.id}',['pendiente','en curso','completado','cancelado','no aprobado'])">Estado</button>
