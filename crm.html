@@ -1181,25 +1181,16 @@ function badgeCobro(estado, id) {
 // ============================================================
 async function writeToSheet(payload) {
   if (!SCRIPT_URL || SCRIPT_URL === '') return;
-  return new Promise((resolve) => {
-    try {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', SCRIPT_URL, true);
-      xhr.setRequestHeader('Content-Type', 'text/plain');
-      xhr.onload = () => {
-        console.log('Sheet write OK:', payload.action, payload.id || '');
-        resolve({ ok: true });
-      };
-      xhr.onerror = () => {
-        console.warn('Sheet write error');
-        resolve({ ok: false });
-      };
-      xhr.send(JSON.stringify(payload));
-    } catch(err) {
-      console.warn('Sheet write failed:', err);
-      resolve({ ok: false });
-    }
-  });
+  try {
+    const url = SCRIPT_URL + '?data=' + encodeURIComponent(JSON.stringify(payload));
+    const res = await fetch(url, { method: 'GET' });
+    const json = await res.json();
+    console.log('Sheet write OK:', payload.action, json);
+    return json;
+  } catch(err) {
+    console.warn('Sheet write error:', err);
+    return { ok: false };
+  }
 }
 
 function cambiarCobro(id, nuevoEstado, divId) {
