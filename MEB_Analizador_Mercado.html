@@ -1512,36 +1512,19 @@ function repeatSearch(query, modo) {
 async function syncHistorialSheet(entry) {
   if (!SCRIPT_URL) return;
   try {
-    if (!document.getElementById('_meb_sheet_writer')) {
-      const iframe = document.createElement('iframe');
-      iframe.name = '_meb_sheet_writer';
-      iframe.id = '_meb_sheet_writer';
-      iframe.style.display = 'none';
-      document.body.appendChild(iframe);
-    }
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = SCRIPT_URL;
-    form.target = '_meb_sheet_writer';
-    form.style.display = 'none';
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'postData';
-    input.value = JSON.stringify({
-      action: 'addHistorialAnalizador',
-      row: {
-        FECHA: entry.fecha,
-        BUSQUEDA: entry.query,
-        MODO: entry.modo,
-        PRECIO_REF: entry.precio,
-        TC: entry.tc
-      }
+    // Usar GET con parámetros — sin problemas de CORS ni CSP
+    const params = new URLSearchParams({
+      action: 'historial',
+      q: entry.query,
+      modo: entry.modo,
+      precio: entry.precio,
+      tc: entry.tc,
+      fecha: entry.fecha
     });
-    form.appendChild(input);
-    document.body.appendChild(form);
-    form.submit();
-    setTimeout(() => { try { form.remove(); } catch(e){} }, 3000);
-  } catch(e) { console.warn('Historial sync error:', e); }
+    const url = SCRIPT_URL + '?' + params.toString();
+    // fetch con no-cors en GET funciona — no necesitamos leer la respuesta
+    fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+  } catch(e) {}
 }
 
 // ============================================================
