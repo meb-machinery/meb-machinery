@@ -617,16 +617,16 @@ async function analizarRepuestos(query) {
   showLoading(true, `Buscando "${query}" en MercadoLibre Argentina...`);
   let mlItems = [];
   try {
+    // Usar Apps Script como proxy para evitar CORS
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    const url = `https://api.mercadolibre.com/sites/MLA/search?q=${encodeURIComponent(query)}&limit=8`;
-    const res = await fetch(url, { signal: controller.signal });
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    const proxyUrl = `${SCRIPT_URL}?q=${encodeURIComponent(query)}`;
+    const res = await fetch(proxyUrl, { signal: controller.signal });
     clearTimeout(timeout);
     const data = await res.json();
     mlItems = data.results || [];
   } catch(e) {
-    console.warn('ML error:', e.message);
-    // Continuar igual — mostrar China/Aduana sin resultados ML
+    console.warn('ML proxy error:', e.message);
   }
 
   currentResults = mlItems;
