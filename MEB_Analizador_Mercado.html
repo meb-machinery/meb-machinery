@@ -3,797 +3,1338 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MEB — Analizador de Mercado</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<title>MEB · Analizador de Mercado</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
   --yellow: #F4B400;
-  --black: #0a0a0a;
-  --dark: #111;
-  --panel: #161616;
-  --border: #222;
-  --border2: #2e2e2e;
+  --black: #0A0A0A;
+  --dark: #111111;
+  --panel: #181818;
+  --panel2: #1E1E1E;
+  --border: #2A2A2A;
+  --border2: #333333;
+  --text: #E8E8E8;
+  --muted: #888888;
+  --muted2: #555555;
   --blue: #003B70;
-  --blue-light: #7bb3e0;
-  --text: #e8e8e8;
-  --muted: #666;
-  --muted2: #3a3a3a;
-  --green: #00c97a;
-  --red: #ff4444;
-  --orange: #ff8c00;
+  --blue-light: #4A9EE0;
+  --green: #2ECC71;
+  --red: #E74C3C;
+  --orange: #F39C12;
+  --hardox: #C0392B;
+  --hardox-light: #E74C3C;
 }
-
-* { margin:0; padding:0; box-sizing:border-box; }
-
-body {
-  background: var(--black);
-  color: var(--text);
-  font-family: 'Barlow', sans-serif;
-  min-height: 100vh;
-  overflow-x: hidden;
-}
-
-/* BG GRID */
-body::before {
-  content: '';
-  position: fixed; inset: 0;
-  background-image:
-    linear-gradient(rgba(244,180,0,0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(244,180,0,0.025) 1px, transparent 1px);
-  background-size: 40px 40px;
-  pointer-events: none; z-index: 0;
-}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--black);color:var(--text);font-family:'Barlow',sans-serif;min-height:100vh}
 
 /* TOPBAR */
-.topbar {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-  background: rgba(10,10,10,0.95);
-  border-bottom: 1px solid var(--border);
-  backdrop-filter: blur(12px);
-  padding: 0 28px; height: 54px;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.topbar-logo { display: flex; align-items: center; gap: 10px; }
-.logo-box { background: var(--yellow); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 2px; }
-.logo-box span { font-family: 'Bebas Neue'; font-size: 14px; color: var(--black); }
-.logo-text { font-family: 'Bebas Neue'; font-size: 17px; color: var(--yellow); letter-spacing: 3px; }
-.logo-sub { font-size: 10px; color: var(--muted); letter-spacing: 2px; margin-left: 4px; }
-.topbar-badge { background: var(--blue); color: var(--blue-light); font-size: 10px; padding: 3px 10px; border-radius: 2px; letter-spacing: 1px; text-transform: uppercase; }
+.topbar{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.97);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:52px;backdrop-filter:blur(10px)}
+.topbar-brand{display:flex;align-items:center;gap:10px}
+.topbar-logo{background:var(--yellow);color:var(--black);font-family:'Bebas Neue';font-size:14px;letter-spacing:2px;padding:4px 8px;border-radius:3px}
+.topbar-name{font-family:'Bebas Neue';font-size:16px;letter-spacing:3px;color:var(--text)}
+.topbar-name span{color:var(--yellow)}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.mode-toggle{display:flex;background:var(--panel);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.mode-btn{padding:6px 14px;font-family:'Bebas Neue';font-size:12px;letter-spacing:2px;border:none;background:transparent;color:var(--muted);cursor:pointer;transition:all 0.2s}
+.mode-btn.active{background:var(--yellow);color:var(--black)}
+.cart-btn{position:relative;background:var(--panel);border:1px solid var(--border);padding:6px 14px;border-radius:4px;font-family:'Bebas Neue';font-size:12px;letter-spacing:2px;color:var(--yellow);cursor:pointer;transition:background 0.2s}
+.cart-btn:hover{background:var(--panel2)}
+.cart-count{position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-family:'Barlow';font-weight:700;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;display:none}
+.cart-count.show{display:flex}
+
+/* LAYOUT */
+.layout{display:grid;grid-template-columns:280px 1fr 300px;gap:0;min-height:calc(100vh - 52px)}
+@media(max-width:1100px){.layout{grid-template-columns:240px 1fr}.sidebar-right{display:none}}
+@media(max-width:768px){.layout{grid-template-columns:1fr}.sidebar-left{display:none}}
+
+/* SIDEBAR LEFT */
+.sidebar-left{background:var(--dark);border-right:1px solid var(--border);padding:20px 16px;display:flex;flex-direction:column;gap:20px}
+.sidebar-section-title{font-family:'Bebas Neue';font-size:11px;letter-spacing:3px;color:var(--muted2);margin-bottom:8px}
+.search-form{display:flex;flex-direction:column;gap:8px}
+.input-wrap{position:relative}
+.input-wrap input,.input-wrap select{width:100%;background:var(--panel);border:1px solid var(--border2);color:var(--text);padding:9px 12px;border-radius:4px;font-family:'Barlow';font-size:13px;outline:none;transition:border-color 0.2s}
+.input-wrap input:focus,.input-wrap select:focus{border-color:var(--yellow)}
+.input-wrap select option{background:var(--dark)}
+.input-icon{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none}
+.btn-search{background:var(--yellow);color:var(--black);border:none;padding:10px;border-radius:4px;font-family:'Bebas Neue';font-size:14px;letter-spacing:2px;cursor:pointer;transition:opacity 0.2s;width:100%}
+.btn-search:hover{opacity:0.85}
+.btn-search:disabled{opacity:0.5;cursor:not-allowed}
+.quick-tags{display:flex;flex-wrap:wrap;gap:5px}
+.qtag{background:var(--panel);border:1px solid var(--border);padding:4px 8px;border-radius:3px;font-size:11px;color:var(--muted);cursor:pointer;transition:all 0.15s;white-space:nowrap}
+.qtag:hover{border-color:var(--yellow);color:var(--yellow)}
+.tc-row{display:flex;align-items:center;gap:8px}
+.tc-label{font-size:11px;color:var(--muted);white-space:nowrap}
+.tc-input{background:var(--panel);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-size:12px;outline:none;width:90px;text-align:right}
+.divider{border:none;border-top:1px solid var(--border);margin:4px 0}
+
+/* HISTORIAL EN SIDEBAR */
+.hist-item{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:9px 10px;cursor:pointer;transition:border-color 0.15s;margin-bottom:5px}
+.hist-item:hover{border-color:var(--yellow)}
+.hist-q{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hist-meta{font-size:10px;color:var(--muted);margin-top:2px}
+.hist-mode{display:inline-block;font-size:9px;font-family:'Bebas Neue';letter-spacing:1px;padding:1px 5px;border-radius:2px;margin-right:4px}
+.hist-mode.rep{background:rgba(74,158,224,0.2);color:var(--blue-light)}
+.hist-mode.her{background:rgba(192,57,43,0.2);color:var(--hardox-light)}
 
 /* MAIN */
-.main {
-  position: relative; z-index: 1;
-  max-width: 1100px; margin: 0 auto;
-  padding: 82px 24px 48px;
-}
-
-/* HERO */
-.hero { margin-bottom: 40px; }
-.hero-label { font-size: 10px; color: var(--yellow); letter-spacing: 4px; text-transform: uppercase; margin-bottom: 10px; }
-.hero-title { font-family: 'Bebas Neue'; font-size: 52px; color: var(--text); letter-spacing: 3px; line-height: 1; margin-bottom: 8px; }
-.hero-title span { color: var(--yellow); }
-.hero-sub { font-size: 14px; color: var(--muted); letter-spacing: 1px; max-width: 600px; line-height: 1.6; }
-
-/* SEARCH BOX */
-.search-section { margin-bottom: 32px; }
-.search-card {
-  background: var(--panel);
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  padding: 24px 28px;
-}
-.search-card-title { font-family: 'Bebas Neue'; font-size: 16px; color: var(--yellow); letter-spacing: 2px; margin-bottom: 16px; }
-.search-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
-.search-group { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 200px; }
-.search-group label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
-.search-input {
-  background: var(--dark); border: 1px solid var(--border2);
-  color: var(--text); padding: 11px 14px;
-  border-radius: 4px; font-family: 'Barlow'; font-size: 14px;
-  outline: none; transition: border-color 0.2s;
-  width: 100%;
-}
-.search-input:focus { border-color: var(--yellow); }
-.search-select {
-  background: var(--dark); border: 1px solid var(--border2);
-  color: var(--text); padding: 11px 14px;
-  border-radius: 4px; font-family: 'Barlow'; font-size: 13px;
-  outline: none; width: 100%; cursor: pointer;
-}
-.search-select option { background: var(--dark); }
-.btn-analizar {
-  background: var(--yellow); color: var(--black);
-  border: none; padding: 12px 28px;
-  font-family: 'Bebas Neue'; font-size: 16px; letter-spacing: 2px;
-  border-radius: 4px; cursor: pointer;
-  display: flex; align-items: center; gap: 8px;
-  transition: all 0.2s; white-space: nowrap;
-  min-width: 160px; justify-content: center;
-}
-.btn-analizar:hover { background: #ffc72c; transform: translateY(-1px); }
-.btn-analizar:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-
-/* QUICK TAGS */
-.quick-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
-.quick-tag {
-  background: transparent; border: 1px solid var(--border2);
-  color: var(--muted); font-size: 11px; padding: 4px 12px;
-  border-radius: 20px; cursor: pointer; letter-spacing: 1px;
-  transition: all 0.15s; font-family: 'Barlow';
-}
-.quick-tag:hover { border-color: var(--yellow); color: var(--yellow); }
+.main-content{padding:24px;overflow-y:auto}
+.hero-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.hero-title{font-family:'Bebas Neue';font-size:28px;letter-spacing:4px;color:var(--text)}
+.hero-title span{color:var(--yellow)}
+.hero-sub{font-size:12px;color:var(--muted);margin-top:3px}
+.mode-indicator{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);padding:8px 14px;border-radius:4px}
+.mode-dot{width:8px;height:8px;border-radius:50%}
+.mode-dot.rep{background:var(--blue-light)}
+.mode-dot.her{background:var(--hardox-light)}
+.mode-label{font-family:'Bebas Neue';font-size:13px;letter-spacing:2px}
 
 /* LOADING */
-.loading-bar {
-  display: none; height: 2px;
-  background: linear-gradient(90deg, transparent, var(--yellow), transparent);
-  background-size: 200% 100%;
-  animation: shimmer 1.2s infinite;
-  border-radius: 2px; margin: 20px 0;
-}
-.loading-bar.show { display: block; }
-@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-
-.loading-text { text-align: center; font-size: 12px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; padding: 20px; display: none; }
-.loading-text.show { display: block; }
-
-/* RESULTS */
-.results-section { display: none; }
-.results-section.show { display: block; }
-
-/* SUMMARY CARDS */
-.summary-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
-.sum-card {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 6px; padding: 16px 18px; position: relative; overflow: hidden;
-}
-.sum-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
-.sum-card.y::before { background: var(--yellow); }
-.sum-card.g::before { background: var(--green); }
-.sum-card.b::before { background: var(--blue); }
-.sum-card.o::before { background: var(--orange); }
-.sum-val { font-family: 'Bebas Neue'; font-size: 28px; color: var(--text); letter-spacing: 1px; line-height: 1; }
-.sum-label { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
-.sum-sub { font-size: 11px; color: var(--muted2); margin-top: 6px; }
-
-/* RECOMMENDATION BOX */
-.rec-box {
-  border-radius: 6px; padding: 16px 20px; margin-bottom: 20px;
-  display: flex; align-items: flex-start; gap: 14px;
-  border: 1px solid;
-}
-.rec-box.good { background: rgba(0,201,122,0.06); border-color: rgba(0,201,122,0.3); }
-.rec-box.ok { background: rgba(244,180,0,0.06); border-color: rgba(244,180,0,0.3); }
-.rec-box.bad { background: rgba(255,68,68,0.06); border-color: rgba(255,68,68,0.3); }
-.rec-icon { font-size: 24px; flex-shrink: 0; }
-.rec-content .rec-title { font-family: 'Bebas Neue'; font-size: 16px; letter-spacing: 2px; margin-bottom: 4px; }
-.rec-content .rec-text { font-size: 13px; color: var(--muted); line-height: 1.6; }
-.rec-box.good .rec-title { color: var(--green); }
-.rec-box.ok .rec-title { color: var(--yellow); }
-.rec-box.bad .rec-title { color: var(--red); }
+.loading-bar{height:2px;background:var(--border);border-radius:1px;overflow:hidden;margin-bottom:16px;display:none}
+.loading-bar.show{display:block}
+.loading-fill{height:100%;background:var(--yellow);width:0;animation:loadfill 2s ease-in-out infinite}
+@keyframes loadfill{0%{width:0;margin-left:0}50%{width:60%}100%{width:0;margin-left:100%}}
+.loading-text{font-size:12px;color:var(--muted);margin-bottom:16px;display:none}
+.loading-text.show{display:block}
 
 /* TABS */
-.tabs { display: flex; gap: 2px; margin-bottom: 16px; background: var(--panel); border-radius: 6px; padding: 4px; border: 1px solid var(--border); }
-.tab {
-  flex: 1; padding: 8px 12px; text-align: center;
-  font-family: 'Bebas Neue'; font-size: 13px; letter-spacing: 2px;
-  cursor: pointer; border-radius: 4px; color: var(--muted);
-  transition: all 0.15s;
-}
-.tab:hover { color: var(--text); }
-.tab.active { background: var(--yellow); color: var(--black); }
+.tabs{display:flex;gap:2px;background:var(--dark);border:1px solid var(--border);border-radius:5px;padding:3px;margin-bottom:20px;flex-wrap:wrap}
+.tab{padding:7px 14px;border-radius:3px;font-family:'Bebas Neue';font-size:12px;letter-spacing:2px;color:var(--muted);cursor:pointer;transition:all 0.15s;white-space:nowrap}
+.tab.active{background:var(--yellow);color:var(--black)}
+.tab-content{display:none}
+.tab-content.active{display:block}
 
-.tab-content { display: none; }
-.tab-content.active { display: block; }
+/* RESULTADO CARDS */
+.results-section{display:none}
+.results-section.show{display:block}
+.section-title{font-family:'Bebas Neue';font-size:14px;letter-spacing:3px;color:var(--yellow);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--border)}
 
-/* TABLE */
-.results-card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-.results-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-.results-title { font-family: 'Bebas Neue'; font-size: 15px; color: var(--yellow); letter-spacing: 2px; }
-.results-count { font-size: 11px; color: var(--muted); letter-spacing: 1px; }
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; }
-th { padding: 10px 14px; font-size: 9px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; border-bottom: 1px solid var(--border); background: var(--dark); text-align: left; white-space: nowrap; }
-td { padding: 11px 14px; font-size: 13px; color: var(--text); border-bottom: 1px solid var(--border); }
-tr:last-child td { border-bottom: none; }
-tr:hover td { background: rgba(255,255,255,0.015); }
-.badge { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
-.badge-green { background: rgba(0,201,122,0.12); color: var(--green); }
-.badge-yellow { background: rgba(244,180,0,0.12); color: var(--yellow); }
-.badge-red { background: rgba(255,68,68,0.12); color: var(--red); }
-.badge-blue { background: rgba(0,59,112,0.35); color: var(--blue-light); }
-.price-ml { font-family: 'Bebas Neue'; font-size: 16px; color: var(--yellow); letter-spacing: 1px; }
-.price-china { font-family: 'Bebas Neue'; font-size: 14px; color: var(--blue-light); }
-.margin-val { font-family: 'Bebas Neue'; font-size: 15px; }
-.margin-val.high { color: var(--green); }
-.margin-val.mid { color: var(--yellow); }
-.margin-val.low { color: var(--red); }
-.vendor-name { font-weight: 600; font-size: 12px; }
-.sold-count { color: var(--muted); font-size: 12px; }
-.product-link { color: var(--yellow); text-decoration: none; font-size: 11px; }
-.product-link:hover { text-decoration: underline; }
+/* ML ITEMS */
+.ml-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:16px}
+.ml-card{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px;transition:border-color 0.15s;position:relative}
+.ml-card:hover{border-color:var(--border2)}
+.ml-card.selected{border-color:var(--yellow)}
+.ml-title{font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ml-price{font-family:'Bebas Neue';font-size:20px;color:var(--green);margin-bottom:6px}
+.ml-meta{font-size:10px;color:var(--muted);margin-bottom:8px}
+.ml-meta span{display:inline-block;margin-right:8px}
+.ml-actions{display:flex;gap:6px}
+.btn-sm{padding:5px 10px;border-radius:3px;font-size:11px;font-family:'Bebas Neue';letter-spacing:1px;border:none;cursor:pointer;transition:opacity 0.15s}
+.btn-sm:hover{opacity:0.8}
+.btn-view{background:var(--panel2);color:var(--text)}
+.btn-add{background:var(--yellow);color:var(--black)}
+.btn-compare{background:var(--blue);color:var(--blue-light)}
+.badge-free{background:rgba(46,204,113,0.15);color:var(--green);font-size:10px;padding:2px 6px;border-radius:2px;font-family:'Bebas Neue';letter-spacing:1px}
+.badge-used{background:rgba(243,156,18,0.15);color:var(--orange);font-size:10px;padding:2px 6px;border-radius:2px;font-family:'Bebas Neue';letter-spacing:1px}
 
-/* ALIBABA SECTION */
-.alibaba-card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 20px; }
-.alibaba-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.alibaba-icon { font-size: 24px; }
-.alibaba-title { font-family: 'Bebas Neue'; font-size: 16px; color: var(--yellow); letter-spacing: 2px; }
-.alibaba-sub { font-size: 11px; color: var(--muted); margin-top: 2px; letter-spacing: 1px; }
-.alibaba-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
-.ali-item { background: var(--dark); border: 1px solid var(--border2); border-radius: 4px; padding: 14px; }
-.ali-qty { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
-.ali-price { font-family: 'Bebas Neue'; font-size: 20px; color: var(--blue-light); letter-spacing: 1px; }
-.ali-price-ars { font-size: 11px; color: var(--muted); margin-top: 3px; }
-.ali-margin { font-size: 12px; margin-top: 6px; }
-.ali-note { font-size: 11px; color: var(--muted); line-height: 1.6; background: rgba(0,59,112,0.1); border: 1px solid rgba(0,59,112,0.3); border-radius: 4px; padding: 10px 14px; margin-top: 8px; }
+/* CHINA CARDS */
+.china-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.china-card{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:16px}
+.china-card-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.china-platform-icon{font-size:20px}
+.china-platform-name{font-family:'Bebas Neue';font-size:14px;letter-spacing:2px;color:var(--yellow)}
+.china-platform-sub{font-size:10px;color:var(--muted)}
+.china-price-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+.china-price-row:last-child{border-bottom:none}
+.china-price-label{font-size:11px;color:var(--muted)}
+.china-price-val{font-family:'Bebas Neue';font-size:15px;color:var(--blue-light)}
+.china-price-ars{font-size:10px;color:var(--muted);margin-top:1px}
+.china-link{display:inline-flex;align-items:center;gap:5px;margin-top:10px;font-size:11px;color:var(--yellow);text-decoration:none;border:1px solid rgba(244,180,0,0.3);padding:5px 10px;border-radius:3px;transition:background 0.15s}
+.china-link:hover{background:rgba(244,180,0,0.1)}
 
-/* MESSAGES */
-.msg-btn {
-  background: var(--panel); border: 1px solid var(--border2);
-  color: var(--text); padding: 10px 16px; border-radius: 4px;
-  font-family: 'Barlow'; font-size: 13px; cursor: pointer;
-  display: flex; align-items: center; gap: 8px;
-  transition: all 0.15s; margin-bottom: 10px; width: 100%;
-  text-align: left;
-}
-.msg-btn:hover { border-color: var(--yellow); color: var(--yellow); }
-.msg-content {
-  display: none; background: var(--dark); border: 1px solid var(--border2);
-  border-radius: 4px; padding: 16px; margin-bottom: 14px;
-  font-size: 13px; line-height: 1.8; color: var(--text);
-  white-space: pre-wrap;
-}
-.msg-content.show { display: block; }
-.copy-btn {
-  background: var(--yellow); color: var(--black); border: none;
-  padding: 6px 14px; border-radius: 3px; font-family: 'Bebas Neue';
-  font-size: 12px; letter-spacing: 1px; cursor: pointer; margin-top: 10px;
-}
+/* ADUANA */
+.aduana-card{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:20px;margin-bottom:16px}
+.aduana-title{font-family:'Bebas Neue';font-size:14px;letter-spacing:2px;color:var(--yellow);margin-bottom:16px}
+.aduana-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:600px){.aduana-grid{grid-template-columns:1fr}}
+.aduana-via{background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:12px;cursor:pointer;transition:border-color 0.15s}
+.aduana-via:hover,.aduana-via.selected{border-color:var(--yellow)}
+.aduana-via-name{font-family:'Bebas Neue';font-size:13px;letter-spacing:2px;color:var(--text);margin-bottom:4px}
+.aduana-via-desc{font-size:10px;color:var(--muted);line-height:1.5}
+.aduana-result{background:var(--panel2);border-radius:5px;padding:16px}
+.aduana-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}
+.aduana-row:last-child{border-bottom:none;padding-top:10px;font-weight:700;font-size:14px}
+.aduana-row .label{color:var(--muted)}
+.aduana-row .val{color:var(--text);font-family:'Barlow Condensed';font-weight:600}
+.aduana-row .val.total{color:var(--yellow);font-family:'Bebas Neue';font-size:18px}
+.viabilidad-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:4px;font-family:'Bebas Neue';font-size:13px;letter-spacing:2px;margin-top:10px}
+.via-viable{background:rgba(46,204,113,0.15);color:var(--green);border:1px solid rgba(46,204,113,0.3)}
+.via-marginal{background:rgba(243,156,18,0.15);color:var(--orange);border:1px solid rgba(243,156,18,0.3)}
+.via-inviable{background:rgba(231,76,60,0.15);color:var(--red);border:1px solid rgba(231,76,60,0.3)}
 
-/* HISTORY */
-.history-section { margin-top: 24px; }
-.history-title { font-family: 'Bebas Neue'; font-size: 14px; color: var(--muted); letter-spacing: 2px; margin-bottom: 12px; }
-.history-list { display: flex; flex-direction: column; gap: 8px; }
-.history-item {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 4px; padding: 12px 16px;
-  display: flex; align-items: center; justify-content: space-between;
-  cursor: pointer; transition: border-color 0.15s;
-}
-.history-item:hover { border-color: var(--yellow); }
-.history-item .hi-product { font-size: 13px; font-weight: 600; color: var(--text); }
-.history-item .hi-date { font-size: 11px; color: var(--muted); }
-.history-item .hi-badge { font-family: 'Bebas Neue'; font-size: 12px; color: var(--yellow); letter-spacing: 1px; }
+/* IA RECOMENDACION */
+.ia-card{background:linear-gradient(135deg,var(--panel) 0%,rgba(0,59,112,0.3) 100%);border:1px solid rgba(74,158,224,0.3);border-radius:6px;padding:20px;margin-bottom:16px}
+.ia-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.ia-icon{font-size:20px}
+.ia-title{font-family:'Bebas Neue';font-size:14px;letter-spacing:2px;color:var(--blue-light)}
+.ia-text{font-size:13px;color:var(--text);line-height:1.7}
+.ia-loading{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.ia-dot{width:6px;height:6px;border-radius:50%;background:var(--blue-light);animation:pulse 1.2s ease-in-out infinite}
+.ia-dot:nth-child(2){animation-delay:0.2s}
+.ia-dot:nth-child(3){animation-delay:0.4s}
+@keyframes pulse{0%,100%{opacity:0.3;transform:scale(0.8)}50%{opacity:1;transform:scale(1)}}
+.ia-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.ia-tag{background:rgba(74,158,224,0.1);border:1px solid rgba(74,158,224,0.2);color:var(--blue-light);font-size:11px;padding:3px 8px;border-radius:3px}
+.ia-tag.warn{background:rgba(231,76,60,0.1);border-color:rgba(231,76,60,0.2);color:var(--red)}
+.ia-tag.ok{background:rgba(46,204,113,0.1);border-color:rgba(46,204,113,0.2);color:var(--green)}
 
-/* EMPTY */
-.empty-state { text-align: center; padding: 48px 24px; color: var(--muted); }
-.empty-icon { font-size: 40px; opacity: 0.2; margin-bottom: 14px; }
+/* HERRERIA */
+.hardox-banner{background:linear-gradient(135deg,#1a0505 0%,#2d0a0a 100%);border:1px solid rgba(192,57,43,0.4);border-radius:6px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:14px}
+.hardox-icon{font-size:28px}
+.hardox-title{font-family:'Bebas Neue';font-size:18px;letter-spacing:3px;color:var(--hardox-light)}
+.hardox-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.hardox-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-bottom:16px}
+.hardox-card{background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:14px;cursor:pointer;transition:border-color 0.15s}
+.hardox-card:hover{border-color:var(--hardox-light)}
+.hardox-card.selected{border-color:var(--hardox-light);background:rgba(192,57,43,0.05)}
+.hardox-grade{font-family:'Bebas Neue';font-size:16px;letter-spacing:2px;color:var(--hardox-light)}
+.hardox-desc{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.5}
+.hardox-price{font-family:'Bebas Neue';font-size:18px;color:var(--yellow);margin-top:8px}
+.hardox-price-sub{font-size:10px;color:var(--muted)}
 
-/* SCROLLBAR */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: var(--dark); }
-::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+/* PROVEEDORES */
+.prov-card{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px;margin-bottom:10px}
+.prov-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.prov-name{font-family:'Bebas Neue';font-size:15px;letter-spacing:2px;color:var(--text)}
+.prov-country{font-size:11px;color:var(--muted);margin-top:2px}
+.prov-stars{display:flex;gap:2px;margin-bottom:8px}
+.star{font-size:14px;color:var(--muted2)}
+.star.filled{color:var(--yellow)}
+.prov-tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
+.prov-tag{background:var(--panel2);border:1px solid var(--border);font-size:10px;color:var(--muted);padding:2px 6px;border-radius:2px}
+.prov-tag.both{background:rgba(244,180,0,0.1);border-color:rgba(244,180,0,0.3);color:var(--yellow)}
+.prov-actions{display:flex;gap:6px}
+.btn-prov{padding:5px 10px;border-radius:3px;font-size:11px;font-family:'Bebas Neue';letter-spacing:1px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all 0.15s}
+.btn-prov:hover{border-color:var(--yellow);color:var(--yellow)}
+.btn-prov.saved{background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)}
+.prov-review-form{background:var(--panel2);border-radius:4px;padding:12px;margin-top:10px;display:none}
+.prov-review-form.show{display:block}
+.review-textarea{width:100%;background:var(--dark);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:4px;font-size:12px;resize:vertical;min-height:60px;font-family:'Barlow'}
+.prov-note{font-size:11px;color:var(--muted);margin-top:6px;font-style:italic}
 
-/* RESPONSIVE */
-@media (max-width: 768px) {
-  .summary-grid { grid-template-columns: repeat(2,1fr); }
-  .alibaba-grid { grid-template-columns: 1fr; }
-  .hero-title { font-size: 36px; }
-}
+/* SIDEBAR RIGHT */
+.sidebar-right{background:var(--dark);border-left:1px solid var(--border);padding:16px;overflow-y:auto}
+.cart-section{margin-bottom:20px}
+.cart-title{font-family:'Bebas Neue';font-size:13px;letter-spacing:3px;color:var(--yellow);margin-bottom:10px}
+.cart-empty{font-size:12px;color:var(--muted);text-align:center;padding:20px 0}
+.cart-item{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:10px;margin-bottom:6px;position:relative}
+.cart-item-name{font-size:11px;font-weight:600;color:var(--text);margin-bottom:4px;padding-right:20px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cart-item-price{font-family:'Bebas Neue';font-size:14px;color:var(--green)}
+.cart-item-source{font-size:10px;color:var(--muted)}
+.cart-item-remove{position:absolute;top:6px;right:6px;background:none;border:none;color:var(--muted2);cursor:pointer;font-size:12px;padding:2px}
+.cart-item-remove:hover{color:var(--red)}
+.cart-total{background:var(--panel2);border-radius:4px;padding:12px;margin-top:8px}
+.cart-total-row{display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px}
+.cart-total-row.main{font-family:'Bebas Neue';font-size:16px;color:var(--yellow);border-top:1px solid var(--border);padding-top:8px;margin-top:4px}
+.cart-total-label{color:var(--muted)}
+.btn-cart-action{width:100%;margin-top:8px;padding:8px;border-radius:4px;font-family:'Bebas Neue';font-size:12px;letter-spacing:2px;border:none;cursor:pointer;transition:opacity 0.15s}
+.btn-cart-action:hover{opacity:0.85}
+.btn-export{background:var(--yellow);color:var(--black)}
+.btn-wishlist{background:var(--panel);border:1px solid var(--border);color:var(--text);margin-top:4px}
+
+/* WISHLIST */
+.wishlist-item{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:8px 10px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center}
+.wishlist-name{font-size:11px;color:var(--text)}
+.wishlist-price{font-family:'Bebas Neue';font-size:12px;color:var(--muted)}
+.wishlist-del{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:11px}
+.wishlist-del:hover{color:var(--red)}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:12px 18px;font-size:13px;z-index:999;transform:translateY(80px);opacity:0;transition:all 0.3s;max-width:300px}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.success{border-color:var(--green);color:var(--green)}
+.toast.error{border-color:var(--red);color:var(--red)}
+.toast.info{border-color:var(--blue-light);color:var(--blue-light)}
+
+/* EMPTY STATE */
+.empty-state{text-align:center;padding:48px 24px;color:var(--muted)}
+.empty-icon{font-size:40px;margin-bottom:12px}
+.empty-title{font-family:'Bebas Neue';font-size:18px;letter-spacing:3px;margin-bottom:6px}
+.empty-sub{font-size:12px;line-height:1.6}
+
+/* PROVEEDOR CRUZADO ALERT */
+.cross-alert{background:rgba(244,180,0,0.08);border:1px solid rgba(244,180,0,0.3);border-radius:5px;padding:12px 14px;margin-bottom:16px;display:none}
+.cross-alert.show{display:block}
+.cross-alert-title{font-family:'Bebas Neue';font-size:12px;letter-spacing:2px;color:var(--yellow);margin-bottom:4px}
+.cross-alert-text{font-size:12px;color:var(--text)}
+
+/* CHILE SECTION */
+.chile-note{background:rgba(0,59,112,0.15);border:1px solid rgba(0,59,112,0.3);border-radius:5px;padding:10px 14px;font-size:11px;color:var(--muted);margin-bottom:16px}
 </style>
 </head>
 <body>
 
 <!-- TOPBAR -->
 <div class="topbar">
-  <div class="topbar-logo">
-    <div class="logo-box"><span>MEB</span></div>
-    <span class="logo-text">Machinery Solutions</span>
-    <span class="logo-sub">· Analizador de Mercado</span>
+  <div class="topbar-brand">
+    <div class="topbar-logo">MEB</div>
+    <div>
+      <div class="topbar-name">ANALIZADOR <span>DE MERCADO</span></div>
+    </div>
   </div>
-  <div class="topbar-badge">MercadoLibre API · En vivo</div>
+  <div class="topbar-right">
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="btnModeRep" onclick="setMode('repuestos')">🔩 REPUESTOS</button>
+      <button class="mode-btn" id="btnModeHer" onclick="setMode('herreria')">⚒️ HERRERÍA</button>
+    </div>
+    <button class="cart-btn" onclick="toggleCart()">🛒 CARRITO <span class="cart-count" id="cartCount">0</span></button>
+  </div>
 </div>
 
-<!-- MAIN -->
-<div class="main">
+<!-- LAYOUT -->
+<div class="layout">
 
-  <!-- HERO -->
-  <div class="hero">
-    <div class="hero-label">Inteligencia comercial</div>
-    <div class="hero-title">Análisis de <span>mercado</span><br>en tiempo real</div>
-    <div class="hero-sub">Buscá cualquier repuesto industrial, compará precios de MercadoLibre con estimaciones de China y calculá tu margen de ganancia al instante.</div>
-  </div>
-
-  <!-- SEARCH -->
-  <div class="search-section">
-    <div class="search-card">
-      <div class="search-card-title">🔍 NUEVA BÚSQUEDA</div>
-      <div class="search-row">
-        <div class="search-group" style="flex:2">
-          <label>Producto a analizar</label>
-          <input class="search-input" id="searchInput" placeholder="Ej: rodamiento 6205, correa A50, filtro hidráulico..." onkeydown="if(event.key==='Enter')analizar()">
+  <!-- SIDEBAR LEFT -->
+  <div class="sidebar-left">
+    <div>
+      <div class="sidebar-section-title">NUEVA BÚSQUEDA</div>
+      <div class="search-form">
+        <div class="input-wrap">
+          <input type="text" id="searchInput" placeholder="Ej: rodamiento 6205, HARDOX 400..." onkeydown="if(event.key==='Enter')analizar()">
+          <span class="input-icon">🔍</span>
         </div>
-        <div class="search-group">
-          <label>Categoría</label>
-          <select class="search-select" id="categorySelect">
-            <option value="">Todas las categorías</option>
-            <option value="Herramientas e Industria">Herramientas e Industria</option>
-            <option value="Industrias y Oficinas">Industrias y Oficinas</option>
-            <option value="Autos, Motos y Otros">Autos y Maquinaria</option>
+        <div class="input-wrap">
+          <select id="catSelect">
+            <option value="repuestos">Repuestos industriales</option>
+            <option value="rodamientos">Rodamientos</option>
+            <option value="hidraulica">Hidráulica</option>
+            <option value="filtros">Filtros</option>
+            <option value="correas">Correas / Cadenas</option>
+            <option value="herreria">Herrería / Acero</option>
+            <option value="herramientas">Herramientas</option>
+            <option value="electrico">Eléctrico</option>
           </select>
         </div>
-        <div class="search-group">
-          <label>Tipo de cambio USD</label>
-          <input class="search-input" id="tipoCambio" type="number" value="1200" placeholder="1200">
+        <div class="tc-row">
+          <span class="tc-label">USD/ARS</span>
+          <input type="number" id="tipoCambio" class="tc-input" value="1250" min="1">
+          <span class="tc-label">Peso (kg)</span>
+          <input type="number" id="pesoKg" class="tc-input" value="1" min="0.1" step="0.1">
         </div>
-        <button class="btn-analizar" id="btnAnalizar" onclick="analizar()">
-          ▶ ANALIZAR
-        </button>
+        <button class="btn-search" id="btnAnalizar" onclick="analizar()">ANALIZAR MERCADO</button>
       </div>
-      <div class="quick-tags">
-        <span class="quick-tag" onclick="buscarRapido('rodamiento 6205')">Rodamiento 6205</span>
-        <span class="quick-tag" onclick="buscarRapido('rodamiento 6208')">Rodamiento 6208</span>
-        <span class="quick-tag" onclick="buscarRapido('correa industrial A50')">Correa A50</span>
-        <span class="quick-tag" onclick="buscarRapido('filtro hidráulico industrial')">Filtro hidráulico</span>
-        <span class="quick-tag" onclick="buscarRapido('reten aceite industrial')">Retén de aceite</span>
-        <span class="quick-tag" onclick="buscarRapido('o-ring kit industrial')">Kit O-rings</span>
-        <span class="quick-tag" onclick="buscarRapido('bomba hidráulica')">Bomba hidráulica</span>
-        <span class="quick-tag" onclick="buscarRapido('caja de herramientas profesional')">Caja herramientas</span>
+    </div>
+
+    <div>
+      <div class="sidebar-section-title">BÚSQUEDAS RÁPIDAS</div>
+      <div class="quick-tags" id="quickTags"></div>
+    </div>
+
+    <hr class="divider">
+
+    <div style="flex:1">
+      <div class="sidebar-section-title">HISTORIAL</div>
+      <div id="historialList">
+        <div style="font-size:12px;color:var(--muted2);text-align:center;padding:12px 0">Sin búsquedas aún</div>
       </div>
     </div>
   </div>
 
-  <!-- LOADING -->
-  <div class="loading-bar" id="loadingBar"></div>
-  <div class="loading-text" id="loadingText">Consultando MercadoLibre en tiempo real...</div>
-
-  <!-- RESULTS -->
-  <div class="results-section" id="resultsSection">
-
-    <!-- SUMMARY -->
-    <div class="summary-grid" id="summaryGrid"></div>
-
-    <!-- RECOMMENDATION -->
-    <div id="recBox"></div>
-
-    <!-- TABS -->
-    <div class="tabs">
-      <div class="tab active" onclick="switchTab('ml')">📊 MERCADOLIBRE</div>
-      <div class="tab" onclick="switchTab('china')">🇨🇳 ESTIMACIÓN CHINA</div>
-      <div class="tab" onclick="switchTab('mensajes')">✉ MENSAJES</div>
-    </div>
-
-    <!-- TAB ML -->
-    <div class="tab-content active" id="tab-ml">
-      <div class="results-card">
-        <div class="results-header">
-          <span class="results-title" id="resultTitle">RESULTADOS</span>
-          <span class="results-count" id="resultCount"></span>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Producto</th>
-                <th>Vendedor</th>
-                <th>Precio ML</th>
-                <th>Unidades vendidas</th>
-                <th>Precio est. China</th>
-                <th>Margen local</th>
-                <th>Margen import.</th>
-                <th>Recomendación</th>
-              </tr>
-            </thead>
-            <tbody id="resultsBody"></tbody>
-          </table>
-        </div>
+  <!-- MAIN -->
+  <div class="main-content">
+    <div class="hero-bar">
+      <div>
+        <div class="hero-title" id="heroTitle">ANÁLISIS DE <span>MERCADO</span></div>
+        <div class="hero-sub" id="heroSub">Comparación en tiempo real: Argentina · China · Chile</div>
+      </div>
+      <div class="mode-indicator">
+        <div class="mode-dot rep" id="modeDot"></div>
+        <span class="mode-label" id="modeLabel">REPUESTOS</span>
       </div>
     </div>
 
-    <!-- TAB CHINA -->
-    <div class="tab-content" id="tab-china">
-      <div class="alibaba-card">
-        <div class="alibaba-header">
-          <div class="alibaba-icon">🏭</div>
-          <div>
-            <div class="alibaba-title">ESTIMACIÓN DE PRECIOS — CHINA (ALIBABA)</div>
-            <div class="alibaba-sub">Basado en promedios históricos de importación Argentina · Los precios reales varían por proveedor y cantidad</div>
-          </div>
-        </div>
-        <div class="alibaba-grid" id="alibabaGrid"></div>
-        <div class="ali-note" id="aliNote"></div>
-      </div>
+    <div class="loading-bar" id="loadingBar"><div class="loading-fill"></div></div>
+    <div class="loading-text" id="loadingText"></div>
+
+    <!-- ALERTA PROVEEDOR CRUZADO -->
+    <div class="cross-alert" id="crossAlert">
+      <div class="cross-alert-title">⚡ PROVEEDOR COMPARTIDO DETECTADO</div>
+      <div class="cross-alert-text" id="crossAlertText"></div>
     </div>
 
-    <!-- TAB MENSAJES -->
-    <div class="tab-content" id="tab-mensajes">
-      <div class="alibaba-card">
-        <div class="alibaba-header">
-          <div class="alibaba-icon">✉</div>
-          <div>
-            <div class="alibaba-title">MENSAJES LISTOS PARA ENVIAR</div>
-            <div class="alibaba-sub">Copiá y pegá en Alibaba o WhatsApp</div>
+    <!-- ESTADO VACÍO -->
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">🔍</div>
+      <div class="empty-title">LISTO PARA ANALIZAR</div>
+      <div class="empty-sub">Ingresá un producto en el buscador.<br>Compararemos precios de Argentina, China y Chile<br>con cálculo de aduana incluido.</div>
+    </div>
+
+    <!-- RESULTADOS -->
+    <div class="results-section" id="resultsSection">
+
+      <!-- IA RECOMENDACIÓN -->
+      <div class="ia-card" id="iaCard">
+        <div class="ia-header">
+          <div class="ia-icon">🤖</div>
+          <div class="ia-title">ANÁLISIS INTELIGENTE MEB</div>
+        </div>
+        <div id="iaContent">
+          <div class="ia-loading">
+            <div class="ia-dot"></div><div class="ia-dot"></div><div class="ia-dot"></div>
+            <span>Analizando viabilidad...</span>
           </div>
         </div>
+      </div>
+
+      <!-- TABS -->
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('argentina',this)">🇦🇷 ARGENTINA</div>
+        <div class="tab" onclick="switchTab('china',this)">🇨🇳 CHINA</div>
+        <div class="tab" onclick="switchTab('chile',this)">🇨🇱 CHILE</div>
+        <div class="tab" onclick="switchTab('aduana',this)">🛃 ADUANA & COSTOS</div>
+        <div class="tab" onclick="switchTab('proveedores',this)">🏭 PROVEEDORES</div>
+        <div class="tab" onclick="switchTab('mensajes',this)">✉️ MENSAJES</div>
+      </div>
+
+      <!-- TAB ARGENTINA -->
+      <div class="tab-content active" id="tab-argentina">
+        <div class="section-title">MERCADOLIBRE ARGENTINA</div>
+        <div class="ml-grid" id="mlGrid"></div>
+        <div id="mlEmpty" style="display:none">
+          <div class="empty-state"><div class="empty-icon">😕</div><div class="empty-title">SIN RESULTADOS</div><div class="empty-sub">No se encontraron productos en MercadoLibre Argentina.</div></div>
+        </div>
+      </div>
+
+      <!-- TAB CHINA -->
+      <div class="tab-content" id="tab-china">
+        <div class="section-title">PROVEEDORES CHINA — ESTIMACIÓN + LINKS DIRECTOS</div>
+        <div id="chinaNote" class="chile-note"></div>
+        <div class="china-grid" id="chinaGrid"></div>
+      </div>
+
+      <!-- TAB CHILE -->
+      <div class="tab-content" id="tab-chile">
+        <div class="section-title">MERCADO CHILE</div>
+        <div class="chile-note">Precios estimados en CLP y USD. Para verificar precios exactos, usá los links directos a cada plataforma chilena.</div>
+        <div id="chileGrid"></div>
+      </div>
+
+      <!-- TAB ADUANA -->
+      <div class="tab-content" id="tab-aduana">
+        <div class="aduana-card">
+          <div class="aduana-title">🛃 CALCULADORA DE ADUANA — ARGENTINA</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Calculá el costo real de importar desde China según la vía de ingreso</div>
+          <div class="aduana-grid" id="aduanaVias"></div>
+          <div class="aduana-result" id="aduanaResult"></div>
+        </div>
+      </div>
+
+      <!-- TAB PROVEEDORES -->
+      <div class="tab-content" id="tab-proveedores">
+        <div class="section-title">PROVEEDORES RECOMENDADOS</div>
+        <div id="proveedoresList"></div>
+      </div>
+
+      <!-- TAB MENSAJES -->
+      <div class="tab-content" id="tab-mensajes">
+        <div class="section-title">MENSAJES LISTOS PARA ENVIAR</div>
         <div id="mensajesContent"></div>
       </div>
+
+    </div><!-- /results -->
+  </div><!-- /main -->
+
+  <!-- SIDEBAR RIGHT — CARRITO -->
+  <div class="sidebar-right" id="sidebarRight">
+    <div class="cart-section">
+      <div class="cart-title">🛒 CARRITO DE COMPARACIÓN</div>
+      <div id="cartItems"><div class="cart-empty">El carrito está vacío.<br>Agregá productos para comparar.</div></div>
+      <div id="cartTotal" style="display:none">
+        <div class="cart-total">
+          <div class="cart-total-row"><span class="cart-total-label">Subtotal local</span><span id="ctSubLocal">$0</span></div>
+          <div class="cart-total-row"><span class="cart-total-label">Estimado China (c/aduana)</span><span id="ctSubChina">USD 0</span></div>
+          <div class="cart-total-row main"><span class="cart-total-label">AHORRO ESTIMADO</span><span id="ctAhorro" style="color:var(--green)">$0</span></div>
+        </div>
+        <button class="btn-cart-action btn-export" onclick="exportarCarrito()">📄 EXPORTAR LISTA</button>
+        <button class="btn-cart-action btn-wishlist" onclick="guardarWishlist()">⭐ GUARDAR WISHLIST</button>
+      </div>
     </div>
 
+    <hr class="divider">
+
+    <div>
+      <div class="cart-title">⭐ WISHLIST</div>
+      <div id="wishlistItems"><div class="cart-empty" style="padding:12px 0">Sin ítems guardados.</div></div>
+    </div>
   </div>
 
-  <!-- HISTORIAL -->
-  <div class="history-section" id="historySection" style="display:none">
-    <div class="history-title">BÚSQUEDAS RECIENTES</div>
-    <div class="history-list" id="historyList"></div>
-  </div>
+</div><!-- /layout -->
 
-</div>
+<div class="toast" id="toast"></div>
 
 <script>
 // ============================================================
 // CONFIG
 // ============================================================
-const ML_API = 'https://api.mercadolibre.com';
-const SITE_ID = 'MLA'; // Argentina
+const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzBFM95IAgRUzA5yepQZ5nj6VD01tvoAv9GyGYa0ydKIQIGoqiedOCrfiU1xjaz4tO5Sw/exec';
+const SITE_ML = 'MLA';
 
-// Factores estimados de precio China vs Argentina
-// Basado en promedios históricos de importación
-const CHINA_FACTOR = { min: 0.12, mid: 0.18, max: 0.25 };
-const MARKUP_LOCAL = 0.50; // markup promedio comprando local
-const COSTO_IMPORTACION_USD = 1200; // costo fijo aprox por pedido chico
-
-let searchHistory = JSON.parse(localStorage.getItem('meb_market_history') || '[]');
-let currentResults = [];
+let currentMode = 'repuestos';
 let currentProduct = '';
+let currentResults = [];
+let cart = JSON.parse(localStorage.getItem('meb_cart') || '[]');
+let wishlist = JSON.parse(localStorage.getItem('meb_wishlist') || '[]');
+let historial = JSON.parse(localStorage.getItem('meb_historial_v2') || '[]');
+let savedProveedores = JSON.parse(localStorage.getItem('meb_proveedores_saved') || '{}');
+let provReviews = JSON.parse(localStorage.getItem('meb_prov_reviews') || '{}');
+let aduanaViaSelected = 'courier';
 
 // ============================================================
-// UTILS
+// QUICK TAGS POR MODO
 // ============================================================
-function fmtARS(n) {
-  return '$' + Math.round(n).toLocaleString('es-AR');
-}
-function fmtUSD(n) {
-  return 'USD ' + n.toFixed(2);
-}
-function getTC() {
-  return parseFloat(document.getElementById('tipoCambio').value) || 1200;
+const QUICK_TAGS = {
+  repuestos: ['Rodamiento 6205','Filtro hidráulico','Bomba hidráulica','Retén aceite','O-ring kit','Correa A50','Cadena 50B','Sello hidráulico'],
+  herreria:  ['Chapa HARDOX 400','HARDOX 450','Electrodo desgaste','Cuchilla balde','Side cutter','Perfil estructural','Acero F-28','Soldadura']
+};
+
+// ============================================================
+// PROVEEDORES BASE
+// ============================================================
+const PROVEEDORES_DB = [
+  { id:'ssab', nombre:'SSAB / HARDOX Wearparts', pais:'🇸🇪 Suecia (dist. AR)', categorias:['herreria','acero'], url:'https://www.ssab.com/en/brands-and-products/hardox', tipo:'fabricante', desc:'Fabricante oficial HARDOX. Distribuidores locales en Argentina.' },
+  { id:'alibaba', nombre:'Alibaba.com', pais:'🇨🇳 China', categorias:['repuestos','herreria','herramientas'], url:'https://www.alibaba.com', tipo:'plataforma', desc:'Mayor plataforma B2B del mundo. MOQ variable. Requiere negociación.' },
+  { id:'aliexpress', nombre:'AliExpress', pais:'🇨🇳 China', categorias:['repuestos','herramientas'], url:'https://www.aliexpress.com', tipo:'plataforma', desc:'Envío directo a Argentina. Sin MOQ. Ideal para pruebas.' },
+  { id:'dhgate', nombre:'DHgate', pais:'🇨🇳 China', categorias:['repuestos','herreria'], url:'https://www.dhgate.com', tipo:'plataforma', desc:'Precios bajos. Bueno para pedidos medianos.' },
+  { id:'madeinchina', nombre:'Made-in-China', pais:'🇨🇳 China', categorias:['herreria','acero','repuestos'], url:'https://www.made-in-china.com', tipo:'plataforma', desc:'Especializado en manufactura industrial.' },
+  { id:'ferroabasto', nombre:'Ferroabasto', pais:'🇦🇷 Argentina', categorias:['herreria','acero'], url:'https://www.ferroabasto.com.ar', tipo:'distribuidor', desc:'Distribuidora de aceros especiales en Argentina.' },
+  { id:'aceroschile', nombre:'Aceros Otero Chile', pais:'🇨🇱 Chile', categorias:['herreria','acero'], url:'https://www.aceroschile.cl', tipo:'distribuidor', desc:'Principal distribuidor aceros Chile. Buenos precios en USD.' },
+  { id:'mlchile', nombre:'MercadoLibre Chile', pais:'🇨🇱 Chile', categorias:['repuestos','herramientas'], url:'https://www.mercadolibre.cl', tipo:'plataforma', desc:'Plataforma masiva Chile. Envío internacional disponible.' },
+];
+
+// ============================================================
+// HARDOX DATA
+// ============================================================
+const HARDOX_GRADES = [
+  { grade:'HARDOX 400', hb:'370-430 HB', uso:'Uso general desgaste', apps:'Baldes excavadora, tolvas, cuchillas generales', precio_usd_ton: 1800, precio_ars_kg: 2800 },
+  { grade:'HARDOX 450', hb:'425-475 HB', uso:'Desgaste severo', apps:'Side cutters, esquineros de balde, recubrimientos', precio_usd_ton: 2200, precio_ars_kg: 3400 },
+  { grade:'HARDOX 500', hb:'470-530 HB', uso:'Desgaste muy severo', apps:'Cuchillas de corte, zapatas, aplicaciones abrasivas extremas', precio_usd_ton: 2600, precio_ars_kg: 4100 },
+  { grade:'Acindar F-28', hb:'~280 HB', uso:'Alternativa económica nacional', apps:'Cuchillas generales, costo menor que HARDOX', precio_usd_ton: 1100, precio_ars_kg: 1700 },
+];
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  renderQuickTags();
+  renderHistorial();
+  renderCart();
+  renderWishlist();
+  updateCartBadge();
 }
 
-function showLoading(show) {
-  document.getElementById('loadingBar').classList.toggle('show', show);
-  document.getElementById('loadingText').classList.toggle('show', show);
-  document.getElementById('btnAnalizar').disabled = show;
-  if(show) document.getElementById('resultsSection').classList.remove('show');
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('btnModeRep').classList.toggle('active', mode === 'repuestos');
+  document.getElementById('btnModeHer').classList.toggle('active', mode === 'herreria');
+  document.getElementById('modeDot').className = 'mode-dot ' + (mode === 'repuestos' ? 'rep' : 'her');
+  document.getElementById('modeLabel').textContent = mode === 'repuestos' ? 'REPUESTOS' : 'HERRERÍA';
+  document.getElementById('heroTitle').innerHTML = mode === 'repuestos'
+    ? 'ANÁLISIS DE <span>MERCADO</span>'
+    : 'HERRERÍA <span>INDUSTRIAL</span>';
+  document.getElementById('heroSub').textContent = mode === 'repuestos'
+    ? 'Comparación en tiempo real: Argentina · China · Chile'
+    : 'Acero HARDOX · Cuchillas · Side Cutters · Precios y proveedores';
+  renderQuickTags();
+  document.getElementById('catSelect').value = mode === 'herreria' ? 'herreria' : 'repuestos';
+  document.getElementById('emptyState').style.display = 'block';
+  document.getElementById('resultsSection').classList.remove('show');
 }
 
-function switchTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  event.currentTarget.classList.add('active');
+function renderQuickTags() {
+  const tags = QUICK_TAGS[currentMode];
+  document.getElementById('quickTags').innerHTML = tags.map(t =>
+    `<span class="qtag" onclick="buscarRapido('${t}')">${t}</span>`
+  ).join('');
 }
 
 function buscarRapido(term) {
   document.getElementById('searchInput').value = term;
+  if (currentMode === 'repuestos' && ['Chapa HARDOX','HARDOX','Electrodo','Cuchilla','Side cutter','Acero F-28'].some(h => term.includes(h.split(' ')[0]))) {
+    setMode('herreria');
+  }
   analizar();
 }
 
+function switchTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (el) el.classList.add('active');
+}
+
+function toggleCart() {
+  const s = document.getElementById('sidebarRight');
+  s.style.display = s.style.display === 'none' ? 'block' : 'block';
+}
+
+function getTC() { return parseFloat(document.getElementById('tipoCambio').value) || 1250; }
+function getPeso() { return parseFloat(document.getElementById('pesoKg').value) || 1; }
+
+function showLoading(show, msg) {
+  document.getElementById('loadingBar').classList.toggle('show', show);
+  const lt = document.getElementById('loadingText');
+  lt.classList.toggle('show', show);
+  if (msg) lt.textContent = msg;
+  document.getElementById('btnAnalizar').disabled = show;
+  if (show) {
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('resultsSection').classList.remove('show');
+  }
+}
+
+function showToast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function fmtARS(n) { return '$' + Math.round(n).toLocaleString('es-AR'); }
+function fmtUSD(n) { return 'USD ' + parseFloat(n).toFixed(2); }
+
 // ============================================================
-// MERCADOLIBRE API
+// ANALIZAR
 // ============================================================
 async function analizar() {
   const query = document.getElementById('searchInput').value.trim();
   if (!query) { document.getElementById('searchInput').focus(); return; }
-
   currentProduct = query;
-  showLoading(true);
-  document.getElementById('loadingText').textContent = `Buscando "${query}" en MercadoLibre Argentina...`;
+  showLoading(true, `Buscando "${query}"...`);
+  document.getElementById('crossAlert').classList.remove('show');
 
-  try {
-    // Usar JSONP via script tag para evitar CORS
-    const data = await fetchML(query);
-    const items = data.results || [];
-    
-    if (!items.length) {
-      showLoading(false);
-      mostrarSinResultados(query);
-      return;
-    }
-
-    currentResults = items;
-    showLoading(false);
-    mostrarResultados(items, query);
-    guardarHistorial(query, items.length, items[0]?.price || 0);
-
-  } catch(e) {
-    showLoading(false);
-    mostrarError(e.message);
-  }
-}
-
-function fetchML(query) {
-  return new Promise((resolve, reject) => {
-    const url = 'https://script.google.com/macros/s/AKfycbwjm05Dd9JV9xIqv06fOkqTuYzL48PSAmtDT4AFJKIeSOPeL3J0n5nkPrA9IWrb99M4/exec?q=' + encodeURIComponent(query);
-    fetch(url)
-      .then(res => {
-        if (!res.ok) throw new Error('Error en el servidor');
-        return res.json();
-      })
-      .then(data => resolve(data))
-      .catch(err => reject(new Error('No se pudo conectar. Intentá de nuevo en unos segundos.')));
-  });
-}
-
-// ============================================================
-// DISPLAY RESULTS
-// ============================================================
-function mostrarResultados(items, query) {
-  const tc = getTC();
-  const section = document.getElementById('resultsSection');
-  section.classList.add('show');
-
-  // Calcular estadísticas
-  const precios = items.map(i => i.price).filter(p => p > 0);
-  const precioMin = Math.min(...precios);
-  const precioMax = Math.max(...precios);
-  const precioMed = precios.reduce((a,b) => a+b, 0) / precios.length;
-  const totalVentas = items.reduce((s, i) => s + (i.sold_quantity || 0), 0);
-
-  // Precio estimado China (medio)
-  const precioChina_usd = precioMed * CHINA_FACTOR.mid / tc;
-  const precioChina_ars = precioMed * CHINA_FACTOR.mid;
-  const margenLocal = Math.round(MARKUP_LOCAL * 100);
-  const margenImport = precioMed > 0 ? Math.round((precioMed - precioChina_ars) / precioMed * 100) : 0;
-
-  // SUMMARY CARDS
-  document.getElementById('summaryGrid').innerHTML = `
-    <div class="sum-card y">
-      <div class="sum-val">${fmtARS(precioMed)}</div>
-      <div class="sum-label">Precio promedio ML</div>
-      <div class="sum-sub">Rango: ${fmtARS(precioMin)} – ${fmtARS(precioMax)}</div>
-    </div>
-    <div class="sum-card g">
-      <div class="sum-val">${margenImport}%</div>
-      <div class="sum-label">Margen importando</div>
-      <div class="sum-sub">Comprando en China y vendiendo al precio ML</div>
-    </div>
-    <div class="sum-card b">
-      <div class="sum-val">${fmtARS(precioChina_ars)}</div>
-      <div class="sum-label">Precio est. China</div>
-      <div class="sum-sub">≈ ${fmtUSD(precioChina_usd)} · Estimación basada en promedios</div>
-    </div>
-    <div class="sum-card o">
-      <div class="sum-val">${totalVentas.toLocaleString('es-AR')}</div>
-      <div class="sum-label">Unidades vendidas</div>
-      <div class="sum-sub">Entre los ${items.length} primeros resultados</div>
-    </div>
-  `;
-
-  // RECOMMENDATION
-  let recClass, recIcon, recTitle, recText;
-  if (margenImport >= 60) {
-    recClass = 'good'; recIcon = '🟢';
-    recTitle = 'MUY RENTABLE — CONVIENE IMPORTAR';
-    recText = `Con un margen estimado del ${margenImport}%, importar desde China es muy conveniente. El precio local de ${fmtARS(precioMed)} vs el costo estimado de importación de ${fmtARS(precioChina_ars)} deja un margen sólido. Recomendamos hacer un pedido de prueba para validar la calidad.`;
-  } else if (margenImport >= 35) {
-    recClass = 'ok'; recIcon = '🟡';
-    recTitle = 'RENTABLE — EVALUAR SEGÚN VOLUMEN';
-    recText = `El margen del ${margenImport}% es aceptable. Conviene importar si el volumen mensual justifica el pedido mínimo y los costos de aduana. Para cantidades bajas, la compra local con markup del ${margenLocal}% puede ser más práctica.`;
+  if (currentMode === 'herreria') {
+    await analizarHerreria(query);
   } else {
-    recClass = 'bad'; recIcon = '🔴';
-    recTitle = 'MARGEN BAJO — MEJOR COMPRA LOCAL';
-    recText = `El margen importando (${margenImport}%) es bajo para este producto. El precio en MercadoLibre es muy competitivo. Recomendamos comprar local y aplicar un markup del ${margenLocal}% para mantenerse competitivo sin el riesgo de importación.`;
+    await analizarRepuestos(query);
+  }
+}
+
+// ============================================================
+// ANALIZAR REPUESTOS
+// ============================================================
+async function analizarRepuestos(query) {
+  showLoading(true, `Buscando "${query}" en MercadoLibre Argentina...`);
+  let mlItems = [];
+  try {
+    const url = `https://api.mercadolibre.com/sites/MLA/search?q=${encodeURIComponent(query)}&limit=8`;
+    const res = await fetch(url);
+    const data = await res.json();
+    mlItems = data.results || [];
+  } catch(e) { console.warn('ML error', e); }
+
+  currentResults = mlItems;
+  const tc = getTC();
+
+  // Renderizar ML
+  const mlGrid = document.getElementById('mlGrid');
+  if (!mlItems.length) {
+    mlGrid.innerHTML = '';
+    document.getElementById('mlEmpty').style.display = 'block';
+  } else {
+    document.getElementById('mlEmpty').style.display = 'none';
+    mlGrid.innerHTML = mlItems.map((item, i) => {
+      const libre = item.shipping?.free_shipping;
+      const cond = item.condition === 'new' ? '<span class="badge-free">NUEVO</span>' : '<span class="badge-used">USADO</span>';
+      return `<div class="ml-card" id="mlcard-${i}">
+        <div class="ml-title">${item.title}</div>
+        <div class="ml-price">${fmtARS(item.price)}</div>
+        <div class="ml-meta">
+          ${cond}
+          ${libre ? '<span class="badge-free">🚚 Gratis</span>' : ''}
+          <span style="color:var(--muted)">${item.sold_quantity || 0} vendidos</span>
+        </div>
+        <div class="ml-actions">
+          <a href="${item.permalink}" target="_blank" class="btn-sm btn-view">VER EN ML</a>
+          <button class="btn-sm btn-add" onclick="addToCart({id:'ml-${i}',name:'${item.title.replace(/'/g,"'")}',price:${item.price},source:'MercadoLibre AR',url:'${item.permalink}'})">+ CARRITO</button>
+        </div>
+      </div>`;
+    }).join('');
   }
 
-  document.getElementById('recBox').innerHTML = `
-    <div class="rec-box ${recClass}">
-      <div class="rec-icon">${recIcon}</div>
-      <div class="rec-content">
-        <div class="rec-title">${recTitle}</div>
-        <div class="rec-text">${recText}</div>
+  // China
+  renderChinaTab(query, mlItems, tc);
+
+  // Chile
+  renderChileTab(query, mlItems, tc);
+
+  // Aduana
+  renderAduanaTab(query, mlItems, tc);
+
+  // Proveedores
+  renderProveedoresTab('repuestos');
+
+  // Mensajes
+  renderMensajesTab(query, mlItems, tc);
+
+  // IA
+  await runIA(query, mlItems, tc, 'repuestos');
+
+  // Guardar historial
+  guardarHistorial(query, 'repuestos', mlItems.length > 0 ? mlItems[0].price : 0);
+
+  showLoading(false);
+  document.getElementById('resultsSection').classList.add('show');
+}
+
+// ============================================================
+// ANALIZAR HERRERIA
+// ============================================================
+async function analizarHerreria(query) {
+  showLoading(true, `Analizando "${query}" — mercado herrería industrial...`);
+  const tc = getTC();
+
+  // Banner herrería
+  const tab = document.getElementById('tab-argentina');
+  tab.innerHTML = `
+    <div class="hardox-banner">
+      <div class="hardox-icon">⚒️</div>
+      <div>
+        <div class="hardox-title">HERRERÍA INDUSTRIAL · ACERO HARDOX</div>
+        <div class="hardox-sub">Precios de referencia por grado · Actualizar con cotización directa a proveedor</div>
       </div>
     </div>
+    <div class="section-title">GRADOS DISPONIBLES — ARGENTINA</div>
+    <div class="hardox-grid">
+      ${HARDOX_GRADES.map((g,i) => `
+        <div class="hardox-card" id="hcard-${i}" onclick="toggleHardoxCard(${i})">
+          <div class="hardox-grade">${g.grade}</div>
+          <div class="hardox-desc">Dureza: <b>${g.hb}</b><br>${g.uso}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">Usos: ${g.apps}</div>
+          <div class="hardox-price">${fmtARS(g.precio_ars_kg)}/kg</div>
+          <div class="hardox-price-sub">${fmtUSD(g.precio_usd_ton / 1000)}/kg — ${fmtUSD(g.precio_usd_ton)}/ton</div>
+          <div class="ml-actions" style="margin-top:10px">
+            <button class="btn-sm btn-add" onclick="event.stopPropagation();addToCart({id:'hx-${i}',name:'${g.grade}',price:${g.precio_ars_kg},source:'Herrería AR',url:''})">+ CARRITO</button>
+          </div>
+        </div>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">* Precios orientativos. Cotizá cantidad exacta con Ferroabasto o distribuidores HARDOX locales.</div>
   `;
 
-  // TABLE
-  document.getElementById('resultTitle').textContent = `RESULTADOS PARA "${query.toUpperCase()}"`;
-  document.getElementById('resultCount').textContent = `${items.length} publicaciones analizadas`;
+  // China herrería
+  renderChinaHerreria(query, tc);
 
-  const tbody = document.getElementById('resultsBody');
-  tbody.innerHTML = items.slice(0, 15).map((item, i) => {
-    const precio = item.price || 0;
-    const chinaEst = precio * CHINA_FACTOR.mid;
-    const margenL = Math.round(MARKUP_LOCAL * 100);
-    const margenI = precio > 0 ? Math.round((precio - chinaEst) / precio * 100) : 0;
-    const margenClass = margenI >= 60 ? 'high' : margenI >= 35 ? 'mid' : 'low';
-    const recTag = margenI >= 60 ? '<span class="badge badge-green">Importar</span>' :
-                   margenI >= 35 ? '<span class="badge badge-yellow">Evaluar</span>' :
-                   '<span class="badge badge-blue">Local</span>';
+  // Chile herrería
+  renderChileHerreria(query, tc);
 
-    const seller = item.seller?.nickname || '—';
-    const sold = item.sold_quantity > 0 ? item.sold_quantity.toLocaleString('es-AR') : '—';
-    const title = item.title?.length > 45 ? item.title.slice(0, 45) + '...' : item.title;
+  // Aduana
+  renderAduanaTab(query, [], tc);
 
-    return `<tr>
-      <td style="color:var(--muted);font-size:12px">${i+1}</td>
-      <td>
-        <div style="font-size:13px;font-weight:600;margin-bottom:3px">${title}</div>
-        <a href="${item.permalink}" target="_blank" class="product-link">Ver en MercadoLibre ↗</a>
-      </td>
-      <td><div class="vendor-name">${seller}</div></td>
-      <td><div class="price-ml">${fmtARS(precio)}</div></td>
-      <td><div class="sold-count">${sold} u.</div></td>
-      <td><div class="price-china">${fmtARS(chinaEst)}</div><div style="font-size:10px;color:var(--muted)">≈ ${fmtUSD(chinaEst/tc)}</div></td>
-      <td><div class="margin-val mid">${margenL}%</div></td>
-      <td><div class="margin-val ${margenClass}">${margenI}%</div></td>
-      <td>${recTag}</td>
-    </tr>`;
-  }).join('');
+  // Proveedores
+  renderProveedoresTab('herreria');
 
-  // ALIBABA TAB
-  mostrarAlibabaEstimacion(query, precioMed, tc);
+  // Mensajes
+  renderMensajesHerreria(query);
 
-  // MENSAJES TAB
-  mostrarMensajes(query, precioChina_usd);
+  // IA
+  await runIA(query, [], tc, 'herreria');
+
+  guardarHistorial(query, 'herreria', HARDOX_GRADES[0].precio_ars_kg);
+
+  showLoading(false);
+  document.getElementById('resultsSection').classList.add('show');
+
+  // Detectar proveedor cruzado
+  detectarProveedorCruzado();
+}
+
+function toggleHardoxCard(i) {
+  document.getElementById('hcard-' + i).classList.toggle('selected');
 }
 
 // ============================================================
-// ALIBABA ESTIMACION
+// CHINA TAB (REPUESTOS)
 // ============================================================
-function mostrarAlibabaEstimacion(query, precioML, tc) {
-  const factores = [
-    { qty: '50 – 100 unidades', factor: CHINA_FACTOR.max, label: 'Pedido pequeño' },
-    { qty: '100 – 500 unidades', factor: CHINA_FACTOR.mid, label: 'Pedido mediano' },
-    { qty: '500+ unidades', factor: CHINA_FACTOR.min, label: 'Pedido grande' },
+function renderChinaTab(query, mlItems, tc) {
+  const avgML = mlItems.length ? mlItems.reduce((s,i) => s + i.price, 0) / mlItems.length : 0;
+  const avgUSD = avgML / tc;
+  const qEn = encodeURIComponent(query.replace(/ /g,'+'));
+
+  const plataformas = [
+    {
+      name:'ALIBABA', icon:'🏭', color:'var(--orange)',
+      url:`https://www.alibaba.com/trade/search?SearchText=${qEn}`,
+      minUSD: (avgUSD * 0.08).toFixed(2),
+      maxUSD: (avgUSD * 0.20).toFixed(2),
+      moq:'50-500 unidades', tiempo:'25-45 días', nota:'Mejor precio. Requiere negociación y pedido mínimo.',
+      reseña:'⭐⭐⭐⭐ Confiable para pedidos grandes. Verificar proveedor con Trade Assurance.'
+    },
+    {
+      name:'ALIEXPRESS', icon:'🛒', color:'var(--red)',
+      url:`https://www.aliexpress.com/wholesale?SearchText=${qEn}`,
+      minUSD: (avgUSD * 0.12).toFixed(2),
+      maxUSD: (avgUSD * 0.25).toFixed(2),
+      moq:'1 unidad', tiempo:'20-40 días', nota:'Sin cantidad mínima. Ideal para probar calidad.',
+      reseña:'⭐⭐⭐ Bueno para pruebas. Flete puede ser alto en piezas pesadas.'
+    },
+    {
+      name:'DHGATE', icon:'📦', color:'var(--blue-light)',
+      url:`https://www.dhgate.com/wholesale/search.do?searchkey=${qEn}`,
+      minUSD: (avgUSD * 0.10).toFixed(2),
+      maxUSD: (avgUSD * 0.22).toFixed(2),
+      moq:'5-50 unidades', tiempo:'20-35 días', nota:'Buen balance precio/MOQ.',
+      reseña:'⭐⭐⭐⭐ Recomendado para pedidos medianos.'
+    },
+    {
+      name:'MADE-IN-CHINA', icon:'🔩', color:'var(--green)',
+      url:`https://www.made-in-china.com/multi-search/${qEn}`,
+      minUSD: (avgUSD * 0.07).toFixed(2),
+      maxUSD: (avgUSD * 0.18).toFixed(2),
+      moq:'100+ unidades', tiempo:'30-50 días', nota:'Fabricantes directos. Precio más bajo posible.',
+      reseña:'⭐⭐⭐⭐⭐ Mejor para importación formal con volumen.'
+    }
   ];
 
-  const costoImportFijo_ars = COSTO_IMPORTACION_USD * tc;
+  document.getElementById('chinaNote').textContent = `Precios estimados basados en promedio MercadoLibre Argentina (${fmtARS(avgML)} promedio). Los precios reales varían por proveedor y cantidad. Siempre cotizar antes de importar.`;
 
-  document.getElementById('alibabaGrid').innerHTML = factores.map(f => {
-    const precioUSD = (precioML * f.factor) / tc;
-    const precioARS = precioML * f.factor;
-    const margen = Math.round((precioML - precioARS) / precioML * 100);
-    const margenClass = margen >= 60 ? 'var(--green)' : margen >= 35 ? 'var(--yellow)' : 'var(--red)';
-
-    return `<div class="ali-item">
-      <div class="ali-qty">${f.label}</div>
-      <div class="ali-qty" style="margin-bottom:8px">${f.qty}</div>
-      <div class="ali-price">${fmtUSD(precioUSD)}</div>
-      <div class="ali-price-ars">${fmtARS(precioARS)} por unidad</div>
-      <div class="ali-margin" style="color:${margenClass}">Margen estimado: ${margen}%</div>
-    </div>`;
-  }).join('');
-
-  document.getElementById('aliNote').innerHTML = `
-    <strong style="color:var(--blue-light)">⚠ Importante sobre estas estimaciones:</strong><br>
-    Los precios de China se calculan como un porcentaje del precio de ML Argentina (entre 12% y 25%) basado en datos históricos del mercado industrial. Para obtener precios reales: buscá "<strong>${query}</strong>" en Alibaba.com, pedí cotización a 5 proveedores con el filtro "Verified Supplier" activo, y solicitá muestras antes de un pedido grande.<br><br>
-    <strong>Costo adicional de importación estimado:</strong> USD ${COSTO_IMPORTACION_USD} por pedido (flete + aduana + despachante). Incluilo en el cálculo si el pedido es pequeño.
-  `;
-}
-
-// ============================================================
-// MENSAJES
-// ============================================================
-function mostrarMensajes(query, precioChina_usd) {
-  const msgEN = `Hello,
-
-I am interested in purchasing ${query} for industrial machinery maintenance.
-
-Could you please provide:
-- Unit price for: 50 units / 100 units / 500 units
-- Minimum order quantity (MOQ)
-- Lead time for production and shipping
-- Available certifications (ISO, etc.)
-- Shipping cost to Argentina (Buenos Aires port)
-
-We are a machinery maintenance company in Argentina and are looking for a reliable long-term supplier.
-
-Thank you,
-MEB Machinery Solutions`;
-
-  const msgES = `Hola,
-
-Estoy buscando ${query} para mantenimiento de maquinaria industrial en Argentina.
-
-Necesito que me informen:
-- Precio unitario para: 50 / 100 / 500 unidades
-- Cantidad mínima de pedido (MOQ)
-- Tiempo de producción y envío
-- Costo de envío a Argentina (puerto de Buenos Aires)
-- Certificaciones disponibles
-
-Somos una empresa de mantenimiento de maquinaria y buscamos proveedor a largo plazo.
-
-Gracias,
-MEB Machinery Solutions`;
-
-  const msgWA = `Hola! Te escribo de MEB Machinery Solutions.
-Estoy buscando *${query}* para maquinaria industrial.
-¿Tenés en stock? ¿Cuál es tu mejor precio por cantidad?
-Muchas gracias 🙏`;
-
-  const mensajes = [
-    { id: 'msg-en', icon: '🇺🇸', label: 'Mensaje en inglés — para proveedores de Alibaba', content: msgEN },
-    { id: 'msg-es', icon: '🇦🇷', label: 'Mensaje en español — para distribuidores locales', content: msgES },
-    { id: 'msg-wa', icon: '📱', label: 'Mensaje corto — para WhatsApp', content: msgWA },
-  ];
-
-  document.getElementById('mensajesContent').innerHTML = mensajes.map(m => `
-    <button class="msg-btn" onclick="toggleMsg('${m.id}')">
-      ${m.icon} ${m.label} <span style="margin-left:auto;color:var(--muted);font-size:12px">▼ Ver mensaje</span>
-    </button>
-    <div class="msg-content" id="${m.id}">${m.content}
-      <br><button class="copy-btn" onclick="copiarMsg('${m.id}')">📋 COPIAR</button>
+  document.getElementById('chinaGrid').innerHTML = plataformas.map(p => `
+    <div class="china-card">
+      <div class="china-card-header">
+        <div class="china-platform-icon">${p.icon}</div>
+        <div>
+          <div class="china-platform-name" style="color:${p.color}">${p.name}</div>
+          <div class="china-platform-sub">${p.moq} · ${p.tiempo}</div>
+        </div>
+      </div>
+      <div class="china-price-row">
+        <span class="china-price-label">Precio estimado</span>
+        <div><div class="china-price-val">${fmtUSD(p.minUSD)} – ${fmtUSD(p.maxUSD)}</div>
+        <div class="china-price-ars">${fmtARS(p.minUSD * tc)} – ${fmtARS(p.maxUSD * tc)}</div></div>
+      </div>
+      <div class="china-price-row">
+        <span class="china-price-label">vs precio local</span>
+        <span class="china-price-val" style="color:var(--green)">-${Math.round((1 - p.maxUSD/avgUSD)*100)}% a -${Math.round((1 - p.minUSD/avgUSD)*100)}%</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin:8px 0;line-height:1.5">${p.nota}</div>
+      <div style="font-size:11px;color:var(--muted2);margin-bottom:8px">${p.reseña}</div>
+      <a href="${p.url}" target="_blank" class="china-link">🔗 Buscar en ${p.name} <span style="color:var(--muted)">↗</span></a>
+      <button class="btn-sm btn-add" style="margin-top:6px" onclick="addToCart({id:'cn-${p.name}',name:'${query} (${p.name})',price:${Math.round(parseFloat(p.minUSD)*tc)},source:'${p.name} China',url:'${p.url}'})">+ CARRITO</button>
     </div>
   `).join('');
 }
 
-function toggleMsg(id) {
-  const el = document.getElementById(id);
-  el.classList.toggle('show');
+// ============================================================
+// CHINA HERRERIA
+// ============================================================
+function renderChinaHerreria(query, tc) {
+  const qEn = encodeURIComponent((query + ' wear steel plate').replace(/ /g, '+'));
+  document.getElementById('chinaNote').textContent = 'Acero de desgaste desde China. Requiere certificación y transporte marítimo. Mínimo rentable: 1 tonelada.';
+  document.getElementById('chinaGrid').innerHTML = `
+    <div class="china-card">
+      <div class="china-card-header"><div class="china-platform-icon">🏭</div><div>
+        <div class="china-platform-name" style="color:var(--hardox-light)">ALIBABA — ACERO DESGASTE</div>
+        <div class="china-platform-sub">5 ton mínimo · 30-60 días marítimo</div>
+      </div></div>
+      <div class="china-price-row"><span class="china-price-label">Acero desgaste 400 HB</span><div><div class="china-price-val">USD 850–1.100/ton</div><div class="china-price-ars">${fmtARS(950*tc/1000)}/kg estimado</div></div></div>
+      <div class="china-price-row"><span class="china-price-label">vs HARDOX AR</span><span class="china-price-val" style="color:var(--green)">-40% a -50%</span></div>
+      <div style="font-size:11px;color:var(--muted);margin:8px 0">⚠️ No es HARDOX original. Calidad variable. Ideal para refuerzos y piezas de baja criticidad.</div>
+      <a href="https://www.alibaba.com/trade/search?SearchText=${qEn}" target="_blank" class="china-link">🔗 Buscar en Alibaba ↗</a>
+    </div>
+    <div class="china-card">
+      <div class="china-card-header"><div class="china-platform-icon">🔩</div><div>
+        <div class="china-platform-name" style="color:var(--hardox-light)">MADE-IN-CHINA</div>
+        <div class="china-platform-sub">1 ton mínimo · Fabricante directo</div>
+      </div></div>
+      <div class="china-price-row"><span class="china-price-label">Chapa desgaste cortada</span><div><div class="china-price-val">USD 900–1.200/ton</div><div class="china-price-ars">${fmtARS(1050*tc/1000)}/kg estimado</div></div></div>
+      <div class="china-price-row"><span class="china-price-label">Cuchillas a medida</span><div><div class="china-price-val">USD 2–8 por pieza</div><div class="china-price-ars">según tamaño</div></div></div>
+      <div style="font-size:11px;color:var(--muted);margin:8px 0">Pueden fabricar cuchillas a medida con plano. Bueno para lotes de herrería.</div>
+      <a href="https://www.made-in-china.com/multi-search/wear+resistant+steel+plate" target="_blank" class="china-link">🔗 Buscar en Made-in-China ↗</a>
+    </div>
+    <div class="china-card">
+      <div class="china-card-header"><div class="china-platform-icon">⚡</div><div>
+        <div class="china-platform-name" style="color:var(--yellow)">SSAB HARDOX ORIGINAL</div>
+        <div class="china-platform-sub">Distribuidor certificado Argentina</div>
+      </div></div>
+      <div class="china-price-row"><span class="china-price-label">HARDOX 400 (chapa)</span><div><div class="china-price-val">${fmtARS(2800)}/kg</div><div class="china-price-ars">USD ${(2800/tc).toFixed(2)}/kg</div></div></div>
+      <div class="china-price-row"><span class="china-price-label">HARDOX 450</span><div><div class="china-price-val">${fmtARS(3400)}/kg</div></div></div>
+      <div style="font-size:11px;color:var(--green);margin:8px 0">✅ Certificado. Garantía de dureza. Recomendado para piezas críticas.</div>
+      <a href="https://www.ssab.com/en/brands-and-products/hardox/hardox-wear-plate" target="_blank" class="china-link">🔗 SSAB HARDOX oficial ↗</a>
+    </div>
+  `;
 }
 
-function copiarMsg(id) {
-  const text = document.getElementById(id).innerText.replace('📋 COPIAR', '').trim();
-  navigator.clipboard.writeText(text).then(() => {
-    showToast('Mensaje copiado al portapapeles');
+// ============================================================
+// CHILE TAB
+// ============================================================
+function renderChileTab(query, mlItems, tc) {
+  const avgML = mlItems.length ? mlItems.reduce((s,i) => s + i.price, 0) / mlItems.length : 0;
+  const avgUSD = avgML / tc;
+  const CLP_USD = 950;
+  const qEn = encodeURIComponent(query);
+
+  document.getElementById('chileGrid').innerHTML = `
+    <div class="china-grid">
+      <div class="china-card">
+        <div class="china-card-header"><div class="china-platform-icon">🛒</div><div>
+          <div class="china-platform-name" style="color:var(--blue-light)">MERCADOLIBRE CHILE</div>
+          <div class="china-platform-sub">Precio estimado en CLP</div>
+        </div></div>
+        <div class="china-price-row"><span class="china-price-label">Precio estimado</span><div>
+          <div class="china-price-val">CLP ${Math.round(avgUSD * CLP_USD * 1.15).toLocaleString()} – ${Math.round(avgUSD * CLP_USD * 1.35).toLocaleString()}</div>
+          <div class="china-price-ars">${fmtUSD((avgUSD * 1.15).toFixed(2))} – ${fmtUSD((avgUSD * 1.35).toFixed(2))}</div>
+        </div></div>
+        <div style="font-size:11px;color:var(--muted);margin:8px 0">Chile suele ser 10-30% más barato que Argentina en repuestos importados. Flete terrestre ~USD 200-400.</div>
+        <a href="https://listado.mercadolibre.cl/${encodeURIComponent(query)}" target="_blank" class="china-link">🔗 Buscar en ML Chile ↗</a>
+      </div>
+      <div class="china-card">
+        <div class="china-card-header"><div class="china-platform-icon">🏗️</div><div>
+          <div class="china-platform-name" style="color:var(--blue-light)">SODIMAC / EASY CHILE</div>
+          <div class="china-platform-sub">Herramientas y materiales</div>
+        </div></div>
+        <div class="china-price-row"><span class="china-price-label">Precio estimado</span><div>
+          <div class="china-price-val">USD ${(avgUSD * 1.10).toFixed(2)} – ${(avgUSD * 1.25).toFixed(2)}</div>
+        </div></div>
+        <div style="font-size:11px;color:var(--muted);margin:8px 0">Buen stock de herramientas. Requiere viaje o intermediario en Chile.</div>
+        <a href="https://www.sodimac.cl/sodimac-cl/search?Ntt=${qEn}" target="_blank" class="china-link">🔗 Buscar en Sodimac ↗</a>
+      </div>
+      <div class="china-card">
+        <div class="china-card-header"><div class="china-platform-icon">🔧</div><div>
+          <div class="china-platform-name" style="color:var(--blue-light)">ACEROS OTERO CHILE</div>
+          <div class="china-platform-sub">Aceros especiales · Solo herrería</div>
+        </div></div>
+        <div class="china-price-row"><span class="china-price-label">HARDOX / Acero desgaste</span><div>
+          <div class="china-price-val">USD 1.400–1.800/ton</div>
+          <div class="china-price-ars">vs AR: -20% a -35%</div>
+        </div></div>
+        <div style="font-size:11px;color:var(--muted);margin:8px 0">Requiere importación formal desde Chile. Viable para pedidos +500kg.</div>
+        <a href="https://www.aceroschile.cl" target="_blank" class="china-link">🔗 Aceros Otero Chile ↗</a>
+      </div>
+    </div>`;
+}
+
+function renderChileHerreria(query, tc) {
+  document.getElementById('chileGrid').innerHTML = `
+    <div class="china-grid">
+      <div class="china-card">
+        <div class="china-card-header"><div class="china-platform-icon">⚙️</div><div>
+          <div class="china-platform-name" style="color:var(--blue-light)">ACEROS OTERO</div>
+          <div class="china-platform-sub">Mayor distribuidor acero Chile</div>
+        </div></div>
+        <div class="china-price-row"><span class="china-price-label">HARDOX 400</span><div><div class="china-price-val">USD 1.450/ton</div><div class="china-price-ars">${fmtARS(1450*tc/1000)}/kg</div></div></div>
+        <div class="china-price-row"><span class="china-price-label">HARDOX 450</span><div><div class="china-price-val">USD 1.750/ton</div></div></div>
+        <div style="font-size:11px;color:var(--green);margin:8px 0">✅ Original certificado. 20-30% más barato que Argentina.</div>
+        <a href="https://www.aceroschile.cl" target="_blank" class="china-link">🔗 Aceros Otero Chile ↗</a>
+      </div>
+      <div class="china-card">
+        <div class="china-card-header"><div class="china-platform-icon">🏭</div><div>
+          <div class="china-platform-name" style="color:var(--blue-light)">FANALOZA / ACEROS CHILE</div>
+          <div class="china-platform-sub">Distribuidores alternativos</div>
+        </div></div>
+        <div class="china-price-row"><span class="china-price-label">Acero desgaste genérico</span><div><div class="china-price-val">USD 1.100–1.400/ton</div></div></div>
+        <div style="font-size:11px;color:var(--muted);margin:8px 0">Alternativa más económica. Bueno para piezas de desgaste no críticas.</div>
+        <a href="https://www.mercadolibre.cl/jm/search?as_word=${encodeURIComponent(query)}" target="_blank" class="china-link">🔗 ML Chile ↗</a>
+      </div>
+    </div>`;
+}
+
+// ============================================================
+// ADUANA TAB
+// ============================================================
+function renderAduanaTab(query, mlItems, tc) {
+  const avgML = mlItems.length ? mlItems.reduce((s,i) => s + i.price, 0) / mlItems.length : 0;
+  const avgUSD = (avgML / tc) || 50;
+  const peso = getPeso();
+
+  const vias = [
+    {
+      id:'courier', name:'COURIER PERSONAL', icon:'📦',
+      desc:'Hasta USD 1.000 sin aduana formal. DHL, FedEx, UPS.',
+      franquicia: 1000,
+      flete_por_kg: 35,
+      iva: 0, ganancias: 0, derechos: 0, tasa: 0,
+      dias: '5-15 días',
+      nota:'Sin trámite de aduana. Ideal para pruebas y piezas pequeñas.'
+    },
+    {
+      id:'encomienda', name:'ENCOMIENDA / PUERTA', icon:'🚪',
+      desc:'Vía postal o courier. Aduana simplificada.',
+      franquicia: 0,
+      flete_por_kg: 25,
+      iva: 21, ganancias: 6, derechos: 20, tasa: 3,
+      dias: '20-40 días',
+      nota:'Impuestos + flete + trámite propio. Viable para montos medios.'
+    },
+    {
+      id:'formal', name:'IMPORTACIÓN FORMAL', icon:'🏛️',
+      desc:'Despachante de aduana. Para volumen.',
+      franquicia: 0,
+      flete_mar: 800,
+      iva: 21, ganancias: 6, derechos: 14, tasa: 3,
+      dias: '45-90 días',
+      nota:'Mayor costo inicial pero menor costo unitario en volumen.'
+    }
+  ];
+
+  document.getElementById('aduanaVias').innerHTML = vias.map(v => `
+    <div class="aduana-via ${v.id === aduanaViaSelected ? 'selected' : ''}" onclick="selectAduana('${v.id}')">
+      <div class="aduana-via-name">${v.icon} ${v.name}</div>
+      <div class="aduana-via-desc">${v.desc}<br><b style="color:var(--yellow)">${v.dias}</b></div>
+    </div>`).join('');
+
+  calcularAduana(avgUSD, peso, tc, vias);
+}
+
+function selectAduana(id) {
+  aduanaViaSelected = id;
+  document.querySelectorAll('.aduana-via').forEach((el, i) => {
+    el.classList.toggle('selected', el.onclick.toString().includes(`'${id}'`));
   });
+  // Re-render con nueva selección
+  const mlItems = currentResults;
+  renderAduanaTab(currentProduct, mlItems, getTC());
+}
+
+function calcularAduana(precioUSD, pesoKg, tc, vias) {
+  const via = vias.find(v => v.id === aduanaViaSelected) || vias[0];
+  const fleteUSD = via.flete_por_kg ? via.flete_por_kg * pesoKg : (via.flete_mar || 800);
+  const baseImponible = precioUSD + fleteUSD;
+  const derechos = baseImponible * (via.derechos / 100);
+  const tasa = baseImponible * (via.tasa / 100);
+  const iva = (baseImponible + derechos) * (via.iva / 100);
+  const ganancias = (baseImponible + derechos) * (via.ganancias / 100);
+  const totalUSD = baseImponible + derechos + tasa + iva + ganancias;
+  const totalARS = totalUSD * tc;
+  const soloImpuestosUSD = derechos + tasa + iva + ganancias;
+
+  // Viabilidad
+  const precioLocalARS = precioUSD * tc;
+  const ratio = totalARS / precioLocalARS;
+  let viabilidad, viaCls;
+  if (ratio < 0.55) { viabilidad = '✅ MUY VIABLE — Ahorro significativo vs precio local'; viaCls = 'via-viable'; }
+  else if (ratio < 0.80) { viabilidad = '🟡 VIABLE — Conviene para pedidos en volumen'; viaCls = 'via-marginal'; }
+  else { viabilidad = '🔴 MARGINAL — Poco margen vs precio local'; viaCls = 'via-inviable'; }
+
+  document.getElementById('aduanaResult').innerHTML = `
+    <div style="font-family:'Bebas Neue';font-size:13px;letter-spacing:2px;color:var(--yellow);margin-bottom:12px">DESGLOSE — ${via.name}</div>
+    <div class="aduana-row"><span class="label">Precio producto</span><span class="val">${fmtUSD(precioUSD)}</span></div>
+    <div class="aduana-row"><span class="label">Flete estimado</span><span class="val">${fmtUSD(fleteUSD)}</span></div>
+    ${via.derechos ? `<div class="aduana-row"><span class="label">Derechos importación (${via.derechos}%)</span><span class="val">${fmtUSD(derechos)}</span></div>` : ''}
+    ${via.tasa ? `<div class="aduana-row"><span class="label">Tasa estadística (${via.tasa}%)</span><span class="val">${fmtUSD(tasa)}</span></div>` : ''}
+    ${via.iva ? `<div class="aduana-row"><span class="label">IVA (${via.iva}%)</span><span class="val">${fmtUSD(iva)}</span></div>` : ''}
+    ${via.ganancias ? `<div class="aduana-row"><span class="label">Anticipos Ganancias (${via.ganancias}%)</span><span class="val">${fmtUSD(ganancias)}</span></div>` : ''}
+    <div class="aduana-row"><span class="label">TOTAL IMPUESTOS</span><span class="val" style="color:var(--red)">${fmtUSD(soloImpuestosUSD)}</span></div>
+    <div class="aduana-row"><span class="label">COSTO TOTAL ESTIMADO</span><span class="val total">${fmtARS(totalARS)}</span></div>
+    <div style="margin-top:4px;font-size:11px;color:var(--muted)">${fmtUSD(totalUSD)} · Precio local referencia: ${fmtARS(precioUSD * tc)}</div>
+    <div class="viabilidad-badge ${viaCls}">${viabilidad}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px">${via.nota}</div>
+    ${via.id === 'courier' && precioUSD < 1000 ? '<div style="font-size:11px;color:var(--green);margin-top:6px">✅ Entra dentro de la franquicia USD 1.000 — sin trámite aduanero.</div>' : ''}
+  `;
+}
+
+// ============================================================
+// PROVEEDORES TAB
+// ============================================================
+function renderProveedoresTab(categoria) {
+  const filtrados = PROVEEDORES_DB.filter(p => p.categorias.includes(categoria) || categoria === 'todos');
+  // Detectar proveedores cruzados
+  const cruzados = PROVEEDORES_DB.filter(p => p.categorias.includes('repuestos') && p.categorias.includes('herreria'));
+
+  document.getElementById('proveedoresList').innerHTML = filtrados.map(p => {
+    const saved = savedProveedores[p.id];
+    const review = provReviews[p.id] || { stars: 0, nota: '' };
+    const esCruzado = p.categorias.includes('repuestos') && p.categorias.includes('herreria');
+    const stars = [1,2,3,4,5].map(n => `<span class="star ${n <= review.stars ? 'filled' : ''}" onclick="setStars('${p.id}',${n})">★</span>`).join('');
+
+    return `<div class="prov-card">
+      <div class="prov-header">
+        <div>
+          <div class="prov-name">${p.nombre}</div>
+          <div class="prov-country">${p.pais} · ${p.tipo}</div>
+        </div>
+        <a href="${p.url}" target="_blank" style="font-size:11px;color:var(--yellow);text-decoration:none">↗ Visitar</a>
+      </div>
+      <div class="prov-stars">${stars}</div>
+      <div class="prov-tags">
+        ${p.categorias.map(c => `<span class="prov-tag ${esCruzado && p.categorias.length > 1 ? 'both' : ''}">${c}</span>`).join('')}
+        ${esCruzado ? '<span class="prov-tag both">⚡ REPUESTOS + HERRERÍA</span>' : ''}
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">${p.desc}</div>
+      ${review.nota ? `<div class="prov-note">📝 "${review.nota}"</div>` : ''}
+      <div class="prov-actions">
+        <button class="btn-prov ${saved ? 'saved' : ''}" onclick="toggleSaveProveedor('${p.id}')">${saved ? '⭐ Guardado' : '☆ Guardar'}</button>
+        <button class="btn-prov" onclick="toggleReviewForm('${p.id}')">✏️ Reseña</button>
+        <button class="btn-prov" onclick="addToCart({id:'prov-${p.id}',name:'Cotización ${p.nombre}',price:0,source:'Proveedor',url:'${p.url}'})">+ Carrito</button>
+      </div>
+      <div class="prov-review-form" id="review-${p.id}">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Tu nota privada (solo MEB):</div>
+        <textarea class="review-textarea" id="rta-${p.id}" placeholder="Ej: Buen precio en rodamientos. Demora 35 días. Contacto: Wang Lee.">${review.nota}</textarea>
+        <button class="btn-sm btn-add" style="margin-top:6px" onclick="saveReview('${p.id}')">GUARDAR NOTA</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleReviewForm(id) {
+  const f = document.getElementById('review-' + id);
+  f.classList.toggle('show');
+}
+
+function setStars(id, n) {
+  provReviews[id] = provReviews[id] || {};
+  provReviews[id].stars = n;
+  localStorage.setItem('meb_prov_reviews', JSON.stringify(provReviews));
+  renderProveedoresTab(currentMode);
+}
+
+function saveReview(id) {
+  provReviews[id] = provReviews[id] || {};
+  provReviews[id].nota = document.getElementById('rta-' + id).value.trim();
+  localStorage.setItem('meb_prov_reviews', JSON.stringify(provReviews));
+  showToast('Nota guardada ✓', 'success');
+  renderProveedoresTab(currentMode);
+}
+
+function toggleSaveProveedor(id) {
+  savedProveedores[id] = !savedProveedores[id];
+  localStorage.setItem('meb_proveedores_saved', JSON.stringify(savedProveedores));
+  renderProveedoresTab(currentMode);
+  showToast(savedProveedores[id] ? 'Proveedor guardado ✓' : 'Proveedor quitado', savedProveedores[id] ? 'success' : 'info');
+}
+
+function detectarProveedorCruzado() {
+  const cruzados = PROVEEDORES_DB.filter(p => p.categorias.includes('repuestos') && p.categorias.includes('herreria'));
+  if (cruzados.length) {
+    document.getElementById('crossAlertText').textContent =
+      `${cruzados.map(p => p.nombre).join(', ')} tienen tanto repuestos como materiales de herrería. Podés consolidar pedidos para reducir costos de flete.`;
+    document.getElementById('crossAlert').classList.add('show');
+  }
+}
+
+// ============================================================
+// MENSAJES TAB
+// ============================================================
+function renderMensajesTab(query, mlItems, tc) {
+  const avgUSD = mlItems.length ? (mlItems.reduce((s,i) => s + i.price, 0) / mlItems.length / tc).toFixed(2) : 'N/A';
+  document.getElementById('mensajesContent').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:12px">
+      ${[
+        { titulo:'Mensaje Alibaba (Inglés)', texto:`Hello,\n\nI'm interested in purchasing "${query}" for industrial machinery use in Argentina.\n\nPlease provide:\n- Price for 10, 50, and 100 units\n- MOQ and lead time\n- Shipping cost to Buenos Aires, Argentina\n- Product specifications and certifications\n\nTarget price: USD ${avgUSD} per unit (market reference)\n\nThank you,\nMEB Machinery Solutions` },
+        { titulo:'Mensaje WhatsApp Proveedor AR', texto:`Hola! Soy de MEB Machinery Solutions. Necesito cotizar "${query}" para maquinaria pesada (excavadoras/minicargadoras). ¿Tienen stock? ¿Cuál es el precio x unidad y por 10 unidades? Gracias` },
+        { titulo:'Mensaje Chile', texto:`Hola, consulto por "${query}" para importar a Argentina. ¿Hacen envío terrestre a Buenos Aires? ¿Cuál es el precio en USD? Muchas gracias, MEB Machinery Solutions (Argentina)` }
+      ].map(m => `
+        <div class="aduana-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div class="aduana-title">${m.titulo}</div>
+            <button class="btn-sm btn-add" onclick="copiarMensaje(this,'${encodeURIComponent(m.texto)}')">COPIAR</button>
+          </div>
+          <pre style="font-size:11px;color:var(--muted);white-space:pre-wrap;line-height:1.6;font-family:'Barlow'">${m.texto}</pre>
+        </div>`).join('')}
+    </div>`;
+}
+
+function renderMensajesHerreria(query) {
+  document.getElementById('mensajesContent').innerHTML = `
+    <div class="aduana-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="aduana-title">Mensaje Alibaba — Acero HARDOX/Desgaste</div>
+        <button class="btn-sm btn-add" onclick="copiarMensaje(this, this.dataset.msg)" data-msg="Hello, I need ${query} (wear resistant steel) for excavator bucket manufacturing in Argentina. Please provide: price per ton for 1, 5, and 10 tons, available grades (HB hardness), thickness options, and shipping cost to Buenos Aires port. We are a machinery repair company. Thank you, MEB Machinery Solutions">COPIAR</button>
+      </div>
+      <pre style="font-size:11px;color:var(--muted);white-space:pre-wrap;line-height:1.6;font-family:'Barlow'">Hello, I need ${query} (wear resistant steel) for excavator bucket manufacturing in Argentina. Please provide: price per ton for 1, 5, and 10 tons, available grades (HB hardness), thickness options, and shipping cost to Buenos Aires port. We are a machinery repair company. Thank you, MEB Machinery Solutions</pre>
+    </div>
+    <div class="aduana-card" style="margin-top:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="aduana-title">Mensaje Ferroabasto / Distribuidor AR</div>
+        <button class="btn-sm btn-add" onclick="copiarMensaje(this,'Hola! Soy de MEB Machinery Solutions. Necesito cotizar chapa ${query} para fabricación de cuchillas de balde de excavadora. ¿Tienen en stock? ¿Cuál es el precio por kg para 50kg y 200kg? ¿Hacen corte a medida? Gracias')">COPIAR</button>
+      </div>
+      <pre style="font-size:11px;color:var(--muted);white-space:pre-wrap;line-height:1.6;font-family:'Barlow'">Hola! Soy de MEB Machinery Solutions. Necesito cotizar chapa ${query} para fabricación de cuchillas de balde de excavadora. ¿Tienen en stock? ¿Cuál es el precio por kg para 50kg y 200kg? ¿Hacen corte a medida? Gracias</pre>
+    </div>`;
+}
+
+function copiarMensaje(btn, msg) {
+  const texto = typeof msg === 'string' ? decodeURIComponent(msg) : msg;
+  navigator.clipboard.writeText(texto).then(() => {
+    btn.textContent = '✓ COPIADO';
+    setTimeout(() => btn.textContent = 'COPIAR', 2000);
+  });
+}
+
+// ============================================================
+// IA — ANÁLISIS INTELIGENTE
+// ============================================================
+async function runIA(query, mlItems, tc, modo) {
+  document.getElementById('iaContent').innerHTML = `<div class="ia-loading"><div class="ia-dot"></div><div class="ia-dot"></div><div class="ia-dot"></div><span>Analizando viabilidad con IA...</span></div>`;
+
+  const avgML = mlItems.length ? mlItems.reduce((s,i) => s + i.price, 0) / mlItems.length : 0;
+  const avgUSD = (avgML / tc).toFixed(2);
+  const peso = getPeso();
+
+  const prompt = modo === 'herreria'
+    ? `Sos un experto en importación industrial y herrería para Argentina. Analizá brevemente la viabilidad de obtener "${query}" considerando: mercado local de acero HARDOX, importación desde China vs Chile vs distribuidores locales, y uso en MEB Machinery Solutions (empresa de reparación de maquinaria pesada que fabrica cuchillas de balde y side cutters). Dame: 1) Recomendación directa, 2) Mejor opción de compra con justificación, 3) Alertas importantes, 4) ROI estimado si venden piezas fabricadas con este material. Sé conciso y práctico. Máximo 150 palabras.`
+    : `Sos un experto en importación industrial para Argentina. El producto buscado es "${query}". Precio promedio en MercadoLibre AR: ${avgML > 0 ? '$' + Math.round(avgML).toLocaleString('es-AR') : 'no disponible'} (USD ${avgUSD}). Peso estimado: ${peso}kg. Analizá: 1) ¿Conviene importar de China o comprar local?, 2) Mejor vía de importación para este producto, 3) Precio objetivo China puesto en Argentina, 4) Riesgos o alertas. Contexto: empresa de reparación maquinaria pesada (excavadoras, retroexcavadoras) en Argentina. Sé directo y práctico. Máximo 150 palabras.`;
+
+  try {
+    const res = await fetch(CLAUDE_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    const texto = data.content?.[0]?.text || 'No se pudo obtener análisis.';
+
+    document.getElementById('iaContent').innerHTML = `
+      <div class="ia-text">${texto.replace(/\n/g, '<br>')}</div>
+      <div class="ia-tags" style="margin-top:12px">
+        <span class="ia-tag ok">Análisis IA</span>
+        <span class="ia-tag">${modo === 'herreria' ? 'Herrería' : 'Repuesto'}</span>
+        ${avgML > 0 ? `<span class="ia-tag">Ref. local: ${fmtARS(avgML)}</span>` : ''}
+        <span class="ia-tag">Peso: ${peso}kg</span>
+      </div>`;
+  } catch(e) {
+    document.getElementById('iaContent').innerHTML = `<div class="ia-text" style="color:var(--muted)">⚠️ Análisis IA no disponible. Revisá los tabs de China y Aduana para comparar manualmente.</div>`;
+  }
+}
+
+// ============================================================
+// CARRITO
+// ============================================================
+function addToCart(item) {
+  const exists = cart.find(c => c.id === item.id);
+  if (exists) { showToast('Ya está en el carrito', 'info'); return; }
+  cart.push({ ...item, addedAt: new Date().toISOString() });
+  localStorage.setItem('meb_cart', JSON.stringify(cart));
+  renderCart();
+  updateCartBadge();
+  showToast('Agregado al carrito ✓', 'success');
+}
+
+function removeFromCart(id) {
+  cart = cart.filter(c => c.id !== id);
+  localStorage.setItem('meb_cart', JSON.stringify(cart));
+  renderCart();
+  updateCartBadge();
+}
+
+function renderCart() {
+  const el = document.getElementById('cartItems');
+  const tot = document.getElementById('cartTotal');
+  if (!cart.length) {
+    el.innerHTML = '<div class="cart-empty">El carrito está vacío.<br>Agregá productos para comparar.</div>';
+    tot.style.display = 'none';
+    return;
+  }
+  el.innerHTML = cart.map(c => `
+    <div class="cart-item">
+      <div class="cart-item-name">${c.name}</div>
+      <div class="cart-item-price">${c.price > 0 ? fmtARS(c.price) : 'A cotizar'}</div>
+      <div class="cart-item-source">${c.source}</div>
+      <button class="cart-item-remove" onclick="removeFromCart('${c.id}')">✕</button>
+    </div>`).join('');
+
+  const localItems = cart.filter(c => c.source.includes('MercadoLibre') || c.source.includes('AR'));
+  const chinaItems = cart.filter(c => c.source.includes('China') || c.source.includes('Alibaba') || c.source.includes('AliExpress'));
+  const totalLocal = localItems.reduce((s,c) => s + c.price, 0);
+  const totalChina = chinaItems.reduce((s,c) => s + c.price, 0);
+  const ahorro = totalLocal - totalChina;
+
+  document.getElementById('ctSubLocal').textContent = fmtARS(totalLocal);
+  document.getElementById('ctSubChina').textContent = fmtARS(totalChina);
+  document.getElementById('ctAhorro').textContent = ahorro > 0 ? fmtARS(ahorro) : 'N/D';
+  tot.style.display = 'block';
+}
+
+function updateCartBadge() {
+  const badge = document.getElementById('cartCount');
+  badge.textContent = cart.length;
+  badge.classList.toggle('show', cart.length > 0);
+}
+
+function exportarCarrito() {
+  const tc = getTC();
+  const lineas = cart.map(c => `- ${c.name}: ${c.price > 0 ? fmtARS(c.price) : 'A cotizar'} (${c.source})`);
+  const totalARS = cart.reduce((s,c) => s + c.price, 0);
+  const texto = `LISTA DE COMPARACIÓN — MEB Machinery Solutions\nFecha: ${new Date().toLocaleDateString('es-AR')}\nTipo de cambio: USD 1 = ARS ${tc}\n\n${lineas.join('\n')}\n\nTOTAL: ${fmtARS(totalARS)}`;
+  navigator.clipboard.writeText(texto);
+  showToast('Lista copiada al portapapeles ✓', 'success');
+}
+
+function guardarWishlist() {
+  cart.forEach(item => {
+    if (!wishlist.find(w => w.id === item.id)) wishlist.push(item);
+  });
+  localStorage.setItem('meb_wishlist', JSON.stringify(wishlist));
+  renderWishlist();
+  showToast(`${cart.length} ítems guardados en wishlist ✓`, 'success');
+}
+
+function renderWishlist() {
+  const el = document.getElementById('wishlistItems');
+  if (!wishlist.length) {
+    el.innerHTML = '<div class="cart-empty" style="padding:12px 0">Sin ítems guardados.</div>';
+    return;
+  }
+  el.innerHTML = wishlist.map((w, i) => `
+    <div class="wishlist-item">
+      <div>
+        <div class="wishlist-name">${w.name.substring(0,35)}${w.name.length > 35 ? '…' : ''}</div>
+        <div style="font-size:10px;color:var(--muted)">${w.source}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="wishlist-price">${w.price > 0 ? fmtARS(w.price) : '—'}</span>
+        <button class="wishlist-del" onclick="removeWishlist(${i})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function removeWishlist(i) {
+  wishlist.splice(i, 1);
+  localStorage.setItem('meb_wishlist', JSON.stringify(wishlist));
+  renderWishlist();
 }
 
 // ============================================================
 // HISTORIAL
 // ============================================================
-function guardarHistorial(query, count, precio) {
-  const entry = { query, count, precio, date: new Date().toLocaleDateString('es-AR'), ts: Date.now() };
-  searchHistory = [entry, ...searchHistory.filter(h => h.query !== query)].slice(0, 10);
-  localStorage.setItem('meb_market_history', JSON.stringify(searchHistory));
+function guardarHistorial(query, modo, precio) {
+  const entry = { query, modo, precio, fecha: new Date().toISOString(), tc: getTC() };
+  historial = [entry, ...historial.filter(h => h.query !== query)].slice(0, 30);
+  localStorage.setItem('meb_historial_v2', JSON.stringify(historial));
   renderHistorial();
+  // Sincronizar con Sheet
+  syncHistorialSheet(entry);
 }
 
 function renderHistorial() {
-  if (!searchHistory.length) return;
-  const section = document.getElementById('historySection');
-  section.style.display = 'block';
-  document.getElementById('historyList').innerHTML = searchHistory.map(h => `
-    <div class="history-item" onclick="buscarRapido('${h.query}')">
-      <div>
-        <div class="hi-product">${h.query}</div>
-        <div class="hi-date">${h.date} · ${h.count} resultados</div>
+  const el = document.getElementById('historialList');
+  if (!historial.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--muted2);text-align:center;padding:12px 0">Sin búsquedas aún</div>';
+    return;
+  }
+  el.innerHTML = historial.slice(0, 10).map(h => `
+    <div class="hist-item" onclick="repeatSearch('${h.query}','${h.modo}')">
+      <div class="hist-q">
+        <span class="hist-mode ${h.modo === 'repuestos' ? 'rep' : 'her'}">${h.modo === 'repuestos' ? 'REP' : 'HER'}</span>
+        ${h.query}
       </div>
-      <div class="hi-badge">$${Math.round(h.precio).toLocaleString('es-AR')}</div>
-    </div>
-  `).join('');
+      <div class="hist-meta">${h.precio > 0 ? fmtARS(h.precio) : ''} · ${new Date(h.fecha).toLocaleDateString('es-AR')}</div>
+    </div>`).join('');
 }
 
-function mostrarSinResultados(query) {
-  document.getElementById('resultsSection').classList.add('show');
-  document.getElementById('summaryGrid').innerHTML = '';
-  document.getElementById('recBox').innerHTML = `<div class="rec-box bad"><div class="rec-icon">🔴</div><div class="rec-content"><div class="rec-title" style="color:var(--red)">SIN RESULTADOS</div><div class="rec-text">No se encontraron resultados para "<strong>${query}</strong>" en MercadoLibre Argentina. Probá con términos más generales o verificá la ortografía.</div></div></div>`;
-  document.getElementById('resultsBody').innerHTML = '';
+function repeatSearch(query, modo) {
+  setMode(modo);
+  document.getElementById('searchInput').value = query;
+  analizar();
 }
 
-function mostrarError(msg) {
-  document.getElementById('resultsSection').classList.add('show');
-  document.getElementById('summaryGrid').innerHTML = '';
-  document.getElementById('recBox').innerHTML = `<div class="rec-box bad"><div class="rec-icon">⚠</div><div class="rec-content"><div class="rec-title" style="color:var(--red)">ERROR DE CONEXIÓN</div><div class="rec-text">${msg}<br><br>La API de MercadoLibre requiere conexión a internet. Verificá tu conexión y volvé a intentar.</div></div></div>`;
-}
-
-// ============================================================
-// TOAST
-// ============================================================
-function showToast(msg) {
-  let t = document.getElementById('toast');
-  if (!t) { t = document.createElement('div'); t.id='toast'; t.style.cssText='position:fixed;bottom:24px;right:24px;background:#1a1a1a;border:1px solid #333;border-left:3px solid #F4B400;padding:12px 18px;border-radius:4px;z-index:999;font-size:13px;color:#e8e8e8;transition:opacity 0.3s;'; document.body.appendChild(t); }
-  t.textContent = msg; t.style.opacity = '1';
-  setTimeout(() => { t.style.opacity = '0'; }, 2500);
+async function syncHistorialSheet(entry) {
+  if (!SCRIPT_URL) return;
+  try {
+    await fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'addHistorialAnalizador', row: { FECHA: entry.fecha, BUSQUEDA: entry.query, MODO: entry.modo, PRECIO_REF: entry.precio, TC: entry.tc } })
+    });
+  } catch(e) {}
 }
 
 // ============================================================
 // INIT
 // ============================================================
-renderHistorial();
-document.getElementById('searchInput').focus();
+init();
 </script>
 </body>
 </html>
