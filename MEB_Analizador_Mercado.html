@@ -617,11 +617,17 @@ async function analizarRepuestos(query) {
   showLoading(true, `Buscando "${query}" en MercadoLibre Argentina...`);
   let mlItems = [];
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
     const url = `https://api.mercadolibre.com/sites/MLA/search?q=${encodeURIComponent(query)}&limit=8`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
     const data = await res.json();
     mlItems = data.results || [];
-  } catch(e) { console.warn('ML error', e); }
+  } catch(e) {
+    console.warn('ML error:', e.message);
+    // Continuar igual — mostrar China/Aduana sin resultados ML
+  }
 
   currentResults = mlItems;
   const tc = getTC();
@@ -630,7 +636,18 @@ async function analizarRepuestos(query) {
   const mlGrid = document.getElementById('mlGrid');
   if (!mlItems.length) {
     mlGrid.innerHTML = '';
-    document.getElementById('mlEmpty').style.display = 'block';
+    document.getElementById('mlEmpty').style.display = 'none';
+    mlGrid.innerHTML = `<div style="grid-column:1/-1">
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:20px;text-align:center">
+        <div style="font-size:28px;margin-bottom:10px">🔍</div>
+        <div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:2px;color:var(--yellow);margin-bottom:6px">BUSCÁ DIRECTAMENTE EN MERCADOLIBRE</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px">La API puede tener restricciones desde este navegador. Usá el link directo:</div>
+        <a href="https://listado.mercadolibre.com.ar/${encodeURIComponent(query)}" target="_blank" 
+           style="display:inline-block;background:var(--yellow);color:var(--black);padding:10px 20px;border-radius:4px;font-family:'Bebas Neue';font-size:14px;letter-spacing:2px;text-decoration:none">
+          🛒 VER EN MERCADOLIBRE →
+        </a>
+      </div>
+    </div>`;
   } else {
     document.getElementById('mlEmpty').style.display = 'none';
     mlGrid.innerHTML = mlItems.map((item, i) => {
