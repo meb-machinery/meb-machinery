@@ -1233,13 +1233,14 @@ function copiarMensaje(btn, msg) {
 let precioManualConfirmado = 0;
 
 function calcularDesdeManual() {
-  const min = parseFloat(document.getElementById('ml-precio-min')?.value) || 0;
-  const max = parseFloat(document.getElementById('ml-precio-max')?.value) || 0;
-  const ref = parseFloat(document.getElementById('ml-precio-ref')?.value) || 0;
+  const parsePrecio = v => parseFloat((v||'').replace(/\./g,'').replace(',','.')) || 0;
+  const min = parsePrecio(document.getElementById('ml-precio-min')?.value);
+  const max = parsePrecio(document.getElementById('ml-precio-max')?.value);
+  const ref = parsePrecio(document.getElementById('ml-precio-ref')?.value);
   const tc = getTC();
 
   // Si tienen al menos un valor, mostrar preview
-  const precio = ref || ((min + max) / 2) || min || max;
+  const precio = ref || (min && max ? (min + max) / 2 : min || max);
   if (!precio) return;
 
   const res = document.getElementById('ml-resultado-manual');
@@ -1269,14 +1270,15 @@ function calcularDesdeManual() {
 }
 
 function confirmarPrecioManual() {
-  const min = parseFloat(document.getElementById('ml-precio-min')?.value) || 0;
-  const max = parseFloat(document.getElementById('ml-precio-max')?.value) || 0;
-  const ref = parseFloat(document.getElementById('ml-precio-ref')?.value) || 0;
+  const parsePrecio = v => parseFloat((v||'').replace(/\./g,'').replace(',','.')) || 0;
+  const min = parsePrecio(document.getElementById('ml-precio-min')?.value);
+  const max = parsePrecio(document.getElementById('ml-precio-max')?.value);
+  const ref = parsePrecio(document.getElementById('ml-precio-ref')?.value);
   const cant = parseInt(document.getElementById('ml-cantidad')?.value) || 1;
   const cond = document.getElementById('ml-condicion')?.value || 'new';
   const tc = getTC();
 
-  const precio = ref || ((min + max) / 2) || min || max;
+  const precio = ref || (min && max ? (min + max) / 2 : min || max);
   if (!precio) { showToast('Ingresá al menos un precio', 'error'); return; }
 
   precioManualConfirmado = precio;
@@ -1510,13 +1512,36 @@ function repeatSearch(query, modo) {
 async function syncHistorialSheet(entry) {
   if (!SCRIPT_URL) return;
   try {
-    await fetch(SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'addHistorialAnalizador', row: { FECHA: entry.fecha, BUSQUEDA: entry.query, MODO: entry.modo, PRECIO_REF: entry.precio, TC: entry.tc } })
+    if (!document.getElementById('_meb_sheet_writer')) {
+      const iframe = document.createElement('iframe');
+      iframe.name = '_meb_sheet_writer';
+      iframe.id = '_meb_sheet_writer';
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+    }
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = SCRIPT_URL;
+    form.target = '_meb_sheet_writer';
+    form.style.display = 'none';
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'postData';
+    input.value = JSON.stringify({
+      action: 'addHistorialAnalizador',
+      row: {
+        FECHA: entry.fecha,
+        BUSQUEDA: entry.query,
+        MODO: entry.modo,
+        PRECIO_REF: entry.precio,
+        TC: entry.tc
+      }
     });
-  } catch(e) {}
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+    setTimeout(() => { try { form.remove(); } catch(e){} }, 3000);
+  } catch(e) { console.warn('Historial sync error:', e); }
 }
 
 // ============================================================
