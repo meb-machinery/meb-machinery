@@ -638,15 +638,77 @@ async function analizarRepuestos(query) {
     mlGrid.innerHTML = '';
     document.getElementById('mlEmpty').style.display = 'none';
     mlGrid.innerHTML = `<div style="grid-column:1/-1">
-      <div style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:20px;text-align:center">
-        <div style="font-size:28px;margin-bottom:10px">🔍</div>
-        <div style="font-family:'Bebas Neue';font-size:16px;letter-spacing:2px;color:var(--yellow);margin-bottom:6px">BUSCÁ DIRECTAMENTE EN MERCADOLIBRE</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:14px">La API puede tener restricciones desde este navegador. Usá el link directo:</div>
-        <a href="https://listado.mercadolibre.com.ar/${encodeURIComponent(query)}" target="_blank" 
-           style="display:inline-block;background:var(--yellow);color:var(--black);padding:10px 20px;border-radius:4px;font-family:'Bebas Neue';font-size:14px;letter-spacing:2px;text-decoration:none">
-          🛒 VER EN MERCADOLIBRE →
+
+      <!-- CARGA MANUAL DE PRECIOS -->
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:20px;margin-bottom:12px">
+        <div style="font-family:'Bebas Neue';font-size:15px;letter-spacing:2px;color:var(--yellow);margin-bottom:4px">
+          📋 CARGÁ LOS PRECIOS QUE VES EN MERCADOLIBRE
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:14px">
+          Abrí ML en otra pestaña, buscá el producto y completá los precios acá. El analizador calcula todo automáticamente.
+        </div>
+
+        <!-- Fila 1 -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Precio más bajo ($)</div>
+            <input type="number" id="ml-precio-min" placeholder="Ej: 5800"
+              style="width:100%;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:8px 10px;border-radius:4px;font-size:13px;outline:none"
+              oninput="calcularDesdeManual()">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Precio más alto ($)</div>
+            <input type="number" id="ml-precio-max" placeholder="Ej: 12000"
+              style="width:100%;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:8px 10px;border-radius:4px;font-size:13px;outline:none"
+              oninput="calcularDesdeManual()">
+          </div>
+        </div>
+
+        <!-- Fila 2 -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Precio que usarías ($)</div>
+            <input type="number" id="ml-precio-ref" placeholder="Ej: 7500"
+              style="width:100%;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:8px 10px;border-radius:4px;font-size:13px;outline:none"
+              oninput="calcularDesdeManual()">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Cantidad resultados</div>
+            <input type="number" id="ml-cantidad" placeholder="Ej: 47" value="1"
+              style="width:100%;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:8px 10px;border-radius:4px;font-size:13px;outline:none">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Condición</div>
+            <select id="ml-condicion"
+              style="width:100%;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:8px 10px;border-radius:4px;font-size:13px;outline:none">
+              <option value="new">Nuevo</option>
+              <option value="used">Usado</option>
+              <option value="mixed">Ambos</option>
+            </select>
+          </div>
+        </div>
+
+        <button onclick="confirmarPrecioManual()"
+          style="background:var(--yellow);color:var(--black);border:none;padding:10px 20px;border-radius:4px;font-family:'Bebas Neue';font-size:14px;letter-spacing:2px;cursor:pointer;width:100%">
+          ✓ CONFIRMAR PRECIOS Y ANALIZAR
+        </button>
+      </div>
+
+      <!-- RESULTADO MANUAL (aparece después de confirmar) -->
+      <div id="ml-resultado-manual" style="display:none"></div>
+
+      <!-- LINK DIRECTO -->
+      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:14px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text)">Buscá en MercadoLibre y copiá los precios acá arriba</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Abrí en nueva pestaña para no perder el análisis</div>
+        </div>
+        <a href="https://listado.mercadolibre.com.ar/${encodeURIComponent(query)}" target="_blank"
+          style="display:flex;align-items:center;gap:6px;background:var(--yellow);color:var(--black);padding:9px 16px;border-radius:4px;font-family:'Bebas Neue';font-size:13px;letter-spacing:2px;text-decoration:none;white-space:nowrap;flex-shrink:0;margin-left:14px">
+          🛒 ABRIR ML →
         </a>
       </div>
+
     </div>`;
   } else {
     document.getElementById('mlEmpty').style.display = 'none';
@@ -1166,8 +1228,117 @@ function copiarMensaje(btn, msg) {
 }
 
 // ============================================================
-// IA — ANÁLISIS INTELIGENTE
+// PRECIO MANUAL ML
 // ============================================================
+let precioManualConfirmado = 0;
+
+function calcularDesdeManual() {
+  const min = parseFloat(document.getElementById('ml-precio-min')?.value) || 0;
+  const max = parseFloat(document.getElementById('ml-precio-max')?.value) || 0;
+  const ref = parseFloat(document.getElementById('ml-precio-ref')?.value) || 0;
+  const tc = getTC();
+
+  // Si tienen al menos un valor, mostrar preview
+  const precio = ref || ((min + max) / 2) || min || max;
+  if (!precio) return;
+
+  const res = document.getElementById('ml-resultado-manual');
+  if (!res) return;
+  res.style.display = 'block';
+  res.innerHTML = `
+    <div style="background:var(--panel);border:1px solid rgba(244,180,0,0.3);border-radius:5px;padding:14px;margin-bottom:10px">
+      <div style="font-family:'Bebas Neue';font-size:13px;letter-spacing:2px;color:var(--yellow);margin-bottom:8px">PREVIEW — PRECIOS INGRESADOS</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        ${min ? `<div style="background:var(--panel2);padding:8px;border-radius:4px;text-align:center">
+          <div style="font-size:10px;color:var(--muted)">MÍN</div>
+          <div style="font-family:'Bebas Neue';font-size:16px;color:var(--green)">${fmtARS(min)}</div>
+          <div style="font-size:10px;color:var(--muted)">USD ${(min/tc).toFixed(2)}</div>
+        </div>` : ''}
+        ${ref ? `<div style="background:var(--panel2);padding:8px;border-radius:4px;text-align:center;border:1px solid var(--yellow)">
+          <div style="font-size:10px;color:var(--muted)">REFERENCIA</div>
+          <div style="font-family:'Bebas Neue';font-size:16px;color:var(--yellow)">${fmtARS(ref)}</div>
+          <div style="font-size:10px;color:var(--muted)">USD ${(ref/tc).toFixed(2)}</div>
+        </div>` : ''}
+        ${max ? `<div style="background:var(--panel2);padding:8px;border-radius:4px;text-align:center">
+          <div style="font-size:10px;color:var(--muted)">MÁX</div>
+          <div style="font-family:'Bebas Neue';font-size:16px;color:var(--red)">${fmtARS(max)}</div>
+          <div style="font-size:10px;color:var(--muted)">USD ${(max/tc).toFixed(2)}</div>
+        </div>` : ''}
+      </div>
+    </div>`;
+}
+
+function confirmarPrecioManual() {
+  const min = parseFloat(document.getElementById('ml-precio-min')?.value) || 0;
+  const max = parseFloat(document.getElementById('ml-precio-max')?.value) || 0;
+  const ref = parseFloat(document.getElementById('ml-precio-ref')?.value) || 0;
+  const cant = parseInt(document.getElementById('ml-cantidad')?.value) || 1;
+  const cond = document.getElementById('ml-condicion')?.value || 'new';
+  const tc = getTC();
+
+  const precio = ref || ((min + max) / 2) || min || max;
+  if (!precio) { showToast('Ingresá al menos un precio', 'error'); return; }
+
+  precioManualConfirmado = precio;
+
+  // Simular items de ML para que el resto del analizador funcione
+  const mlItemsSimulados = [{
+    title: currentProduct,
+    price: precio,
+    condition: cond === 'mixed' ? 'new' : cond,
+    sold_quantity: 0,
+    shipping: { free_shipping: false },
+    permalink: `https://listado.mercadolibre.com.ar/${encodeURIComponent(currentProduct)}`
+  }];
+  if (min && min !== precio) mlItemsSimulados.push({ title: currentProduct + ' (mínimo)', price: min, condition: cond, sold_quantity: 0, shipping: { free_shipping: false }, permalink: `https://listado.mercadolibre.com.ar/${encodeURIComponent(currentProduct)}` });
+  if (max && max !== precio) mlItemsSimulados.push({ title: currentProduct + ' (máximo)', price: max, condition: cond, sold_quantity: 0, shipping: { free_shipping: false }, permalink: `https://listado.mercadolibre.com.ar/${encodeURIComponent(currentProduct)}` });
+
+  currentResults = mlItemsSimulados;
+
+  // Actualizar China, Aduana, Mensajes con el precio real
+  renderChinaTab(currentProduct, mlItemsSimulados, tc);
+  renderChileTab(currentProduct, mlItemsSimulados, tc);
+  renderAduanaTab(currentProduct, mlItemsSimulados, tc);
+  renderMensajesTab(currentProduct, mlItemsSimulados, tc);
+  runIA(currentProduct, mlItemsSimulados, tc, 'repuestos');
+
+  // Mostrar confirmación
+  const res = document.getElementById('ml-resultado-manual');
+  if (res) {
+    res.style.display = 'block';
+    res.innerHTML = `
+      <div style="background:rgba(46,204,113,0.1);border:1px solid rgba(46,204,113,0.3);border-radius:5px;padding:14px;margin-bottom:10px">
+        <div style="font-family:'Bebas Neue';font-size:13px;letter-spacing:2px;color:var(--green);margin-bottom:8px">✅ PRECIOS CONFIRMADOS — ANÁLISIS ACTUALIZADO</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          ${min ? `<div style="text-align:center"><div style="font-size:10px;color:var(--muted)">MÍN LOCAL</div><div style="font-family:'Bebas Neue';font-size:16px;color:var(--green)">${fmtARS(min)}</div></div>` : ''}
+          <div style="text-align:center;border-left:2px solid var(--yellow);border-right:2px solid var(--yellow)">
+            <div style="font-size:10px;color:var(--muted)">PRECIO REF.</div>
+            <div style="font-family:'Bebas Neue';font-size:18px;color:var(--yellow)">${fmtARS(precio)}</div>
+            <div style="font-size:10px;color:var(--muted)">USD ${(precio/tc).toFixed(2)}</div>
+          </div>
+          ${max ? `<div style="text-align:center"><div style="font-size:10px;color:var(--muted)">MÁX LOCAL</div><div style="font-family:'Bebas Neue';font-size:16px;color:var(--red)">${fmtARS(max)}</div></div>` : ''}
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:10px">
+          ✓ China, Chile, Aduana y Análisis IA actualizados con este precio de referencia.<br>
+          Revisá los demás tabs para ver la comparativa completa.
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button onclick="addToCart({id:'ml-manual',name:'${currentProduct.replace(/'/g,"'")} (ML Argentina)',price:${precio},source:'MercadoLibre AR (manual)',url:'https://listado.mercadolibre.com.ar/${encodeURIComponent(currentProduct)}'})"
+            style="background:var(--yellow);color:var(--black);border:none;padding:7px 14px;border-radius:4px;font-family:'Bebas Neue';font-size:12px;letter-spacing:1px;cursor:pointer">
+            + CARRITO
+          </button>
+          <a href="https://listado.mercadolibre.com.ar/${encodeURIComponent(currentProduct)}" target="_blank"
+            style="display:inline-flex;align-items:center;gap:5px;background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:7px 14px;border-radius:4px;font-family:'Bebas Neue';font-size:12px;letter-spacing:1px;text-decoration:none">
+            🛒 VER EN ML
+          </a>
+        </div>
+      </div>`;
+  }
+
+  showToast('Precios cargados — China y Aduana actualizados ✓', 'success');
+  // Ir al tab de China automáticamente
+  setTimeout(() => switchTab('china', document.querySelector('.tab:nth-child(2)')), 500);
+}
 async function runIA(query, mlItems, tc, modo) {
   document.getElementById('iaContent').innerHTML = `<div class="ia-loading"><div class="ia-dot"></div><div class="ia-dot"></div><div class="ia-dot"></div><span>Analizando viabilidad con IA...</span></div>`;
 
