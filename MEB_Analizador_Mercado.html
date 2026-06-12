@@ -750,7 +750,8 @@ async function analizarRepuestos(query) {
   await runIA(query, mlItems, tc, 'repuestos');
 
   // Guardar historial
-  guardarHistorial(query, 'repuestos', mlItems.length > 0 ? mlItems[0].price : 0);
+  // Para repuestos, guardar historial SIN precio (se actualiza al confirmar manualmente)
+  guardarHistorial(query, 'repuestos', 0);
 
   showLoading(false);
   document.getElementById('resultsSection').classList.add('show');
@@ -1338,6 +1339,10 @@ function confirmarPrecioManual() {
   }
 
   showToast('Precios cargados — China y Aduana actualizados ✓', 'success');
+
+  // Actualizar historial con el precio real confirmado
+  guardarHistorial(currentProduct, 'repuestos', precio);
+
   // Ir al tab de China automáticamente
   setTimeout(() => switchTab('china', document.querySelector('.tab:nth-child(2)')), 500);
 }
