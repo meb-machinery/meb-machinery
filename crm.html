@@ -2290,57 +2290,85 @@ function generarPresupuestoPDF(presupId) {
   const cl = DB.clientes.find(c => c.id === p.clienteId);
   const trabajoRel = DB.trabajos.find(t => t.clienteId === p.clienteId);
   const maquinaRel = trabajoRel ? DB.maquinas.find(m => m.id === trabajoRel.maquinaId) : null;
-  const numPresup = p.num || p.id;
-  const fechaHoy = new Date().toLocaleDateString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric'});
+  const numPresup = String(p.num || p.id).padStart(4,'0');
+  const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const fechaVence = new Date(Date.now() + 15*24*60*60*1000).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const montof = p.monto > 0 ? fmtMonto(p.monto) : '—';
 
-  const w = window.open('','_blank','width=960,height=750');
+  // Parsear ítems si hay descripción multilínea
+  const lineas = (p.descripcion || '').split('\n').filter(l => l.trim());
+  const itemsHTML = lineas.length > 1
+    ? lineas.map((l,i) => `<tr><td>${i+1}</td><td>${l.trim()}</td><td>Servicio técnico</td><td style="text-align:right">${i===lineas.length-1 && p.monto > 0 ? montof : '—'}</td></tr>`).join('')
+    : `<tr><td>1</td><td contenteditable="true">${p.descripcion||'—'}</td><td contenteditable="true">Servicio técnico</td><td contenteditable="true" style="text-align:right">${montof}</td></tr>
+       <tr><td>2</td><td contenteditable="true" style="color:#aaa;font-style:italic">Agregar línea adicional si es necesario...</td><td contenteditable="true"></td><td contenteditable="true" style="text-align:right"></td></tr>
+       <tr><td>3</td><td contenteditable="true" style="color:#aaa;font-style:italic">Agregar línea adicional si es necesario...</td><td contenteditable="true"></td><td contenteditable="true" style="text-align:right"></td></tr>`;
+
+  const w = window.open('','_blank','width=980,height=800');
   w.document.write(`<!DOCTYPE html><html lang="es"><head>
 <meta charset="UTF-8">
 <title>Presupuesto N° ${numPresup} — MEB</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;background:#fff;padding:40px}
-.no-print{margin-bottom:20px;display:flex;gap:10px;align-items:center}
+body{font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;background:#fff;padding:40px;max-width:900px;margin:0 auto}
+.no-print{margin-bottom:24px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px;background:#f5f5f5;border-radius:6px;border-left:4px solid #F4B400}
 .btn-pdf{background:#F4B400;color:#1A1A1A;border:none;padding:10px 24px;font-weight:700;font-size:14px;border-radius:6px;cursor:pointer}
-.btn-cerrar{background:#eee;color:#333;border:none;padding:10px 24px;font-weight:700;font-size:14px;border-radius:6px;cursor:pointer}
-.tip{font-size:12px;color:#888}
+.btn-cerrar{background:#1A1A1A;color:#fff;border:none;padding:10px 24px;font-weight:700;font-size:14px;border-radius:6px;cursor:pointer}
+.tip{font-size:11px;color:#888;flex:1}
 .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:16px;border-bottom:3px solid #F4B400}
-.logo img{width:260px}
-.empresa-info{text-align:right;font-size:12px;color:#555;line-height:1.7}
-.empresa-info strong{font-size:14px;color:#1A1A1A;display:block;margin-bottom:4px}
-.titulo-doc{background:#1A1A1A;color:#F4B400;padding:10px 20px;font-size:20px;font-weight:900;letter-spacing:2px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center}
+.logo img{height:60px;width:auto}
+.empresa-info{text-align:right;font-size:12px;color:#555;line-height:1.8}
+.empresa-info strong{font-size:15px;color:#1A1A1A;display:block;margin-bottom:2px;letter-spacing:1px}
+.titulo-doc{background:#1A1A1A;color:#F4B400;padding:12px 20px;font-size:22px;font-weight:900;letter-spacing:3px;margin-bottom:0;display:flex;justify-content:space-between;align-items:center;border-radius:4px 4px 0 0}
 .titulo-doc .num{font-size:13px;color:#aaa;font-weight:400;letter-spacing:0}
+.estado-bar{background:#F4B400;padding:6px 20px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;border-radius:0 0 4px 4px}
+.estado-bar span{font-size:11px;font-weight:700;letter-spacing:1px;color:#1A1A1A;text-transform:uppercase}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
 .seccion{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden}
-.seccion-titulo{background:#F4B400;color:#1A1A1A;font-weight:700;font-size:11px;letter-spacing:1px;padding:6px 12px;text-transform:uppercase}
-.seccion-body{padding:12px}
-.campo{margin-bottom:6px;font-size:12px}
-.campo label{color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:1px}
-.campo span{font-weight:600;color:#1A1A1A}
-table.detalle{width:100%;border-collapse:collapse;margin-bottom:24px}
-table.detalle th{background:#1A1A1A;color:#F4B400;font-size:11px;text-transform:uppercase;letter-spacing:1px;padding:8px 12px;text-align:left}
-table.detalle td{padding:10px 12px;border-bottom:1px solid #f0f0f0;font-size:13px;vertical-align:top}
+.seccion-titulo{background:#F4B400;color:#1A1A1A;font-weight:700;font-size:10px;letter-spacing:2px;padding:7px 14px;text-transform:uppercase}
+.seccion-body{padding:14px}
+.campo{margin-bottom:8px;font-size:12px}
+.campo label{color:#999;font-size:10px;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:2px}
+.campo span{font-weight:600;color:#1A1A1A;font-size:13px}
+table.detalle{width:100%;border-collapse:collapse;margin-bottom:0}
+table.detalle thead tr{background:#1A1A1A}
+table.detalle th{color:#F4B400;font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:9px 12px;text-align:left}
+table.detalle th:last-child{text-align:right}
+table.detalle td{padding:11px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;vertical-align:top}
+table.detalle td:first-child{color:#aaa;font-size:11px;width:30px}
+table.detalle td:last-child{font-weight:700;text-align:right;color:#1A1A1A}
 table.detalle tr:last-child td{border-bottom:none}
-.total-box{display:flex;justify-content:flex-end;margin-bottom:24px}
-.total-inner{border:2px solid #F4B400;border-radius:6px;padding:14px 24px;text-align:right;min-width:260px}
-.total-inner .lbl{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#888}
-.total-inner .monto{font-size:32px;font-weight:900;color:#1A1A1A}
-.condiciones{background:#f9f9f9;border-left:4px solid #F4B400;padding:14px 16px;margin-bottom:28px;font-size:12px;color:#555;line-height:1.7;outline:none}
-.firmas{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px}
+table.detalle tr:hover td{background:#fafafa}
+.detalle-wrap{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;margin-bottom:20px}
+.detalle-titulo{background:#F4B400;color:#1A1A1A;font-weight:700;font-size:10px;letter-spacing:2px;padding:7px 14px;text-transform:uppercase}
+.total-section{display:flex;justify-content:flex-end;margin-bottom:24px}
+.total-box{border:2px solid #F4B400;border-radius:8px;padding:16px 24px;min-width:280px}
+.total-row{display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:4px}
+.total-row.main{border-top:1px solid #e0e0e0;padding-top:10px;margin-top:6px;font-size:22px;font-weight:900;color:#1A1A1A}
+.total-row.main span:last-child{color:#1A1A1A}
+.notas-box{background:#fffdf0;border-left:4px solid #F4B400;padding:14px 16px;margin-bottom:20px;font-size:12px;color:#555;line-height:1.7;border-radius:0 4px 4px 0}
+.notas-box[contenteditable]:focus{outline:2px dashed #F4B400}
+.condiciones{background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:24px}
+.condiciones-titulo{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#888;margin-bottom:10px}
+.cond-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cond-item{font-size:12px;color:#555}
+.cond-item::before{content:"✓ ";color:#F4B400;font-weight:700}
+.firmas{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:40px}
 .firma-box{text-align:center}
-.firma-linea{border-top:1px solid #1A1A1A;margin-bottom:8px;margin-top:60px}
-.firma-label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px}
-.footer{margin-top:32px;padding-top:12px;border-top:1px solid #e0e0e0;text-align:center;font-size:11px;color:#aaa}
-.badge-estado{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;background:#fff3cd;color:#856404}
-[contenteditable]:focus{outline:2px dashed #F4B400;border-radius:3px}
-@media print{.no-print{display:none}body{padding:20px}[contenteditable]{outline:none}}
+.firma-linea{border-top:2px solid #1A1A1A;margin-bottom:8px;margin-top:70px}
+.firma-label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:2px}
+.firma-nombre{font-size:12px;font-weight:700;color:#1A1A1A;margin-top:4px}
+.footer{margin-top:28px;padding-top:12px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center}
+.footer-brand{font-size:11px;font-weight:700;color:#1A1A1A;letter-spacing:1px}
+.footer-data{font-size:10px;color:#aaa;text-align:right}
+.vencimiento{background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:6px 12px;font-size:11px;color:#856404;font-weight:700;display:inline-block}
+[contenteditable]:focus{outline:2px dashed #F4B400;border-radius:3px;padding:1px 3px}
+@media print{.no-print{display:none}body{padding:20px}[contenteditable]{outline:none;padding:0}table.detalle tr:hover td{background:transparent}}
 </style></head><body>
 
 <div class="no-print">
   <button class="btn-pdf" onclick="window.print()">🖨️ IMPRIMIR / GUARDAR PDF</button>
   <button class="btn-cerrar" onclick="window.close()">✕ Cerrar</button>
-  <span class="tip">Los campos con borde amarillo son editables antes de imprimir · En el diálogo de impresión elegí "Guardar como PDF"</span>
+  <span class="tip">Los campos con borde punteado amarillo son editables antes de imprimir · En el diálogo de impresión elegí "Guardar como PDF"</span>
 </div>
 
 <div class="header">
@@ -2358,6 +2386,10 @@ table.detalle tr:last-child td{border-bottom:none}
   <span>PRESUPUESTO</span>
   <span class="num">N° ${numPresup} &nbsp;·&nbsp; ${fechaHoy}</span>
 </div>
+<div class="estado-bar">
+  <span>Estado: ${(p.estado||'pendiente').toUpperCase()}</span>
+  <span class="vencimiento">⏱ Válido hasta: ${fechaVence}</span>
+</div>
 
 <div class="grid-2">
   <div class="seccion">
@@ -2373,63 +2405,65 @@ table.detalle tr:last-child td{border-bottom:none}
   <div class="seccion">
     <div class="seccion-titulo">Datos del presupuesto</div>
     <div class="seccion-body">
-      <div class="campo"><label>N° presupuesto</label><span>${numPresup}</span></div>
-      <div class="campo"><label>Fecha</label><span>${p.fecha ? fmtDate(p.fecha) : fechaHoy}</span></div>
-      <div class="campo"><label>Estado</label><span class="badge-estado">${p.estado.toUpperCase()}</span></div>
-      ${maquinaRel ? `<div class="campo"><label>Máquina</label><span>${maquinaRel.marca} ${maquinaRel.modelo}${maquinaRel.serie?' — '+maquinaRel.serie:''}</span></div>` : ''}
-      ${maquinaRel ? `<div class="campo"><label>Tipo</label><span>${maquinaRel.tipo||'—'}</span></div>` : ''}
+      <div class="campo"><label>Nº Presupuesto</label><span>${numPresup}</span></div>
+      <div class="campo"><label>Fecha</label><span>${p.fecha||fechaHoy}</span></div>
+      <div class="campo"><label>Estado</label><span>${(p.estado||'Pendiente').toUpperCase()}</span></div>
+      ${maquinaRel ? `<div class="campo"><label>Máquina</label><span>${maquinaRel.marca} ${maquinaRel.modelo} — ${maquinaRel.serie||'S/N'}</span></div>
+      <div class="campo"><label>Tipo</label><span>${maquinaRel.tipo||'—'}</span></div>` : ''}
     </div>
   </div>
 </div>
 
-<table class="detalle">
-  <thead><tr>
-    <th style="width:60%">Descripción del trabajo / servicio</th>
-    <th style="width:20%">Tipo</th>
-    <th style="width:20%;text-align:right">Importe</th>
-  </tr></thead>
-  <tbody>
-    <tr>
-      <td contenteditable="true">${p.descripcion||p.titulo||'—'}</td>
-      <td contenteditable="true">Servicio técnico</td>
-      <td style="text-align:right;font-weight:700" contenteditable="true">${montof}</td>
-    </tr>
-    ${p.notas ? `<tr><td colspan="3" contenteditable="true" style="color:#666;font-size:12px;font-style:italic">${p.notas}</td></tr>` : ''}
-    <tr><td colspan="3" contenteditable="true" style="color:#aaa;font-size:12px;font-style:italic">Agregar línea adicional si es necesario...</td></tr>
-  </tbody>
-</table>
+<div class="detalle-wrap">
+  <div class="detalle-titulo">Descripción del trabajo / Servicio</div>
+  <table class="detalle">
+    <thead><tr><th>#</th><th>Descripción</th><th>Tipo</th><th style="text-align:right">Importe</th></tr></thead>
+    <tbody>${itemsHTML}</tbody>
+  </table>
+</div>
 
-<div class="total-box">
-  <div class="total-inner">
-    <div class="lbl">Total presupuestado</div>
-    <div class="monto" contenteditable="true">${montof}</div>
-    <div style="font-size:11px;color:#888;margin-top:4px">Precios en pesos argentinos (ARS)</div>
+${p.notas ? `<div class="notas-box" contenteditable="true"><strong>Notas:</strong> ${p.notas}</div>` : '<div class="notas-box" contenteditable="true" style="color:#aaa;font-style:italic">Agregar notas, condiciones especiales o aclaraciones...</div>'}
+
+<div class="total-section">
+  <div class="total-box">
+    <div class="total-row"><span>Subtotal mano de obra</span><span contenteditable="true">—</span></div>
+    <div class="total-row"><span>Repuestos / Materiales</span><span contenteditable="true">—</span></div>
+    <div class="total-row"><span>Descuento</span><span contenteditable="true">—</span></div>
+    <div class="total-row main"><span>TOTAL</span><span>${montof}</span></div>
   </div>
 </div>
 
-<div class="condiciones" contenteditable="true">
-  <strong>Condiciones:</strong><br>
-  • Presupuesto válido por 7 días hábiles desde la fecha de emisión.<br>
-  • Los repuestos utilizados se detallarán en la orden de trabajo final.<br>
-  • El diagnóstico previo no tiene costo adicional.<br>
-  • Garantía sobre mano de obra: 30 días.<br>
-  • Forma de pago: a convenir con el cliente.
+<div class="condiciones">
+  <div class="condiciones-titulo">Condiciones del presupuesto</div>
+  <div class="cond-grid">
+    <div class="cond-item" contenteditable="true">Validez: 15 días corridos</div>
+    <div class="cond-item" contenteditable="true">Forma de pago: A convenir</div>
+    <div class="cond-item" contenteditable="true">Repuestos: Originales / Alternativos según disponibilidad</div>
+    <div class="cond-item" contenteditable="true">Traslado: Incluido / A coordinar</div>
+    <div class="cond-item" contenteditable="true">Garantía de mano de obra: 30 días</div>
+    <div class="cond-item" contenteditable="true">Precios sujetos a variación sin previo aviso</div>
+  </div>
 </div>
 
 <div class="firmas">
   <div class="firma-box">
     <div class="firma-linea"></div>
-    <div class="firma-label">Marcos Bellando — MEB Machinery Solutions</div>
+    <div class="firma-label">Firma y aclaración del cliente</div>
+    <div class="firma-nombre" contenteditable="true">${cl ? cl.nombre : '—'}</div>
   </div>
   <div class="firma-box">
     <div class="firma-linea"></div>
-    <div class="firma-label">Firma y aclaración del cliente</div>
+    <div class="firma-label">MEB Machinery Solutions</div>
+    <div class="firma-nombre">Marcos Emmanuel Bellando</div>
   </div>
 </div>
 
 <div class="footer">
-  MEB Machinery Solutions · mebmachinerysolutions@gmail.com · +54 11 3392-3254<br>
-  Servicio técnico especializado en maquinaria pesada · Buenos Aires, Argentina
+  <div class="footer-brand">MEB MACHINERY SOLUTIONS</div>
+  <div class="footer-data">
+    mebmachinerysolutions@gmail.com · +54 11 3392-3254<br>
+    meb-machinery.github.io/meb-machinery
+  </div>
 </div>
 
 </body></html>`);
