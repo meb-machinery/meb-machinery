@@ -2374,11 +2374,11 @@ table.detalle tr:hover td{background:#fafafa}
 <div class="header">
   <div class="logo"><img src="${MEB_LOGO_PDF_B64}" alt="MEB Machinery Solutions"/></div>
   <div class="empresa-info">
-    <strong>MEB MACHINERY SOLUTIONS</strong>
-    Servicio técnico especializado en maquinaria pesada<br>
-    mebmachinerysolutions@gmail.com<br>
-    +54 11 3392-3254<br>
-    Buenos Aires, Argentina
+    <strong contenteditable="true">MEB MACHINERY SOLUTIONS</strong>
+    <span contenteditable="true">Servicio técnico especializado en maquinaria pesada</span><br>
+    <span contenteditable="true">mebmachinerysolutions@gmail.com</span><br>
+    <span contenteditable="true">+54 11 3392-3254</span><br>
+    <span contenteditable="true">Buenos Aires, Argentina</span>
   </div>
 </div>
 
@@ -2388,28 +2388,28 @@ table.detalle tr:hover td{background:#fafafa}
 </div>
 <div class="estado-bar">
   <span>Estado: ${(p.estado||'pendiente').toUpperCase()}</span>
-  <span class="vencimiento">⏱ Válido hasta: ${fechaVence}</span>
+  <span class="vencimiento" contenteditable="true">⏱ Válido hasta: ${fechaVence}</span>
 </div>
 
 <div class="grid-2">
   <div class="seccion">
     <div class="seccion-titulo">Datos del cliente</div>
     <div class="seccion-body">
-      <div class="campo"><label>Empresa / Nombre</label><span>${cl ? cl.nombre : '—'}</span></div>
-      ${cl && cl.empresa && cl.empresa !== cl.nombre ? `<div class="campo"><label>Razón social</label><span>${cl.empresa}</span></div>` : ''}
-      <div class="campo"><label>Zona</label><span>${cl ? (cl.zona||'—') : '—'}</span></div>
-      <div class="campo"><label>Teléfono</label><span>${cl ? (cl.telefono||'—') : '—'}</span></div>
-      <div class="campo"><label>Email</label><span>${cl ? (cl.email||'—') : '—'}</span></div>
+      <div class="campo"><label>Empresa / Nombre</label><span contenteditable="true">${cl ? cl.nombre : '—'}</span></div>
+      <div class="campo"><label>Razón social</label><span contenteditable="true">${cl && cl.empresa ? cl.empresa : '—'}</span></div>
+      <div class="campo"><label>Zona</label><span contenteditable="true">${cl ? (cl.zona||'—') : '—'}</span></div>
+      <div class="campo"><label>Teléfono</label><span contenteditable="true">${cl ? (cl.telefono||'—') : '—'}</span></div>
+      <div class="campo"><label>Email</label><span contenteditable="true">${cl ? (cl.email||'—') : '—'}</span></div>
     </div>
   </div>
   <div class="seccion">
     <div class="seccion-titulo">Datos del presupuesto</div>
     <div class="seccion-body">
-      <div class="campo"><label>Nº Presupuesto</label><span>${numPresup}</span></div>
-      <div class="campo"><label>Fecha</label><span>${p.fecha||fechaHoy}</span></div>
-      <div class="campo"><label>Estado</label><span>${(p.estado||'Pendiente').toUpperCase()}</span></div>
-      ${maquinaRel ? `<div class="campo"><label>Máquina</label><span>${maquinaRel.marca} ${maquinaRel.modelo} — ${maquinaRel.serie||'S/N'}</span></div>
-      <div class="campo"><label>Tipo</label><span>${maquinaRel.tipo||'—'}</span></div>` : ''}
+      <div class="campo"><label>Nº Presupuesto</label><span contenteditable="true">${numPresup}</span></div>
+      <div class="campo"><label>Fecha</label><span contenteditable="true">${p.fecha||fechaHoy}</span></div>
+      <div class="campo"><label>Estado</label><span contenteditable="true">${(p.estado||'Pendiente').toUpperCase()}</span></div>
+      ${maquinaRel ? `<div class="campo"><label>Máquina</label><span contenteditable="true">${maquinaRel.marca} ${maquinaRel.modelo} — ${maquinaRel.serie||'S/N'}</span></div>
+      <div class="campo"><label>Tipo</label><span contenteditable="true">${maquinaRel.tipo||'—'}</span></div>` : `<div class="campo"><label>Máquina</label><span contenteditable="true">—</span></div>`}
     </div>
   </div>
 </div>
@@ -2454,7 +2454,7 @@ ${p.notas ? `<div class="notas-box" contenteditable="true"><strong>Notas:</stron
   <div class="firma-box">
     <div class="firma-linea"></div>
     <div class="firma-label">MEB Machinery Solutions</div>
-    <div class="firma-nombre">Marcos Emmanuel Bellando</div>
+    <div class="firma-nombre" contenteditable="true">Marcos Emmanuel Bellando</div>
   </div>
 </div>
 
