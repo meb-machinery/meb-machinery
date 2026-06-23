@@ -2391,60 +2391,128 @@ function generarPresupuestoPDF(presupId) {
   const p = DB.presupuestos.find(x => x.id === presupId);
   if (!p) return;
   const cl = DB.clientes.find(c => c.id === p.clienteId);
-  const trabajoRel = DB.trabajos.find(t => t.clienteId === p.clienteId);
+
+  // Buscar el trabajo MÁS RECIENTE del mismo cliente (para pre-llenar datos)
+  const trabajosCliente = DB.trabajos
+    .filter(t => t.clienteId === p.clienteId && t.titulo)
+    .sort((a,b) => {
+      const fa = a.fechaInicio ? new Date(a.fechaInicio.split('/').reverse().join('-')) : new Date(0);
+      const fb = b.fechaInicio ? new Date(b.fechaInicio.split('/').reverse().join('-')) : new Date(0);
+      return fb - fa;
+    });
+  const trabajoRel = trabajosCliente[0] || null;
   const maquinaRel = trabajoRel ? DB.maquinas.find(m => m.id === trabajoRel.maquinaId) : null;
+
   const numPresup = String(p.num || p.id).padStart(4,'0');
   const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const fechaVence = new Date(Date.now() + 15*24*60*60*1000).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const montof = p.monto > 0 ? fmtMonto(p.monto) : '—';
 
-  // Parsear ítems con soporte para formato extendido: "descripción|artículo|cant|precio_unit"
+  // Parsear ítems: soporte para formato pipe "desc|tipo|cant|precio" (multi-ítem) o texto libre (ítem único)
   const lineas = (p.descripcion || '').split('\n').filter(l => l.trim());
   let itemsHTML = '';
-  if (lineas.length > 1) {
+  let montoCalculado = 0;
+
+  if (lineas.length >= 1 && lineas[0].includes('|')) {
+    // FORMATO NUEVO: multi-ítem con pipes
     itemsHTML = lineas.map((l, i) => {
       const parts = l.split('|').map(s => s.trim());
       const desc = parts[0] || '—';
-      const art = parts[1] || 'Servicio';
-      const cant = parts[2] || '1';
+      const art = parts[1] || 'Servicio técnico';
+      const cant = Number(parts[2]) || 1;
       const precioU = parts[3] ? parsePrecio(parts[3]) : 0;
-      const subtotal = precioU > 0 ? fmtMonto(precioU * Number(cant)) : (i===lineas.length-1 && p.monto>0 ? montof : '—');
-      return `<tr><td>${i+1}</td><td>${desc}</td><td>${art}</td><td style="text-align:center">${cant}</td><td style="text-align:right">${precioU>0?fmtMonto(precioU):'—'}</td><td style="text-align:right">${subtotal}</td></tr>`;
+      const sub = precioU * cant;
+      montoCalculado += sub;
+      const subtotalStr = sub > 0 ? fmtMonto(sub) : '—';
+      const precioStr = precioU > 0 ? fmtMonto(precioU) : '—';
+      return `<tr>
+        <td>${i+1}</td>
+        <td contenteditable="true">${desc}</td>
+        <td contenteditable="true">${art}</td>
+        <td contenteditable="true" style="text-align:center">${cant}</td>
+        <td contenteditable="true" style="text-align:right">${precioStr}</td>
+        <td contenteditable="true" style="text-align:right">${subtotalStr}</td>
+      </tr>`;
     }).join('');
+    // Agregar filas vacías editables para extras
+    const extras = Math.max(0, 3 - lineas.length);
+    for(let i=0;i<extras;i++){
+      itemsHTML+=`<tr><td>${lineas.length+i+1}</td><td contenteditable="true" style="color:#aaa;font-style:italic">Agregar ítem (opcional)</td><td contenteditable="true" style="color:#aaa">Repuesto</td><td contenteditable="true" style="text-align:center;color:#aaa">—</td><td contenteditable="true" style="text-align:right;color:#aaa">—</td><td contenteditable="true" style="text-align:right;color:#aaa">—</td></tr>`;
+    }
+
   } else {
+    // FORMATO ANTIGUO: texto libre — pre-llenamos desde el trabajo relacionado
+    montoCalculado = p.monto || 0;
+
+    // Fila 1: mano de obra (desde trabajo relacionado si existe)
+    const descMO = trabajoRel ? trabajoRel.titulo : (p.descripcion || 'Mano de obra / Servicio técnico');
+    const manoObra = trabajoRel && trabajoRel.manoObraCobrada > 0 ? trabajoRel.manoObraCobrada : (p.monto > 0 ? p.monto : 0);
+    const manoObraF = manoObra > 0 ? fmtMonto(manoObra) : '—';
     itemsHTML = `<tr>
       <td>1</td>
-      <td contenteditable="true">${p.descripcion||'Descripción del servicio'}</td>
-      <td contenteditable="true">Servicio técnico</td>
+      <td contenteditable="true">${descMO}</td>
+      <td contenteditable="true">Mano de obra</td>
       <td contenteditable="true" style="text-align:center">1</td>
-      <td contenteditable="true" style="text-align:right">—</td>
-      <td contenteditable="true" style="text-align:right">${montof}</td>
-    </tr>
-    <tr>
-      <td>2</td>
-      <td contenteditable="true" style="color:#aaa;font-style:italic">Repuesto (ej: Filtro hidráulico)</td>
-      <td contenteditable="true" style="color:#aaa;font-style:italic">Repuesto</td>
-      <td contenteditable="true" style="text-align:center;color:#aaa">—</td>
-      <td contenteditable="true" style="text-align:right;color:#aaa">—</td>
-      <td contenteditable="true" style="text-align:right;color:#aaa">—</td>
-    </tr>
-    <tr>
-      <td>3</td>
-      <td contenteditable="true" style="color:#aaa;font-style:italic">Repuesto (ej: Aceite motor 10W-40)</td>
-      <td contenteditable="true" style="color:#aaa;font-style:italic">Repuesto</td>
-      <td contenteditable="true" style="text-align:center;color:#aaa">—</td>
-      <td contenteditable="true" style="text-align:right;color:#aaa">—</td>
-      <td contenteditable="true" style="text-align:right;color:#aaa">—</td>
-    </tr>
-    <tr>
-      <td>4</td>
-      <td contenteditable="true" style="color:#aaa;font-style:italic">Mano de obra adicional (opcional)</td>
-      <td contenteditable="true" style="color:#aaa;font-style:italic">Mano de obra</td>
-      <td contenteditable="true" style="text-align:center;color:#aaa">—</td>
-      <td contenteditable="true" style="text-align:right;color:#aaa">—</td>
-      <td contenteditable="true" style="text-align:right;color:#aaa">—</td>
+      <td contenteditable="true" style="text-align:right">${manoObraF}</td>
+      <td contenteditable="true" style="text-align:right">${manoObraF}</td>
     </tr>`;
+
+    // Filas de repuestos desde el trabajo relacionado
+    let numFila = 2;
+    if (trabajoRel && trabajoRel.repuestosDetalle) {
+      const repuestos = trabajoRel.repuestosDetalle.split('\n').filter(r=>r.trim());
+      repuestos.forEach(rep => {
+        // Intentar parsear "Nombre repuesto | cant | precio" o solo nombre
+        const partes = rep.split('|').map(s=>s.trim());
+        const nombreRep = partes[0] || rep.trim();
+        const cantRep = partes[1] || '1';
+        const precioRep = partes[2] ? fmtMonto(Number(partes[2])) : '—';
+        const subRep = (partes[1] && partes[2]) ? fmtMonto(Number(partes[1])*Number(partes[2])) : '—';
+        itemsHTML += `<tr>
+          <td>${numFila}</td>
+          <td contenteditable="true">${nombreRep}</td>
+          <td contenteditable="true">Repuesto</td>
+          <td contenteditable="true" style="text-align:center">${cantRep}</td>
+          <td contenteditable="true" style="text-align:right">${precioRep}</td>
+          <td contenteditable="true" style="text-align:right">${subRep}</td>
+        </tr>`;
+        numFila++;
+      });
+    }
+
+    // Fila de movilidad si hay (desde trabajo)
+    if (trabajoRel && trabajoRel.movilidad > 0) {
+      itemsHTML += `<tr>
+        <td>${numFila}</td>
+        <td contenteditable="true">Traslado / viáticos</td>
+        <td contenteditable="true">Traslado</td>
+        <td contenteditable="true" style="text-align:center">1</td>
+        <td contenteditable="true" style="text-align:right">${fmtMonto(trabajoRel.movilidad)}</td>
+        <td contenteditable="true" style="text-align:right">${fmtMonto(trabajoRel.movilidad)}</td>
+      </tr>`;
+      numFila++;
+    }
+
+    // Siempre agregar al menos 2 filas vacías editables al final
+    const filasVacias = Math.max(2, 5 - numFila + 1);
+    for(let i=0; i<filasVacias; i++){
+      itemsHTML += `<tr>
+        <td>${numFila+i}</td>
+        <td contenteditable="true" style="color:#aaa;font-style:italic">Ítem adicional (opcional)</td>
+        <td contenteditable="true" style="color:#aaa">Repuesto</td>
+        <td contenteditable="true" style="text-align:center;color:#aaa">—</td>
+        <td contenteditable="true" style="text-align:right;color:#aaa">—</td>
+        <td contenteditable="true" style="text-align:right;color:#aaa">—</td>
+      </tr>`;
+    }
   }
+  // Calcular subtotales reales desde el trabajo relacionado (si existe)
+  const subtotalMO = trabajoRel && trabajoRel.manoObraCobrada > 0 ? fmtMonto(trabajoRel.manoObraCobrada) : '—';
+  const subtotalRep = trabajoRel && trabajoRel.precioRepuestoFacturado > 0
+    ? fmtMonto(trabajoRel.precioRepuestoFacturado)
+    : (trabajoRel && trabajoRel.costoRepuesto > 0 ? fmtMonto(trabajoRel.costoRepuesto) : '—');
+  const subtotalMov = trabajoRel && trabajoRel.movilidad > 0 ? fmtMonto(trabajoRel.movilidad) : '—';
+  const totalFinal = montoCalculado > 0 ? fmtMonto(montoCalculado) : montof;
 
   const w = window.open('','_blank','width=980,height=800');
   w.document.write(`<!DOCTYPE html><html lang="es"><head>
@@ -2570,10 +2638,11 @@ ${p.notas ? `<div class="notas-box" contenteditable="true"><strong>Notas:</stron
 
 <div class="total-section">
   <div class="total-box">
-    <div class="total-row"><span>Subtotal mano de obra</span><span contenteditable="true">—</span></div>
-    <div class="total-row"><span>Repuestos / Materiales</span><span contenteditable="true">—</span></div>
+    <div class="total-row"><span>Subtotal mano de obra</span><span contenteditable="true">${subtotalMO}</span></div>
+    <div class="total-row"><span>Repuestos / Materiales</span><span contenteditable="true">${subtotalRep}</span></div>
+    <div class="total-row"><span>Traslado / viáticos</span><span contenteditable="true">${subtotalMov}</span></div>
     <div class="total-row"><span>Descuento</span><span contenteditable="true">—</span></div>
-    <div class="total-row main"><span>TOTAL</span><span>${montof}</span></div>
+    <div class="total-row main"><span>TOTAL</span><span contenteditable="true">${totalFinal}</span></div>
   </div>
 </div>
 
@@ -2688,17 +2757,121 @@ function openModal(type, data={}) {
 
   else if(type==='presupuesto') {
     title='NUEVO PRESUPUESTO';
+    // Si ya tiene ítems en formato pipe, parsearlos para edición
+    const lineasExist = (data.descripcion||'').split('\n').filter(l=>l.trim());
+    let itemsInicialesHTML = '';
+    if(lineasExist.length > 0 && lineasExist[0].includes('|')) {
+      // Presupuesto con ítems existentes en formato pipe
+      itemsInicialesHTML = lineasExist.map((l,i)=>{
+        const parts = l.split('|').map(s=>s.trim());
+        return `<tr class="item-row">
+          <td style="color:var(--muted);font-size:11px;padding:4px 6px">${i+1}</td>
+          <td><input class="item-desc" value="${parts[0]||''}" placeholder="Descripción del servicio o repuesto" style="width:100%;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px 8px;border-radius:4px;font-family:Barlow;font-size:12px"/></td>
+          <td><select class="item-tipo" style="background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px">
+            <option value="Servicio técnico"${(parts[1]||'')===''||parts[1]==='Servicio técnico'?' selected':''}>Servicio técnico</option>
+            <option value="Repuesto"${parts[1]==='Repuesto'?' selected':''}>Repuesto</option>
+            <option value="Mano de obra"${parts[1]==='Mano de obra'?' selected':''}>Mano de obra</option>
+            <option value="Material"${parts[1]==='Material'?' selected':''}>Material</option>
+            <option value="Traslado"${parts[1]==='Traslado'?' selected':''}>Traslado</option>
+          </select></td>
+          <td><input class="item-cant" type="number" value="${parts[2]||1}" min="1" style="width:60px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px;text-align:center" oninput="recalcularTotal()"/></td>
+          <td><input class="item-precio" type="number" value="${parts[3]||''}" placeholder="0" style="width:110px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px;text-align:right" oninput="recalcularTotal()"/></td>
+          <td class="item-subtotal" style="color:var(--yellow);font-family:'Bebas Neue';font-size:14px;text-align:right;padding:4px 6px">—</td>
+          <td><button onclick="this.closest('tr').remove();recalcularTotal()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px 6px">✕</button></td>
+        </tr>`;
+      }).join('');
+    } else {
+      // Presupuesto nuevo o con descripción texto — 1 fila con la descripción existente
+      itemsInicialesHTML = `<tr class="item-row">
+        <td style="color:var(--muted);font-size:11px;padding:4px 6px">1</td>
+        <td><input class="item-desc" value="${data.descripcion||''}" placeholder="Descripción del trabajo / servicio" style="width:100%;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px 8px;border-radius:4px;font-family:Barlow;font-size:12px"/></td>
+        <td><select class="item-tipo" style="background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px">
+          <option value="Servicio técnico" selected>Servicio técnico</option>
+          <option value="Repuesto">Repuesto</option>
+          <option value="Mano de obra">Mano de obra</option>
+          <option value="Material">Material</option>
+          <option value="Traslado">Traslado</option>
+        </select></td>
+        <td><input class="item-cant" type="number" value="1" min="1" style="width:60px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px;text-align:center" oninput="recalcularTotal()"/></td>
+        <td><input class="item-precio" type="number" value="${data.monto||''}" placeholder="0" style="width:110px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px;text-align:right" oninput="recalcularTotal()"/></td>
+        <td class="item-subtotal" style="color:var(--yellow);font-family:'Bebas Neue';font-size:14px;text-align:right;padding:4px 6px">—</td>
+        <td><button onclick="this.closest('tr').remove();recalcularTotal()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px 6px">✕</button></td>
+      </tr>`;
+    }
+
     body=`<div class="form-grid">
       <div class="form-group full"><label>Cliente *</label><select id="f-pcli"><option value="">Seleccionar...</option>${clienteOptions(data.clienteId)}</select></div>
-      <div class="form-group full"><label>Descripción *</label><input id="f-pdesc" value="${data.descripcion||''}"/></div>
-      <div class="form-group"><label>Monto ($)</label><input id="f-pmonto" type="number" value="${data.monto||0}"/></div>
       <div class="form-group"><label>Fecha</label><input id="f-pfecha" type="date" value="${data.fecha||today()}"/></div>
       <div class="form-group"><label>Estado</label>
-        <select id="f-pestado"><option value="pendiente">Pendiente</option><option value="aprobado">Aprobado</option><option value="rechazado">Rechazado</option></select>
+        <select id="f-pestado">
+          <option value="pendiente"${(data.estado||'pendiente')==='pendiente'?' selected':''}>Pendiente</option>
+          <option value="aprobado"${data.estado==='aprobado'?' selected':''}>Aprobado</option>
+          <option value="rechazado"${data.estado==='rechazado'?' selected':''}>Rechazado</option>
+        </select>
       </div>
-      <div class="form-group full"><label>Notas</label><textarea id="f-pnotas">${data.notas||''}</textarea></div>
+
+      <!-- Tabla de ítems -->
+      <div class="form-group full" style="margin-top:4px">
+        <label style="display:flex;justify-content:space-between;align-items:center">
+          <span>Ítems del presupuesto</span>
+          <button type="button" onclick="agregarItemPresup()" style="background:var(--yellow);color:var(--black);border:none;padding:4px 12px;border-radius:4px;font-family:'Bebas Neue';font-size:13px;cursor:pointer;letter-spacing:1px">+ AGREGAR ÍTEM</button>
+        </label>
+        <table style="width:100%;border-collapse:collapse;margin-top:8px">
+          <thead>
+            <tr style="background:var(--dark2,#222)">
+              <th style="padding:6px;font-size:10px;color:var(--muted);text-align:left;width:24px">#</th>
+              <th style="padding:6px;font-size:10px;color:var(--muted);text-align:left">DESCRIPCIÓN</th>
+              <th style="padding:6px;font-size:10px;color:var(--muted);text-align:left;width:130px">TIPO</th>
+              <th style="padding:6px;font-size:10px;color:var(--muted);text-align:center;width:60px">CANT.</th>
+              <th style="padding:6px;font-size:10px;color:var(--muted);text-align:right;width:120px">P. UNITARIO</th>
+              <th style="padding:6px;font-size:10px;color:var(--muted);text-align:right;width:100px">SUBTOTAL</th>
+              <th style="width:30px"></th>
+            </tr>
+          </thead>
+          <tbody id="items-presup-body">${itemsInicialesHTML}</tbody>
+        </table>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+          <span style="color:var(--muted);font-size:12px;margin-right:12px;line-height:2">TOTAL:</span>
+          <span id="presup-total-display" style="font-family:'Bebas Neue';font-size:22px;color:var(--yellow)">—</span>
+        </div>
+      </div>
+
+      <div class="form-group full"><label>Notas (opcional)</label><textarea id="f-pnotas">${data.notas||''}</textarea></div>
     </div>`;
-    onSave=()=>guardar('presupuestos',{id:data.id||uid(),num:data.num||DB.presupCounter++,clienteId:gv('f-pcli'),descripcion:gv('f-pdesc'),monto:parseFloat(gv('f-pmonto'))||0,estado:gv('f-pestado'),fecha:gv('f-pfecha'),notas:gv('f-pnotas')},'descripcion');
+
+    onSave=()=>{
+      const clienteId = gv('f-pcli');
+      if(!clienteId){showToast('Seleccioná un cliente','error');return;}
+      const rows = document.querySelectorAll('#items-presup-body .item-row');
+      if(!rows.length){showToast('Agregá al menos un ítem','error');return;}
+      // Construir descripción en formato pipe y calcular monto total
+      let totalMonto = 0;
+      const lineas = [];
+      rows.forEach(tr=>{
+        const desc = tr.querySelector('.item-desc')?.value?.trim()||'';
+        const tipo = tr.querySelector('.item-tipo')?.value?.trim()||'Servicio técnico';
+        const cant = Number(tr.querySelector('.item-cant')?.value)||1;
+        const precio = Number(tr.querySelector('.item-precio')?.value)||0;
+        if(!desc) return;
+        lineas.push(`${desc}|${tipo}|${cant}|${precio}`);
+        totalMonto += cant * precio;
+      });
+      if(!lineas.length){showToast('Completá la descripción de al menos un ítem','error');return;}
+      const descripcion = lineas.join('\n');
+      guardar('presupuestos',{
+        id:data.id||uid(),
+        num:data.num||DB.presupCounter++,
+        clienteId,
+        descripcion,
+        monto:totalMonto||data.monto||0,
+        estado:gv('f-pestado'),
+        fecha:gv('f-pfecha'),
+        notas:gv('f-pnotas')
+      },'descripcion');
+    };
+
+    // Calcular subtotales después de renderizar
+    setTimeout(()=>recalcularTotal(), 50);
   }
 
   else if(type==='alerta') {
@@ -2744,6 +2917,49 @@ function openModal(type, data={}) {
 
 function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
 function closeModalOut(e) { if(e.target===document.getElementById('modalOverlay')) closeModal(); }
+
+// Agregar fila de ítem al formulario de presupuesto
+function agregarItemPresup() {
+  const tbody = document.getElementById('items-presup-body');
+  if (!tbody) return;
+  const n = tbody.querySelectorAll('.item-row').length + 1;
+  const tr = document.createElement('tr');
+  tr.className = 'item-row';
+  tr.innerHTML = `
+    <td style="color:var(--muted);font-size:11px;padding:4px 6px">${n}</td>
+    <td><input class="item-desc" placeholder="Descripción del ítem" style="width:100%;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px 8px;border-radius:4px;font-family:Barlow;font-size:12px"/></td>
+    <td><select class="item-tipo" style="background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px">
+      <option value="Servicio técnico">Servicio técnico</option>
+      <option value="Repuesto" selected>Repuesto</option>
+      <option value="Mano de obra">Mano de obra</option>
+      <option value="Material">Material</option>
+      <option value="Traslado">Traslado</option>
+    </select></td>
+    <td><input class="item-cant" type="number" value="1" min="1" style="width:60px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px;text-align:center" oninput="recalcularTotal()"/></td>
+    <td><input class="item-precio" type="number" placeholder="0" style="width:110px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px;text-align:right" oninput="recalcularTotal()"/></td>
+    <td class="item-subtotal" style="color:var(--yellow);font-family:'Bebas Neue';font-size:14px;text-align:right;padding:4px 6px">—</td>
+    <td><button onclick="this.closest('tr').remove();recalcularTotal()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px 6px">✕</button></td>`;
+  tbody.appendChild(tr);
+  tr.querySelector('.item-desc').focus();
+}
+
+// Recalcular subtotales y total del presupuesto en tiempo real
+function recalcularTotal() {
+  let total = 0;
+  document.querySelectorAll('#items-presup-body .item-row').forEach((tr, i) => {
+    const cant = Number(tr.querySelector('.item-cant')?.value) || 1;
+    const precio = Number(tr.querySelector('.item-precio')?.value) || 0;
+    const sub = cant * precio;
+    const subCell = tr.querySelector('.item-subtotal');
+    // renumerar
+    const numCell = tr.cells[0];
+    if(numCell) numCell.textContent = i+1;
+    if(subCell) subCell.textContent = sub > 0 ? fmtMonto(sub) : '—';
+    total += sub;
+  });
+  const totalEl = document.getElementById('presup-total-display');
+  if(totalEl) totalEl.textContent = total > 0 ? fmtMonto(total) : '—';
+}
 
 // ============================================================
 // CRUD
