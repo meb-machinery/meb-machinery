@@ -246,7 +246,7 @@ select option { background:var(--dark); }
 <div class="login-screen" id="loginScreen">
   <div class="login-box">
     <div class="login-logo">
-      <img id="loginLogoImg" style="height:56px;object-fit:contain;margin-bottom:4px" alt="MEB Machinery Solutions"/>
+      <img id="loginLogoImg" style="height:56px;object-fit:contain;margin-bottom:4px;border-radius:6px;background:#1E1E1E" alt="MEB Machinery Solutions"/>
       <div class="lt" style="display:none"><div class="l1">Machinery Solutions</div><div class="l2">Sistema interno · CRM</div></div>
     </div>
     <div class="l2" style="font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:20px">Sistema interno · CRM</div>
@@ -411,6 +411,7 @@ select option { background:var(--dark); }
       <button class="filter-tab" onclick="setFilter('presup','en curso',this)">En curso</button>
       <button class="filter-tab" onclick="setFilter('presup','no aprobado',this)">No aprobados</button>
     </div>
+    <div class="search-bar"><span>🔍</span><input type="text" placeholder="Buscar número, cliente, descripción..." id="searchPresupuestos" oninput="renderPresupuestos()"></div>
     <div class="card"><div class="table-wrap"><table>
       <thead><tr><th>#</th><th>Cliente</th><th>Descripción</th><th>Monto</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
       <tbody id="tabla-presupuestos"></tbody>
@@ -1418,21 +1419,34 @@ function renderTrabajos() {
 function renderPresupuestos() {
   let data=DB.presupuestos;
   if(filters.presup!=='todos') data=data.filter(p=>p.estado===filters.presup);
+  // Buscador interno
+  const search=(document.getElementById('searchPresupuestos')||{value:''}).value.toLowerCase().trim();
+  if(search){
+    data=data.filter(p=>{
+      const cl=DB.clientes.find(c=>c.id===p.clienteId);
+      const numStr=String(p.num||0).padStart(4,'0');
+      return numStr.includes(search)||
+        (p.descripcion||'').toLowerCase().includes(search)||
+        (cl&&((cl.nombre||'')+(cl.empresa||'')).toLowerCase().includes(search));
+    });
+  }
   const tbody=document.getElementById('tabla-presupuestos');
   if(!data.length){tbody.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="icon">📋</div><p>Sin presupuestos</p></div></td></tr>`;return;}
   tbody.innerHTML=data.map(p=>{
     const cl=DB.clientes.find(c=>c.id===p.clienteId);
+    const descCorta=(p.descripcion||'—').split('\n')[0].split('|')[0];
     return `<tr>
       <td><span style="font-family:'Bebas Neue';color:var(--yellow);font-size:15px">#${String(p.num||0).padStart(4,'0')}</span></td>
       <td>${cl?`<div class="td-name">${cl.nombre}</div><div class="td-muted">${cl.empresa||''}</div>`:'—'}</td>
-      <td>${p.descripcion||'—'}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${descCorta}</td>
       <td><span class="monto">${fmtMonto(p.monto)}</span></td>
       <td>${badgeEstado(p.estado)}</td>
       <td class="td-muted">${fmtDate(p.fecha)}</td>
       <td><div class="actions">
+        <button class="btn-secondary" title="Editar" onclick="openModal('presupuesto',DB.presupuestos.find(x=>x.id==='${p.id}'))">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','rechazado'])">Estado</button>
         <button class="btn-secondary" onclick="duplicarPresupuesto('${p.id}')" title="Duplicar">⧉</button>
-        <button class="btn-secondary" onclick="generarPresupuestoPDF('${p.id}')">📄</button>
+        <button class="btn-secondary" onclick="generarPresupuestoPDF('${p.id}')">📄 PDF</button>
         <button class="btn-danger" onclick="eliminar('presupuestos','${p.id}')">✕</button>
       </div></td>
     </tr>`;
@@ -1558,19 +1572,35 @@ function renderAlertas() {
 
   const el=document.getElementById('lista-alertas');
   const data=[...DB.alertas].sort((a,b)=>(a.resuelta?1:0)-(b.resuelta?1:0));
+
+  const total=data.length, resueltas=data.filter(a=>a.resuelta).length, pendientes=total-resueltas;
+  const indexHTML=total>0?`<div style="display:flex;gap:14px;margin-bottom:10px;padding:8px 12px;background:var(--dark);border-radius:6px;font-size:12px">
+    <span>📋 <strong style="color:var(--text)">${total}</strong> total</span>
+    <span>🔴 <strong style="color:var(--red)">${pendientes}</strong> pendientes</span>
+    <span>✅ <strong style="color:#25d366">${resueltas}</strong> resueltas</span>
+    ${total>0?`<span style="color:var(--muted)">${Math.round(resueltas/total*100)}% completadas</span>`:''}
+  </div>`:'';
+
   if(!data.length){el.innerHTML=`<div class="empty-state"><div class="icon">🔔</div><p>Sin alertas manuales</p></div>`;return;}
-  el.innerHTML=data.map(a=>{
+  el.innerHTML=indexHTML+data.map(a=>{
     const cl=DB.clientes.find(c=>c.id===a.clienteId);
-    const col=a.prioridad==='alta'?'red':a.prioridad==='media'?'orange':'yellow';
-    return `<div class="alert-item" style="${a.resuelta?'opacity:0.35':''}">
-      <div class="alert-dot ${col}"></div>
-      <div class="alert-text">
+    const col=a.prioridad==='alta'?'var(--red)':a.prioridad==='media'?'var(--orange)':'var(--yellow)';
+    const commLabel=a.tipoComm?`<div style="font-size:10px;color:var(--muted);margin-top:2px">📞 ${a.tipoComm}</div>`:'';
+    return `<div class="alert-item" style="${a.resuelta?'opacity:0.45;border-left:3px solid #25d366':''}">
+      <div class="alert-dot" style="background:${col};width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px"></div>
+      <div class="alert-text" style="flex:1">
         <div class="alert-title">${a.titulo}${cl?` — <span style="color:var(--yellow)">${cl.nombre}</span>`:''}</div>
         <div class="alert-sub">${a.descripcion||''}</div>
+        ${commLabel}
+        ${!a.resuelta?`<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">
+          <button class="btn-secondary" style="font-size:10px;padding:2px 8px" onclick="registrarComm('${a.id}','Personal')">👥 Personal</button>
+          <button class="btn-secondary" style="font-size:10px;padding:2px 8px" onclick="registrarComm('${a.id}','Telefónica')">📞 Telefónica</button>
+          <button class="btn-secondary" style="font-size:10px;padding:2px 8px;background:rgba(37,211,102,0.12);border-color:#25d366;color:#25d366" onclick="registrarComm('${a.id}','WA')">📲 WA</button>
+        </div>`:''}
       </div>
-      <div style="text-align:right">
+      <div style="text-align:right;min-width:90px">
         <div class="alert-date">${fmtDate(a.fecha)}</div>
-        <button class="btn-secondary" style="margin-top:4px;font-size:10px;padding:3px 8px" onclick="resolverAlerta('${a.id}')">${a.resuelta?'↩ Reabrir':'✓ Resolver'}</button>
+        <button class="btn-secondary" style="margin-top:6px;font-size:10px;padding:3px 8px;${a.resuelta?'border-color:#25d366;color:#25d366':''}" onclick="resolverAlerta('${a.id}')">${a.resuelta?'✔ Resuelta':'✓ Resolver'}</button>
       </div>
     </div>`;
   }).join('');
@@ -1579,6 +1609,15 @@ function renderAlertas() {
 function resolverAlerta(id) {
   const a=DB.alertas.find(x=>x.id===id);
   if(a){a.resuelta=!a.resuelta;saveLocal();updateBadges();renderAlertas();renderDashboard();}
+}
+
+function registrarComm(id, tipo) {
+  const a=DB.alertas.find(x=>x.id===id);
+  if(!a) return;
+  a.tipoComm=tipo;
+  a.resuelta=true;
+  saveLocal();updateBadges();renderAlertas();renderDashboard();
+  showToast('Comunicación '+tipo+' registrada — alerta resuelta ✔','success');
 }
 
 let _waAlertaTelefono = '';
@@ -2434,10 +2473,10 @@ function generarPresupuestoPDF(presupId) {
         <td contenteditable="true" style="text-align:right">${subtotalStr}</td>
       </tr>`;
     }).join('');
-    // Agregar filas vacías editables para extras
-    const extras = Math.max(0, 3 - lineas.length);
+    // Agregar filas vacías hasta 25 total
+    const extras = Math.max(0, 25 - lineas.length);
     for(let i=0;i<extras;i++){
-      itemsHTML+=`<tr><td>${lineas.length+i+1}</td><td contenteditable="true" style="color:#aaa;font-style:italic">Agregar ítem (opcional)</td><td contenteditable="true" style="color:#aaa">Repuesto</td><td contenteditable="true" style="text-align:center;color:#aaa">—</td><td contenteditable="true" style="text-align:right;color:#aaa">—</td><td contenteditable="true" style="text-align:right;color:#aaa">—</td></tr>`;
+      itemsHTML+=`<tr><td style="color:#bbb">${lineas.length+i+1}</td><td contenteditable="true"></td><td contenteditable="true">Repuesto</td><td contenteditable="true" style="text-align:center"></td><td contenteditable="true" style="text-align:right"></td><td contenteditable="true" style="text-align:right"></td></tr>`;
     }
 
   } else {
@@ -2493,16 +2532,16 @@ function generarPresupuestoPDF(presupId) {
       numFila++;
     }
 
-    // Siempre agregar al menos 2 filas vacías editables al final
-    const filasVacias = Math.max(2, 5 - numFila + 1);
+    // Siempre agregar filas vacías hasta llegar a 25 total
+    const filasVacias = Math.max(3, 25 - numFila + 1);
     for(let i=0; i<filasVacias; i++){
       itemsHTML += `<tr>
-        <td>${numFila+i}</td>
-        <td contenteditable="true" style="color:#aaa;font-style:italic">Ítem adicional (opcional)</td>
-        <td contenteditable="true" style="color:#aaa">Repuesto</td>
-        <td contenteditable="true" style="text-align:center;color:#aaa">—</td>
-        <td contenteditable="true" style="text-align:right;color:#aaa">—</td>
-        <td contenteditable="true" style="text-align:right;color:#aaa">—</td>
+        <td style="color:#bbb">${numFila+i}</td>
+        <td contenteditable="true"></td>
+        <td contenteditable="true">Repuesto</td>
+        <td contenteditable="true" style="text-align:center"></td>
+        <td contenteditable="true" style="text-align:right"></td>
+        <td contenteditable="true" style="text-align:right"></td>
       </tr>`;
     }
   }
@@ -2573,14 +2612,74 @@ table.detalle tr:hover td{background:#fafafa}
 .footer-brand{font-size:11px;font-weight:700;color:#1A1A1A;letter-spacing:1px}
 .footer-data{font-size:10px;color:#aaa;text-align:right}
 .vencimiento{background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:6px 12px;font-size:11px;color:#856404;font-weight:700;display:inline-block}
+.btn-wa-pdf{background:#25d366;color:#fff;border:none;padding:9px 16px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer}
+.btn-mail-pdf{background:#003B70;color:#fff;border:none;padding:9px 16px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer}
+[contenteditable]{color:#1A1A1A}
 [contenteditable]:focus{outline:2px dashed #F4B400;border-radius:3px;padding:1px 3px}
-@media print{.no-print{display:none}body{padding:20px}[contenteditable]{outline:none;padding:0}table.detalle tr:hover td{background:transparent}}
-</style></head><body>
+[contenteditable]:hover{background:rgba(244,180,0,0.07)}
+table.detalle td[contenteditable]{color:#1A1A1A}
+@media print{.no-print{display:none}body{padding:20px}[contenteditable]{outline:none;padding:0;background:transparent!important;color:#1A1A1A!important}table.detalle tr:hover td{background:transparent}}
+</style>
+<script>
+function _fmtPeso(n){if(!n||isNaN(n)||n<=0)return '';return '$'+Number(n).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2});}
+function _parsePeso(s){if(!s||s==='-'||s==='—'||s.trim()==='')return 0;var c=String(s).replace(/\$/g,'').replace(/\s/g,'').replace(/\./g,'').replace(',','.');return parseFloat(c)||0;}
+function recalcPDF(){
+  var rows=document.querySelectorAll('table.detalle tbody tr');
+  var tMO=0,tRep=0,tMov=0,grand=0;
+  rows.forEach(function(tr){
+    var c=tr.querySelectorAll('td');
+    if(c.length<6)return;
+    var tipo=(c[2]?c[2].innerText:'').toLowerCase().trim();
+    var cant=parseFloat((c[3]?c[3].innerText:'').replace(',','.'))||0;
+    var precio=_parsePeso(c[4]?c[4].innerText:'');
+    var sub=cant>0&&precio>0?cant*precio:0;
+    if(sub>0){
+      c[5].innerText=_fmtPeso(sub);
+      grand+=sub;
+      if(tipo.includes('repuesto')||tipo.includes('material'))tRep+=sub;
+      else if(tipo.includes('traslado')||tipo.includes('via'))tMov+=sub;
+      else tMO+=sub;
+    }
+  });
+  document.querySelectorAll('.total-row').forEach(function(row){
+    var sp=row.querySelectorAll('span');
+    if(!sp[0]||!sp[1])return;
+    var lbl=(sp[0].innerText||'').toLowerCase();
+    if(lbl.includes('mano'))sp[1].innerText=tMO>0?_fmtPeso(tMO):'—';
+    else if(lbl.includes('repuesto')||lbl.includes('material'))sp[1].innerText=tRep>0?_fmtPeso(tRep):'—';
+    else if(lbl.includes('traslado'))sp[1].innerText=tMov>0?_fmtPeso(tMov):'—';
+    else if(row.classList.contains('main')&&grand>0)sp[1].innerText=_fmtPeso(grand);
+  });
+}
+window.addEventListener('DOMContentLoaded',function(){
+  document.querySelectorAll('table.detalle td[contenteditable]').forEach(function(td){
+    td.addEventListener('blur',function(){
+      var idx=Array.from(td.parentNode.children).indexOf(td);
+      if(idx===4){var v=_parsePeso(td.innerText);if(v>0)td.innerText=_fmtPeso(v);}
+      if(idx===3||idx===4)recalcPDF();
+    });
+    td.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();td.blur();}});
+  });
+  recalcPDF();
+});
+function _enviarWA(tel,num){
+  var msg='Hola! Te contactamos desde *MEB Machinery Solutions*.\n\nTe enviamos el Presupuesto N° '+num+'.\n\nCualquier consulta estamos disponibles:\n📞 +54 11 3392-3254\n📧 mebmachinerysolutions@gmail.com\n\n¡Gracias!';
+  window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank');
+}
+function _enviarEmail(email,num){
+  var s='Presupuesto N° '+num+' — MEB Machinery Solutions';
+  var b='Estimado/a,\n\nAdjuntamos el Presupuesto N° '+num+' de MEB Machinery Solutions.\n\nContacto: mebmachinerysolutions@gmail.com | +54 11 3392-3254\n\n¡Quedamos a disposición!';
+  window.location.href='mailto:'+email+'?subject='+encodeURIComponent(s)+'&body='+encodeURIComponent(b);
+}
+</script>
+</head><body>
 
 <div class="no-print">
   <button class="btn-pdf" onclick="window.print()">🖨️ IMPRIMIR / GUARDAR PDF</button>
+  <button class="btn-wa-pdf" onclick="_enviarWA('${cl ? (cl.telefono||'').replace(/\D/g,'') : ''}','${numPresup}')">📲 WA cliente</button>
+  <button class="btn-mail-pdf" onclick="_enviarEmail('${cl ? (cl.email||'') : ''}','${numPresup}')">📧 Email cliente</button>
   <button class="btn-cerrar" onclick="window.close()">✕ Cerrar</button>
-  <span class="tip">✏️ Todos los campos con borde amarillo son <strong>editables</strong> antes de imprimir · Completá cantidad, precio unitario y subtotal en cada fila · En el diálogo de impresión elegí "Guardar como PDF"</span>
+  <span class="tip">✏️ Campos editables · Ingresá <strong>Cant.</strong> y <strong>P. Unitario</strong> → el subtotal y totales se calculan solos</span>
 </div>
 
 <div class="header">
@@ -2620,8 +2719,7 @@ table.detalle tr:hover td{background:#fafafa}
       <div class="campo"><label>Nº Presupuesto</label><span contenteditable="true">${numPresup}</span></div>
       <div class="campo"><label>Fecha</label><span contenteditable="true">${p.fecha||fechaHoy}</span></div>
       <div class="campo"><label>Estado</label><span contenteditable="true">${(p.estado||'Pendiente').toUpperCase()}</span></div>
-      ${maquinaRel ? `<div class="campo"><label>Máquina</label><span contenteditable="true">${maquinaRel.marca} ${maquinaRel.modelo} — ${maquinaRel.serie||'S/N'}</span></div>
-      <div class="campo"><label>Tipo</label><span contenteditable="true">${maquinaRel.tipo||'—'}</span></div>` : `<div class="campo"><label>Máquina</label><span contenteditable="true">—</span></div>`}
+      ${maquinaRel ? '<div class="campo"><label>M\u00e1quina</label><span contenteditable="true">'+( maquinaRel ? maquinaRel.marca+' '+maquinaRel.modelo+' \u2014 '+(maquinaRel.serie||'S/N') : '\u2014')+'</span></div><div class="campo"><label>Tipo</label><span contenteditable="true">'+(maquinaRel ? maquinaRel.tipo||'\u2014' : '\u2014')+'</span></div>' : '<div class="campo"><label>M\u00e1quina</label><span contenteditable="true">\u2014</span></div>'}
     </div>
   </div>
 </div>
@@ -2634,7 +2732,7 @@ table.detalle tr:hover td{background:#fafafa}
   </table>
 </div>
 
-${p.notas ? `<div class="notas-box" contenteditable="true"><strong>Notas:</strong> ${p.notas}</div>` : '<div class="notas-box" contenteditable="true" style="color:#aaa;font-style:italic">Agregar notas, condiciones especiales o aclaraciones...</div>'}
+${p.notas ? '<div class="notas-box" contenteditable="true"><strong>Notas:</strong> '+p.notas+'</div>' : '<div class="notas-box" contenteditable="true" style="color:#aaa;font-style:italic">Agregar notas, condiciones especiales o aclaraciones...</div>'}
 
 <div class="total-section">
   <div class="total-box">
