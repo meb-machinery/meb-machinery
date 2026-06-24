@@ -1555,31 +1555,53 @@ function renderAlertas() {
   if(mantPanel) {
     const alMant = calcularAlertasRepuesto();
     if(alMant.length) {
+      // Calcular estadísticas de comunicaciones
+      const conComm = alMant.filter(a=>{
+        const key = a.clienteNombre+'|'+a.maquinaDesc+'|'+a.label;
+        return DB.alertasRepuesto && DB.alertasRepuesto[key] && DB.alertasRepuesto[key].length>0;
+      }).length;
+      const pctComm = Math.round(conComm/alMant.length*100);
+      const colPct = pctComm>=80?'#25d366':pctComm>=50?'var(--yellow)':'var(--red)';
+
       mantPanel.innerHTML = `<div class="card" style="border-left:3px solid var(--orange);margin-bottom:12px">
-        <div class="card-header"><span class="card-title">⚙️ MANTENIMIENTO PREDICTIVO (${alMant.length})</span></div>
-        <div style="padding:8px 12px">${alMant.map(a=>{
+        <div class="card-header">
+          <span class="card-title">⚙️ MANTENIMIENTO PREDICTIVO (${alMant.length})</span>
+          <span style="font-size:11px;color:var(--muted)">Comunicaciones: <strong style="color:${colPct}">${conComm}/${alMant.length} (${pctComm}%)</strong></span>
+        </div>
+        <div style="background:var(--border);border-radius:3px;height:5px;margin:0 12px 10px;overflow:hidden">
+          <div style="height:100%;width:${pctComm}%;background:${colPct};border-radius:3px;transition:width .4s"></div>
+        </div>
+        <div style="padding:4px 12px 8px">${alMant.map(a=>{
           const col = a.urgencia==='vencido'?'var(--red)':a.urgencia==='urgente'?'var(--orange)':'var(--yellow)';
           const label = a.urgencia==='vencido'?`VENCIDO hace ${Math.abs(a.diasRestantes)}d`:`en ${a.diasRestantes}d`;
           const cl = DB.clientes.find(c=>c.nombre===a.clienteNombre);
           const tieneWA = cl && cl.telefono;
+          const key = encodeURIComponent(a.clienteNombre+'|'+a.maquinaDesc+'|'+a.label);
+          const rawKey = a.clienteNombre+'|'+a.maquinaDesc+'|'+a.label;
+          const historial = (DB.alertasRepuesto&&DB.alertasRepuesto[rawKey])||[];
+          const ultimaComm = historial.length>0 ? historial[historial.length-1] : null;
           const aJson = encodeURIComponent(JSON.stringify({
-            clienteNombre: a.clienteNombre,
-            maquinaDesc: a.maquinaDesc,
-            label: a.label,
-            hs: a.hs,
-            fechaBase: a.fechaBase,
-            urgencia: a.urgencia,
-            diasRestantes: a.diasRestantes,
-            telefono: cl ? (cl.telefono||'') : ''
+            clienteNombre:a.clienteNombre, maquinaDesc:a.maquinaDesc,
+            label:a.label, hs:a.hs, fechaBase:a.fechaBase,
+            urgencia:a.urgencia, diasRestantes:a.diasRestantes,
+            telefono:cl?(cl.telefono||''):''
           }));
-          return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
-            <div style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></div>
-            <div style="flex:1">
-              <div style="font-size:12px;font-weight:600;color:var(--text)">${a.clienteNombre} · ${a.maquinaDesc}</div>
-              <div style="font-size:11px;color:var(--muted)">${a.label} · Base: ${a.fechaBase}</div>
+          return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></div>
+              <div style="flex:1">
+                <div style="font-size:12px;font-weight:600;color:var(--text)">${a.clienteNombre} · ${a.maquinaDesc}</div>
+                <div style="font-size:11px;color:var(--muted)">${a.label} · Base: ${a.fechaBase}</div>
+                ${ultimaComm?`<div style="font-size:10px;color:#25d366;margin-top:2px">✔ Último contacto: ${ultimaComm.tipo} — ${ultimaComm.fecha}</div>`:'<div style="font-size:10px;color:var(--muted2);margin-top:2px">Sin comunicación registrada</div>'}
+              </div>
+              <span style="font-family:'Bebas Neue';font-size:13px;color:${col};margin-right:6px">${label}</span>
             </div>
-            <span style="font-family:'Bebas Neue';font-size:13px;color:${col};margin-right:8px">${label}</span>
-            ${tieneWA ? `<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="previewMsgAlerta('${aJson}')">📲 Notificar WA</button>` : ''}
+            <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap;padding-left:18px">
+              <button class="btn-secondary" style="font-size:10px;padding:2px 8px" onclick="regCommMant('${key}','Personal')">👥 Personal</button>
+              <button class="btn-secondary" style="font-size:10px;padding:2px 8px" onclick="regCommMant('${key}','Telefónica')">📞 Telefónica</button>
+              ${tieneWA?`<button class="btn-secondary" style="font-size:10px;padding:2px 8px;background:rgba(37,211,102,0.12);border-color:#25d366;color:#25d366" onclick="regCommMantWA('${key}','${aJson}')">📲 WA</button>`:''}
+              ${historial.length>0?`<button class="btn-secondary" style="font-size:10px;padding:2px 8px;color:var(--muted)" onclick="verHistorialComm('${key}')">📋 Ver historial (${historial.length})</button>`:''}
+            </div>
           </div>`;
         }).join('')}</div>
       </div>`;
@@ -1648,6 +1670,51 @@ function registrarComm(id, tipo) {
   a.resuelta=true;
   saveLocal();updateBadges();renderAlertas();renderDashboard();
   showToast('Comunicación '+tipo+' registrada — alerta resuelta ✔','success');
+}
+
+// Registrar comunicación en alerta de MANTENIMIENTO PREDICTIVO
+function regCommMant(keyEncoded, tipo) {
+  const key = decodeURIComponent(keyEncoded);
+  if(!DB.alertasRepuesto) DB.alertasRepuesto={};
+  if(!DB.alertasRepuesto[key]) DB.alertasRepuesto[key]=[];
+  const fecha = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  DB.alertasRepuesto[key].push({tipo, fecha, hora: new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})});
+  saveLocal(); renderAlertas(); renderDashboard();
+  showToast('Comunicación '+tipo+' registrada ✔','success');
+}
+
+function regCommMantWA(keyEncoded, aJsonEncoded) {
+  regCommMant(keyEncoded, 'WA');
+  previewMsgAlerta(aJsonEncoded);
+}
+
+function verHistorialComm(keyEncoded) {
+  const key = decodeURIComponent(keyEncoded);
+  const historial = (DB.alertasRepuesto&&DB.alertasRepuesto[key])||[];
+  if(!historial.length){showToast('Sin historial de comunicaciones','');return;}
+  const partes = key.split('|');
+  const titulo = (partes[0]||'')+(partes[1]?' · '+partes[1]:'');
+  const rows = historial.map((h,i)=>`<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
+    <span style="color:var(--muted);font-size:11px;min-width:20px">${i+1}</span>
+    <span>${h.tipo==='WA'?'📲':h.tipo==='Personal'?'👥':'📞'} <strong>${h.tipo}</strong></span>
+    <span style="color:var(--muted)">${h.fecha} ${h.hora||''}</span>
+    <button onclick="eliminarCommMant('${keyEncoded}',${i})" style="margin-left:auto;background:none;border:none;color:var(--muted2);cursor:pointer;font-size:12px">✕</button>
+  </div>`).join('');
+  document.getElementById('modalTitle').textContent='📋 Historial: '+titulo;
+  document.getElementById('modalBody').innerHTML=`<div style="max-height:300px;overflow-y:auto">${rows}</div>`;
+  document.getElementById('modalFooter').innerHTML=`<button class="btn-secondary" onclick="closeModal()">Cerrar</button>`;
+  window._onSave=null;
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function eliminarCommMant(keyEncoded, idx) {
+  const key = decodeURIComponent(keyEncoded);
+  if(DB.alertasRepuesto&&DB.alertasRepuesto[key]) {
+    DB.alertasRepuesto[key].splice(idx,1);
+    saveLocal();
+    verHistorialComm(keyEncoded);
+    renderAlertas();
+  }
 }
 
 // Recibe cambios editados desde la ventana PDF del presupuesto
@@ -2198,12 +2265,57 @@ function renderEstadisticas() {
   const estAl = document.getElementById('est-alertas-mantenimiento');
   if(estAl) {
     const al = calcularAlertasRepuesto();
-    estAl.innerHTML = al.length ? `<div class="card" style="border-left:3px solid var(--orange)"><div class="table-wrap"><table>
-      <thead><tr><th>CLIENTE</th><th>MÁQUINA</th><th>SERVICIO</th><th>FECHA BASE</th><th>ESTADO</th></tr></thead>
+    // Calcular stats de comunicaciones
+    if(!DB.alertasRepuesto) DB.alertasRepuesto={};
+    const conComm = al.filter(a=>{
+      const key=a.clienteNombre+'|'+a.maquinaDesc+'|'+a.label;
+      return DB.alertasRepuesto[key]&&DB.alertasRepuesto[key].length>0;
+    }).length;
+    const sinComm = al.length - conComm;
+    // Contar por tipo
+    let cPersonal=0,cTel=0,cWA=0;
+    Object.values(DB.alertasRepuesto).forEach(hist=>{
+      hist.forEach(h=>{ if(h.tipo==='Personal')cPersonal++; else if(h.tipo==='Telefónica')cTel++; else if(h.tipo==='WA')cWA++; });
+    });
+    const totalComms = cPersonal+cTel+cWA;
+    const statsHTML = al.length>0 ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+      <div style="background:var(--dark);border-radius:6px;padding:12px;text-align:center;border:1px solid var(--border2)">
+        <div style="font-size:22px;font-weight:900;font-family:'Bebas Neue';color:var(--yellow)">${al.length}</div>
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Total alertas</div>
+      </div>
+      <div style="background:var(--dark);border-radius:6px;padding:12px;text-align:center;border:1px solid var(--border2)">
+        <div style="font-size:22px;font-weight:900;font-family:'Bebas Neue';color:#25d366">${conComm}</div>
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Con comunicación</div>
+      </div>
+      <div style="background:var(--dark);border-radius:6px;padding:12px;text-align:center;border:1px solid var(--border2)">
+        <div style="font-size:22px;font-weight:900;font-family:'Bebas Neue';color:var(--red)">${sinComm}</div>
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Sin comunicación</div>
+      </div>
+      <div style="background:var(--dark);border-radius:6px;padding:12px;text-align:center;border:1px solid var(--border2)">
+        <div style="font-size:22px;font-weight:900;font-family:'Bebas Neue';color:var(--text)">${totalComms}</div>
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Contactos totales</div>
+      </div>
+    </div>
+    ${totalComms>0?`<div style="background:var(--dark);border-radius:6px;padding:12px;margin-bottom:14px;border:1px solid var(--border2)">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Desglose por tipo de contacto</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        ${cPersonal>0?`<div style="display:flex;align-items:center;gap:6px"><span style="font-size:18px">👥</span><div><div style="font-size:18px;font-weight:900;font-family:'Bebas Neue';color:var(--text)">${cPersonal}</div><div style="font-size:10px;color:var(--muted)">Personal</div></div></div>`:''}
+        ${cTel>0?`<div style="display:flex;align-items:center;gap:6px"><span style="font-size:18px">📞</span><div><div style="font-size:18px;font-weight:900;font-family:'Bebas Neue';color:var(--text)">${cTel}</div><div style="font-size:10px;color:var(--muted)">Telefónica</div></div></div>`:''}
+        ${cWA>0?`<div style="display:flex;align-items:center;gap:6px"><span style="font-size:18px">📲</span><div><div style="font-size:18px;font-weight:900;font-family:'Bebas Neue';color:#25d366">${cWA}</div><div style="font-size:10px;color:var(--muted)">WhatsApp</div></div></div>`:''}
+      </div>
+    </div>`:''}` : '';
+    estAl.innerHTML = al.length ? `<div class="card" style="border-left:3px solid var(--orange)">
+      ${statsHTML}
+      <div class="table-wrap"><table>
+      <thead><tr><th>CLIENTE</th><th>MÁQUINA</th><th>SERVICIO</th><th>FECHA BASE</th><th>ESTADO</th><th>ÚLTIMO CONTACTO</th></tr></thead>
       <tbody>${al.map(a=>{
         const col = a.urgencia==='vencido'?'var(--red)':a.urgencia==='urgente'?'var(--orange)':'var(--yellow)';
         const label = a.urgencia==='vencido'?`⚠️ VENCIDO hace ${Math.abs(a.diasRestantes)}d`:`en ${a.diasRestantes}d`;
-        return `<tr><td class="td-name">${a.clienteNombre}</td><td>${a.maquinaDesc}</td><td style="font-size:11px">${a.label}</td><td class="td-muted">${a.fechaBase}</td><td><span style="font-family:'Bebas Neue';font-size:13px;color:${col}">${label}</span></td></tr>`;
+        const key=a.clienteNombre+'|'+a.maquinaDesc+'|'+a.label;
+        const hist=(DB.alertasRepuesto&&DB.alertasRepuesto[key])||[];
+        const ult = hist.length>0?hist[hist.length-1]:null;
+        const commStr = ult?`<span style="color:#25d366;font-size:11px">✔ ${ult.tipo} ${ult.fecha}</span>`:`<span style="color:var(--muted2);font-size:11px">—</span>`;
+        return `<tr><td class="td-name">${a.clienteNombre}</td><td>${a.maquinaDesc}</td><td style="font-size:11px">${a.label}</td><td class="td-muted">${a.fechaBase}</td><td><span style="font-family:'Bebas Neue';font-size:13px;color:${col}">${label}</span></td><td>${commStr}</td></tr>`;
       }).join('')}</tbody></table></div></div>` :
       `<div class="card"><div class="empty-state"><div class="icon">✅</div><p>Sin alertas de mantenimiento pendientes</p></div></div>`;
   }
@@ -2992,48 +3104,36 @@ function envWA(){
   window.open('https://wa.me/'+CLIENTE_TEL+'?text='+encodeURIComponent(msg),'_blank');
 }
 
-// MAIL — abre Gmail/cliente de correo con asunto y cuerpo listos
+// MAIL — abre Gmail compose directamente con datos pre-cargados
 function envMail(){
   var destino = CLIENTE_EMAIL || '';
   var asunto = 'Presupuesto N\u00b0 '+NUM_PRESUP+' \u2014 MEB Machinery Solutions';
   var cuerpo = 'Estimado/a '+CLIENTE_NOMBRE+',\n\n'
-    +'Adjuntamos el Presupuesto N\u00b0 '+NUM_PRESUP+' de MEB Machinery Solutions.\n\n'
-    +'Por favor, imprima/guarde el PDF desde esta misma pantalla y adjúntelo al responder.\n\n'
-    +'Para consultar o confirmar, comuníquese con nosotros:\n'
+    +'Le enviamos el Presupuesto N\u00b0 '+NUM_PRESUP+' de MEB Machinery Solutions.\n\n'
+    +'Para consultar o confirmar, com\u00fan\u00edquese con nosotros:\n'
     +'Tel: +54 11 3392-3254\n'
     +'Email: mebmachinerysolutions@gmail.com\n\n'
     +'\u00a1Quedamos a disposici\u00f3n!\n\n'
     +'Equipo MEB Machinery Solutions';
 
-  // Construir mailto
-  var mailto = 'mailto:'+destino
-    +'?subject='+encodeURIComponent(asunto)
-    +'&body='+encodeURIComponent(cuerpo);
+  // URL directa a Gmail compose — siempre abre Gmail en el navegador
+  var gmailURL = 'https://mail.google.com/mail/?view=cm&fs=1'
+    +'&to='+encodeURIComponent(destino)
+    +'&su='+encodeURIComponent(asunto)
+    +'&body='+encodeURIComponent(cuerpo)
+    +'&authuser=mebmachinerysolutions%40gmail.com';
 
-  // Intentar abrir cliente de correo
-  var a = document.createElement('a');
-  a.href = mailto;
-  a.target = '_blank';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  window.open(gmailURL, '_blank');
 
-  // Mostrar instrucciones claras
-  var aviso = document.getElementById('mailAviso');
-  if(!aviso){
-    aviso = document.createElement('div');
-    aviso.id = 'mailAviso';
-    aviso.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#003B70;color:#fff;padding:14px 18px;border-radius:8px;font-size:12px;max-width:320px;box-shadow:0 4px 20px rgba(0,0,0,0.3);z-index:9999;line-height:1.6';
-    aviso.innerHTML = '<strong>📧 Para enviar el presupuesto por mail:</strong><br>'
-      +'1. Primero imprimí/guardá el PDF (botón 🖨️)<br>'
-      +'2. Tu cliente de correo debería abrirse con el mensaje listo<br>'
-      +'3. Adjuntá el PDF descargado<br>'
-      +'4. Enviá desde <strong>mebmachinerysolutions@gmail.com</strong><br><br>'
-      +'<small style="color:#aad4ff">Si el correo no se abre: copiá la dirección manualmente → '+destino+'</small><br>'
-      +'<button onclick="document.getElementById(\'mailAviso\').remove()" style="margin-top:8px;background:#F4B400;color:#1A1A1A;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-weight:700;font-size:11px">Entendido ✓</button>';
-    document.body.appendChild(aviso);
-    setTimeout(function(){ if(document.getElementById('mailAviso')) document.getElementById('mailAviso').remove(); }, 12000);
-  }
+  // Aviso con instrucción de adjuntar PDF
+  var aviso = document.createElement('div');
+  aviso.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#003B70;color:#fff;padding:14px 18px;border-radius:8px;font-size:12px;max-width:300px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:9999;line-height:1.7';
+  aviso.innerHTML = '<strong style="font-size:13px">📧 Gmail abierto</strong><br>'
+    +(destino?'Para: <strong>'+destino+'</strong>':'<span style="color:#ffd">⚠ Sin email del cliente — completá el destinatario</span>')+'<br>'
+    +'<span style="color:#aad4ff;font-size:11px">Acordate de adjuntar el PDF antes de enviar<br>(guardalo con el botón 🖨️)</span><br>'
+    +'<button onclick="this.parentNode.remove()" style="margin-top:6px;background:#F4B400;color:#1A1A1A;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-weight:700;font-size:11px">OK</button>';
+  document.body.appendChild(aviso);
+  setTimeout(function(){if(aviso.parentNode)aviso.parentNode.removeChild(aviso);},9000);
 }
 
 // GUARDAR — recolecta items editados y sincroniza con CRM padre
