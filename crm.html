@@ -1592,12 +1592,24 @@ function renderAlertas() {
   const data=[...DB.alertas].sort((a,b)=>(a.resuelta?1:0)-(b.resuelta?1:0));
 
   const total=data.length, resueltas=data.filter(a=>a.resuelta).length, pendientes=total-resueltas;
-  const indexHTML=total>0?`<div style="display:flex;gap:14px;margin-bottom:10px;padding:8px 12px;background:var(--dark);border-radius:6px;font-size:12px">
-    <span>📋 <strong style="color:var(--text)">${total}</strong> total</span>
-    <span>🔴 <strong style="color:var(--red)">${pendientes}</strong> pendientes</span>
-    <span>✅ <strong style="color:#25d366">${resueltas}</strong> resueltas</span>
-    ${total>0?`<span style="color:var(--muted)">${Math.round(resueltas/total*100)}% completadas</span>`:''}
-  </div>`:'';
+  const pct = total>0 ? Math.round(resueltas/total*100) : 0;
+
+  const indexHTML = total>0 ? `<div style="margin-bottom:12px;padding:12px;background:var(--dark);border-radius:8px;border:1px solid var(--border2)">
+    <div style="display:flex;gap:16px;margin-bottom:8px;font-size:12px;flex-wrap:wrap">
+      <span>📋 <strong style="color:var(--text)">${total}</strong> alertas</span>
+      <span>🔴 <strong style="color:var(--red)">${pendientes}</strong> pendientes</span>
+      <span>✅ <strong style="color:#25d366">${resueltas}</strong> resueltas</span>
+      <span style="color:var(--muted);margin-left:auto"><strong style="color:${pct>=80?'#25d366':pct>=50?'var(--yellow)':'var(--red)'}">${pct}%</strong> completadas</span>
+    </div>
+    <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:${pct>=80?'#25d366':pct>=50?'var(--yellow)':'var(--red)'};border-radius:4px;transition:width .4s"></div>
+    </div>
+  </div>` : '';
+
+  if(!data.length){
+    el.innerHTML=`<div class="empty-state"><div class="icon">🔔</div><p>Sin alertas manuales</p><p style="font-size:11px;color:var(--muted2);margin-top:4px">Al agregar una alerta, aquí aparecerán los botones<br>👥 Personal · 📞 Telefónica · 📲 WA para registrar comunicaciones</p></div>`;
+    return;
+  }
 
   if(!data.length){el.innerHTML=`<div class="empty-state"><div class="icon">🔔</div><p>Sin alertas manuales</p></div>`;return;}
   el.innerHTML=indexHTML+data.map(a=>{
@@ -2982,17 +2994,46 @@ function envWA(){
 
 // MAIL — abre Gmail/cliente de correo con asunto y cuerpo listos
 function envMail(){
-  var destino = CLIENTE_EMAIL || 'mebmachinerysolutions@gmail.com';
+  var destino = CLIENTE_EMAIL || '';
   var asunto = 'Presupuesto N\u00b0 '+NUM_PRESUP+' \u2014 MEB Machinery Solutions';
-  var cuerpo = 'Estimado/a '+CLIENTE_NOMBRE+',\\n\\n'
-    +'Adjuntamos el Presupuesto N\u00b0 '+NUM_PRESUP+' de MEB Machinery Solutions.\\n\\n'
-    +'Para consultar o confirmar, comuníquese con nosotros:\\n'
-    +'Tel: +54 11 3392-3254\\n'
-    +'Email: mebmachinerysolutions@gmail.com\\n\\n'
-    +'¡Quedamos a disposición!\\n\\n'
+  var cuerpo = 'Estimado/a '+CLIENTE_NOMBRE+',\n\n'
+    +'Adjuntamos el Presupuesto N\u00b0 '+NUM_PRESUP+' de MEB Machinery Solutions.\n\n'
+    +'Por favor, imprima/guarde el PDF desde esta misma pantalla y adjúntelo al responder.\n\n'
+    +'Para consultar o confirmar, comuníquese con nosotros:\n'
+    +'Tel: +54 11 3392-3254\n'
+    +'Email: mebmachinerysolutions@gmail.com\n\n'
+    +'\u00a1Quedamos a disposici\u00f3n!\n\n'
     +'Equipo MEB Machinery Solutions';
-  var mailto='mailto:'+destino+'?subject='+encodeURIComponent(asunto)+'&body='+encodeURIComponent(cuerpo);
-  window.location.href=mailto;
+
+  // Construir mailto
+  var mailto = 'mailto:'+destino
+    +'?subject='+encodeURIComponent(asunto)
+    +'&body='+encodeURIComponent(cuerpo);
+
+  // Intentar abrir cliente de correo
+  var a = document.createElement('a');
+  a.href = mailto;
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  // Mostrar instrucciones claras
+  var aviso = document.getElementById('mailAviso');
+  if(!aviso){
+    aviso = document.createElement('div');
+    aviso.id = 'mailAviso';
+    aviso.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#003B70;color:#fff;padding:14px 18px;border-radius:8px;font-size:12px;max-width:320px;box-shadow:0 4px 20px rgba(0,0,0,0.3);z-index:9999;line-height:1.6';
+    aviso.innerHTML = '<strong>📧 Para enviar el presupuesto por mail:</strong><br>'
+      +'1. Primero imprimí/guardá el PDF (botón 🖨️)<br>'
+      +'2. Tu cliente de correo debería abrirse con el mensaje listo<br>'
+      +'3. Adjuntá el PDF descargado<br>'
+      +'4. Enviá desde <strong>mebmachinerysolutions@gmail.com</strong><br><br>'
+      +'<small style="color:#aad4ff">Si el correo no se abre: copiá la dirección manualmente → '+destino+'</small><br>'
+      +'<button onclick="document.getElementById(\'mailAviso\').remove()" style="margin-top:8px;background:#F4B400;color:#1A1A1A;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-weight:700;font-size:11px">Entendido ✓</button>';
+    document.body.appendChild(aviso);
+    setTimeout(function(){ if(document.getElementById('mailAviso')) document.getElementById('mailAviso').remove(); }, 12000);
+  }
 }
 
 // GUARDAR — recolecta items editados y sincroniza con CRM padre
