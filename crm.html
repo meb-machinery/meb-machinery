@@ -281,6 +281,7 @@ select option { background:var(--dark); }
     </div>
     <span class="sync-status" id="syncStatus">●  Conectado</span>
     <button class="sync-btn" id="syncBtn" onclick="syncAll()">↺ SINCRONIZAR</button>
+    <button class="sync-btn" id="undoBtn" onclick="undoLastChange()" title="Deshacer último cambio" style="background:var(--dark);border:1px solid var(--border2);color:var(--muted);padding:6px 12px;font-size:12px">↩ Deshacer</button>
     <button class="logout-btn" onclick="doLogout()">Salir</button>
   </div>
 </div>
@@ -750,6 +751,22 @@ const MEB_LOGO_PDF_B64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEBLAEsAAD/4QC
 
 let DB = { clientes:[], maquinas:[], trabajos:[], presupuestos:[], alertas:[], calendarioEventos:[], alertasRepuesto:[], presupCounter:1 };
 let filters = { clientes:'todos', trabajos:'todos', presup:'todos' };
+let _undoStack = []; // historial para deshacer
+
+function pushUndo(label) {
+  _undoStack.push({ label: label||'cambio', snap: JSON.stringify(DB) });
+  if(_undoStack.length > 30) _undoStack.shift(); // máx 30 pasos
+  const btn = document.getElementById('undoBtn');
+  if(btn) btn.title = 'Deshacer: '+( label||'último cambio');
+}
+
+function undoLastChange() {
+  if(!_undoStack.length){ showToast('No hay cambios para deshacer',''); return; }
+  const prev = _undoStack.pop();
+  DB = JSON.parse(prev.snap);
+  saveLocal(); updateBadges(); refreshCurrentPage();
+  showToast('↩ Deshecho: '+prev.label,'success');
+}
 let charts = {};
 
 function saveLocal() { try { localStorage.setItem('meb_crm_v2', JSON.stringify(DB)); } catch(e){} }
@@ -2654,301 +2671,130 @@ function generarPresupuestoPDF(presupId) {
   if (!p) return;
   const cl = DB.clientes.find(c => c.id === p.clienteId);
 
-  // Buscar el trabajo MÁS RECIENTE del mismo cliente (para pre-llenar datos)
-  const trabajosCliente = DB.trabajos
+  // Trabajo más reciente del cliente para pre-llenar
+  const tRel = DB.trabajos
     .filter(t => t.clienteId === p.clienteId && t.titulo)
-    .sort((a,b) => {
-      const fa = a.fechaInicio ? new Date(a.fechaInicio.split('/').reverse().join('-')) : new Date(0);
-      const fb = b.fechaInicio ? new Date(b.fechaInicio.split('/').reverse().join('-')) : new Date(0);
-      return fb - fa;
-    });
-  const trabajoRel = trabajosCliente[0] || null;
-  const maquinaRel = trabajoRel ? DB.maquinas.find(m => m.id === trabajoRel.maquinaId) : null;
+    .sort((a,b)=>{
+      const fa=a.fechaInicio?new Date(a.fechaInicio.split('/').reverse().join('-')):new Date(0);
+      const fb=b.fechaInicio?new Date(b.fechaInicio.split('/').reverse().join('-')):new Date(0);
+      return fb-fa;
+    })[0] || null;
+  const maqRel = tRel ? DB.maquinas.find(m=>m.id===tRel.maquinaId) : null;
 
-  const numPresup = String(p.num || p.id).padStart(4,'0');
+  const numPresup = String(p.num||p.id).padStart(4,'0');
   const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
-  const fechaVence = new Date(Date.now() + 15*24*60*60*1000).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
-  const montof = p.monto > 0 ? fmtMonto(p.monto) : '—';
+  const fechaVence = new Date(Date.now()+15*24*60*60*1000).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
 
-  // Parsear ítems: soporte para formato pipe "desc|tipo|cant|precio" (multi-ítem) o texto libre (ítem único)
-  const lineas = (p.descripcion || '').split('\n').filter(l => l.trim());
-  let itemsHTML = '';
-  let montoCalculado = 0;
-
-  if (lineas.length >= 1 && lineas[0].includes('|')) {
-    // FORMATO NUEVO: multi-ítem con pipes
-    itemsHTML = lineas.map((l, i) => {
-      const parts = l.split('|').map(s => s.trim());
-      const desc = parts[0] || '—';
-      const art = parts[1] || 'Servicio técnico';
-      const cant = Number(parts[2]) || 1;
-      const precioU = parts[3] ? parsePrecio(parts[3]) : 0;
-      const sub = precioU * cant;
-      montoCalculado += sub;
-      const subtotalStr = sub > 0 ? fmtMonto(sub) : '—';
-      const precioStr = precioU > 0 ? fmtMonto(precioU) : '—';
-      return `<tr>
-        <td>${i+1}</td>
-        <td contenteditable="true">${desc}</td>
-        <td contenteditable="true">${art}</td>
-        <td contenteditable="true" style="text-align:center">${cant}</td>
-        <td contenteditable="true" style="text-align:right">${precioStr}</td>
-        <td contenteditable="true" style="text-align:right">${subtotalStr}</td>
-      </tr>`;
-    }).join('');
-    // Agregar filas vacías hasta 25 total
-    const extras = Math.max(0, 25 - lineas.length);
-    for(let i=0;i<extras;i++){
-      itemsHTML+=`<tr><td style="color:#bbb">${lineas.length+i+1}</td><td contenteditable="true"></td><td contenteditable="true">Repuesto</td><td contenteditable="true" style="text-align:center"></td><td contenteditable="true" style="text-align:right"></td><td contenteditable="true" style="text-align:right"></td></tr>`;
-    }
-
+  // Construir filas iniciales
+  const lineas = (p.descripcion||'').split('\n').filter(l=>l.trim());
+  let initRows = [];
+  if (lineas.length>=1 && lineas[0].includes('|')) {
+    initRows = lineas.map(l=>{
+      const pts = l.split('|').map(s=>s.trim());
+      return {desc:pts[0]||'',tipo:pts[1]||'Servicio técnico',cant:pts[2]||'1',precio:pts[3]||''};
+    });
   } else {
-    // FORMATO ANTIGUO: texto libre — pre-llenamos desde el trabajo relacionado
-    montoCalculado = p.monto || 0;
-
-    // Fila 1: mano de obra (desde trabajo relacionado si existe)
-    const descMO = trabajoRel ? trabajoRel.titulo : (p.descripcion || 'Mano de obra / Servicio técnico');
-    const manoObra = trabajoRel && trabajoRel.manoObraCobrada > 0 ? trabajoRel.manoObraCobrada : (p.monto > 0 ? p.monto : 0);
-    const manoObraF = manoObra > 0 ? fmtMonto(manoObra) : '—';
-    itemsHTML = `<tr>
-      <td>1</td>
-      <td contenteditable="true">${descMO}</td>
-      <td contenteditable="true">Mano de obra</td>
-      <td contenteditable="true" style="text-align:center">1</td>
-      <td contenteditable="true" style="text-align:right">${manoObraF}</td>
-      <td contenteditable="true" style="text-align:right">${manoObraF}</td>
-    </tr>`;
-
-    // Filas de repuestos desde el trabajo relacionado
-    let numFila = 2;
-    if (trabajoRel && trabajoRel.repuestosDetalle) {
-      const repuestos = trabajoRel.repuestosDetalle.split('\n').filter(r=>r.trim());
-      repuestos.forEach(rep => {
-        // Intentar parsear "Nombre repuesto | cant | precio" o solo nombre
-        const partes = rep.split('|').map(s=>s.trim());
-        const nombreRep = partes[0] || rep.trim();
-        const cantRep = partes[1] || '1';
-        const precioRep = partes[2] ? fmtMonto(Number(partes[2])) : '—';
-        const subRep = (partes[1] && partes[2]) ? fmtMonto(Number(partes[1])*Number(partes[2])) : '—';
-        itemsHTML += `<tr>
-          <td>${numFila}</td>
-          <td contenteditable="true">${nombreRep}</td>
-          <td contenteditable="true">Repuesto</td>
-          <td contenteditable="true" style="text-align:center">${cantRep}</td>
-          <td contenteditable="true" style="text-align:right">${precioRep}</td>
-          <td contenteditable="true" style="text-align:right">${subRep}</td>
-        </tr>`;
-        numFila++;
+    const descMO = tRel ? tRel.titulo : (p.descripcion||'Mano de obra / Servicio técnico');
+    const manoObra = tRel&&tRel.manoObraCobrada>0 ? tRel.manoObraCobrada : (p.monto>0?p.monto:0);
+    initRows.push({desc:descMO,tipo:'Mano de obra',cant:'1',precio:manoObra>0?String(manoObra):''});
+    if (tRel && tRel.repuestosDetalle) {
+      tRel.repuestosDetalle.split('\n').filter(r=>r.trim()).forEach(rep=>{
+        const pts=rep.split('|').map(s=>s.trim());
+        initRows.push({desc:pts[0]||rep.trim(),tipo:'Repuesto',cant:pts[1]||'1',precio:pts[2]||''});
       });
     }
-
-    // Fila de movilidad si hay (desde trabajo)
-    if (trabajoRel && trabajoRel.movilidad > 0) {
-      itemsHTML += `<tr>
-        <td>${numFila}</td>
-        <td contenteditable="true">Traslado / viáticos</td>
-        <td contenteditable="true">Traslado</td>
-        <td contenteditable="true" style="text-align:center">1</td>
-        <td contenteditable="true" style="text-align:right">${fmtMonto(trabajoRel.movilidad)}</td>
-        <td contenteditable="true" style="text-align:right">${fmtMonto(trabajoRel.movilidad)}</td>
-      </tr>`;
-      numFila++;
-    }
-
-    // Siempre agregar filas vacías hasta llegar a 25 total
-    const filasVacias = Math.max(3, 25 - numFila + 1);
-    for(let i=0; i<filasVacias; i++){
-      itemsHTML += `<tr>
-        <td style="color:#bbb">${numFila+i}</td>
-        <td contenteditable="true"></td>
-        <td contenteditable="true">Repuesto</td>
-        <td contenteditable="true" style="text-align:center"></td>
-        <td contenteditable="true" style="text-align:right"></td>
-        <td contenteditable="true" style="text-align:right"></td>
-      </tr>`;
-    }
+    if (tRel && tRel.movilidad>0) initRows.push({desc:'Traslado / viáticos',tipo:'Traslado',cant:'1',precio:String(tRel.movilidad)});
   }
-  // Calcular subtotales reales desde el trabajo relacionado (si existe)
-  const subtotalMO = trabajoRel && trabajoRel.manoObraCobrada > 0 ? fmtMonto(trabajoRel.manoObraCobrada) : '—';
-  const subtotalRep = trabajoRel && trabajoRel.precioRepuestoFacturado > 0
-    ? fmtMonto(trabajoRel.precioRepuestoFacturado)
-    : (trabajoRel && trabajoRel.costoRepuesto > 0 ? fmtMonto(trabajoRel.costoRepuesto) : '—');
-  const subtotalMov = trabajoRel && trabajoRel.movilidad > 0 ? fmtMonto(trabajoRel.movilidad) : '—';
-  const totalFinal = montoCalculado > 0 ? fmtMonto(montoCalculado) : montof;
+  // Pad a 25 filas vacías
+  while(initRows.length<25) initRows.push({desc:'',tipo:'Repuesto',cant:'',precio:''});
 
-  const w = window.open('','_blank','width=980,height=800');
+  const LOGO = typeof MEB_LOGO_PDF_B64!=='undefined'?MEB_LOGO_PDF_B64:'';
+  const clienteTel = cl ? (cl.telefono||'').replace(/\D/g,'') : '';
+  const clienteEmail = cl ? (cl.email||'') : '';
+  const clienteNombre = cl ? cl.nombre : '—';
+
+  // Serializar filas como JSON para inyectarlas
+  const rowsJSON = JSON.stringify(initRows);
+
+  const w = window.open('','_blank','width=1000,height=860');
   w.document.write(`<!DOCTYPE html><html lang="es"><head>
 <meta charset="UTF-8">
-<title>Presupuesto N° ${numPresup} — MEB</title>
+<title>Presupuesto N\u00b0 ${numPresup} \u2014 MEB</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;background:#fff;padding:40px;max-width:900px;margin:0 auto}
-.no-print{margin-bottom:24px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px;background:#f5f5f5;border-radius:6px;border-left:4px solid #F4B400}
-.btn-pdf{background:#F4B400;color:#1A1A1A;border:none;padding:10px 24px;font-weight:700;font-size:14px;border-radius:6px;cursor:pointer}
-.btn-cerrar{background:#1A1A1A;color:#fff;border:none;padding:10px 24px;font-weight:700;font-size:14px;border-radius:6px;cursor:pointer}
-.tip{font-size:11px;color:#888;flex:1}
-.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:16px;border-bottom:3px solid #F4B400}
-.logo img{height:60px;width:auto}
+body{font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;background:#fff;padding:36px;max-width:960px;margin:0 auto}
+.no-print{margin-bottom:20px;display:flex;gap:8px;flex-wrap:wrap;padding:12px 14px;background:#f5f5f5;border-radius:6px;border-left:4px solid #F4B400;align-items:center}
+.no-print button{padding:8px 14px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer;border:none}
+.btn-imp{background:#F4B400;color:#1A1A1A}
+.btn-wa{background:#25d366;color:#fff}
+.btn-mail{background:#003B70;color:#fff}
+.btn-save{background:#1A1A1A;color:#F4B400;border:2px solid #F4B400!important}
+.btn-close{background:#555;color:#fff}
+.tip{font-size:11px;color:#888;flex:1;min-width:200px}
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:14px;border-bottom:3px solid #F4B400}
+.logo img{height:58px;mix-blend-mode:screen}
 .empresa-info{text-align:right;font-size:12px;color:#555;line-height:1.8}
 .empresa-info strong{font-size:15px;color:#1A1A1A;display:block;margin-bottom:2px;letter-spacing:1px}
-.titulo-doc{background:#1A1A1A;color:#F4B400;padding:12px 20px;font-size:22px;font-weight:900;letter-spacing:3px;margin-bottom:0;display:flex;justify-content:space-between;align-items:center;border-radius:4px 4px 0 0}
-.titulo-doc .num{font-size:13px;color:#aaa;font-weight:400;letter-spacing:0}
-.estado-bar{background:#F4B400;padding:6px 20px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;border-radius:0 0 4px 4px}
+.titulo-doc{background:#1A1A1A;color:#F4B400;padding:12px 20px;font-size:22px;font-weight:900;letter-spacing:3px;display:flex;justify-content:space-between;align-items:center;border-radius:4px 4px 0 0}
+.estado-bar{background:#F4B400;padding:6px 20px;margin-bottom:22px;display:flex;justify-content:space-between;align-items:center;border-radius:0 0 4px 4px}
 .estado-bar span{font-size:11px;font-weight:700;letter-spacing:1px;color:#1A1A1A;text-transform:uppercase}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px}
 .seccion{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden}
 .seccion-titulo{background:#F4B400;color:#1A1A1A;font-weight:700;font-size:10px;letter-spacing:2px;padding:7px 14px;text-transform:uppercase}
 .seccion-body{padding:14px}
 .campo{margin-bottom:8px;font-size:12px}
 .campo label{color:#999;font-size:10px;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:2px}
 .campo span{font-weight:600;color:#1A1A1A;font-size:13px}
-table.detalle{width:100%;border-collapse:collapse;margin-bottom:0}
-table.detalle thead tr{background:#1A1A1A}
-table.detalle th{color:#F4B400;font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:9px 12px;text-align:left}
-table.detalle th:nth-child(4){text-align:center}
-table.detalle th:nth-child(5),table.detalle th:nth-child(6){text-align:right}
-table.detalle td{padding:11px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;vertical-align:top}
-table.detalle td:first-child{color:#aaa;font-size:11px;width:30px}
-table.detalle td:nth-child(6){font-weight:700;text-align:right;color:#1A1A1A}
-table.detalle tr:last-child td{border-bottom:none}
-table.detalle tr:hover td{background:#fafafa}
 .detalle-wrap{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;margin-bottom:20px}
-.detalle-titulo{background:#F4B400;color:#1A1A1A;font-weight:700;font-size:10px;letter-spacing:2px;padding:7px 14px;text-transform:uppercase}
-.total-section{display:flex;justify-content:flex-end;margin-bottom:24px}
-.total-box{border:2px solid #F4B400;border-radius:8px;padding:16px 24px;min-width:280px}
-.total-row{display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:4px}
+.detalle-titulo{background:#F4B400;color:#1A1A1A;font-weight:700;font-size:10px;letter-spacing:2px;padding:7px 14px;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}
+.detalle-titulo .row-btns{display:flex;gap:6px}
+.detalle-titulo button{background:#1A1A1A;color:#F4B400;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700}
+table.detalle{width:100%;border-collapse:collapse}
+table.detalle thead tr{background:#1A1A1A}
+table.detalle th{color:#F4B400;font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:9px 10px;text-align:left}
+table.detalle th:nth-child(1){width:36px}
+table.detalle th:nth-child(4){text-align:center;width:60px}
+table.detalle th:nth-child(5){text-align:right;width:130px}
+table.detalle th:nth-child(6){text-align:right;width:130px}
+table.detalle th:last-child{width:36px;text-align:center}
+table.detalle td{padding:9px 10px;border-bottom:1px solid #f0f0f0;font-size:12px;vertical-align:middle;color:#1A1A1A}
+table.detalle td:nth-child(4){text-align:center}
+table.detalle td:nth-child(5),table.detalle td:nth-child(6){text-align:right}
+table.detalle td[contenteditable]:focus{outline:2px dashed #F4B400;background:rgba(244,180,0,0.06)}
+table.detalle td[contenteditable]:hover{background:rgba(244,180,0,0.04)}
+table.detalle .btn-del-row{background:#fee;border:1px solid #fcc;color:#c00;border-radius:4px;width:22px;height:22px;cursor:pointer;font-size:12px;padding:0;text-align:center;display:block;margin:auto}
+.total-section{display:flex;justify-content:flex-end;margin-bottom:22px}
+.total-box{border:2px solid #F4B400;border-radius:8px;padding:16px 22px;min-width:280px}
+.total-row{display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:5px}
 .total-row.main{border-top:1px solid #e0e0e0;padding-top:10px;margin-top:6px;font-size:22px;font-weight:900;color:#1A1A1A}
-.total-row.main span:last-child{color:#1A1A1A}
-.notas-box{background:#fffdf0;border-left:4px solid #F4B400;padding:14px 16px;margin-bottom:20px;font-size:12px;color:#555;line-height:1.7;border-radius:0 4px 4px 0}
-.notas-box[contenteditable]:focus{outline:2px dashed #F4B400}
-.condiciones{background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:24px}
+.notas-box{background:#fffdf0;border-left:4px solid #F4B400;padding:14px;margin-bottom:20px;font-size:12px;color:#555;border-radius:0 4px 4px 0;min-height:50px;outline:none}
+.condiciones{background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:22px}
 .condiciones-titulo{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#888;margin-bottom:10px}
 .cond-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.cond-item{font-size:12px;color:#555}
-.cond-item::before{content:"✓ ";color:#F4B400;font-weight:700}
-.firmas{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:40px}
+.cond-item{font-size:12px;color:#555}.cond-item::before{content:"\\2713  ";color:#F4B400;font-weight:700}
+.firmas{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:36px}
 .firma-box{text-align:center}
-.firma-linea{border-top:2px solid #1A1A1A;margin-bottom:8px;margin-top:70px}
+.firma-linea{border-top:2px solid #1A1A1A;margin-bottom:8px;margin-top:64px}
 .firma-label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:2px}
 .firma-nombre{font-size:12px;font-weight:700;color:#1A1A1A;margin-top:4px}
-.footer{margin-top:28px;padding-top:12px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center}
-.footer-brand{font-size:11px;font-weight:700;color:#1A1A1A;letter-spacing:1px}
-.footer-data{font-size:10px;color:#aaa;text-align:right}
-.vencimiento{background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:6px 12px;font-size:11px;color:#856404;font-weight:700;display:inline-block}
-.btn-wa-pdf{background:#25d366;color:#fff;border:none;padding:9px 16px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer}
-.btn-mail-pdf{background:#003B70;color:#fff;border:none;padding:9px 16px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer}
-[contenteditable]{color:#1A1A1A}
-[contenteditable]:focus{outline:2px dashed #F4B400;border-radius:3px;padding:1px 3px}
-[contenteditable]:hover{background:rgba(244,180,0,0.07)}
-table.detalle td[contenteditable]{color:#1A1A1A}
-@media print{.no-print{display:none}body{padding:20px}[contenteditable]{outline:none;padding:0;background:transparent!important;color:#1A1A1A!important}table.detalle tr:hover td{background:transparent}}
+.footer{margin-top:24px;padding-top:12px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;font-size:10px;color:#aaa}
+[contenteditable]{color:#1A1A1A;outline:none}
+.vencimiento{background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:5px 12px;font-size:11px;color:#856404;font-weight:700}
+@media print{.no-print{display:none}body{padding:20px}[contenteditable]{color:#1A1A1A!important}table.detalle .btn-del-row{display:none!important}}
 </style>
-<script>
-function _fmtPeso(n){if(!n||isNaN(n)||n<=0)return '';return '$'+Number(n).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2});}
-function _parsePeso(s){if(!s||s==='-'||s==='—'||s.trim()==='')return 0;var c=String(s).replace(/\$/g,'').replace(/\s/g,'').replace(/\./g,'').replace(',','.');return parseFloat(c)||0;}
-function recalcPDF(){
-  var rows=document.querySelectorAll('table.detalle tbody tr');
-  var tMO=0,tRep=0,tMov=0,grand=0;
-  rows.forEach(function(tr){
-    var c=tr.querySelectorAll('td');
-    if(c.length<6)return;
-    var tipo=(c[2]?c[2].innerText:'').toLowerCase().trim();
-    var cant=parseFloat((c[3]?c[3].innerText:'').replace(',','.'))||0;
-    var precio=_parsePeso(c[4]?c[4].innerText:'');
-    var sub=cant>0&&precio>0?cant*precio:0;
-    if(sub>0){
-      c[5].innerText=_fmtPeso(sub);
-      grand+=sub;
-      if(tipo.includes('repuesto')||tipo.includes('material'))tRep+=sub;
-      else if(tipo.includes('traslado')||tipo.includes('via'))tMov+=sub;
-      else tMO+=sub;
-    }
-  });
-  document.querySelectorAll('.total-row').forEach(function(row){
-    var sp=row.querySelectorAll('span');
-    if(!sp[0]||!sp[1])return;
-    var lbl=(sp[0].innerText||'').toLowerCase();
-    if(lbl.includes('mano'))sp[1].innerText=tMO>0?_fmtPeso(tMO):'—';
-    else if(lbl.includes('repuesto')||lbl.includes('material'))sp[1].innerText=tRep>0?_fmtPeso(tRep):'—';
-    else if(lbl.includes('traslado'))sp[1].innerText=tMov>0?_fmtPeso(tMov):'—';
-    else if(row.classList.contains('main')&&grand>0)sp[1].innerText=_fmtPeso(grand);
-  });
-}
-window.addEventListener('DOMContentLoaded',function(){
-  document.querySelectorAll('table.detalle td[contenteditable]').forEach(function(td){
-    td.addEventListener('blur',function(){
-      var idx=Array.from(td.parentNode.children).indexOf(td);
-      if(idx===4){var v=_parsePeso(td.innerText);if(v>0)td.innerText=_fmtPeso(v);}
-      if(idx===3||idx===4)recalcPDF();
-    });
-    td.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();td.blur();}});
-  });
-  recalcPDF();
-});
-function _enviarWA(tel,num){
-  var msg='Hola! Te contactamos desde *MEB Machinery Solutions*.\n\nTe enviamos el Presupuesto N° '+num+'.\n\nCualquier consulta estamos disponibles:\n📞 +54 11 3392-3254\n📧 mebmachinerysolutions@gmail.com\n\n¡Gracias!';
-  window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank');
-}
-function _enviarEmail(email,num){
-  var s='Presupuesto N° '+num+' — MEB Machinery Solutions';
-  var b='Estimado/a,\n\nAdjuntamos el Presupuesto N° '+num+' de MEB Machinery Solutions.\n\nContacto: mebmachinerysolutions@gmail.com | +54 11 3392-3254\n\n¡Quedamos a disposición!';
-  window.location.href='mailto:'+email+'?subject='+encodeURIComponent(s)+'&body='+encodeURIComponent(b);
-}
-<\/script>
 </head><body>
 
 <div class="no-print">
-  <button class="btn-pdf" onclick="window.print()">🖨️ IMPRIMIR / GUARDAR PDF</button>
-  <button class="btn-wa-pdf" onclick="_enviarWA('${cl ? (cl.telefono||'').replace(/\D/g,'') : ''}','${numPresup}')">📲 WA cliente</button>
-  <button class="btn-mail-pdf" onclick="_enviarEmail('${cl ? (cl.email||'') : ''}','${numPresup}')">📧 Email cliente</button>
-  <button style="background:#1A1A1A;color:#F4B400;border:2px solid #F4B400;padding:9px 16px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer" onclick="_guardarCambios()">💾 Guardar cambios</button>
-  <button style="background:#003B70;color:#fff;border:none;padding:9px 16px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer" onclick="_abrirInformeTecnico()">🔧 Informe Técnico</button>
-  <button class="btn-cerrar" onclick="window.close()">✕ Cerrar</button>
-  <span class="tip">✏️ Campos editables · Ingresá <strong>Cant.</strong> y <strong>P. Unitario</strong> → subtotal y total se calculan solos · 💾 Guardá los cambios antes de cerrar</span>
+  <button class="btn-imp" onclick="window.print()">🖨️ IMPRIMIR / PDF</button>
+  <button class="btn-wa" onclick="envWA()">📲 WA</button>
+  <button class="btn-mail" onclick="envMail()">📧 MAIL</button>
+  <button class="btn-save" onclick="guardarCambios()">💾 GUARDAR</button>
+  <button class="btn-close" onclick="window.close()">✕ Cerrar</button>
+  <span class="tip">✏️ Editá cualquier campo · Cant × Precio = Subtotal automático · ➕/➖ para agregar/quitar filas · 💾 Guardar sincroniza con el CRM</span>
 </div>
-<script>
-// Guardar cambios de vuelta al CRM
-function _guardarCambios(){
-  try {
-    // Recolectar ítems editados de la tabla
-    var rows = document.querySelectorAll('table.detalle tbody tr');
-    var items = [];
-    rows.forEach(function(tr){
-      var c = tr.querySelectorAll('td');
-      if(c.length < 6) return;
-      var desc = c[1] ? c[1].innerText.trim() : '';
-      if(!desc) return;
-      var tipo = c[2] ? c[2].innerText.trim() : '';
-      var cant = c[3] ? c[3].innerText.trim() : '';
-      var precio = c[4] ? c[4].innerText.trim() : '';
-      items.push(desc+'|'+tipo+'|'+cant+'|'+precio);
-    });
-    var descNueva = items.join('\\n');
-    // Calcular total
-    var totalEl = document.querySelector('.total-row.main span:last-child');
-    var totalStr = totalEl ? totalEl.innerText.replace(/[^0-9,\.]/g,'').replace(/\\./g,'').replace(',','.') : '0';
-    var totalNum = parseFloat(totalStr) || 0;
-    // Notas
-    var notasEl = document.querySelector('.notas-box');
-    var notas = notasEl ? notasEl.innerText.replace('Notas:','').trim() : '';
-    // Enviar al padre (CRM)
-    if(window.opener && window.opener._recibirCambiosPresupuesto){
-      window.opener._recibirCambiosPresupuesto('${p.id}', descNueva, totalNum, notas);
-      document.querySelector('.no-print').insertAdjacentHTML('beforeend','<span style="color:#25d366;font-weight:700;margin-left:8px">✔ Guardado</span>');
-    } else {
-      alert('Cambios registrados. Cerrá esta ventana y recargá el CRM para ver los cambios.');
-    }
-  } catch(e){ alert('Error al guardar: '+e.message); }
-}
-function _abrirInformeTecnico(){
-  var clienteNombre = document.querySelector('.campo span') ? document.querySelector('.campo span').innerText : '';
-  var url = '${window.location.origin}${window.location.pathname.replace('crm.html','')}crm.html?informe=${p.id}';
-  window.open(url,'_blank');
-}
-<\/script>
 
 <div class="header">
-  <div class="logo"><img src="${MEB_LOGO_PDF_B64}" alt="MEB Machinery Solutions"/></div>
+  <div class="logo"><img src="${LOGO}" alt="MEB"/></div>
   <div class="empresa-info">
     <strong contenteditable="true">MEB MACHINERY SOLUTIONS</strong>
     <span contenteditable="true">Servicio técnico especializado en maquinaria pesada</span><br>
@@ -2958,90 +2804,225 @@ function _abrirInformeTecnico(){
   </div>
 </div>
 
-<div class="titulo-doc">
-  <span>PRESUPUESTO</span>
-  <span class="num">N° ${numPresup} &nbsp;·&nbsp; ${fechaHoy}</span>
-</div>
+<div class="titulo-doc">PRESUPUESTO <span style="font-size:13px;color:#aaa;font-weight:400">N\u00b0 ${numPresup} &middot; ${fechaHoy}</span></div>
 <div class="estado-bar">
-  <span>Estado: ${(p.estado||'pendiente').toUpperCase()}</span>
-  <span class="vencimiento" contenteditable="true">⏱ Válido hasta: ${fechaVence}</span>
+  <span contenteditable="true">ESTADO: ${(p.estado||'PENDIENTE').toUpperCase()}</span>
+  <span class="vencimiento" contenteditable="true">\u23f0 V\u00c1LIDO HASTA: ${fechaVence}</span>
 </div>
 
 <div class="grid-2">
   <div class="seccion">
     <div class="seccion-titulo">Datos del cliente</div>
     <div class="seccion-body">
-      <div class="campo"><label>Empresa / Nombre</label><span contenteditable="true">${cl ? cl.nombre : '—'}</span></div>
-      <div class="campo"><label>Razón social</label><span contenteditable="true">${cl && cl.empresa ? cl.empresa : '—'}</span></div>
-      <div class="campo"><label>Zona</label><span contenteditable="true">${cl ? (cl.zona||'—') : '—'}</span></div>
-      <div class="campo"><label>Teléfono</label><span contenteditable="true">${cl ? (cl.telefono||'—') : '—'}</span></div>
-      <div class="campo"><label>Email</label><span contenteditable="true">${cl ? (cl.email||'—') : '—'}</span></div>
+      <div class="campo"><label>Empresa / Nombre</label><span contenteditable="true">${cl?cl.nombre:'—'}</span></div>
+      <div class="campo"><label>Razón social</label><span contenteditable="true">${cl?cl.empresa||cl.nombre:'—'}</span></div>
+      <div class="campo"><label>Zona</label><span contenteditable="true">${cl?cl.zona||'—':'—'}</span></div>
+      <div class="campo"><label>Teléfono</label><span contenteditable="true">${cl?cl.telefono||'—':'—'}</span></div>
+      <div class="campo"><label>Email</label><span contenteditable="true">${cl?cl.email||'—':'—'}</span></div>
     </div>
   </div>
   <div class="seccion">
     <div class="seccion-titulo">Datos del presupuesto</div>
     <div class="seccion-body">
-      <div class="campo"><label>Nº Presupuesto</label><span contenteditable="true">${numPresup}</span></div>
+      <div class="campo"><label>N\u00ba Presupuesto</label><span contenteditable="true">${numPresup}</span></div>
       <div class="campo"><label>Fecha</label><span contenteditable="true">${p.fecha||fechaHoy}</span></div>
       <div class="campo"><label>Estado</label><span contenteditable="true">${(p.estado||'Pendiente').toUpperCase()}</span></div>
-      ${maquinaRel ? '<div class="campo"><label>M\u00e1quina</label><span contenteditable="true">'+( maquinaRel ? maquinaRel.marca+' '+maquinaRel.modelo+' \u2014 '+(maquinaRel.serie||'S/N') : '\u2014')+'</span></div><div class="campo"><label>Tipo</label><span contenteditable="true">'+(maquinaRel ? maquinaRel.tipo||'\u2014' : '\u2014')+'</span></div>' : '<div class="campo"><label>M\u00e1quina</label><span contenteditable="true">\u2014</span></div>'}
+      <div class="campo"><label>Máquina</label><span contenteditable="true">${maqRel?maqRel.marca+' '+maqRel.modelo+' — '+(maqRel.serie||'S/N'):'—'}</span></div>
+      <div class="campo"><label>Tipo</label><span contenteditable="true">${maqRel?maqRel.tipo||'—':'—'}</span></div>
     </div>
   </div>
 </div>
 
 <div class="detalle-wrap">
-  <div class="detalle-titulo">Detalle de trabajos y repuestos</div>
+  <div class="detalle-titulo">
+    Detalle de trabajos y repuestos
+    <div class="row-btns">
+      <button onclick="agregarFila()">➕ Agregar fila</button>
+    </div>
+  </div>
   <table class="detalle">
-    <thead><tr><th>#</th><th>Descripción</th><th>Artículo / Tipo</th><th style="text-align:center">Cant.</th><th style="text-align:right">P. Unitario</th><th style="text-align:right">Subtotal</th></tr></thead>
-    <tbody>${itemsHTML}</tbody>
+    <thead><tr><th>#</th><th>Descripción</th><th>Artículo / Tipo</th><th>Cant.</th><th>P. Unitario</th><th>Subtotal</th><th></th></tr></thead>
+    <tbody id="tbodyItems"></tbody>
   </table>
 </div>
 
-${p.notas ? '<div class="notas-box" contenteditable="true"><strong>Notas:</strong> '+p.notas+'</div>' : '<div class="notas-box" contenteditable="true" style="color:#aaa;font-style:italic">Agregar notas, condiciones especiales o aclaraciones...</div>'}
-
 <div class="total-section">
   <div class="total-box">
-    <div class="total-row"><span>Subtotal mano de obra</span><span contenteditable="true">${subtotalMO}</span></div>
-    <div class="total-row"><span>Repuestos / Materiales</span><span contenteditable="true">${subtotalRep}</span></div>
-    <div class="total-row"><span>Traslado / viáticos</span><span contenteditable="true">${subtotalMov}</span></div>
-    <div class="total-row"><span>Descuento</span><span contenteditable="true">—</span></div>
-    <div class="total-row main"><span>TOTAL</span><span contenteditable="true">${totalFinal}</span></div>
+    <div class="total-row"><span>Subtotal mano de obra</span><span id="tMO">—</span></div>
+    <div class="total-row"><span>Repuestos / Materiales</span><span id="tRep">—</span></div>
+    <div class="total-row"><span>Traslado / viáticos</span><span id="tMov">—</span></div>
+    <div class="total-row"><span>Descuento</span><span contenteditable="true" id="tDesc">—</span></div>
+    <div class="total-row main"><span>TOTAL</span><span id="tTotal">—</span></div>
   </div>
 </div>
 
+<div class="notas-box" id="notasBox" contenteditable="true">${p.notas||'Agregar notas, condiciones especiales o aclaraciones...'}</div>
+
 <div class="condiciones">
-  <div class="condiciones-titulo">Condiciones del presupuesto</div>
+  <div class="condiciones-titulo">Condiciones comerciales</div>
   <div class="cond-grid">
-    <div class="cond-item" contenteditable="true">Validez: 15 días corridos</div>
+    <div class="cond-item" contenteditable="true">Validez del presupuesto: 15 días corridos</div>
     <div class="cond-item" contenteditable="true">Forma de pago: A convenir</div>
     <div class="cond-item" contenteditable="true">Repuestos: Originales / Alternativos según disponibilidad</div>
-    <div class="cond-item" contenteditable="true">Traslado: Incluido / A coordinar</div>
-    <div class="cond-item" contenteditable="true">Garantía de mano de obra: 30 días</div>
-    <div class="cond-item" contenteditable="true">Precios sujetos a variación sin previo aviso</div>
+    <div class="cond-item" contenteditable="true">Tiempo estimado de trabajo: A coordinar</div>
   </div>
 </div>
 
 <div class="firmas">
-  <div class="firma-box">
-    <div class="firma-linea"></div>
-    <div class="firma-label">Firma y aclaración del cliente</div>
-    <div class="firma-nombre" contenteditable="true">${cl ? cl.nombre : '—'}</div>
-  </div>
-  <div class="firma-box">
-    <div class="firma-linea"></div>
-    <div class="firma-label">MEB Machinery Solutions</div>
-    <div class="firma-nombre" contenteditable="true">Marcos Emmanuel Bellando</div>
-  </div>
+  <div class="firma-box"><div class="firma-linea"></div><div class="firma-label">Firma del cliente</div><div class="firma-nombre" contenteditable="true">${cl?cl.nombre:'Nombre del cliente'}</div></div>
+  <div class="firma-box"><div class="firma-linea"></div><div class="firma-label">MEB Machinery Solutions</div><div class="firma-nombre" contenteditable="true">Marcos Bellando</div></div>
 </div>
 
 <div class="footer">
-  <div class="footer-brand">MEB MACHINERY SOLUTIONS</div>
-  <div class="footer-data">
-    mebmachinerysolutions@gmail.com · +54 11 3392-3254<br>
-    meb-machinery.github.io/meb-machinery
-  </div>
+  <span>MEB MACHINERY SOLUTIONS &middot; mebmachinerysolutions@gmail.com &middot; +54 11 3392-3254</span>
+  <span>Presupuesto N\u00b0 ${numPresup} &middot; ${fechaHoy}</span>
 </div>
 
+<script>
+var PRESUP_ID = '${p.id}';
+var CLIENTE_TEL = '${clienteTel}';
+var CLIENTE_EMAIL = '${clienteEmail}';
+var CLIENTE_NOMBRE = '${clienteNombre}';
+var NUM_PRESUP = '${numPresup}';
+var initRows = ${rowsJSON};
+
+function fmt(n){
+  if(!n||isNaN(n)||n<=0) return '';
+  return '$'+Number(n).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2});
+}
+function parse(s){
+  if(!s||s==='-'||s==='—') return 0;
+  return parseFloat(String(s).replace(/\\$/g,'').replace(/\\s/g,'').replace(/\\./g,'').replace(',','.')) || 0;
+}
+
+function recalc(){
+  var rows = document.querySelectorAll('#tbodyItems tr');
+  var tMO=0,tRep=0,tMov=0,grand=0;
+  rows.forEach(function(tr){
+    var c = tr.querySelectorAll('td');
+    if(c.length<7) return;
+    var tipo = (c[2].innerText||'').toLowerCase().trim();
+    var cant = parseFloat((c[3].innerText||'').replace(',','.')) || 0;
+    var precio = parse(c[4].innerText);
+    var sub = cant>0 && precio>0 ? cant*precio : 0;
+    c[5].innerText = sub>0 ? fmt(sub) : '';
+    if(sub>0){
+      grand += sub;
+      if(tipo.includes('repuesto')||tipo.includes('material')) tRep+=sub;
+      else if(tipo.includes('traslado')||tipo.includes('via')) tMov+=sub;
+      else tMO+=sub;
+    }
+  });
+  document.getElementById('tMO').innerText = tMO>0?fmt(tMO):'—';
+  document.getElementById('tRep').innerText = tRep>0?fmt(tRep):'—';
+  document.getElementById('tMov').innerText = tMov>0?fmt(tMov):'—';
+  document.getElementById('tTotal').innerText = grand>0?fmt(grand):'—';
+}
+
+function mkRow(num, d, doRecalc){
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td style="color:#bbb;font-size:11px">'+num+'</td>'
+    +'<td contenteditable="true">'+d.desc+'</td>'
+    +'<td contenteditable="true">'+d.tipo+'</td>'
+    +'<td contenteditable="true" style="text-align:center">'+d.cant+'</td>'
+    +'<td contenteditable="true" style="text-align:right">'+(d.precio&&d.precio!='0'?fmt(parseFloat(d.precio)||0)||d.precio:'')+'</td>'
+    +'<td style="text-align:right;font-weight:700"></td>'
+    +'<td><button class="btn-del-row" onclick="delRow(this)" title="Eliminar fila">✕</button></td>';
+  // Events
+  tr.querySelectorAll('td[contenteditable]').forEach(function(td){
+    td.addEventListener('input', function(){
+      var idx=Array.from(tr.children).indexOf(td);
+      if(idx===3||idx===4) recalc();
+    });
+    td.addEventListener('blur', function(){
+      var idx=Array.from(tr.children).indexOf(td);
+      if(idx===4){var v=parse(td.innerText);if(v>0)td.innerText=fmt(v);}
+      recalc();
+    });
+    td.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();td.blur();}});
+  });
+  if(doRecalc) recalc();
+  return tr;
+}
+
+function agregarFila(){
+  var tbody=document.getElementById('tbodyItems');
+  var num=tbody.rows.length+1;
+  tbody.appendChild(mkRow(num,{desc:'',tipo:'Repuesto',cant:'',precio:''},true));
+}
+
+function delRow(btn){
+  var tr=btn.closest('tr');
+  tr.parentNode.removeChild(tr);
+  // Renumerar
+  document.querySelectorAll('#tbodyItems tr').forEach(function(row,i){
+    row.cells[0].innerText=i+1;
+  });
+  recalc();
+}
+
+// Init rows
+(function(){
+  var tbody=document.getElementById('tbodyItems');
+  initRows.forEach(function(d,i){ tbody.appendChild(mkRow(i+1,d,false)); });
+  recalc();
+})();
+
+// WA — abre con mensaje completo al número del cliente
+function envWA(){
+  if(!CLIENTE_TEL){alert('Este cliente no tiene teléfono registrado en el CRM.');return;}
+  var msg='Hola '+CLIENTE_NOMBRE+'! 👋\\n\\n'
+    +'Te enviamos el *Presupuesto N° '+NUM_PRESUP+'* de *MEB Machinery Solutions*.\\n\\n'
+    +'Para consultar o confirmar, comunicate con nosotros:\\n'
+    +'📞 +54 11 3392-3254\\n'
+    +'📧 mebmachinerysolutions@gmail.com\\n\\n'
+    +'¡Quedamos a disposición!';
+  window.open('https://wa.me/'+CLIENTE_TEL+'?text='+encodeURIComponent(msg),'_blank');
+}
+
+// MAIL — abre Gmail/cliente de correo con asunto y cuerpo listos
+function envMail(){
+  var destino = CLIENTE_EMAIL || 'mebmachinerysolutions@gmail.com';
+  var asunto = 'Presupuesto N\u00b0 '+NUM_PRESUP+' \u2014 MEB Machinery Solutions';
+  var cuerpo = 'Estimado/a '+CLIENTE_NOMBRE+',\\n\\n'
+    +'Adjuntamos el Presupuesto N\u00b0 '+NUM_PRESUP+' de MEB Machinery Solutions.\\n\\n'
+    +'Para consultar o confirmar, comuníquese con nosotros:\\n'
+    +'Tel: +54 11 3392-3254\\n'
+    +'Email: mebmachinerysolutions@gmail.com\\n\\n'
+    +'¡Quedamos a disposición!\\n\\n'
+    +'Equipo MEB Machinery Solutions';
+  var mailto='mailto:'+destino+'?subject='+encodeURIComponent(asunto)+'&body='+encodeURIComponent(cuerpo);
+  window.location.href=mailto;
+}
+
+// GUARDAR — recolecta items editados y sincroniza con CRM padre
+function guardarCambios(){
+  var rows=document.querySelectorAll('#tbodyItems tr');
+  var items=[];
+  rows.forEach(function(tr){
+    var c=tr.querySelectorAll('td');
+    if(c.length<6)return;
+    var desc=(c[1].innerText||'').trim();
+    if(!desc)return;
+    var tipo=(c[2].innerText||'').trim();
+    var cant=(c[3].innerText||'').trim();
+    var precio=String(parse(c[4].innerText));
+    items.push(desc+'|'+tipo+'|'+cant+'|'+precio);
+  });
+  var desc=items.join('\\n');
+  var totalTxt=document.getElementById('tTotal').innerText;
+  var monto=parse(totalTxt)||0;
+  var notas=(document.getElementById('notasBox').innerText||'').replace('Agregar notas, condiciones especiales o aclaraciones...','').trim();
+  if(window.opener && window.opener._recibirCambiosPresupuesto){
+    window.opener._recibirCambiosPresupuesto(PRESUP_ID,desc,monto,notas);
+    var saveBtn=document.querySelector('.btn-save');
+    if(saveBtn){saveBtn.style.background='#25d366';saveBtn.style.color='#fff';saveBtn.innerText='✔ Guardado';}
+    setTimeout(function(){if(saveBtn){saveBtn.style.background='#1A1A1A';saveBtn.style.color='#F4B400';saveBtn.innerText='💾 GUARDAR';}},2500);
+  } else {
+    alert('Guardado local. Cerrá esta ventana para ver los cambios en el CRM.');
+  }
+}
+<\/script>
 </body></html>`);
   w.document.close();
 }
@@ -3331,11 +3312,11 @@ function guardar(tipo, obj, campoRequerido) {
   if(campoRequerido&&!obj[campoRequerido]){showToast('Completá los campos requeridos','error');return;}
   const idx=DB[tipo].findIndex(x=>x.id===obj.id);
   const esNuevo = idx < 0;
+  pushUndo((esNuevo?'Nuevo ':'Editar ')+tipo.replace('s',''));
   if(idx>=0) DB[tipo][idx]=obj;
   else DB[tipo].push(obj);
   saveLocal(); updateBadges(); closeModal(); refreshCurrentPage();
   showToast('Guardado correctamente','success');
-  // Escribir al Sheet solo registros nuevos
   if(esNuevo) {
     if(tipo==='presupuestos') writeToSheet({ action:'addPresupuesto', row: {
       ID:obj.id, NUMERO:obj.num, CLIENTE_ID:obj.clienteId,
@@ -3348,25 +3329,30 @@ function guardar(tipo, obj, campoRequerido) {
       ZONA:obj.zona||'', ESTADO:obj.estado||'activo',
       ULTIMO_CONTACTO:obj.ultimoContacto||'', NOTAS:obj.notas||''
     }});
+  } else {
+    if(tipo==='presupuestos') writeToSheet({ action:'updatePresupuesto', id:obj.id, row:{
+      DESCRIPCION:obj.descripcion, MONTO:obj.monto, ESTADO:obj.estado, NOTAS:obj.notas||''
+    }});
   }
 }
 
 function cambiarEstado(tipo, id, estados) {
   const item=DB[tipo].find(x=>x.id===id);
   if(!item) return;
+  pushUndo('Estado '+tipo.replace('s',''));
   const i=estados.indexOf(item.estado);
   item.estado=estados[(i+1)%estados.length];
   saveLocal(); updateBadges(); refreshCurrentPage();
-  // Escribir al Sheet
   if(tipo==='trabajos') writeToSheet({ action:'updateEstadoTrabajo', id:id, estado:item.estado });
   if(tipo==='presupuestos') writeToSheet({ action:'updateEstadoPresupuesto', id:id, estado:item.estado });
 }
 
 function eliminar(tipo, id) {
   if(!confirm('¿Eliminar este registro?')) return;
+  pushUndo('Eliminar '+tipo.replace('s',''));
   DB[tipo]=DB[tipo].filter(x=>x.id!==id);
   saveLocal(); updateBadges(); refreshCurrentPage();
-  showToast('Eliminado','');
+  showToast('Eliminado — podés deshacer con ↩','');
 }
 
 function editCliente(id) { const c=DB.clientes.find(x=>x.id===id); if(c) openModal('cliente',c); }
