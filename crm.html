@@ -246,7 +246,7 @@ select option { background:var(--dark); }
 <div class="login-screen" id="loginScreen">
   <div class="login-box">
     <div class="login-logo">
-      <img id="loginLogoImg" style="height:56px;object-fit:contain;margin-bottom:4px;border-radius:6px;background:#1E1E1E" alt="MEB Machinery Solutions"/>
+      <img id="loginLogoImg" style="height:64px;object-fit:contain;margin-bottom:4px;mix-blend-mode:screen;filter:brightness(1.1)" alt="MEB Machinery Solutions"/>
       <div class="lt" style="display:none"><div class="l1">Machinery Solutions</div><div class="l2">Sistema interno · CRM</div></div>
     </div>
     <div class="l2" style="font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:20px">Sistema interno · CRM</div>
@@ -1447,6 +1447,7 @@ function renderPresupuestos() {
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','rechazado'])">Estado</button>
         <button class="btn-secondary" onclick="duplicarPresupuesto('${p.id}')" title="Duplicar">⧉</button>
         <button class="btn-secondary" onclick="generarPresupuestoPDF('${p.id}')">📄 PDF</button>
+        <button class="btn-secondary" style="background:rgba(0,59,112,0.2);border-color:#003B70;color:#6fa8dc" onclick="generarInformeTecnico('${p.id}')">🔧 Informe</button>
         <button class="btn-danger" onclick="eliminar('presupuestos','${p.id}')">✕</button>
       </div></td>
     </tr>`;
@@ -1618,6 +1619,228 @@ function registrarComm(id, tipo) {
   a.resuelta=true;
   saveLocal();updateBadges();renderAlertas();renderDashboard();
   showToast('Comunicación '+tipo+' registrada — alerta resuelta ✔','success');
+}
+
+// Recibe cambios editados desde la ventana PDF del presupuesto
+function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas) {
+  const p = DB.presupuestos.find(x=>x.id===presupId);
+  if(!p) return;
+  p.descripcion = descripcion;
+  if(monto > 0) p.monto = monto;
+  if(notas) p.notas = notas;
+  saveLocal();
+  renderPresupuestos();
+  showToast('Presupuesto actualizado y guardado ✔','success');
+  writeToSheet({ action:'updatePresupuesto', id:presupId, row:{
+    DESCRIPCION: descripcion, MONTO: monto||p.monto, ESTADO: p.estado, NOTAS: notas||p.notas||''
+  }});
+}
+
+// Genera el Informe Técnico en ventana nueva
+function generarInformeTecnico(presupId) {
+  const p = DB.presupuestos.find(x=>x.id===presupId);
+  const cl = p ? DB.clientes.find(c=>c.id===p.clienteId) : null;
+  const maq = p ? (()=>{ const t=DB.trabajos.find(t=>t.clienteId===p.clienteId); return t?DB.maquinas.find(m=>m.id===t.maquinaId):null; })() : null;
+  const numPresup = p ? String(p.num||0).padStart(4,'0') : '0000';
+  const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const LOGO = typeof MEB_LOGO_PDF_B64 !== 'undefined' ? MEB_LOGO_PDF_B64 : '';
+
+  const w = window.open('','_blank','width=1000,height=900');
+  w.document.write(`<!DOCTYPE html><html lang="es"><head>
+<meta charset="UTF-8"><title>Informe Técnico N° ${numPresup} — MEB</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;background:#fff;padding:32px;max-width:960px;margin:0 auto}
+.no-print{margin-bottom:20px;display:flex;gap:10px;flex-wrap:wrap;padding:12px;background:#f5f5f5;border-radius:6px;border-left:4px solid #F4B400}
+.no-print button{padding:8px 14px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer;border:none}
+.btn-print{background:#F4B400;color:#1A1A1A}
+.btn-close{background:#1A1A1A;color:#fff}
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #F4B400}
+.logo img{height:52px}
+.empresa-info{text-align:right;font-size:11px;color:#555;line-height:1.8}
+.titulo-doc{background:#1A1A1A;color:#F4B400;padding:10px 18px;font-size:20px;font-weight:900;letter-spacing:2px;border-radius:4px 4px 0 0;display:flex;justify-content:space-between;align-items:center}
+.estado-bar{background:#F4B400;padding:5px 18px;margin-bottom:20px;border-radius:0 0 4px 4px;font-size:11px;font-weight:700;letter-spacing:1px;color:#1A1A1A}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.seccion{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden}
+.seccion-titulo{background:#F4B400;color:#1A1A1A;font-weight:700;font-size:10px;letter-spacing:2px;padding:6px 12px;text-transform:uppercase}
+.seccion-body{padding:12px}
+.campo{margin-bottom:6px;font-size:12px}
+.campo label{color:#999;font-size:10px;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:1px}
+.campo span{font-weight:600;color:#1A1A1A}
+.bloque{border:1px solid #e0e0e0;border-radius:6px;margin-bottom:16px;overflow:hidden}
+.bloque-titulo{background:#1A1A1A;color:#F4B400;padding:8px 14px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}
+.bloque-body{padding:14px;min-height:80px}
+.texto-libre{width:100%;min-height:80px;border:none;outline:none;font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;resize:vertical;background:transparent}
+.fotos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;padding:12px}
+.foto-item{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;position:relative}
+.foto-item img{width:100%;max-height:180px;object-fit:cover;display:block}
+.foto-caption{padding:6px 8px}
+.foto-caption input{width:100%;border:none;outline:none;font-size:11px;color:#555;background:transparent}
+.foto-add{border:2px dashed #F4B400;border-radius:6px;padding:24px;text-align:center;cursor:pointer;color:#F4B400;font-weight:700;font-size:13px;background:#fffdf0}
+.foto-drop{border:2px dashed #ccc;border-radius:6px;padding:16px;text-align:center;cursor:pointer;color:#888;font-size:12px;margin-bottom:10px}
+.arrow-canvas{position:absolute;inset:0;pointer-events:none}
+.diagnostico-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:14px}
+.diag-cell{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden}
+.diag-label{background:#F4B400;color:#1A1A1A;font-size:10px;font-weight:700;letter-spacing:1px;padding:5px 10px;text-transform:uppercase}
+.diag-body{padding:8px;min-height:80px}
+.diag-body textarea{width:100%;min-height:72px;border:none;outline:none;font-family:Arial,sans-serif;font-size:12px;color:#1A1A1A;resize:vertical;background:transparent}
+.footer{margin-top:24px;padding-top:10px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#aaa}
+@media print{.no-print{display:none}body{padding:16px}.texto-libre,.diag-body textarea{resize:none}}
+</style></head><body>
+
+<div class="no-print">
+  <button class="btn-print" onclick="window.print()">🖨️ IMPRIMIR / GUARDAR PDF</button>
+  <button style="background:#003B70;color:#fff;padding:8px 14px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer;border:none" onclick="agregarFoto()">📷 Agregar foto</button>
+  <button style="background:#555;color:#fff;padding:8px 14px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer;border:none" onclick="agregarVideo()">🎥 Agregar video</button>
+  <button class="btn-close" onclick="window.close()">✕ Cerrar</button>
+  <span style="font-size:11px;color:#888;flex:1">✏️ Todos los campos son editables · Las fotos se pueden pegar (Ctrl+V) o agregar por URL</span>
+</div>
+
+<div class="header">
+  <div class="logo"><img src="${LOGO}" alt="MEB"/></div>
+  <div class="empresa-info">
+    <strong style="font-size:14px;color:#1A1A1A;display:block;letter-spacing:1px">MEB MACHINERY SOLUTIONS</strong>
+    <span>Servicio técnico especializado en maquinaria pesada</span><br>
+    <span>mebmachinerysolutions@gmail.com · +54 11 3392-3254</span>
+  </div>
+</div>
+
+<div class="titulo-doc">
+  🔧 INFORME TÉCNICO
+  <span style="font-size:13px;color:#aaa;font-weight:400">Ref. Presupuesto N° ${numPresup} · ${fechaHoy}</span>
+</div>
+<div class="estado-bar">INFORME TÉCNICO DE DIAGNÓSTICO Y TRABAJO REALIZADO</div>
+
+<div class="grid-2">
+  <div class="seccion">
+    <div class="seccion-titulo">Datos del cliente</div>
+    <div class="seccion-body">
+      <div class="campo"><label>Empresa / Nombre</label><span contenteditable="true">${cl ? cl.nombre : '—'}</span></div>
+      <div class="campo"><label>Razón social</label><span contenteditable="true">${cl ? cl.empresa||cl.nombre : '—'}</span></div>
+      <div class="campo"><label>Zona</label><span contenteditable="true">${cl ? cl.zona||'—' : '—'}</span></div>
+      <div class="campo"><label>Teléfono</label><span contenteditable="true">${cl ? cl.telefono||'—' : '—'}</span></div>
+    </div>
+  </div>
+  <div class="seccion">
+    <div class="seccion-titulo">Datos de la máquina</div>
+    <div class="seccion-body">
+      <div class="campo"><label>Máquina</label><span contenteditable="true">${maq ? maq.marca+' '+maq.modelo : '—'}</span></div>
+      <div class="campo"><label>N° de serie</label><span contenteditable="true">${maq ? maq.serie||'—' : '—'}</span></div>
+      <div class="campo"><label>Tipo</label><span contenteditable="true">${maq ? maq.tipo||'—' : '—'}</span></div>
+      <div class="campo"><label>Fecha del informe</label><span contenteditable="true">${fechaHoy}</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="bloque">
+  <div class="bloque-titulo">🗣️ QUEJA / SÍNTOMA REPORTADO POR EL CLIENTE</div>
+  <div class="bloque-body">
+    <textarea class="texto-libre" placeholder="Describí la queja o síntoma que reportó el cliente..."></textarea>
+  </div>
+</div>
+
+<div class="bloque">
+  <div class="bloque-titulo">
+    📷 REGISTRO FOTOGRÁFICO
+    <span style="font-size:10px;font-weight:400;color:#aaa">Podés pegar imágenes (Ctrl+V), agregar por URL o arrastrar</span>
+  </div>
+  <div class="bloque-body" style="padding:8px">
+    <div class="foto-drop" id="fotoDropZone" ondragover="event.preventDefault()" ondrop="_dropFoto(event)" onclick="agregarFoto()">
+      📷 Hacé clic aquí o arrastrá una foto · También podés pegar con <strong>Ctrl+V</strong>
+    </div>
+    <div class="fotos-grid" id="fotosContainer"></div>
+  </div>
+</div>
+
+<div class="bloque">
+  <div class="bloque-titulo">🎥 VIDEOS</div>
+  <div class="bloque-body" id="videosContainer">
+    <div style="font-size:12px;color:#888;margin-bottom:8px">Pegá links de videos (Google Drive, YouTube, WhatsApp Web, etc.)</div>
+    <div id="videosLista"></div>
+  </div>
+</div>
+
+<div class="bloque">
+  <div class="bloque-titulo">🔍 DIAGNÓSTICO</div>
+  <div class="diagnostico-grid">
+    <div class="diag-cell">
+      <div class="diag-label">⚠️ Síntoma</div>
+      <div class="diag-body"><textarea placeholder="Describí el síntoma técnico observado..."></textarea></div>
+    </div>
+    <div class="diag-cell">
+      <div class="diag-label">🔎 Causa</div>
+      <div class="diag-body"><textarea placeholder="Indicá la causa raíz identificada..."></textarea></div>
+    </div>
+    <div class="diag-cell">
+      <div class="diag-label">✅ Solución</div>
+      <div class="diag-body"><textarea placeholder="Describí la solución implementada..."></textarea></div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <span>MEB MACHINERY SOLUTIONS · mebmachinerysolutions@gmail.com · +54 11 3392-3254</span>
+  <span>Informe Técnico Ref. Presupuesto N° ${numPresup}</span>
+</div>
+
+<script>
+// Pegar imagen con Ctrl+V
+document.addEventListener('paste', function(e){
+  var items = e.clipboardData && e.clipboardData.items;
+  if(!items) return;
+  for(var i=0;i<items.length;i++){
+    if(items[i].type.indexOf('image')>=0){
+      var blob = items[i].getAsFile();
+      var reader = new FileReader();
+      reader.onload = function(ev){ _addFotoImg(ev.target.result, ''); };
+      reader.readAsDataURL(blob);
+    }
+  }
+});
+
+function _dropFoto(e){
+  e.preventDefault();
+  var files = e.dataTransfer.files;
+  for(var i=0;i<files.length;i++){
+    if(files[i].type.indexOf('image')>=0){
+      var reader = new FileReader();
+      reader.onload = (function(f){ return function(ev){ _addFotoImg(ev.target.result, f.name); }; })(files[i]);
+      reader.readAsDataURL(files[i]);
+    }
+  }
+}
+
+function agregarFoto(){
+  var url = prompt('URL de la imagen (o dejá vacío y pegá con Ctrl+V):','');
+  if(url && url.trim()) _addFotoImg(url.trim(), '');
+}
+
+function _addFotoImg(src, caption){
+  var cont = document.getElementById('fotosContainer');
+  var div = document.createElement('div');
+  div.className = 'foto-item';
+  div.style.position = 'relative';
+  div.innerHTML = '<img src="'+src+'" onerror="this.src=\\'data:image/svg+xml,<svg xmlns=\\"http://www.w3.org/2000/svg\\" width=\\"200\\" height=\\"150\\"><rect fill=\\"%23f0f0f0\\" width=\\"200\\" height=\\"150\\"/><text x=\\"50%\\" y=\\"50%\\" text-anchor=\\"middle\\" fill=\\"%23888\\" font-size=\\"12\\">Imagen no disponible</text></svg>\\'"+'>'
+    + '<div class="foto-caption"><input type="text" placeholder="Descripción de la foto..." value="'+caption+'" style="width:100%;border:none;outline:none;font-size:11px;color:#555"></div>'
+    + '<button onclick="this.parentNode.remove()" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:11px">✕</button>';
+  cont.appendChild(div);
+}
+
+function agregarVideo(){
+  var url = prompt('URL del video (Drive, YouTube, WhatsApp Web):','');
+  if(!url||!url.trim()) return;
+  var lista = document.getElementById('videosLista');
+  var div = document.createElement('div');
+  div.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:#f8f8f8;border-radius:6px';
+  div.innerHTML = '<span style="font-size:16px">🎥</span>'
+    + '<a href="'+url+'" target="_blank" style="font-size:12px;color:#003B70;flex:1;word-break:break-all">'+url+'</a>'
+    + '<input type="text" placeholder="Descripción del video..." style="border:1px solid #ddd;border-radius:4px;padding:4px 8px;font-size:11px;width:200px">'
+    + '<button onclick="this.parentNode.remove()" style="background:#e0e0e0;border:none;border-radius:4px;padding:4px 8px;cursor:pointer;font-size:11px">✕</button>';
+  lista.appendChild(div);
+}
+<\/script>
+</body></html>`);
+  w.document.close();
 }
 
 let _waAlertaTelefono = '';
@@ -2671,16 +2894,58 @@ function _enviarEmail(email,num){
   var b='Estimado/a,\n\nAdjuntamos el Presupuesto N° '+num+' de MEB Machinery Solutions.\n\nContacto: mebmachinerysolutions@gmail.com | +54 11 3392-3254\n\n¡Quedamos a disposición!';
   window.location.href='mailto:'+email+'?subject='+encodeURIComponent(s)+'&body='+encodeURIComponent(b);
 }
-</script>
+<\/script>
 </head><body>
 
 <div class="no-print">
   <button class="btn-pdf" onclick="window.print()">🖨️ IMPRIMIR / GUARDAR PDF</button>
   <button class="btn-wa-pdf" onclick="_enviarWA('${cl ? (cl.telefono||'').replace(/\D/g,'') : ''}','${numPresup}')">📲 WA cliente</button>
   <button class="btn-mail-pdf" onclick="_enviarEmail('${cl ? (cl.email||'') : ''}','${numPresup}')">📧 Email cliente</button>
+  <button style="background:#1A1A1A;color:#F4B400;border:2px solid #F4B400;padding:9px 16px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer" onclick="_guardarCambios()">💾 Guardar cambios</button>
+  <button style="background:#003B70;color:#fff;border:none;padding:9px 16px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer" onclick="_abrirInformeTecnico()">🔧 Informe Técnico</button>
   <button class="btn-cerrar" onclick="window.close()">✕ Cerrar</button>
-  <span class="tip">✏️ Campos editables · Ingresá <strong>Cant.</strong> y <strong>P. Unitario</strong> → el subtotal y totales se calculan solos</span>
+  <span class="tip">✏️ Campos editables · Ingresá <strong>Cant.</strong> y <strong>P. Unitario</strong> → subtotal y total se calculan solos · 💾 Guardá los cambios antes de cerrar</span>
 </div>
+<script>
+// Guardar cambios de vuelta al CRM
+function _guardarCambios(){
+  try {
+    // Recolectar ítems editados de la tabla
+    var rows = document.querySelectorAll('table.detalle tbody tr');
+    var items = [];
+    rows.forEach(function(tr){
+      var c = tr.querySelectorAll('td');
+      if(c.length < 6) return;
+      var desc = c[1] ? c[1].innerText.trim() : '';
+      if(!desc) return;
+      var tipo = c[2] ? c[2].innerText.trim() : '';
+      var cant = c[3] ? c[3].innerText.trim() : '';
+      var precio = c[4] ? c[4].innerText.trim() : '';
+      items.push(desc+'|'+tipo+'|'+cant+'|'+precio);
+    });
+    var descNueva = items.join('\\n');
+    // Calcular total
+    var totalEl = document.querySelector('.total-row.main span:last-child');
+    var totalStr = totalEl ? totalEl.innerText.replace(/[^0-9,\.]/g,'').replace(/\\./g,'').replace(',','.') : '0';
+    var totalNum = parseFloat(totalStr) || 0;
+    // Notas
+    var notasEl = document.querySelector('.notas-box');
+    var notas = notasEl ? notasEl.innerText.replace('Notas:','').trim() : '';
+    // Enviar al padre (CRM)
+    if(window.opener && window.opener._recibirCambiosPresupuesto){
+      window.opener._recibirCambiosPresupuesto('${p.id}', descNueva, totalNum, notas);
+      document.querySelector('.no-print').insertAdjacentHTML('beforeend','<span style="color:#25d366;font-weight:700;margin-left:8px">✔ Guardado</span>');
+    } else {
+      alert('Cambios registrados. Cerrá esta ventana y recargá el CRM para ver los cambios.');
+    }
+  } catch(e){ alert('Error al guardar: '+e.message); }
+}
+function _abrirInformeTecnico(){
+  var clienteNombre = document.querySelector('.campo span') ? document.querySelector('.campo span').innerText : '';
+  var url = '${window.location.origin}${window.location.pathname.replace('crm.html','')}crm.html?informe=${p.id}';
+  window.open(url,'_blank');
+}
+<\/script>
 
 <div class="header">
   <div class="logo"><img src="${MEB_LOGO_PDF_B64}" alt="MEB Machinery Solutions"/></div>
