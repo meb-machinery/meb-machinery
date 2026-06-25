@@ -3029,7 +3029,7 @@ var CLIENTE_TEL = '${clienteTel}';
 var CLIENTE_EMAIL = '${clienteEmail}';
 var CLIENTE_NOMBRE = '${clienteNombre}';
 var NUM_PRESUP = '${numPresup}';
-var _FIRMA = '${typeof MEB_FIRMA_B64!=\'undefined\'?MEB_FIRMA_B64:\'\'}';
+var _FIRMA = typeof MEB_FIRMA_B64 !== 'undefined' ? MEB_FIRMA_B64 : '';
 var initRows = ${rowsJSON};
 
 function fmt(n){
