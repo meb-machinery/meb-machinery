@@ -912,13 +912,24 @@ async function syncAll() {
       // Deduplicate: if multiple rows have same ID (one row per item), keep first occurrence for presupuesto header
       // but concatenate descriptions
       const presupMap = {};
+      if(pr.length) console.log('[MEB DEBUG] Presupuesto cols:', Object.keys(pr[0]));
       pr.forEach((r,i)=>{
         const pid = String(r.ID||'').trim();
         if(!pid) return;
         if(!presupMap[pid]) {
           // Handle all possible column name variants from old and new sheet formats
-          const _cid = String(r.CLIENTE_ID||r.CLIENTE_ID_||'').trim();
-          const _cnm = String(r.CLIENTE||r.CLIENTE_NOMBRE||'').trim();
+          // Try every possible column name for cliente
+          const _cid = String(r.CLIENTE_ID||r.CLIENTE_ID_||r['CLIENTE ID']||r.CLIENTEID||'').trim();
+          const _cnm = String(r.CLIENTE||r.CLIENTE_NOMBRE||r.NOMBRE_CLIENTE||r['CLIENTE_NOMBRE']||'').trim();
+          // If both empty, try to find client value in any column that looks like a name
+          let _clienteResolved = _cid || _cnm;
+          if(!_clienteResolved) {
+            // Scan all keys for the first one that could be a client name/id
+            const skip = new Set(['ID','NUMERO','N°','N°_','DESCRIPCION','DESCRIPCIÓN','MONTO','ESTADO','FECHA','NOTAS','TIPO','CANTIDAD','PRECIO_UNIT.','SUBTOTAL','TOTAL_PRESUP.']);
+            for(const k of Object.keys(r)) {
+              if(!skip.has(k) && r[k] && r[k].trim()) { _clienteResolved = r[k].trim(); break; }
+            }
+          }
           const _num = r.NUMERO||r['N°']||r['N°']||r.NUM||'';
           const _desc = r.DESCRIPCION||r['DESCRIPCIÓN']||r.DECSRIPCION||r.TITULO||'';
           const _monto = parseMonto(r.TOTAL_PRESUP_||r['TOTAL_PRESUP.']||r.MONTO_TOTAL||r.SUBTOTAL||r.MONTO||'0');
@@ -927,7 +938,7 @@ async function syncAll() {
             id:pid,
             num:_num||i+1,
             clienteId:_cid,
-            clienteNombreSheet:_cnm,
+            clienteNombreSheet:_cnm||_clienteResolved,
             descripcion:_desc,
             monto:_monto,
             estado:isNaN(_estado)?_estado:'pendiente',
