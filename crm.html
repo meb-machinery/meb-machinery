@@ -542,6 +542,10 @@ select option { background:var(--dark); }
       <div class="chart-card"><div class="chart-title">COBRADO REAL VS PRESUPUESTADO</div><div class="chart-wrap"><canvas id="chartCobradoVsPresup"></canvas></div></div>
       <div class="chart-card"><div class="chart-title">CLIENTES POR ZONA</div><div class="chart-wrap"><canvas id="chartZonas"></canvas></div></div>
     </div>
+    <div class="charts-grid">
+      <div class="chart-card"><div class="chart-title">ALERTAS: RESUELTA vs PENDIENTE</div><div class="chart-wrap"><canvas id="chartAlertas"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">PRESUPUESTOS: CONVERSIÓN</div><div class="chart-wrap"><canvas id="chartPresupConv"></canvas></div></div>
+    </div>
     <div class="card">
       <div class="card-header"><span class="card-title">TRABAJOS CON MAYOR RENTABILIDAD</span></div>
       <div class="table-wrap"><table>
@@ -738,7 +742,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwrNjOKAkygMUrIlZGlyyKQ6_o_g8HlzodENOIyDNql8N2HvMSoY-DOhMEssx43BDaikg/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxSnNNdW-THkOs9aLe1DM6cJtN1E6rUsKT12gbLEoUvDvIrqG6pVYR3Kfs-mEYlCnMOlg/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1665,6 +1669,7 @@ function renderAlertas() {
       <div style="text-align:right;min-width:90px">
         <div class="alert-date">${fmtDate(a.fecha)}</div>
         <button class="btn-secondary" style="margin-top:6px;font-size:10px;padding:3px 8px;${a.resuelta?'border-color:#25d366;color:#25d366':''}" onclick="resolverAlerta('${a.id}')">${a.resuelta?'✔ Resuelta':'✓ Resolver'}</button>
+        <button class="btn-secondary" style="margin-top:4px;font-size:10px;padding:3px 8px;background:rgba(244,180,0,0.12);border-color:var(--yellow);color:var(--yellow)" onclick="guardarAlertaSheets('${a.id}')">💾 Sheets</button>
       </div>
     </div>`;
   }).join('');
@@ -1673,6 +1678,15 @@ function renderAlertas() {
 function resolverAlerta(id) {
   const a=DB.alertas.find(x=>x.id===id);
   if(a){a.resuelta=!a.resuelta;saveLocal();updateBadges();renderAlertas();renderDashboard();}
+}
+
+function guardarAlertaSheets(id) {
+  const a = DB.alertas.find(x=>x.id===id);
+  if(!a) return;
+  const cl = DB.clientes.find(x=>x.id===a.clienteId);
+  const row = {id:a.id,titulo:a.titulo,cliente:cl?cl.nombre:'',fecha:a.fecha||'',prioridad:a.prioridad||'media',descripcion:a.descripcion||'',resuelta:a.resuelta};
+  writeToSheet({action:'addAlerta',row});
+  showToast('Alerta guardada en Sheets ✔','success');
 }
 
 function registrarComm(id, tipo) {
@@ -1742,15 +1756,21 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas) {
   const clObj2 = DB.clientes.find(x=>x.id===p.clienteId);
   const clNom2 = clObj2 ? clObj2.nombre : '';
   const lineas2 = (descripcion||'').split('\n').filter(l=>l.trim());
-  const items2 = lineas2.map(l=>{ const pts=l.split('|'); return {desc:pts[0]||'',tipo:pts[1]||'',cant:pts[2]||'',precio:pts[3]||''}; });
-  const descs2 = items2.map(x=>x.desc).filter(Boolean).join(' / ');
-  const tipos2 = items2.map(x=>x.tipo).filter(Boolean).join(' / ');
-  const cants2 = items2.map(x=>x.cant).filter(Boolean).join(' / ');
-  const precios2 = items2.map(x=>x.precio).filter(Boolean).join(' / ');
-  writeToSheet({ action:'updatePresupuesto', id:presupId, row:{
-    cliente:clNom2, descripcion:descs2, tipo:tipos2, cantidad:cants2,
-    precio_unitario:precios2, monto:monto||p.monto, estado:p.estado, notas:notas||p.notas||''
-  }});
+  const items2 = lineas2.length ? lineas2.map(l=>{ const pts=l.split('|'); return {desc:pts[0]||'',tipo:pts[1]||'Servicio',cant:pts[2]||'1',precio:pts[3]||''}; }) : [{desc:descripcion||'',tipo:'Servicio',cant:'1',precio:String(monto||p.monto||0)}];
+  items2.forEach(function(item2) {
+    const precioNum2 = parseFloat(String(item2.precio).replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
+    const cantNum2 = parseFloat(item2.cant) || 1;
+    const subtotal2 = cantNum2 * precioNum2;
+    writeToSheet({ action:'addPresupuesto', row:{
+      id:p.id, num:p.num, cliente:clNom2,
+      descripcion:item2.desc, tipo:item2.tipo,
+      cantidad:item2.cant,
+      precio_unitario: precioNum2>0 ? '$'+precioNum2.toLocaleString('es-AR') : '',
+      monto: '$'+(subtotal2||monto||p.monto||0).toLocaleString('es-AR'),
+      monto_total: '$'+(monto||p.monto||0).toLocaleString('es-AR'),
+      estado:p.estado, fecha:p.fecha||'', notas:notas||p.notas||''
+    }});
+  });
 }
 
 // Genera el Informe Técnico en ventana nueva
@@ -2294,6 +2314,32 @@ function renderEstadisticas() {
     charts.provCategorias=new Chart(document.getElementById('chartProvCategorias'),{
       type:'doughnut',
       data:{labels:Object.keys(gastoCat).map(k=>k.toUpperCase()),datasets:[{data:Object.values(gastoCat),backgroundColor:['rgba(244,180,0,0.85)','rgba(231,76,60,0.85)','rgba(46,204,113,0.85)','rgba(123,179,224,0.85)','rgba(155,89,182,0.85)'],borderWidth:0}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:12,color:'#aaa'}}}}
+    });
+  }
+
+
+  // Alertas: resuelta vs pendiente
+  destroyChart('alertas');
+  if(document.getElementById('chartAlertas')) {
+    const alResueltas = DB.alertas.filter(a=>a.resuelta).length;
+    const alPendientes = DB.alertas.filter(a=>!a.resuelta).length;
+    charts.alertas = new Chart(document.getElementById('chartAlertas'),{
+      type:'doughnut',
+      data:{labels:['✔ Resueltas','🔴 Pendientes'],datasets:[{data:[alResueltas,alPendientes],backgroundColor:['#25d366','#e74c3c'],borderWidth:0}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:12,color:'#aaa'}}}}
+    });
+  }
+  // Presupuestos: conversión por estado
+  destroyChart('presupConv');
+  if(document.getElementById('chartPresupConv')) {
+    const pAprobados = DB.presupuestos.filter(p=>p.estado==='aprobado').length;
+    const pPendientes = DB.presupuestos.filter(p=>p.estado==='pendiente').length;
+    const pRechazados = DB.presupuestos.filter(p=>p.estado==='rechazado').length;
+    const pNoApr = DB.presupuestos.filter(p=>p.estado==='no aprobado').length;
+    charts.presupConv = new Chart(document.getElementById('chartPresupConv'),{
+      type:'doughnut',
+      data:{labels:['Aprobados','Pendientes','Rechazados','No aprobados'],datasets:[{data:[pAprobados,pPendientes,pRechazados,pNoApr],backgroundColor:['#2ecc71','#F4B400','#e74c3c','#888'],borderWidth:0}]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:12,color:'#aaa'}}}}
     });
   }
@@ -3001,9 +3047,10 @@ function generarPresupuestoPDF(presupId) {
     'var CLIENTE_NOMBRE=' + JSON.stringify(clienteNombre) + ';',
     'var NUM_PRESUP=' + JSON.stringify(numPresup) + ';',
     '',
+    'var MONEDA_SYM=' + JSON.stringify((p.monedaSym||'$')) + ';',
     'function fmt(n) {',
     '  if(!n||isNaN(n)||n<=0) return "";',
-    '  return "$"+Number(n).toLocaleString("es-AR",{minimumFractionDigits:0,maximumFractionDigits:2});',
+    '  return MONEDA_SYM+Number(n).toLocaleString("es-AR",{minimumFractionDigits:0,maximumFractionDigits:2});',
     '}',
     'function parse(s) {',
     '  if(!s||s==="-"||s==="\\u2014") return 0;',
@@ -3421,6 +3468,12 @@ function openModal(type, data={}) {
     body=`<div class="form-grid">
       <div class="form-group full"><label>Cliente *</label><select id="f-pcli"><option value="">Seleccionar...</option>${clienteOptions(data.clienteId)}</select></div>
       <div class="form-group"><label>Fecha</label><input id="f-pfecha" type="date" value="${data.fecha||today()}"/></div>
+      <div class="form-group"><label>Moneda</label>
+        <select id="f-pmoneda" style="background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:8px;border-radius:6px;font-family:Barlow;font-size:13px;width:100%">
+          <option value="ARS"${(data.moneda||'ARS')==='ARS'?' selected':''}>$ Pesos argentinos</option>
+          <option value="USD"${data.moneda==='USD'?' selected':''}>USD Dólares</option>
+        </select>
+      </div>
       <div class="form-group"><label>Estado</label>
         <select id="f-pestado">
           <option value="pendiente"${(data.estado||'pendiente')==='pendiente'?' selected':''}>Pendiente</option>
@@ -3477,12 +3530,16 @@ function openModal(type, data={}) {
       });
       if(!lineas.length){showToast('Completá la descripción de al menos un ítem','error');return;}
       const descripcion = lineas.join('\n');
+      const monedaVal = gv('f-pmoneda')||'ARS';
+      const monedaSym = monedaVal==='USD'?'USD ':'$';
       guardar('presupuestos',{
         id:data.id||uid(),
         num:data.num||DB.presupCounter++,
         clienteId,
         descripcion,
         monto:totalMonto||data.monto||0,
+        moneda:monedaVal,
+        monedaSym:monedaSym,
         estado:gv('f-pestado'),
         fecha:gv('f-pfecha'),
         notas:gv('f-pnotas')
@@ -3498,7 +3555,7 @@ function openModal(type, data={}) {
     body=`<div class="form-grid">
       <div class="form-group full"><label>Título *</label><input id="f-atit" value="${data.titulo||''}"/></div>
       <div class="form-group full"><label>Cliente (opcional)</label><select id="f-acli"><option value="">Sin cliente</option>${clienteOptions(data.clienteId)}</select></div>
-      <div class="form-group"><label>Fecha recordatorio</label><input id="f-afecha" type="date" value="${data.fecha||today()}"/></div>
+      <div class="form-group"><label>Fecha recordatorio</label><input id="f-afecha" type="date" value="${data.fecha||''}"/></div>
       <div class="form-group"><label>Prioridad</label>
         <select id="f-aprio"><option value="alta">Alta 🔴</option><option value="media" selected>Media 🟠</option><option value="baja">Baja 🟡</option></select>
       </div>
@@ -3606,16 +3663,22 @@ function guardar(tipo, obj, campoRequerido) {
       const clObj = DB.clientes.find(x=>x.id===obj.clienteId);
       const clNom = clObj ? clObj.nombre : obj.clienteId;
       const lineas = (obj.descripcion||'').split('\n').filter(l=>l.trim());
-      const items = lineas.map(l=>{ const pts=l.split('|'); return {desc:pts[0]||'',tipo:pts[1]||'',cant:pts[2]||'',precio:pts[3]||''}; });
-      const descs = items.map(x=>x.desc).filter(Boolean).join(' / ');
-      const tipos = items.map(x=>x.tipo).filter(Boolean).join(' / ');
-      const cants = items.map(x=>x.cant).filter(Boolean).join(' / ');
-      const precios = items.map(x=>x.precio).filter(Boolean).join(' / ');
-      writeToSheet({ action:'addPresupuesto', row: {
-        id:obj.id, num:obj.num, cliente:clNom,
-        descripcion:descs, tipo:tipos, cantidad:cants, precio_unitario:precios,
-        monto:obj.monto, estado:obj.estado, fecha:obj.fecha, notas:obj.notas||''
-      }});
+      const items = lineas.length ? lineas.map(l=>{ const pts=l.split('|'); return {desc:pts[0]||'',tipo:pts[1]||'Servicio',cant:pts[2]||'1',precio:pts[3]||''}; }) : [{desc:obj.descripcion||'',tipo:'Servicio',cant:'1',precio:String(obj.monto||0)}];
+      const monedaSym = obj.moneda==='USD' ? 'USD ' : '$';
+      items.forEach(function(item) {
+        const precioNum = parseFloat(String(item.precio).replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
+        const cantNum = parseFloat(item.cant) || 1;
+        const subtotal = cantNum * precioNum;
+        writeToSheet({ action:'addPresupuesto', row: {
+          id:obj.id, num:obj.num, cliente:clNom,
+          descripcion:item.desc, tipo:item.tipo,
+          cantidad:item.cant,
+          precio_unitario: precioNum > 0 ? monedaSym + precioNum.toLocaleString('es-AR') : '',
+          monto: subtotal > 0 ? monedaSym + subtotal.toLocaleString('es-AR') : (monedaSym + (obj.monto||0).toLocaleString('es-AR')),
+          monto_total: monedaSym + (obj.monto||0).toLocaleString('es-AR'),
+          estado:obj.estado, fecha:obj.fecha, notas:obj.notas||''
+        }});
+      });
     }
     if(tipo==='clientes') writeToSheet({ action:'addCliente', row: {
       ID:obj.id, NOMBRE:obj.nombre, EMPRESA:obj.empresa||'',
