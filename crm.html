@@ -246,7 +246,8 @@ select option { background:var(--dark); }
 <div class="login-screen" id="loginScreen">
   <div class="login-box">
     <div class="login-logo">
-      <img id="loginLogoImg" style="height:64px;object-fit:contain;margin-bottom:4px;background:#ffffff;border-radius:4px;padding:2px" alt="MEB Machinery Solutions"/>
+      <img id="loginLogoImg" style="height:64px;object-fit:contain;margin-bottom:4px;background:#ffffff;border-radius:4px;padding:2px" alt="MEB Machinery Solutions" onerror="this.style.display='none';var fb=document.getElementById('loginLogoFallback');if(fb)fb.style.display='flex'"/>
+      <div id="loginLogoFallback" style="display:none;background:var(--yellow);width:64px;height:64px;border-radius:4px;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:22px;color:var(--black);letter-spacing:1px;margin-bottom:4px">MEB</div>
       <div class="lt" style="display:none"><div class="l1">Machinery Solutions</div><div class="l2">Sistema interno · CRM</div></div>
     </div>
     <div class="l2" style="font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:20px">Sistema interno · CRM</div>
@@ -256,7 +257,7 @@ select option { background:var(--dark); }
     <button onclick="doLogin()">INGRESAR</button>
     <div class="login-error" id="loginError">Usuario o contraseña incorrectos</div>
   </div>
-  <p class="login-hint">MEB Machinery Solutions · Sistema interno</p>
+  <p class="login-hint">MEB Machinery Solutions · Sistema interno<br><span style="color:var(--muted2);font-size:10px">Usuario: meb &nbsp;|&nbsp; Contraseña: meb2025</span></p>
 </div>
 
 <!-- TOPBAR -->
@@ -784,22 +785,31 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function doLogin() {
-  const u = document.getElementById('loginUser').value.trim().toLowerCase().replace(/\s/g,'');
-  const p = document.getElementById('loginPass').value.trim().replace(/\s/g,'');
-  const ok = (u === 'meb' || u === 'admin') && p === 'meb2025';
-  if(ok) {
-    document.getElementById('loginScreen').style.display='none';
-    document.getElementById('appTopbar').style.display='flex';
-    document.getElementById('appSidebar').style.display='flex';
-    document.getElementById('mainContent').style.display='block';
-    document.getElementById('globalSearchWrap').style.display='block';
-    loadLocal(); updateTopbar(); updateBadges(); renderDashboard();
-    // Pre-render calendario
-    setTimeout(()=>{ if(typeof renderCalendario==='function') renderCalendario(); }, 200);
-    showToast('Bienvenido a MEB CRM','success');
-  } else {
-    document.getElementById('loginError').style.display='block';
-    document.getElementById('loginError').textContent='Usuario: meb · Contraseña: meb2025';
+  try {
+    const u = document.getElementById('loginUser').value.trim().toLowerCase().replace(/\s/g,'');
+    const p = document.getElementById('loginPass').value.trim().replace(/\s/g,'');
+    const ok = (u === 'meb' || u === 'admin') && p === 'meb2025';
+    if(ok) {
+      document.getElementById('loginScreen').style.display='none';
+      document.getElementById('appTopbar').style.display='flex';
+      document.getElementById('appSidebar').style.display='flex';
+      document.getElementById('mainContent').style.display='block';
+      document.getElementById('globalSearchWrap').style.display='block';
+      try { loadLocal(); } catch(e){ console.warn('loadLocal error:',e); }
+      try { updateTopbar(); } catch(e){ console.warn('updateTopbar error:',e); }
+      try { updateBadges(); } catch(e){ console.warn('updateBadges error:',e); }
+      try { renderDashboard(); } catch(e){ console.warn('renderDashboard error:',e); }
+      // Pre-render calendario
+      setTimeout(()=>{ try{ if(typeof renderCalendario==='function') renderCalendario(); }catch(e){} }, 200);
+      showToast('Bienvenido a MEB CRM ✔','success');
+    } else {
+      const errEl = document.getElementById('loginError');
+      errEl.style.display='block';
+      errEl.textContent='Usuario incorrecto. Usar: meb / meb2025';
+    }
+  } catch(e) {
+    console.error('doLogin error:',e);
+    alert('Error al iniciar sesión. Recargá la página e intentá de nuevo.');
   }
 }
 function doLogout() {
@@ -1889,7 +1899,7 @@ body{font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;background:#fff;p
     <div style="font-size:12px;font-weight:700;color:#1A1A1A;margin-top:4px" contenteditable="true">${cl?cl.nombre:'Nombre del cliente'}</div>
   </div>
   <div style="text-align:center">
-    <img src="${FIRMA_IT}" style="height:260px;width:auto;max-width:400px;object-fit:contain;display:block;margin:0 auto 4px;" alt="Firma MEB"/>
+    <img src="${FIRMA_IT}" style="height:400px;width:auto;max-width:480px;object-fit:contain;display:block;margin:0 auto 4px;" alt="Firma MEB"/>
     <div style="border-top:2px solid #1A1A1A;margin-bottom:8px;margin-top:4px"></div>
     <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:2px">MEB Machinery Solutions</div>
     <div style="font-size:12px;font-weight:700;color:#1A1A1A;margin-top:4px" contenteditable="true">Marcos Bellando</div>
@@ -2909,7 +2919,7 @@ table.detalle .btn-del-row{background:#fee;border:1px solid #fcc;color:#c00;bord
 .condiciones{background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:22px}
 .condiciones-titulo{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#888;margin-bottom:10px}
 .cond-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.cond-item{font-size:12px;color:#555}.cond-item::before{content:"\2713  ";color:#F4B400;font-weight:700}
+.cond-item{font-size:12px;color:#555}.cond-item::before{content:"\u2713  ";color:#F4B400;font-weight:700}
 .firmas{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:36px}
 .firma-box{text-align:center}
 .firma-linea{border-top:2px solid #1A1A1A;margin-bottom:8px;margin-top:64px}
@@ -2999,7 +3009,7 @@ table.detalle .btn-del-row{background:#fee;border:1px solid #fcc;color:#c00;bord
 </div>
 <div class="firmas">
   <div class="firma-box"><div class="firma-linea"></div><div class="firma-label">Firma del cliente</div><div class="firma-nombre" contenteditable="true">${cl?cl.nombre:'Nombre del cliente'}</div></div>
-  <div class="firma-box"><img src="${FIRMA}" style="height:260px;width:auto;max-width:400px;object-fit:contain;display:block;margin:0 auto 4px;" alt="Firma"/><div class="firma-linea" style="margin-top:4px"></div><div class="firma-label">MEB Machinery Solutions</div><div class="firma-nombre" contenteditable="true">Marcos Bellando</div></div>
+  <div class="firma-box"><img src="${FIRMA}" style="height:400px;width:auto;max-width:480px;object-fit:contain;display:block;margin:0 auto 4px;" alt="Firma"/><div class="firma-linea" style="margin-top:4px"></div><div class="firma-label">MEB Machinery Solutions</div><div class="firma-nombre" contenteditable="true">Marcos Bellando</div></div>
 </div>
 <div class="footer">
   <span>MEB MACHINERY SOLUTIONS &middot; mebmachinerysolutions@gmail.com &middot; +54 11 3392-3254</span>
