@@ -873,8 +873,8 @@ function parseCSVLine(line) {
 async function syncAll() {
   const btn=document.getElementById('syncBtn');
   const status=document.getElementById('syncStatus');
-  btn.classList.add('syncing'); btn.textContent='↺ SINCRONIZANDO...';
-  status.textContent='● Sincronizando...'; status.style.color='var(--yellow)';
+  if(btn){btn.classList.add('syncing'); btn.textContent='↺ SINCRONIZANDO...';}
+  if(status){status.textContent='● Sincronizando...'; status.style.color='var(--yellow)';}
   showLoading('SINCRONIZANDO CON GOOGLE SHEETS...');
 
   try {
@@ -916,14 +916,21 @@ async function syncAll() {
         const pid = String(r.ID||'').trim();
         if(!pid) return;
         if(!presupMap[pid]) {
+          // Handle all possible column name variants from old and new sheet formats
+          const _cid = String(r.CLIENTE_ID||r.CLIENTE_ID_||'').trim();
+          const _cnm = String(r.CLIENTE||r.CLIENTE_NOMBRE||'').trim();
+          const _num = r.NUMERO||r['N°']||r['N°']||r.NUM||'';
+          const _desc = r.DESCRIPCION||r['DESCRIPCIÓN']||r.DECSRIPCION||r.TITULO||'';
+          const _monto = parseMonto(r.TOTAL_PRESUP_||r['TOTAL_PRESUP.']||r.MONTO_TOTAL||r.SUBTOTAL||r.MONTO||'0');
+          const _estado = String(r.ESTADO||'pendiente').toLowerCase().trim();
           presupMap[pid] = {
             id:pid,
-            num:r.NUMERO||r['N°']||r.N||i+1,
-            clienteId:String(r.CLIENTE_ID||'').trim(),
-            clienteNombreSheet:String(r.CLIENTE||'').trim(),
-            descripcion:r.DESCRIPCION||r['DESCRIPCIÓN']||r.DECSRIPCION||r.TITULO||'',
-            monto:parseMonto(r.MONTO_TOTAL||r.MONTO||r['MONTO_TOTAL']||r['TOTAL PRESUP.']),
-            estado:(r.ESTADO||'pendiente').toLowerCase().trim(),
+            num:_num||i+1,
+            clienteId:_cid,
+            clienteNombreSheet:_cnm,
+            descripcion:_desc,
+            monto:_monto,
+            estado:isNaN(_estado)?_estado:'pendiente',
             fecha:r.FECHA||'', notas:r.NOTAS||''
           };
         } else {
@@ -961,11 +968,19 @@ async function syncAll() {
         return p;
       });
     } else if(!DB.presupuestos.length) DB.presupuestos=[];
-    if(al.length) DB.alertas = al.map(r=>({
-      id:String(r.ID||uid()).trim(), titulo:r.TITULO||'', clienteId:String(r.CLIENTE_ID||'').trim(),
-      fecha:r.FECHA||'', prioridad:(r.PRIORIDAD||'media').toLowerCase(),
-      descripcion:r.DESCRIPCION||'', resuelta:r.RESUELTA==='TRUE'||r.RESUELTA==='true'||r.RESUELTA==='1'
-    })); else if(!DB.alertas.length) DB.alertas=[];
+    if(al.length) DB.alertas = al.map(r=>{
+      let acid = String(r.CLIENTE_ID||'').trim();
+      // Resolve cliente by name if id not found
+      if(!acid && r.CLIENTE) {
+        const fc = DB.clientes.find(c=>c.nombre.toUpperCase()===r.CLIENTE.toUpperCase());
+        if(fc) acid = fc.id;
+      }
+      return {
+        id:String(r.ID||uid()).trim(), titulo:r.TITULO||'', clienteId:acid,
+        fecha:r.FECHA||'', prioridad:(r.PRIORIDAD||'media').toLowerCase(),
+        descripcion:r.DESCRIPCION||'', resuelta:r.RESUELTA==='TRUE'||r.RESUELTA==='true'||r.RESUELTA==='1'
+      };
+    }); else if(!DB.alertas.length) DB.alertas=[];
     if(pv.length) {
       DB.proveedores = pv.filter(r=>r.TIPO==='proveedor'||!r.TIPO||r.NOMBRE).map(r=>({
         id:String(r.ID||uid()).trim(), nombre:r.NOMBRE||'', categoria:(r.CATEGORIA||'otros').toLowerCase(),
@@ -1004,16 +1019,16 @@ async function syncAll() {
     updateBadges();
     refreshCurrentPage();
     renderDashboard();
-    status.textContent='● Conectado'; status.style.color='var(--green)';
+    if(status){status.textContent='● Conectado'; status.style.color='var(--green)';}
     showToast(`Sincronizado — ${DB.clientes.length} clientes · ${DB.maquinas.length} máquinas · ${DB.trabajos.length} trabajos · ${DB.presupuestos.length} presupuestos`,'success');
   } catch(e) {
-    status.textContent='● Error sync'; status.style.color='var(--red)';
+    if(status){status.textContent='● Error sync'; status.style.color='var(--red)';}
     showToast('Error: '+e.message+' — verificá que el Sheet esté público','error');
     console.error('SyncAll error:', e);
   }
 
   hideLoading();
-  btn.classList.remove('syncing'); btn.textContent='↺ SINCRONIZAR';
+  if(btn){btn.classList.remove('syncing'); btn.textContent='↺ SINCRONIZAR';}
   updateBadges(); refreshCurrentPage();
 }
 
@@ -1043,7 +1058,7 @@ function parseMonto(v) {
   }
   return parseFloat(s) || 0;
 }
-function fmtMonto(n) { return '$'+Number(n||0).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+function fmtMonto(n) { const v=parseFloat(String(n||0).replace(/[$USD]/g,'').replace(/\./g,'').replace(',','.')); return '$'+(isNaN(v)?0:v).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}); }
 function gv(id) { return document.getElementById(id)?.value?.trim()||''; }
 
 function badgeEstado(e) {
@@ -1281,7 +1296,7 @@ function renderMaquinas() {
   const tbody=document.getElementById('tabla-maquinas');
   if(!DB.maquinas.length){tbody.innerHTML=`<tr><td colspan="6"><div class="empty-state"><div class="icon">⚙️</div><p>Sin máquinas</p></div></td></tr>`;return;}
   tbody.innerHTML=DB.maquinas.map(m=>{
-    const cl=DB.clientes.find(c=>c.id===m.clienteId);
+    const cl=DB.clientes.find(c=>String(c.id)===String(m.clienteId));
     const trs=DB.trabajos.filter(t=>t.maquinaId===m.id).length;
     return `<tr>
       <td><div class="td-name">${m.marca} ${m.modelo}</div></td>
@@ -1392,7 +1407,7 @@ function filtrarPorCobrarAuto() {
 function verTrabajo(id) {
   const t = DB.trabajos.find(x=>x.id===id);
   if(!t) return;
-  const cl = DB.clientes.find(c=>c.id===t.clienteId);
+  const cl = DB.clientes.find(c=>String(c.id)===String(t.clienteId));
   const mq = DB.maquinas.find(m=>m.id===t.maquinaId);
   const montoCobrado = Number(t.montoCobrado||0);
   const costoRep = Number(t.costoRepuesto||0);
@@ -1471,7 +1486,7 @@ function renderTrabajos() {
   const tbody=document.getElementById('tabla-trabajos');
   if(!data.length){tbody.innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="icon">🔧</div><p>Sin trabajos</p></div></td></tr>`;return;}
   tbody.innerHTML=data.map(t=>{
-    const cl=DB.clientes.find(c=>c.id===t.clienteId);
+    const cl=DB.clientes.find(c=>String(c.id)===String(t.clienteId));
     const mq=DB.maquinas.find(m=>m.id===t.maquinaId);
     // Monto cobrado real del Sheet
     const montoCobrado=Number(t.montoCobrado||0);
@@ -2357,7 +2372,7 @@ function renderEstadisticas() {
   }).sort((a,b)=>b.ganancia-a.ganancia).slice(0,10);
   const trEl=document.getElementById('tabla-rentabilidad');
   trEl.innerHTML=trs.length?trs.map(t=>{
-    const cl=DB.clientes.find(c=>c.id===t.clienteId);
+    const cl=DB.clientes.find(c=>String(c.id)===String(t.clienteId));
     return `<tr>
       <td class="td-name">${t.titulo}</td>
       <td>${cl?cl.nombre:'—'}</td>
@@ -2593,7 +2608,7 @@ function renderBusquedaGlobal(q) {
   });
 
   DB.maquinas.filter(m=>(m.marca+m.modelo+m.serie+m.tipo).toLowerCase().includes(q)).slice(0,4).forEach(m=>{
-    const cl = DB.clientes.find(c=>c.id===m.clienteId);
+    const cl = DB.clientes.find(c=>String(c.id)===String(m.clienteId));
     hits.push(`<div class="gs-item" onclick="showPage('maquinas')">
       <span style="font-size:11px;color:var(--muted)">⚙️ MÁQUINA</span>
       <div style="font-size:13px;font-weight:600;color:var(--text)">${m.marca} ${m.modelo}</div>
@@ -2602,7 +2617,7 @@ function renderBusquedaGlobal(q) {
   });
 
   DB.presupuestos.filter(p=>(p.descripcion+p.num).toString().toLowerCase().includes(q)).slice(0,4).forEach(p=>{
-    const cl = DB.clientes.find(c=>c.id===p.clienteId);
+    const cl = DB.clientes.find(c=>String(c.id)===String(p.clienteId));
     hits.push(`<div class="gs-item" onclick="document.getElementById('globalSearchInput').value='';document.getElementById('globalSearchResults').style.display='none';generarPresupuestoPDF('${p.id}')">
       <span style="font-size:11px;color:var(--muted)">📋 PRESUPUESTO</span>
       <div style="font-size:13px;font-weight:600;color:var(--text)">#${String(p.num||0).padStart(4,'0')} · ${cl?cl.nombre:'—'}</div>
@@ -2919,7 +2934,7 @@ function renderMapa() {
     zonaMap[z].clientes.push(c);
   });
   DB.trabajos.forEach(t => {
-    const cl = DB.clientes.find(c=>c.id===t.clienteId);
+    const cl = DB.clientes.find(c=>String(c.id)===String(t.clienteId));
     if(!cl) return;
     const z = cl.zona||'Sin zona';
     if(zonaMap[z]) { zonaMap[z].trabajos++; zonaMap[z].facturado += Number(t.montoCobrado||0); }
@@ -3648,7 +3663,7 @@ function openModal(type, data={}) {
         tipoComm: existente ? existente.tipoComm : undefined
       };
       const esNuevaAlerta = !existente;
-      const clAlerta = DB.clientes.find(x=>x.id===aObj.clienteId);
+      const clAlerta = DB.clientes.find(x=>String(x.id)===String(aObj.clienteId));
       const clNomAlerta = clAlerta ? clAlerta.nombre : '';
       guardar('alertas', aObj, 'titulo');
       const rowA={id:aObj.id,titulo:aObj.titulo,cliente:clNomAlerta,fecha:aObj.fecha,prioridad:aObj.prioridad,descripcion:aObj.descripcion,resuelta:aObj.resuelta};
@@ -3907,7 +3922,7 @@ function calcularAlertasRepuesto() {
     if (!t.fechaInicio || !t.titulo) return;
     const est = estimarProximoCambio(t.fechaInicio, t.titulo);
     if (!est) return;
-    const cl = DB.clientes.find(c=>c.id===t.clienteId);
+    const cl = DB.clientes.find(c=>String(c.id)===String(t.clienteId));
     const mq = DB.maquinas.find(m=>m.id===t.maquinaId);
     const diasRestantes = Math.ceil((est.proximaFecha - hoy) / (24*60*60*1000));
     let urgencia = null;
@@ -3978,7 +3993,7 @@ function renderCalendario() {
     const d = normalizarFecha(t.fechaInicio);
     if (d && d.startsWith(`${y}-${String(m+1).padStart(2,'0')}`)) {
       if (!eventosPorDia[d]) eventosPorDia[d] = [];
-      const cl = DB.clientes.find(c=>c.id===t.clienteId);
+      const cl = DB.clientes.find(c=>String(c.id)===String(t.clienteId));
       eventosPorDia[d].push({ tipo:'trabajo', titulo:t.titulo, cliente:cl?.nombre||'—', color:'#7bb3e0', id:t.id });
     }
   });
@@ -4044,7 +4059,7 @@ function calVerDia(fechaStr) {
   const evs = [];
   DB.trabajos.forEach(t => {
     if (normalizarFecha(t.fechaInicio) === fechaStr) {
-      const cl = DB.clientes.find(c=>c.id===t.clienteId);
+      const cl = DB.clientes.find(c=>String(c.id)===String(t.clienteId));
       const mq = DB.maquinas.find(m=>m.id===t.maquinaId);
       evs.push(`<div style="padding:10px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;gap:8px;align-items:center">
@@ -4091,7 +4106,7 @@ function eliminarEvento(id) {
 function verFotos(trabajoId) {
   const t = DB.trabajos.find(x=>x.id===trabajoId);
   if (!t) return;
-  const cl = DB.clientes.find(c=>c.id===t.clienteId);
+  const cl = DB.clientes.find(c=>String(c.id)===String(t.clienteId));
   const mq = DB.maquinas.find(m=>m.id===t.maquinaId);
   document.getElementById('fotosTitle').textContent = `📷 ${t.titulo}`;
   document.getElementById('fotosOverlay').style.display='flex';
