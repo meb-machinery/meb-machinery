@@ -803,9 +803,10 @@ function doLogin() {
       try { updateTopbar(); } catch(e){ console.warn('updateTopbar error:',e); }
       try { updateBadges(); } catch(e){ console.warn('updateBadges error:',e); }
       try { renderDashboard(); } catch(e){ console.warn('renderDashboard error:',e); }
-      // Pre-render calendario
       setTimeout(()=>{ try{ if(typeof renderCalendario==='function') renderCalendario(); }catch(e){} }, 200);
-      showToast('Bienvenido a MEB CRM ✔','success');
+      // Auto-sync desde Sheets al login
+      showToast('Bienvenido a MEB CRM ✔ — Sincronizando...','success');
+      setTimeout(()=>{ try{ syncAll(); }catch(e){ console.warn('auto-sync error:',e); } }, 400);
     } else {
       const errEl = document.getElementById('loginError');
       errEl.style.display='block';
@@ -979,12 +980,32 @@ async function syncAll() {
       }));
     } else { if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; }
 
+    // ── Reparar clienteId corruptos (nombre guardado en lugar de ID) ──────────
+    DB.presupuestos.forEach(p => {
+      if(!p.clienteId) return;
+      // Si clienteId no coincide con ningún ID, buscar por nombre
+      const byId = DB.clientes.find(c => String(c.id) === String(p.clienteId));
+      if(!byId) {
+        const byName = DB.clientes.find(c => c.nombre.toUpperCase() === String(p.clienteId).toUpperCase()
+          || c.nombre.toUpperCase() === String(p.clienteNombreSheet||'').toUpperCase());
+        if(byName) p.clienteId = byName.id;
+      }
+    });
+    DB.alertas.forEach(a => {
+      if(!a.clienteId) return;
+      const byId = DB.clientes.find(c => String(c.id) === String(a.clienteId));
+      if(!byId) {
+        const byName = DB.clientes.find(c => c.nombre.toUpperCase() === String(a.clienteId).toUpperCase());
+        if(byName) a.clienteId = byName.id;
+      }
+    });
+
     saveLocal();
     updateBadges();
     refreshCurrentPage();
     renderDashboard();
     status.textContent='● Conectado'; status.style.color='var(--green)';
-    showToast(`Sincronizado — ${DB.clientes.length} clientes · ${DB.maquinas.length} máquinas · ${DB.trabajos.length} trabajos · ${DB.presupuestos.length} presupuestos · ${DB.proveedores.length} proveedores`,'success');
+    showToast(`Sincronizado — ${DB.clientes.length} clientes · ${DB.maquinas.length} máquinas · ${DB.trabajos.length} trabajos · ${DB.presupuestos.length} presupuestos`,'success');
   } catch(e) {
     status.textContent='● Error sync'; status.style.color='var(--red)';
     showToast('Error: '+e.message+' — verificá que el Sheet esté público','error');
@@ -1165,7 +1186,9 @@ function renderDashboard() {
       </div></div>`),
     ...la.map(a=>{
       const col=a.prioridad==='alta'?'red':a.prioridad==='media'?'orange':'yellow';
-      return `<div class="alert-item"><div class="alert-dot ${col}"></div><div class="alert-text"><div class="alert-title">${a.titulo}</div><div class="alert-sub">${fmtDate(a.fecha)}</div></div></div>`;
+      const clA=DB.clientes.find(c=>String(c.id)===String(a.clienteId));
+      const commBadge=a.tipoComm?`<span style="font-size:10px;color:#25d366;margin-left:6px">✔ ${a.tipoComm}</span>`:'';
+      return `<div class="alert-item"><div class="alert-dot ${col}"></div><div class="alert-text"><div class="alert-title">${a.titulo}${clA?` <span style="color:var(--yellow)">· ${clA.nombre}</span>`:''}${commBadge}</div><div class="alert-sub">${fmtDate(a.fecha)}${a.descripcion?' · '+a.descripcion:''}</div></div></div>`;
     })
   ].join('') : `<div class="empty-state"><div class="icon">✅</div><p>Sin alertas</p></div>`;
 
