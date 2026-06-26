@@ -947,23 +947,14 @@ async function syncAll() {
       DB.presupuestos = Object.values(presupMap).map(p=>{
         // If clienteId is missing but we have the client name, try to find by name
         // Try to resolve clienteId if it's a name (not a numeric/uid ID)
-        if(p.clienteNombreSheet && (!p.clienteId || isNaN(p.clienteId.replace(/[^0-9]/g,'')) === false)) {
-          // clienteId might be numeric string "1" or a name "BAIBONA RAUL"
-          // First try exact id match
-          let found = DB.clientes.find(c=>String(c.id)===String(p.clienteId));
-          if(!found) {
-            // Try matching by name stored in clienteId field (old bug where name was stored as id)
-            found = DB.clientes.find(c=>c.nombre.toUpperCase()===(p.clienteId||'').toUpperCase());
-          }
-          if(!found && p.clienteNombreSheet) {
-            // Try matching by sheet cliente column (name)
-            found = DB.clientes.find(c=>c.nombre.toUpperCase()===p.clienteNombreSheet.toUpperCase());
-          }
-          if(found) p.clienteId = found.id;
-        } else if(!p.clienteId && p.clienteNombreSheet) {
-          const found = DB.clientes.find(c=>c.nombre.toUpperCase()===p.clienteNombreSheet.toUpperCase());
-          if(found) p.clienteId = found.id;
-          else p.clienteId = p.clienteNombreSheet;
+        // Always try to resolve to a valid client ID
+        const _exactMatch = DB.clientes.find(c=>String(c.id)===String(p.clienteId));
+        if(!_exactMatch) {
+          const _nameMatch = DB.clientes.find(c=>
+            c.nombre.toUpperCase()===(p.clienteNombreSheet||'').toUpperCase() ||
+            c.nombre.toUpperCase()===(p.clienteId||'').toUpperCase()
+          );
+          if(_nameMatch) p.clienteId = _nameMatch.id;
         }
         return p;
       });
@@ -1253,7 +1244,7 @@ function renderClientes() {
 function verCliente(id) {
   const c=DB.clientes.find(x=>x.id===id); if(!c) return;
   const mqs=DB.maquinas.filter(m=>m.clienteId===id);
-  const prs=DB.presupuestos.filter(p=>p.clienteId===id);
+  const prs=DB.presupuestos.filter(p=>String(p.clienteId)===String(id)||String(p.clienteNombreSheet||'')===String(DB.clientes.find(x=>x.id===id)?.nombre||''));
   const trs=DB.trabajos.filter(t=>t.clienteId===id);
   const totalCobrado=trs.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
   const porCobrarCliente=trs.filter(t=>t.estado==='completado'&&(t.estadoCobro||'pendiente')!=='cobrado').reduce((s,t)=>s+Number(t.montoCobrado||0),0);
@@ -1860,8 +1851,10 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas) {
 // Genera el Informe Técnico en ventana nueva
 function generarInformeTecnico(presupId) {
   const p = DB.presupuestos.find(x=>x.id===presupId);
-  const cl = p ? DB.clientes.find(c=>String(c.id)===String(p.clienteId)) : null;
-  const maq = p ? (()=>{ const t=DB.trabajos.find(t=>t.clienteId===p.clienteId); return t?DB.maquinas.find(m=>m.id===t.maquinaId):null; })() : null;
+  const cl = p ? (DB.clientes.find(c=>String(c.id)===String(p.clienteId))
+              || DB.clientes.find(c=>c.nombre.toUpperCase()===String(p.clienteNombreSheet||'').toUpperCase())
+              || DB.clientes.find(c=>c.nombre.toUpperCase()===String(p.clienteId||'').toUpperCase())) : null;
+  const maq = p ? (()=>{ const t=DB.trabajos.find(t=>String(t.clienteId)===String(p.clienteId)); return t?DB.maquinas.find(m=>m.id===t.maquinaId):null; })() : null;
   const numPresup = p ? String(p.num||0).padStart(4,'0') : '0000';
   const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const LOGO = typeof MEB_LOGO_PDF_B64 !== 'undefined' ? MEB_LOGO_PDF_B64 : '';
@@ -3059,7 +3052,10 @@ function maquinaOptions(selected='') {
 function generarPresupuestoPDF(presupId) {
   const p = DB.presupuestos.find(x => x.id === presupId);
   if (!p) return;
-  const cl = DB.clientes.find(c => String(c.id) === String(p.clienteId));
+  // Buscar cliente por ID exacto, luego por nombre (por si el Sheet guardó el nombre como clienteId)
+  const cl = DB.clientes.find(c => String(c.id) === String(p.clienteId))
+          || DB.clientes.find(c => c.nombre.toUpperCase() === String(p.clienteNombreSheet||'').toUpperCase())
+          || DB.clientes.find(c => c.nombre.toUpperCase() === String(p.clienteId||'').toUpperCase());
 
   const tRel = DB.trabajos
     .filter(t => String(t.clienteId) === String(p.clienteId) && t.titulo)
