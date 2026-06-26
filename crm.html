@@ -742,7 +742,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxSnNNdW-THkOs9aLe1DM6cJtN1E6rUsKT12gbLEoUvDvIrqG6pVYR3Kfs-mEYlCnMOlg/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz3hsLNjhPMgxUTnPzS4CNpmim3T-S9MeeANbxEctp-4t0xrODKu3QDU6zmgmnmd2cpYg/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -907,13 +907,59 @@ async function syncAll() {
       notas:r.NOTAS||'', fotoUrl:r.FOTO_URL||'',
       estadoCobro:(r.ESTADO_COBRO||'pendiente').toLowerCase().trim()
     })); else if(!DB.trabajos.length) DB.trabajos=[];
-    if(pr.length) DB.presupuestos = pr.map((r,i)=>({
-      id:String(r.ID||uid()).trim(), num:r.NUMERO||i+1, clienteId:String(r.CLIENTE_ID||r['CLIENTE_ID']||'').trim(),
-      descripcion:r.DESCRIPCION||r.DECSRIPCION||r.TITULO||'',
-      titulo:r.TITULO||r.DESCRIPCION||r.DECSRIPCION||'',
-      monto:parseMonto(r.MONTO), estado:(r.ESTADO||'pendiente').toLowerCase().trim(),
-      fecha:r.FECHA||'', notas:r.NOTAS||''
-    })); else if(!DB.presupuestos.length) DB.presupuestos=[];
+    if(pr.length) {
+      // Deduplicate: if multiple rows have same ID (one row per item), keep first occurrence for presupuesto header
+      // but concatenate descriptions
+      const presupMap = {};
+      pr.forEach((r,i)=>{
+        const pid = String(r.ID||'').trim();
+        if(!pid) return;
+        if(!presupMap[pid]) {
+          presupMap[pid] = {
+            id:pid,
+            num:r.NUMERO||r['N°']||r.N||i+1,
+            clienteId:String(r.CLIENTE_ID||'').trim(),
+            clienteNombreSheet:String(r.CLIENTE||'').trim(),
+            descripcion:r.DESCRIPCION||r['DESCRIPCIÓN']||r.DECSRIPCION||r.TITULO||'',
+            monto:parseMonto(r.MONTO_TOTAL||r.MONTO||r['MONTO_TOTAL']||r['TOTAL PRESUP.']),
+            estado:(r.ESTADO||'pendiente').toLowerCase().trim(),
+            fecha:r.FECHA||'', notas:r.NOTAS||''
+          };
+        } else {
+          // Append item description from subsequent rows
+          const extra = r.DESCRIPCION||r['DESCRIPCIÓN']||'';
+          if(extra && !presupMap[pid].descripcion.includes(extra)) {
+            presupMap[pid].descripcion += '\n' + extra;
+          }
+          // Use highest monto_total found
+          const m = parseMonto(r.MONTO_TOTAL||r['TOTAL PRESUP.']||r.MONTO);
+          if(m > presupMap[pid].monto) presupMap[pid].monto = m;
+        }
+      });
+      DB.presupuestos = Object.values(presupMap).map(p=>{
+        // If clienteId is missing but we have the client name, try to find by name
+        // Try to resolve clienteId if it's a name (not a numeric/uid ID)
+        if(p.clienteNombreSheet && (!p.clienteId || isNaN(p.clienteId.replace(/[^0-9]/g,'')) === false)) {
+          // clienteId might be numeric string "1" or a name "BAIBONA RAUL"
+          // First try exact id match
+          let found = DB.clientes.find(c=>String(c.id)===String(p.clienteId));
+          if(!found) {
+            // Try matching by name stored in clienteId field (old bug where name was stored as id)
+            found = DB.clientes.find(c=>c.nombre.toUpperCase()===(p.clienteId||'').toUpperCase());
+          }
+          if(!found && p.clienteNombreSheet) {
+            // Try matching by sheet cliente column (name)
+            found = DB.clientes.find(c=>c.nombre.toUpperCase()===p.clienteNombreSheet.toUpperCase());
+          }
+          if(found) p.clienteId = found.id;
+        } else if(!p.clienteId && p.clienteNombreSheet) {
+          const found = DB.clientes.find(c=>c.nombre.toUpperCase()===p.clienteNombreSheet.toUpperCase());
+          if(found) p.clienteId = found.id;
+          else p.clienteId = p.clienteNombreSheet;
+        }
+        return p;
+      });
+    } else if(!DB.presupuestos.length) DB.presupuestos=[];
     if(al.length) DB.alertas = al.map(r=>({
       id:String(r.ID||uid()).trim(), titulo:r.TITULO||'', clienteId:String(r.CLIENTE_ID||'').trim(),
       fecha:r.FECHA||'', prioridad:(r.PRIORIDAD||'media').toLowerCase(),
@@ -1129,7 +1175,7 @@ function renderDashboard() {
   dp.innerHTML=lp.length?`<div class="table-wrap"><table>
     <thead><tr><th>#</th><th>Cliente</th><th>Descripción</th><th>Monto</th><th>Estado</th></tr></thead>
     <tbody>${lp.map(p=>{
-      const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId));
+      const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId))||DB.clientes.find(c=>c.nombre.toUpperCase()===(p.clienteNombreSheet||p.clienteId||'').toUpperCase());
       return `<tr><td><span style="font-family:'Bebas Neue';color:var(--yellow)">#${String(p.num||0).padStart(4,'0')}</span></td>
         <td>${cl?cl.nombre:'—'}</td><td>${p.descripcion||'—'}</td>
         <td><span class="monto">${fmtMonto(p.monto)}</span></td><td>${badgeEstado(p.estado)}</td></tr>`;
@@ -1456,7 +1502,7 @@ function renderPresupuestos() {
   const search=(document.getElementById('searchPresupuestos')||{value:''}).value.toLowerCase().trim();
   if(search){
     data=data.filter(p=>{
-      const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId));
+      const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId))||DB.clientes.find(c=>c.nombre.toUpperCase()===(p.clienteNombreSheet||p.clienteId||'').toUpperCase());
       const numStr=String(p.num||0).padStart(4,'0');
       return numStr.includes(search)||
         (p.descripcion||'').toLowerCase().includes(search)||
@@ -1466,7 +1512,7 @@ function renderPresupuestos() {
   const tbody=document.getElementById('tabla-presupuestos');
   if(!data.length){tbody.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="icon">📋</div><p>Sin presupuestos</p></div></td></tr>`;return;}
   tbody.innerHTML=data.map(p=>{
-    const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId));
+    const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId))||DB.clientes.find(c=>c.nombre.toUpperCase()===(p.clienteNombreSheet||p.clienteId||'').toUpperCase());
     const descCorta=(p.descripcion||'—').split('\n')[0].split('|')[0];
     return `<tr>
       <td><span style="font-family:'Bebas Neue';color:var(--yellow);font-size:15px">#${String(p.num||0).padStart(4,'0')}</span></td>
@@ -1762,7 +1808,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas) {
     const cantNum2 = parseFloat(item2.cant) || 1;
     const subtotal2 = cantNum2 * precioNum2;
     writeToSheet({ action:'addPresupuesto', row:{
-      id:p.id, num:p.num, cliente:clNom2,
+      id:p.id, num:p.num, cliente_id:p.clienteId, cliente:clNom2,
       descripcion:item2.desc, tipo:item2.tipo,
       cantidad:item2.cant,
       precio_unitario: precioNum2>0 ? '$'+precioNum2.toLocaleString('es-AR') : '',
@@ -3017,8 +3063,8 @@ function generarPresupuestoPDF(presupId) {
   const FIRMA = typeof MEB_FIRMA_B64!=='undefined'?MEB_FIRMA_B64:'';
   const clienteTel = cl ? (cl.telefono||'').replace(/\D/g,'') : '';
   const clienteEmail = cl ? (cl.email||'') : '';
-  const clienteNombre = cl ? cl.nombre : '—';
-  const estadoPresup = (p.estado||'PENDIENTE').toUpperCase();
+  const clienteNombre = cl ? cl.nombre : (p.clienteNombreSheet||p.clienteId||'—');
+  const estadoPresup = (isNaN(p.estado) ? (p.estado||'PENDIENTE') : 'PENDIENTE').toUpperCase();
   const maqDesc = maqRel ? maqRel.marca+' '+maqRel.modelo+' — '+(maqRel.serie||'S/N') : '—';
   const maqTipo = maqRel ? maqRel.tipo||'—' : '—';
 
@@ -3443,7 +3489,7 @@ function openModal(type, data={}) {
             <option value="Traslado"${parts[1]==='Traslado'?' selected':''}>Traslado</option>
           </select></td>
           <td><input class="item-cant" type="number" value="${parts[2]||1}" min="1" style="width:60px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px;text-align:center" oninput="recalcularTotal()"/></td>
-          <td><input class="item-precio" type="number" value="${parts[3]||''}" placeholder="0" style="width:110px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px;text-align:right" oninput="recalcularTotal()"/></td>
+          <td><input class="item-precio" type="number" value="${parts[3]||''}" placeholder="Ej: 150000" style="width:110px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px;text-align:right" oninput="recalcularTotal()"/></td>
           <td class="item-subtotal" style="color:var(--yellow);font-family:'Bebas Neue';font-size:14px;text-align:right;padding:4px 6px">—</td>
           <td><button onclick="this.closest('tr').remove();recalcularTotal()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px 6px">✕</button></td>
         </tr>`;
@@ -3461,7 +3507,7 @@ function openModal(type, data={}) {
           <option value="Traslado">Traslado</option>
         </select></td>
         <td><input class="item-cant" type="number" value="1" min="1" style="width:60px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px;text-align:center" oninput="recalcularTotal()"/></td>
-        <td><input class="item-precio" type="number" value="${data.monto||''}" placeholder="0" style="width:110px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px;text-align:right" oninput="recalcularTotal()"/></td>
+        <td><input class="item-precio" type="number" value="${data.monto||''}" placeholder="Ej: 150000" style="width:110px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px;text-align:right" oninput="recalcularTotal()"/></td>
         <td class="item-subtotal" style="color:var(--yellow);font-family:'Bebas Neue';font-size:14px;text-align:right;padding:4px 6px">—</td>
         <td><button onclick="this.closest('tr').remove();recalcularTotal()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px 6px">✕</button></td>
       </tr>`;
@@ -3623,7 +3669,7 @@ function agregarItemPresup() {
       <option value="Traslado">Traslado</option>
     </select></td>
     <td><input class="item-cant" type="number" value="1" min="1" style="width:60px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px;text-align:center" oninput="recalcularTotal()"/></td>
-    <td><input class="item-precio" type="number" placeholder="0" style="width:110px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px;text-align:right" oninput="recalcularTotal()"/></td>
+    <td><input class="item-precio" type="number" placeholder="Ej: 150000" style="width:110px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-family:Barlow;font-size:12px;text-align:right" oninput="recalcularTotal()"/></td>
     <td class="item-subtotal" style="color:var(--yellow);font-family:'Bebas Neue';font-size:14px;text-align:right;padding:4px 6px">—</td>
     <td><button onclick="this.closest('tr').remove();recalcularTotal()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px 6px">✕</button></td>`;
   tbody.appendChild(tr);
@@ -3672,7 +3718,7 @@ function guardar(tipo, obj, campoRequerido) {
         const cantNum = parseFloat(item.cant) || 1;
         const subtotal = cantNum * precioNum;
         writeToSheet({ action:'addPresupuesto', row: {
-          id:obj.id, num:obj.num, cliente:clNom,
+          id:obj.id, num:obj.num, cliente_id:obj.clienteId, cliente:clNom,
           descripcion:item.desc, tipo:item.tipo,
           cantidad:item.cant,
           precio_unitario: precioNum > 0 ? monedaSym + precioNum.toLocaleString('es-AR') : '',
