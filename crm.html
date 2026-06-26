@@ -2812,7 +2812,6 @@ function generarPresupuestoPDF(presupId) {
   if (!p) return;
   const cl = DB.clientes.find(c => c.id === p.clienteId);
 
-  // Trabajo más reciente del cliente para pre-llenar
   const tRel = DB.trabajos
     .filter(t => t.clienteId === p.clienteId && t.titulo)
     .sort((a,b)=>{
@@ -2826,7 +2825,6 @@ function generarPresupuestoPDF(presupId) {
   const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const fechaVence = new Date(Date.now()+15*24*60*60*1000).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
 
-  // Construir filas iniciales
   const lineas = (p.descripcion||'').split('\n').filter(l=>l.trim());
   let initRows = [];
   if (lineas.length>=1 && lineas[0].includes('|')) {
@@ -2846,23 +2844,18 @@ function generarPresupuestoPDF(presupId) {
     }
     if (tRel && tRel.movilidad>0) initRows.push({desc:'Traslado / viáticos',tipo:'Traslado',cant:'1',precio:String(tRel.movilidad)});
   }
-  // Pad a 25 filas vacías
   while(initRows.length<25) initRows.push({desc:'',tipo:'Repuesto',cant:'',precio:''});
 
   const LOGO = typeof MEB_LOGO_PDF_B64!=='undefined'?MEB_LOGO_PDF_B64:'';
+  const FIRMA = typeof MEB_FIRMA_B64!=='undefined'?MEB_FIRMA_B64:'';
   const clienteTel = cl ? (cl.telefono||'').replace(/\D/g,'') : '';
   const clienteEmail = cl ? (cl.email||'') : '';
   const clienteNombre = cl ? cl.nombre : '—';
 
-  // Serializar filas como JSON para inyectarlas
-  // Sanitize rowsJSON to be safe inside template literal
-  const rowsJSON = JSON.stringify(initRows)
-    .replace(/\\/g,'\\\\')
-    .replace(/`/g,'\\`')
-    .replace(/\$\{/g,'\\${');
+  // BLOB URL — evita truncamiento de document.write con base64 grande
+  const rowsJSON = JSON.stringify(initRows);
 
-  const w = window.open('','_blank','width=1000,height=860');
-  w.document.write(`<!DOCTYPE html><html lang="es"><head>
+  const htmlContent = `<!DOCTYPE html><html lang="es"><head>
 <meta charset="UTF-8">
 <title>Presupuesto N\u00b0 ${numPresup} \u2014 MEB</title>
 <style>
@@ -2877,7 +2870,7 @@ body{font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;background:#fff;p
 .btn-close{background:#555;color:#fff}
 .tip{font-size:11px;color:#888;flex:1;min-width:200px}
 .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:14px;border-bottom:3px solid #F4B400}
-.logo img{height:58px;mix-blend-mode:screen}
+.logo img{height:58px}
 .empresa-info{text-align:right;font-size:12px;color:#555;line-height:1.8}
 .empresa-info strong{font-size:15px;color:#1A1A1A;display:block;margin-bottom:2px;letter-spacing:1px}
 .titulo-doc{background:#1A1A1A;color:#F4B400;padding:12px 20px;font-size:22px;font-weight:900;letter-spacing:3px;display:flex;justify-content:space-between;align-items:center;border-radius:4px 4px 0 0}
@@ -2916,7 +2909,7 @@ table.detalle .btn-del-row{background:#fee;border:1px solid #fcc;color:#c00;bord
 .condiciones{background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:22px}
 .condiciones-titulo{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#888;margin-bottom:10px}
 .cond-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.cond-item{font-size:12px;color:#555}.cond-item::before{content:"\\2713  ";color:#F4B400;font-weight:700}
+.cond-item{font-size:12px;color:#555}.cond-item::before{content:"\2713  ";color:#F4B400;font-weight:700}
 .firmas{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:36px}
 .firma-box{text-align:center}
 .firma-linea{border-top:2px solid #1A1A1A;margin-bottom:8px;margin-top:64px}
@@ -2928,107 +2921,96 @@ table.detalle .btn-del-row{background:#fee;border:1px solid #fcc;color:#c00;bord
 @media print{.no-print{display:none}body{padding:20px}[contenteditable]{color:#1A1A1A!important}table.detalle .btn-del-row{display:none!important}}
 </style>
 </head><body>
-
 <div class="no-print">
-  <button class="btn-imp" onclick="window.print()">🖨️ IMPRIMIR / PDF</button>
-  <button class="btn-wa" onclick="envWA()">📲 WA</button>
-  <button class="btn-mail" id="mailBtn" onclick="envMail()">📧 MAIL</button>
-  <button class="btn-save" onclick="guardarCambios()">💾 GUARDAR</button>
-  <button class="btn-close" onclick="window.close()">✕ Cerrar</button>
-  <span class="tip">✏️ Editá cualquier campo · Cant × Precio = Subtotal automático · ➕/➖ para agregar/quitar filas · 💾 Guardar sincroniza con el CRM</span>
+  <button class="btn-imp" onclick="window.print()">&#x1F5A8; IMPRIMIR / PDF</button>
+  <button class="btn-wa" onclick="envWA()">&#x1F4F2; WA</button>
+  <button class="btn-mail" onclick="envMail()">&#x1F4E7; MAIL</button>
+  <button class="btn-save" onclick="guardarCambios()">&#x1F4BE; GUARDAR</button>
+  <button class="btn-close" onclick="window.close()">&#x2715; Cerrar</button>
+  <span class="tip">&#x270F; Edit&#xE1; cualquier campo &middot; Cant &times; Precio = Subtotal autom&#xE1;tico &middot; &#x2795;/&#x2796; agregar/quitar filas &middot; &#x1F4BE; Guardar sincroniza con el CRM</span>
 </div>
-
 <div class="header">
   <div class="logo"><img src="${LOGO}" alt="MEB"/></div>
   <div class="empresa-info">
     <strong contenteditable="true">MEB MACHINERY SOLUTIONS</strong>
-    <span contenteditable="true">Servicio técnico especializado en maquinaria pesada</span><br>
+    <span contenteditable="true">Servicio t&#xE9;cnico especializado en maquinaria pesada</span><br>
     <span contenteditable="true">mebmachinerysolutions@gmail.com</span><br>
     <span contenteditable="true">+54 11 3392-3254</span><br>
     <span contenteditable="true">Buenos Aires, Argentina</span>
   </div>
 </div>
-
-<div class="titulo-doc">PRESUPUESTO <span style="font-size:13px;color:#aaa;font-weight:400">N\u00b0 ${numPresup} &middot; ${fechaHoy}</span></div>
+<div class="titulo-doc">PRESUPUESTO <span style="font-size:13px;color:#aaa;font-weight:400">N&#xB0; ${numPresup} &middot; ${fechaHoy}</span></div>
 <div class="estado-bar">
   <span contenteditable="true">ESTADO: ${(p.estado||'PENDIENTE').toUpperCase()}</span>
-  <span class="vencimiento" contenteditable="true">\u23f0 V\u00c1LIDO HASTA: ${fechaVence}</span>
+  <span class="vencimiento" contenteditable="true">&#x23F0; V&#xC1;LIDO HASTA: ${fechaVence}</span>
 </div>
-
 <div class="grid-2">
   <div class="seccion">
     <div class="seccion-titulo">Datos del cliente</div>
     <div class="seccion-body">
-      <div class="campo"><label>Empresa / Nombre</label><span contenteditable="true">${cl?cl.nombre:'—'}</span></div>
-      <div class="campo"><label>Razón social</label><span contenteditable="true">${cl?cl.empresa||cl.nombre:'—'}</span></div>
-      <div class="campo"><label>Zona</label><span contenteditable="true">${cl?cl.zona||'—':'—'}</span></div>
-      <div class="campo"><label>Teléfono</label><span contenteditable="true">${cl?cl.telefono||'—':'—'}</span></div>
-      <div class="campo"><label>Email</label><span contenteditable="true">${cl?cl.email||'—':'—'}</span></div>
+      <div class="campo"><label>Empresa / Nombre</label><span contenteditable="true">${cl?cl.nombre:'&#x2014;'}</span></div>
+      <div class="campo"><label>Raz&#xF3;n social</label><span contenteditable="true">${cl?cl.empresa||cl.nombre:'&#x2014;'}</span></div>
+      <div class="campo"><label>Zona</label><span contenteditable="true">${cl?cl.zona||'&#x2014;':'&#x2014;'}</span></div>
+      <div class="campo"><label>Tel&#xE9;fono</label><span contenteditable="true">${cl?cl.telefono||'&#x2014;':'&#x2014;'}</span></div>
+      <div class="campo"><label>Email</label><span contenteditable="true">${cl?cl.email||'&#x2014;':'&#x2014;'}</span></div>
     </div>
   </div>
   <div class="seccion">
     <div class="seccion-titulo">Datos del presupuesto</div>
     <div class="seccion-body">
-      <div class="campo"><label>N\u00ba Presupuesto</label><span contenteditable="true">${numPresup}</span></div>
+      <div class="campo"><label>N&#xBA; Presupuesto</label><span contenteditable="true">${numPresup}</span></div>
       <div class="campo"><label>Fecha</label><span contenteditable="true">${p.fecha||fechaHoy}</span></div>
       <div class="campo"><label>Estado</label><span contenteditable="true">${(p.estado||'Pendiente').toUpperCase()}</span></div>
-      <div class="campo"><label>Máquina</label><span contenteditable="true">${maqRel?maqRel.marca+' '+maqRel.modelo+' — '+(maqRel.serie||'S/N'):'—'}</span></div>
-      <div class="campo"><label>Tipo</label><span contenteditable="true">${maqRel?maqRel.tipo||'—':'—'}</span></div>
+      <div class="campo"><label>M&#xE1;quina</label><span contenteditable="true">${maqRel?maqRel.marca+' '+maqRel.modelo+' &#x2014; '+(maqRel.serie||'S/N'):'&#x2014;'}</span></div>
+      <div class="campo"><label>Tipo</label><span contenteditable="true">${maqRel?maqRel.tipo||'&#x2014;':'&#x2014;'}</span></div>
     </div>
   </div>
 </div>
-
 <div class="detalle-wrap">
   <div class="detalle-titulo">
     Detalle de trabajos y repuestos
     <div class="row-btns">
-      <button onclick="agregarFila()">➕ Agregar fila</button>
+      <button id="btnAgregar" type="button">&#x2795; Agregar fila</button>
     </div>
   </div>
   <table class="detalle">
-    <thead><tr><th>#</th><th>Descripción</th><th>Artículo / Tipo</th><th>Cant.</th><th>P. Unitario</th><th>Subtotal</th><th></th></tr></thead>
+    <thead><tr><th>#</th><th>Descripci&#xF3;n</th><th>Art&#xED;culo / Tipo</th><th>Cant.</th><th>P. Unitario</th><th>Subtotal</th><th></th></tr></thead>
     <tbody id="tbodyItems"></tbody>
   </table>
 </div>
-
 <div class="total-section">
   <div class="total-box">
-    <div class="total-row"><span>Subtotal mano de obra</span><span id="tMO">—</span></div>
-    <div class="total-row"><span>Repuestos / Materiales</span><span id="tRep">—</span></div>
-    <div class="total-row"><span>Traslado / viáticos</span><span id="tMov">—</span></div>
-    <div class="total-row"><span>Descuento</span><span contenteditable="true" id="tDesc">—</span></div>
-    <div class="total-row main"><span>TOTAL</span><span id="tTotal">—</span></div>
+    <div class="total-row"><span>Subtotal mano de obra</span><span id="tMO">&#x2014;</span></div>
+    <div class="total-row"><span>Repuestos / Materiales</span><span id="tRep">&#x2014;</span></div>
+    <div class="total-row"><span>Traslado / vi&#xE1;ticos</span><span id="tMov">&#x2014;</span></div>
+    <div class="total-row"><span>Descuento</span><span contenteditable="true" id="tDesc">&#x2014;</span></div>
+    <div class="total-row main"><span>TOTAL</span><span id="tTotal">&#x2014;</span></div>
   </div>
 </div>
-
 <div class="notas-box" id="notasBox" contenteditable="true">${p.notas||'Agregar notas, condiciones especiales o aclaraciones...'}</div>
-
 <div class="condiciones">
   <div class="condiciones-titulo">Condiciones comerciales</div>
   <div class="cond-grid">
-    <div class="cond-item" contenteditable="true">Validez del presupuesto: 15 días corridos</div>
+    <div class="cond-item" contenteditable="true">Validez del presupuesto: 15 d&#xED;as corridos</div>
     <div class="cond-item" contenteditable="true">Forma de pago: A convenir</div>
-    <div class="cond-item" contenteditable="true">Repuestos: Originales / Alternativos según disponibilidad</div>
+    <div class="cond-item" contenteditable="true">Repuestos: Originales / Alternativos seg&#xFA;n disponibilidad</div>
     <div class="cond-item" contenteditable="true">Tiempo estimado de trabajo: A coordinar</div>
   </div>
 </div>
-
 <div class="firmas">
   <div class="firma-box"><div class="firma-linea"></div><div class="firma-label">Firma del cliente</div><div class="firma-nombre" contenteditable="true">${cl?cl.nombre:'Nombre del cliente'}</div></div>
-  <div class="firma-box"><img src="${typeof MEB_FIRMA_B64!=='undefined'?MEB_FIRMA_B64:''}" style="height:160px;width:auto;max-width:280px;object-fit:contain;display:block;margin:0 auto 4px;" alt="Firma"/><div class="firma-linea" style="margin-top:4px"></div><div class="firma-label">MEB Machinery Solutions</div><div class="firma-nombre" contenteditable="true">Marcos Bellando</div></div>
+  <div class="firma-box"><img src="${FIRMA}" style="height:160px;width:auto;max-width:280px;object-fit:contain;display:block;margin:0 auto 4px;" alt="Firma"/><div class="firma-linea" style="margin-top:4px"></div><div class="firma-label">MEB Machinery Solutions</div><div class="firma-nombre" contenteditable="true">Marcos Bellando</div></div>
 </div>
-
 <div class="footer">
   <span>MEB MACHINERY SOLUTIONS &middot; mebmachinerysolutions@gmail.com &middot; +54 11 3392-3254</span>
-  <span>Presupuesto N\u00b0 ${numPresup} &middot; ${fechaHoy}</span>
+  <span>Presupuesto N&#xB0; ${numPresup} &middot; ${fechaHoy}</span>
 </div>
-
 <script>
-var PRESUP_ID = '${p.id}';
-var CLIENTE_TEL = '${clienteTel}';
-var CLIENTE_EMAIL = '${clienteEmail}';
-var CLIENTE_NOMBRE = '${clienteNombre}';
-var NUM_PRESUP = '${numPresup}';
+var PRESUP_ID = ${JSON.stringify(p.id)};
+var CLIENTE_TEL = ${JSON.stringify(clienteTel)};
+var CLIENTE_EMAIL = ${JSON.stringify(clienteEmail)};
+var CLIENTE_NOMBRE = ${JSON.stringify(clienteNombre)};
+var NUM_PRESUP = ${JSON.stringify(numPresup)};
 var initRows = ${rowsJSON};
 
 function fmt(n){
@@ -3036,133 +3018,85 @@ function fmt(n){
   return '$'+Number(n).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2});
 }
 function parse(s){
-  if(!s||s==='-'||s==='—') return 0;
-  return parseFloat(String(s).replace(/\\$/g,'').replace(/\\s/g,'').replace(/\\./g,'').replace(',','.')) || 0;
+  if(!s||s==='-'||s==='\u2014') return 0;
+  return parseFloat(String(s).replace(/[$]/g,'').replace(/\s/g,'').replace(/\./g,'').replace(',','.')) || 0;
 }
-
 function recalc(){
-  var rows = document.querySelectorAll('#tbodyItems tr');
+  var rows=document.querySelectorAll('#tbodyItems tr');
   var tMO=0,tRep=0,tMov=0,grand=0;
   rows.forEach(function(tr){
-    var c = tr.querySelectorAll('td');
+    var c=tr.querySelectorAll('td');
     if(c.length<7) return;
-    var tipo = (c[2].innerText||'').toLowerCase().trim();
-    var cant = parseFloat((c[3].innerText||'').replace(',','.')) || 0;
-    var precio = parse(c[4].innerText);
-    var sub = cant>0 && precio>0 ? cant*precio : 0;
-    c[5].innerText = sub>0 ? fmt(sub) : '';
+    var tipo=(c[2].innerText||'').toLowerCase().trim();
+    var cant=parseFloat((c[3].innerText||'').replace(',','.')) || 0;
+    var precio=parse(c[4].innerText);
+    var sub=cant>0 && precio>0 ? cant*precio : 0;
+    c[5].innerText=sub>0?fmt(sub):'';
     if(sub>0){
-      grand += sub;
+      grand+=sub;
       if(tipo.includes('repuesto')||tipo.includes('material')) tRep+=sub;
       else if(tipo.includes('traslado')||tipo.includes('via')) tMov+=sub;
       else tMO+=sub;
     }
   });
-  document.getElementById('tMO').innerText = tMO>0?fmt(tMO):'—';
-  document.getElementById('tRep').innerText = tRep>0?fmt(tRep):'—';
-  document.getElementById('tMov').innerText = tMov>0?fmt(tMov):'—';
-  document.getElementById('tTotal').innerText = grand>0?fmt(grand):'—';
+  document.getElementById('tMO').innerText=tMO>0?fmt(tMO):'\u2014';
+  document.getElementById('tRep').innerText=tRep>0?fmt(tRep):'\u2014';
+  document.getElementById('tMov').innerText=tMov>0?fmt(tMov):'\u2014';
+  document.getElementById('tTotal').innerText=grand>0?fmt(grand):'\u2014';
 }
-
-function mkRow(num, d, doRecalc){
-  var tr = document.createElement('tr');
-  tr.innerHTML = '<td style="color:#bbb;font-size:11px">'+num+'</td>'
-    +'<td contenteditable="true">'+d.desc+'</td>'
-    +'<td contenteditable="true">'+d.tipo+'</td>'
-    +'<td contenteditable="true" style="text-align:center">'+d.cant+'</td>'
-    +'<td contenteditable="true" style="text-align:right">'+(d.precio&&d.precio!='0'?fmt(parseFloat(d.precio)||0)||d.precio:'')+'</td>'
-    +'<td style="text-align:right;font-weight:700"></td>'
-    +'<td><button class="btn-del-row" onclick="delRow(this)" title="Eliminar fila">✕</button></td>';
-  // Events
-  tr.querySelectorAll('td[contenteditable]').forEach(function(td){
-    td.addEventListener('input', function(){
-      var idx=Array.from(tr.children).indexOf(td);
-      if(idx===3||idx===4) recalc();
-    });
-    td.addEventListener('blur', function(){
-      var idx=Array.from(tr.children).indexOf(td);
-      if(idx===4){var v=parse(td.innerText);if(v>0)td.innerText=fmt(v);}
-      recalc();
-    });
+function mkRow(num,d){
+  var tr=document.createElement('tr');
+  var precioFmt=d.precio&&d.precio!='0'?(fmt(parseFloat(d.precio)||0)||d.precio):'';
+  tr.innerHTML='<td style="color:#bbb;font-size:11px;text-align:center">'+num+'</td>'
+    +'<td contenteditable="true" style="min-width:200px">'+escH(d.desc)+'</td>'
+    +'<td contenteditable="true">'+escH(d.tipo)+'</td>'
+    +'<td contenteditable="true" style="text-align:center">'+escH(d.cant)+'</td>'
+    +'<td contenteditable="true" style="text-align:right">'+escH(precioFmt)+'</td>'
+    +'<td style="text-align:right;font-weight:700;color:#1A1A1A"></td>'
+    +'<td><button class="btn-del-row" type="button" title="Eliminar">\u2715</button></td>';
+  tr.querySelectorAll('td[contenteditable]').forEach(function(td,idx){
+    td.addEventListener('input',function(){ if(idx===3||idx===4) recalc(); });
+    td.addEventListener('blur',function(){ if(idx===4){var v=parse(td.innerText);if(v>0)td.innerText=fmt(v);} recalc(); });
     td.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();td.blur();}});
   });
-  if(doRecalc) recalc();
+  tr.querySelector('.btn-del-row').addEventListener('click',function(){
+    tr.parentNode.removeChild(tr);
+    document.querySelectorAll('#tbodyItems tr').forEach(function(r,i){r.cells[0].innerText=i+1;});
+    recalc();
+  });
   return tr;
 }
-
+function escH(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function agregarFila(){
   var tbody=document.getElementById('tbodyItems');
-  var num=tbody.rows.length+1;
-  tbody.appendChild(mkRow(num,{desc:'',tipo:'Repuesto',cant:'',precio:''},true));
-}
-
-function delRow(btn){
-  var tr=btn.closest('tr');
-  tr.parentNode.removeChild(tr);
-  // Renumerar
-  document.querySelectorAll('#tbodyItems tr').forEach(function(row,i){
-    row.cells[0].innerText=i+1;
-  });
+  tbody.appendChild(mkRow(tbody.rows.length+1,{desc:'',tipo:'Repuesto',cant:'',precio:''}));
   recalc();
 }
-
-// Init rows
+document.getElementById('btnAgregar').addEventListener('click', agregarFila);
 (function(){
   var tbody=document.getElementById('tbodyItems');
-  initRows.forEach(function(d,i){ tbody.appendChild(mkRow(i+1,d,false)); });
+  initRows.forEach(function(d,i){ tbody.appendChild(mkRow(i+1,d)); });
   recalc();
 })();
-
-// WA — abre con mensaje completo al número del cliente
 function envWA(){
-  if(!CLIENTE_TEL){alert('Este cliente no tiene teléfono registrado en el CRM.');return;}
-  var msg='Hola '+CLIENTE_NOMBRE+'! 👋\\n\\n'
-    +'Te enviamos el *Presupuesto N° '+NUM_PRESUP+'* de *MEB Machinery Solutions*.\\n\\n'
-    +'Para consultar o confirmar, comunicate con nosotros:\\n'
-    +'📞 +54 11 3392-3254\\n'
-    +'📧 mebmachinerysolutions@gmail.com\\n\\n'
-    +'¡Quedamos a disposición!';
+  if(!CLIENTE_TEL){alert('Este cliente no tiene tel\u00E9fono registrado en el CRM.');return;}
+  var msg='Hola '+CLIENTE_NOMBRE+'! \\n\\nTe enviamos el *Presupuesto N\u00B0 '+NUM_PRESUP+'* de *MEB Machinery Solutions*.\\n\\nPara consultar o confirmar, comunicate con nosotros:\\n\u{1F4DE} +54 11 3392-3254\\n\u{1F4E7} mebmachinerysolutions@gmail.com\\n\\n\u00A1Quedamos a disposici\u00F3n!';
   window.open('https://wa.me/'+CLIENTE_TEL+'?text='+encodeURIComponent(msg),'_blank');
 }
-
-// MAIL — abre Gmail compose directamente con datos pre-cargados
 function envMail(){
-  var destino = CLIENTE_EMAIL || '';
-  var asunto = 'Presupuesto N° '+NUM_PRESUP+' — MEB Machinery Solutions';
-  var cuerpo = 'Estimado/a '+CLIENTE_NOMBRE+',\n\n'
-    +'Le enviamos el Presupuesto N° '+NUM_PRESUP+' de MEB Machinery Solutions.\n\n'
-    +'Para consultar o confirmar, com\u00fan\u00edquese con nosotros:\n'
-    +'Tel: +54 11 3392-3254\n'
-    +'Email: mebmachinerysolutions@gmail.com\n\n'
-    +'\u00a1Quedamos a disposici\u00f3n!\n\n'
-    +'Equipo MEB Machinery Solutions';
-  var gmailURL = 'https://mail.google.com/mail/?view=cm&fs=1'
-    +'&to='+encodeURIComponent(destino)
-    +'&su='+encodeURIComponent(asunto)
-    +'&body='+encodeURIComponent(cuerpo);
-  // Use real anchor to bypass popup blockers
-  var a = document.createElement('a');
-  a.href = gmailURL;
-  a.target = '_blank';
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(function(){ document.body.removeChild(a); }, 100);
-  // Show aviso
-  var old = document.getElementById('mailAviso');
-  if(old) old.remove();
-  var aviso = document.createElement('div');
-  aviso.id = 'mailAviso';
-  aviso.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#003B70;color:#fff;padding:14px 18px;border-radius:8px;font-size:12px;max-width:300px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:9999;line-height:1.7';
-  aviso.innerHTML = '<strong>\ud83d\udce7 Gmail abierto</strong><br>'
-    +(destino?'Para: <strong>'+destino+'</strong>':'<span style="color:#ffd">\u26a0\ufe0f Sin email del cliente</span>')+'<br>'
-    +'<span style="color:#aad4ff;font-size:11px">Acordate de adjuntar el PDF (bot\u00f3n \ud83d\udda8\ufe0f)</span><br>'
-    +'<button onclick="this.parentNode.remove()" style="margin-top:6px;background:#F4B400;color:#1A1A1A;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-weight:700">OK</button>';
-  document.body.appendChild(aviso);
+  var destino=CLIENTE_EMAIL||'';
+  var asunto='Presupuesto N\u00B0 '+NUM_PRESUP+' \u2014 MEB Machinery Solutions';
+  var cuerpo='Estimado/a '+CLIENTE_NOMBRE+',\\n\\nLe enviamos el Presupuesto N\u00B0 '+NUM_PRESUP+' de MEB Machinery Solutions.\\n\\nPara consultar o confirmar, com\u00FAn\u00EDquese con nosotros:\\nTel: +54 11 3392-3254\\nEmail: mebmachinerysolutions@gmail.com\\n\\n\u00A1Quedamos a disposici\u00F3n!\\n\\nEquipo MEB Machinery Solutions';
+  var url='https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(destino)+'&su='+encodeURIComponent(asunto)+'&body='+encodeURIComponent(cuerpo);
+  var a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';
+  document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);},100);
+  var old=document.getElementById('mailAviso');if(old)old.remove();
+  var av=document.createElement('div');av.id='mailAviso';
+  av.style.cssText='position:fixed;bottom:20px;right:20px;background:#003B70;color:#fff;padding:14px 18px;border-radius:8px;font-size:12px;max-width:300px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:9999;line-height:1.7';
+  av.innerHTML='<strong>\u{1F4E7} Gmail abierto</strong><br>'+(destino?'Para: <strong>'+destino+'</strong>':'<span style="color:#ffd">\u26A0\uFE0F Sin email del cliente</span>')+'<br><span style="color:#aad4ff;font-size:11px">Acordate de adjuntar el PDF (\u{1F5A8})</span><br><button onclick="this.parentNode.remove()" style="margin-top:6px;background:#F4B400;color:#1A1A1A;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-weight:700">OK</button>';
+  document.body.appendChild(av);
   setTimeout(function(){var el=document.getElementById('mailAviso');if(el)el.remove();},9000);
 }
-
-// GUARDAR — recolecta items editados y sincroniza con CRM padre
 function guardarCambios(){
   var rows=document.querySelectorAll('#tbodyItems tr');
   var items=[];
@@ -3176,23 +3110,28 @@ function guardarCambios(){
     var precio=String(parse(c[4].innerText));
     items.push(desc+'|'+tipo+'|'+cant+'|'+precio);
   });
-  var desc=items.join('\\n');
+  var desc=items.join('\n');
   var totalTxt=document.getElementById('tTotal').innerText;
   var monto=parse(totalTxt)||0;
   var notas=(document.getElementById('notasBox').innerText||'').replace('Agregar notas, condiciones especiales o aclaraciones...','').trim();
   if(window.opener && window.opener._recibirCambiosPresupuesto){
     window.opener._recibirCambiosPresupuesto(PRESUP_ID,desc,monto,notas);
-    var saveBtn=document.querySelector('.btn-save');
-    if(saveBtn){saveBtn.style.background='#25d366';saveBtn.style.color='#fff';saveBtn.innerText='✔ Guardado';}
-    setTimeout(function(){if(saveBtn){saveBtn.style.background='#1A1A1A';saveBtn.style.color='#F4B400';saveBtn.innerText='💾 GUARDAR';}},2500);
+    var sb=document.querySelector('.btn-save');
+    if(sb){sb.style.background='#25d366';sb.style.color='#fff';sb.innerText='\u2714 Guardado';}
+    setTimeout(function(){if(sb){sb.style.background='#1A1A1A';sb.style.color='#F4B400';sb.innerText='\u{1F4BE} GUARDAR';}},2500);
   } else {
-    alert('Guardado local. Cerrá esta ventana para ver los cambios en el CRM.');
+    alert('Guardado local. Cerr\u00E1 esta ventana para ver los cambios en el CRM.');
   }
 }
-<\/script>
-</body></html>`);
-  w.document.close();
+</script>
+</body></html>`;
+  const blob = new Blob([htmlContent], {type:'text/html;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, '_blank', 'width=1000,height=860');
+  if(w) setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+  else { alert('Bloqueador de popups activo. Por favor permit\u00ED los popups para este sitio.'); URL.revokeObjectURL(url); }
 }
+
 
 function clienteOptions(selectedId='') {
   return DB.clientes.map(c =>
