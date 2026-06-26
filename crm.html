@@ -912,7 +912,7 @@ async function syncAll() {
       // Deduplicate: if multiple rows have same ID (one row per item), keep first occurrence for presupuesto header
       // but concatenate descriptions
       const presupMap = {};
-      if(pr.length) console.log('[MEB DEBUG] Presupuesto cols:', Object.keys(pr[0]));
+      if(pr.length) { console.log('[MEB DEBUG] Presupuesto cols:', Object.keys(pr[0])); console.log('[MEB DEBUG] Row0 raw:', JSON.stringify(pr[0])); }
       pr.forEach((r,i)=>{
         const pid = String(r.ID||'').trim();
         if(!pid) return;
@@ -997,15 +997,16 @@ async function syncAll() {
       }));
     } else { if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; }
 
-    // ── Reparar clienteId corruptos (nombre guardado en lugar de ID) ──────────
+    // ── Reparar clienteId corruptos o vacíos ──────────────────────────────────
     DB.presupuestos.forEach(p => {
-      if(!p.clienteId) return;
-      // Si clienteId no coincide con ningún ID, buscar por nombre
-      const byId = DB.clientes.find(c => String(c.id) === String(p.clienteId));
-      if(!byId) {
-        const byName = DB.clientes.find(c => c.nombre.toUpperCase() === String(p.clienteId).toUpperCase()
-          || c.nombre.toUpperCase() === String(p.clienteNombreSheet||'').toUpperCase());
-        if(byName) p.clienteId = byName.id;
+      // Skip only if clienteId already resolves to a valid client
+      const alreadyValid = p.clienteId && DB.clientes.find(c => String(c.id) === String(p.clienteId));
+      if(alreadyValid) return;
+      // Try to find client by name from clienteNombreSheet or clienteId (if it's a name)
+      const nameToTry = [p.clienteNombreSheet, p.clienteId].filter(Boolean);
+      for(const name of nameToTry) {
+        const found = DB.clientes.find(c => c.nombre.toUpperCase() === name.toUpperCase());
+        if(found) { p.clienteId = found.id; return; }
       }
     });
     DB.alertas.forEach(a => {
