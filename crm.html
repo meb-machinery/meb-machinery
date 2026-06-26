@@ -1697,14 +1697,14 @@ function renderAlertas() {
 
   if(!data.length){el.innerHTML=`<div class="empty-state"><div class="icon">🔔</div><p>Sin alertas manuales</p></div>`;return;}
   el.innerHTML=indexHTML+data.map(a=>{
-    const cl=DB.clientes.find(c=>c.id===a.clienteId);
+    const cl=DB.clientes.find(c=>String(c.id)===String(a.clienteId));
     const col=a.prioridad==='alta'?'var(--red)':a.prioridad==='media'?'var(--orange)':'var(--yellow)';
     const commLabel=a.tipoComm?`<div style="font-size:10px;color:var(--muted);margin-top:2px">📞 ${a.tipoComm}</div>`:'';
     return `<div class="alert-item" style="${a.resuelta?'opacity:0.45;border-left:3px solid #25d366':''}">
       <div class="alert-dot" style="background:${col};width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px"></div>
       <div class="alert-text" style="flex:1">
         <div class="alert-title">${a.titulo}${cl?` — <span style="color:var(--yellow)">${cl.nombre}</span>`:''}</div>
-        <div class="alert-sub">${a.descripcion||''}</div>
+        <div class="alert-sub">${fmtDate(a.fecha)}${a.descripcion?' · '+a.descripcion:''}</div>
         ${commLabel}
         ${!a.resuelta?`<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">
           <button class="btn-secondary" style="font-size:10px;padding:2px 8px" onclick="registrarComm('${a.id}','Personal')">👥 Personal</button>
@@ -1712,10 +1712,10 @@ function renderAlertas() {
           <button class="btn-secondary" style="font-size:10px;padding:2px 8px;background:rgba(37,211,102,0.12);border-color:#25d366;color:#25d366" onclick="registrarComm('${a.id}','WA')">📲 WA</button>
         </div>`:''}
       </div>
-      <div style="text-align:right;min-width:90px">
-        <div class="alert-date">${fmtDate(a.fecha)}</div>
-        <button class="btn-secondary" style="margin-top:6px;font-size:10px;padding:3px 8px;${a.resuelta?'border-color:#25d366;color:#25d366':''}" onclick="resolverAlerta('${a.id}')">${a.resuelta?'✔ Resuelta':'✓ Resolver'}</button>
-        <button class="btn-secondary" style="margin-top:4px;font-size:10px;padding:3px 8px;background:rgba(244,180,0,0.12);border-color:var(--yellow);color:var(--yellow)" onclick="guardarAlertaSheets('${a.id}')">💾 Sheets</button>
+      <div style="text-align:right;min-width:110px;display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+        <button class="btn-secondary" style="font-size:10px;padding:3px 10px;background:rgba(244,180,0,0.15);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('alerta',DB.alertas.find(x=>x.id==='${a.id}'))">✏️ Editar</button>
+        <button class="btn-secondary" style="font-size:10px;padding:3px 10px;${a.resuelta?'border-color:#25d366;color:#25d366':''}" onclick="resolverAlerta('${a.id}')">${a.resuelta?'✔ Resuelta':'✓ Resolver'}</button>
+        <button class="btn-secondary" style="font-size:10px;padding:3px 10px;background:rgba(123,179,224,0.12);border-color:#7bb3e0;color:#7bb3e0" onclick="guardarAlertaSheets('${a.id}')">💾 Sheets</button>
       </div>
     </div>`;
   }).join('');
@@ -3152,13 +3152,16 @@ function generarPresupuestoPDF(presupId) {
     '    td.addEventListener("input", function() { if(idx===3||idx===4) recalc(); });',
     '    td.addEventListener("blur", function() {',
     '      if(idx===4){var v=parse(td.innerText);if(v>0)td.innerText=fmt(v);}',
+    '      if(idx===3){var v=parseFloat((td.innerText||"").replace(",","."));if(v>0)td.innerText=String(v);}',
     '      recalc();',
     '    });',
     '    td.addEventListener("keydown", function(ev) {',
-    '      if(ev.key==="Enter"){ev.preventDefault();td.blur();}',
-    '      if(ev.key==="Tab"){ev.preventDefault();',
-    '        var next=td.parentElement.cells[td.cellIndex+1];',
-    '        if(next&&next.contentEditable==="true")next.focus();',
+    '      if(ev.key==="Enter"||ev.key==="Tab"){ev.preventDefault();',
+    '        if(idx===4){var v=parse(td.innerText);if(v>0)td.innerText=fmt(v);}',
+    '        recalc();',
+    '        var nextIdx = ev.key==="Tab" ? td.cellIndex+1 : -1;',
+    '        if(nextIdx>0){var next=td.parentElement.cells[nextIdx];if(next&&next.contentEditable==="true"){next.focus();return;}}',
+    '        td.blur();',
     '      }',
     '    });',
     '  });',
@@ -3599,25 +3602,35 @@ function openModal(type, data={}) {
   }
 
   else if(type==='alerta') {
-    title='NUEVA ALERTA';
+    title = data.id ? 'EDITAR ALERTA' : 'NUEVA ALERTA';
     body=`<div class="form-grid">
       <div class="form-group full"><label>Título *</label><input id="f-atit" value="${data.titulo||''}"/></div>
       <div class="form-group full"><label>Cliente (opcional)</label><select id="f-acli"><option value="">Sin cliente</option>${clienteOptions(data.clienteId)}</select></div>
       <div class="form-group"><label>Fecha recordatorio</label><input id="f-afecha" type="date" value="${(()=>{ if(!data.fecha) return ''; const p=data.fecha.split('/'); return p.length===3?p[2]+'-'+p[1]+'-'+p[0]:data.fecha; })()||''}"/></div>
       <div class="form-group"><label>Prioridad</label>
-        <select id="f-aprio"><option value="alta">Alta 🔴</option><option value="media" selected>Media 🟠</option><option value="baja">Baja 🟡</option></select>
+        <select id="f-aprio"><option value="alta"${data.prioridad==='alta'?' selected':''}>Alta 🔴</option><option value="media"${(!data.prioridad||data.prioridad==='media')?' selected':''}>Media 🟠</option><option value="baja"${data.prioridad==='baja'?' selected':''}>Baja 🟡</option></select>
       </div>
       <div class="form-group full"><label>Descripción</label><textarea id="f-adesc">${data.descripcion||''}</textarea></div>
     </div>`;
     onSave=()=>{
-      const aObj={id:data.id||uid(),titulo:gv('f-atit'),clienteId:gv('f-acli'),fecha:gv('f-afecha'),prioridad:gv('f-aprio'),descripcion:gv('f-adesc'),resuelta:false};
-      const esNuevaAlerta = !DB.alertas.find(x=>x.id===aObj.id);
+      const existente = DB.alertas.find(x=>x.id===data.id);
+      const aObj={
+        id:data.id||uid(),
+        titulo:gv('f-atit'),
+        clienteId:gv('f-acli'),
+        fecha:gv('f-afecha'),
+        prioridad:gv('f-aprio'),
+        descripcion:gv('f-adesc'),
+        resuelta: existente ? existente.resuelta : false,
+        tipoComm: existente ? existente.tipoComm : undefined
+      };
+      const esNuevaAlerta = !existente;
       const clAlerta = DB.clientes.find(x=>x.id===aObj.clienteId);
       const clNomAlerta = clAlerta ? clAlerta.nombre : '';
       guardar('alertas', aObj, 'titulo');
-      const rowA={id:aObj.id,titulo:aObj.titulo,cliente:clNomAlerta,fecha:aObj.fecha,prioridad:aObj.prioridad,descripcion:aObj.descripcion,resuelta:false};
+      const rowA={id:aObj.id,titulo:aObj.titulo,cliente:clNomAlerta,fecha:aObj.fecha,prioridad:aObj.prioridad,descripcion:aObj.descripcion,resuelta:aObj.resuelta};
       if(esNuevaAlerta) writeToSheet({action:'addAlerta', row:rowA});
-      else writeToSheet({action:'updateAlerta', id:aObj.id, row:rowA});
+      else writeToSheet({action:'addAlerta', id:aObj.id, row:rowA});
     };
   }
   else if(type==='calEvento') {
