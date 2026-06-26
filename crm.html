@@ -1889,7 +1889,7 @@ body{font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;background:#fff;p
     <div style="font-size:12px;font-weight:700;color:#1A1A1A;margin-top:4px" contenteditable="true">${cl?cl.nombre:'Nombre del cliente'}</div>
   </div>
   <div style="text-align:center">
-    <img src="${FIRMA_IT}" style="height:130px;object-fit:contain;display:block;margin:0 auto 4px;mix-blend-mode:multiply" alt="Firma MEB"/>
+    <img src="${FIRMA_IT}" style="height:180px;width:auto;max-width:300px;object-fit:contain;display:block;margin:0 auto 4px;" alt="Firma MEB"/>
     <div style="border-top:2px solid #1A1A1A;margin-bottom:8px;margin-top:4px"></div>
     <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:2px">MEB Machinery Solutions</div>
     <div style="font-size:12px;font-weight:700;color:#1A1A1A;margin-top:4px" contenteditable="true">Marcos Bellando</div>
@@ -3015,7 +3015,7 @@ table.detalle .btn-del-row{background:#fee;border:1px solid #fcc;color:#c00;bord
 
 <div class="firmas">
   <div class="firma-box"><div class="firma-linea"></div><div class="firma-label">Firma del cliente</div><div class="firma-nombre" contenteditable="true">${cl?cl.nombre:'Nombre del cliente'}</div></div>
-  <div class="firma-box"><img src="${_FIRMA}" style="height:130px;object-fit:contain;display:block;margin:0 auto 4px;mix-blend-mode:multiply" alt="Firma"/><div class="firma-linea" style="margin-top:4px"></div><div class="firma-label">MEB Machinery Solutions</div><div class="firma-nombre" contenteditable="true">Marcos Bellando</div></div>
+  <div class="firma-box"><img src="${typeof MEB_FIRMA_B64!=='undefined'?MEB_FIRMA_B64:''}" style="height:160px;width:auto;max-width:280px;object-fit:contain;display:block;margin:0 auto 4px;" alt="Firma"/><div class="firma-linea" style="margin-top:4px"></div><div class="firma-label">MEB Machinery Solutions</div><div class="firma-nombre" contenteditable="true">Marcos Bellando</div></div>
 </div>
 
 <div class="footer">
@@ -3029,7 +3029,6 @@ var CLIENTE_TEL = '${clienteTel}';
 var CLIENTE_EMAIL = '${clienteEmail}';
 var CLIENTE_NOMBRE = '${clienteNombre}';
 var NUM_PRESUP = '${numPresup}';
-var _FIRMA = typeof MEB_FIRMA_B64 !== 'undefined' ? MEB_FIRMA_B64 : '';
 var initRows = ${rowsJSON};
 
 function fmt(n){
