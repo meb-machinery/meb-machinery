@@ -1129,7 +1129,7 @@ function renderDashboard() {
   dp.innerHTML=lp.length?`<div class="table-wrap"><table>
     <thead><tr><th>#</th><th>Cliente</th><th>Descripción</th><th>Monto</th><th>Estado</th></tr></thead>
     <tbody>${lp.map(p=>{
-      const cl=DB.clientes.find(c=>c.id===p.clienteId);
+      const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId));
       return `<tr><td><span style="font-family:'Bebas Neue';color:var(--yellow)">#${String(p.num||0).padStart(4,'0')}</span></td>
         <td>${cl?cl.nombre:'—'}</td><td>${p.descripcion||'—'}</td>
         <td><span class="monto">${fmtMonto(p.monto)}</span></td><td>${badgeEstado(p.estado)}</td></tr>`;
@@ -1456,7 +1456,7 @@ function renderPresupuestos() {
   const search=(document.getElementById('searchPresupuestos')||{value:''}).value.toLowerCase().trim();
   if(search){
     data=data.filter(p=>{
-      const cl=DB.clientes.find(c=>c.id===p.clienteId);
+      const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId));
       const numStr=String(p.num||0).padStart(4,'0');
       return numStr.includes(search)||
         (p.descripcion||'').toLowerCase().includes(search)||
@@ -1466,7 +1466,7 @@ function renderPresupuestos() {
   const tbody=document.getElementById('tabla-presupuestos');
   if(!data.length){tbody.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="icon">📋</div><p>Sin presupuestos</p></div></td></tr>`;return;}
   tbody.innerHTML=data.map(p=>{
-    const cl=DB.clientes.find(c=>c.id===p.clienteId);
+    const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId));
     const descCorta=(p.descripcion||'—').split('\n')[0].split('|')[0];
     return `<tr>
       <td><span style="font-family:'Bebas Neue';color:var(--yellow);font-size:15px">#${String(p.num||0).padStart(4,'0')}</span></td>
@@ -1776,7 +1776,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas) {
 // Genera el Informe Técnico en ventana nueva
 function generarInformeTecnico(presupId) {
   const p = DB.presupuestos.find(x=>x.id===presupId);
-  const cl = p ? DB.clientes.find(c=>c.id===p.clienteId) : null;
+  const cl = p ? DB.clientes.find(c=>String(c.id)===String(p.clienteId)) : null;
   const maq = p ? (()=>{ const t=DB.trabajos.find(t=>t.clienteId===p.clienteId); return t?DB.maquinas.find(m=>m.id===t.maquinaId):null; })() : null;
   const numPresup = p ? String(p.num||0).padStart(4,'0') : '0000';
   const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
@@ -2975,10 +2975,10 @@ function maquinaOptions(selected='') {
 function generarPresupuestoPDF(presupId) {
   const p = DB.presupuestos.find(x => x.id === presupId);
   if (!p) return;
-  const cl = DB.clientes.find(c => c.id === p.clienteId);
+  const cl = DB.clientes.find(c => String(c.id) === String(p.clienteId));
 
   const tRel = DB.trabajos
-    .filter(t => t.clienteId === p.clienteId && t.titulo)
+    .filter(t => String(t.clienteId) === String(p.clienteId) && t.titulo)
     .sort((a,b)=>{
       const fa=a.fechaInicio?new Date(a.fechaInicio.split('/').reverse().join('-')):new Date(0);
       const fb=b.fechaInicio?new Date(b.fechaInicio.split('/').reverse().join('-')):new Date(0);
@@ -3023,10 +3023,12 @@ function generarPresupuestoPDF(presupId) {
   const maqTipo = maqRel ? maqRel.tipo||'—' : '—';
 
   // Build rows HTML - no JS needed for initial render
+  const monSym = (p.monedaSym||'$');
   let rowsHTML = '';
   initRows.forEach(function(d, i) {
     const num = i+1;
-    const precioVal = d.precio && d.precio !== '0' ? d.precio : '';
+    const rawPrecio = parseFloat(String(d.precio||'').replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
+    const precioVal = rawPrecio > 0 ? monSym + rawPrecio.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2}) : '';
     const cantVal = d.cant || '';
     rowsHTML += '<tr>'
       + '<td class="num-col">' + num + '</td>'
@@ -3555,7 +3557,7 @@ function openModal(type, data={}) {
     body=`<div class="form-grid">
       <div class="form-group full"><label>Título *</label><input id="f-atit" value="${data.titulo||''}"/></div>
       <div class="form-group full"><label>Cliente (opcional)</label><select id="f-acli"><option value="">Sin cliente</option>${clienteOptions(data.clienteId)}</select></div>
-      <div class="form-group"><label>Fecha recordatorio</label><input id="f-afecha" type="date" value="${data.fecha||''}"/></div>
+      <div class="form-group"><label>Fecha recordatorio</label><input id="f-afecha" type="date" value="${(()=>{ if(!data.fecha) return ''; const p=data.fecha.split('/'); return p.length===3?p[2]+'-'+p[1]+'-'+p[0]:data.fecha; })()||''}"/></div>
       <div class="form-group"><label>Prioridad</label>
         <select id="f-aprio"><option value="alta">Alta 🔴</option><option value="media" selected>Media 🟠</option><option value="baja">Baja 🟡</option></select>
       </div>
