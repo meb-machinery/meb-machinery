@@ -738,7 +738,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgsDVxuVdLbAq4ttdMiyHJs35AL1xfF2j3MgK2-Fy2qjVhd7W4OmXRtBzbOEtqx6vKlw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzat5_Kt9nShZ68YLpDLaEIISAN985W-G90dnzZWKQ4_X0CaqhmviUFCCCqYWgS9RxxoQ/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1754,216 +1754,316 @@ function generarInformeTecnico(presupId) {
   const LOGO = typeof MEB_LOGO_PDF_B64 !== 'undefined' ? MEB_LOGO_PDF_B64 : '';
   const FIRMA_IT = typeof MEB_FIRMA_B64 !== 'undefined' ? MEB_FIRMA_B64 : '';
 
-  const w = window.open('','_blank','width=1000,height=900');
-  w.document.write(`<!DOCTYPE html><html lang="es"><head>
-<meta charset="UTF-8"><title>Informe Técnico N° ${numPresup} — MEB</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;background:#fff;padding:32px;max-width:960px;margin:0 auto}
-.no-print{margin-bottom:20px;display:flex;gap:10px;flex-wrap:wrap;padding:12px;background:#f5f5f5;border-radius:6px;border-left:4px solid #F4B400}
-.no-print button{padding:8px 14px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer;border:none}
-.btn-print{background:#F4B400;color:#1A1A1A}
-.btn-close{background:#1A1A1A;color:#fff}
-.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #F4B400}
-.logo img{height:52px}
-.empresa-info{text-align:right;font-size:11px;color:#555;line-height:1.8}
-.titulo-doc{background:#1A1A1A;color:#F4B400;padding:10px 18px;font-size:20px;font-weight:900;letter-spacing:2px;border-radius:4px 4px 0 0;display:flex;justify-content:space-between;align-items:center}
-.estado-bar{background:#F4B400;padding:5px 18px;margin-bottom:20px;border-radius:0 0 4px 4px;font-size:11px;font-weight:700;letter-spacing:1px;color:#1A1A1A}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
-.seccion{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden}
-.seccion-titulo{background:#F4B400;color:#1A1A1A;font-weight:700;font-size:10px;letter-spacing:2px;padding:6px 12px;text-transform:uppercase}
-.seccion-body{padding:12px}
-.campo{margin-bottom:6px;font-size:12px}
-.campo label{color:#999;font-size:10px;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:1px}
-.campo span{font-weight:600;color:#1A1A1A}
-.bloque{border:1px solid #e0e0e0;border-radius:6px;margin-bottom:16px;overflow:hidden}
-.bloque-titulo{background:#1A1A1A;color:#F4B400;padding:8px 14px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}
-.bloque-body{padding:14px;min-height:80px}
-.texto-libre{width:100%;min-height:80px;border:none;outline:none;font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;resize:vertical;background:transparent}
-.fotos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;padding:12px}
-.foto-item{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;position:relative}
-.foto-item img{width:100%;max-height:180px;object-fit:cover;display:block}
-.foto-caption{padding:6px 8px}
-.foto-caption input{width:100%;border:none;outline:none;font-size:11px;color:#555;background:transparent}
-.foto-add{border:2px dashed #F4B400;border-radius:6px;padding:24px;text-align:center;cursor:pointer;color:#F4B400;font-weight:700;font-size:13px;background:#fffdf0}
-.foto-drop{border:2px dashed #ccc;border-radius:6px;padding:16px;text-align:center;cursor:pointer;color:#888;font-size:12px;margin-bottom:10px}
-.arrow-canvas{position:absolute;inset:0;pointer-events:none}
-.diagnostico-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:14px}
-.diag-cell{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden}
-.diag-label{background:#F4B400;color:#1A1A1A;font-size:10px;font-weight:700;letter-spacing:1px;padding:5px 10px;text-transform:uppercase}
-.diag-body{padding:8px;min-height:80px}
-.diag-body textarea{width:100%;min-height:72px;border:none;outline:none;font-family:Arial,sans-serif;font-size:12px;color:#1A1A1A;resize:vertical;background:transparent}
-.footer{margin-top:24px;padding-top:10px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#aaa}
-@media print{.no-print{display:none}body{padding:16px}.texto-libre,.diag-body textarea{resize:none}}
-</style></head><body>
+  // JS code as array of strings - safe, no template literal issues
+  const jsCode = [
+    'var PRESUP_ID=' + JSON.stringify(presupId) + ';',
+    'var SHEET_URL=' + JSON.stringify((typeof SCRIPT_URL!=='undefined'?SCRIPT_URL:'')) + ';',
+    'var NUM_PRESUP=' + JSON.stringify(numPresup) + ';',
+    'var CLIENTE_NOMBRE=' + JSON.stringify(cl?cl.nombre:'') + ';',
+    '',
+    '// Pegar imagen con Ctrl+V',
+    'document.addEventListener("paste", function(e){',
+    '  var items = e.clipboardData && e.clipboardData.items;',
+    '  if(!items) return;',
+    '  for(var i=0;i<items.length;i++){',
+    '    if(items[i].type.indexOf("image")>=0){',
+    '      var blob=items[i].getAsFile();',
+    '      var reader=new FileReader();',
+    '      reader.onload=function(ev){_addFotoImg(ev.target.result,"Foto pegada");};',
+    '      reader.readAsDataURL(blob);',
+    '    }',
+    '  }',
+    '});',
+    '',
+    'function _dropFoto(e){',
+    '  e.preventDefault();',
+    '  var files=e.dataTransfer.files;',
+    '  for(var i=0;i<files.length;i++){',
+    '    if(files[i].type.indexOf("image")>=0){',
+    '      var reader=new FileReader();',
+    '      reader.onload=(function(f){return function(ev){_addFotoImg(ev.target.result,f.name);};})(files[i]);',
+    '      reader.readAsDataURL(files[i]);',
+    '    }',
+    '  }',
+    '}',
+    '',
+    'function agregarFoto(){',
+    '  var input=document.createElement("input");',
+    '  input.type="file";',
+    '  input.accept="image/*";',
+    '  input.multiple=true;',
+    '  input.onchange=function(){',
+    '    Array.from(input.files).forEach(function(file){',
+    '      var reader=new FileReader();',
+    '      reader.onload=function(ev){_addFotoImg(ev.target.result,file.name.replace(/\\.[^.]+$/,""));};',
+    '      reader.readAsDataURL(file);',
+    '    });',
+    '  };',
+    '  input.click();',
+    '}',
+    '',
+    'function _addFotoImg(src,caption){',
+    '  var cont=document.getElementById("fotosContainer");',
+    '  var drop=document.getElementById("fotoDropZone");',
+    '  if(drop) drop.style.display="none";',
+    '  var div=document.createElement("div");',
+    '  div.className="foto-item";',
+    '  var cap=caption||"";',
+    '  div.innerHTML="<img src=\\""+src+"\\" onerror=\\"this.parentNode.remove()\\">"',
+    '    +"<div class=\\"foto-caption\\"><input type=\\"text\\" placeholder=\\"Descripci\\u00F3n de la foto...\\" value=\\""+cap.replace(/\\"/g,"&quot;")+"\\" style=\\"width:100%;border:none;outline:none;font-size:11px;color:#555\\"></div>"',
+    '    +"<button onclick=\\"this.parentNode.remove()\\" style=\\"position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px;line-height:1\\">\u00D7</button>";',
+    '  cont.appendChild(div);',
+    '}',
+    '',
+    'function agregarVideo(){',
+    '  var url=prompt("URL del video (Drive, YouTube, WhatsApp Web, etc.):");',
+    '  if(!url||!url.trim()) return;',
+    '  var desc=prompt("Descripci\\u00F3n del video (opcional):","");',
+    '  var lista=document.getElementById("videosLista");',
+    '  var div=document.createElement("div");',
+    '  div.style.cssText="display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:10px 12px;background:#f8f8f8;border-radius:6px;border-left:3px solid #003B70";',
+    '  div.innerHTML="<span style=\\"font-size:18px\\">\uD83C\uDFA5</span>"',
+    '    +"<div style=\\"flex:1\\"><a href=\\""+url.trim()+"\\" target=\\"_blank\\" style=\\"font-size:12px;color:#003B70;word-break:break-all;display:block\\">"+url.trim()+"</a>"',
+    '    +(desc&&desc.trim()?"<span style=\\"font-size:11px;color:#888\\">"+desc.trim()+"</span>":"")+"</div>"',
+    '    +"<button onclick=\\"this.parentNode.remove()\\" style=\\"background:#e0e0e0;border:none;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:11px\\">\u00D7</button>";',
+    '  lista.appendChild(div);',
+    '  var drop=document.getElementById("videoDropZone");',
+    '  if(drop) drop.style.display="none";',
+    '}',
+    '',
+    'function guardarInforme(){',
+    '  var btn=document.getElementById("btnGuardar");',
+    '  if(btn){btn.disabled=true;btn.textContent="\u231B Guardando...";}',
+    '',
+    '  // Collect all text fields',
+    '  var queja=(document.getElementById("quejaBox")||{}).value||"";',
+    '  var sintoma=(document.getElementById("sintomaBox")||{}).value||"";',
+    '  var causa=(document.getElementById("causaBox")||{}).value||"";',
+    '  var solucion=(document.getElementById("solucionBox")||{}).value||"";',
+    '  var trabajoRealizado=(document.getElementById("trabajoBox")||{}).innerText||"";',
+    '  var repuestosUsados=(document.getElementById("repuestosBox")||{}).innerText||"";',
+    '  var observaciones=(document.getElementById("obsBox")||{}).innerText||"";',
+    '',
+    '  // Collect fotos (count + captions)',
+    '  var fotos=[];',
+    '  document.querySelectorAll("#fotosContainer .foto-item").forEach(function(item){',
+    '    var inp=item.querySelector("input");',
+    '    fotos.push(inp?inp.value:"foto");',
+    '  });',
+    '',
+    '  // Collect videos',
+    '  var videos=[];',
+    '  document.querySelectorAll("#videosLista a").forEach(function(a){ videos.push(a.href); });',
+    '',
+    '  var payload={',
+    '    action:"addInforme",',
+    '    row:{',
+    '      num:NUM_PRESUP,',
+    '      fecha:new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"}),',
+    '      cliente:CLIENTE_NOMBRE,',
+    '      queja:queja,',
+    '      sintoma:sintoma,',
+    '      causa:causa,',
+    '      solucion:solucion,',
+    '      trabajo:trabajoRealizado,',
+    '      repuestos:repuestosUsados,',
+    '      observaciones:observaciones,',
+    '      fotos:fotos.join(" | "),',
+    '      videos:videos.join(" | ")',
+    '    }',
+    '  };',
+    '',
+    '  if(!SHEET_URL){',
+    '    alert("Guardado local OK. Para sincronizar con Sheets configur\\u00E1 SCRIPT_URL.");',
+    '    if(btn){btn.disabled=false;btn.textContent="\\uD83D\\uDCBE Guardar";}',
+    '    return;',
+    '  }',
+    '',
+    '  var xhr=new XMLHttpRequest();',
+    '  xhr.open("POST",SHEET_URL,true);',
+    '  xhr.setRequestHeader("Content-Type","text/plain");',
+    '  xhr.onload=function(){',
+    '    if(btn){btn.style.background="#25d366";btn.style.color="#fff";btn.textContent="\\u2714 Guardado en Sheets";}',
+    '    setTimeout(function(){if(btn){btn.style.background="#1A1A1A";btn.style.color="#F4B400";btn.textContent="\\uD83D\\uDCBE Guardar";btn.disabled=false;}},3000);',
+    '  };',
+    '  xhr.onerror=function(){',
+    '    if(btn){btn.style.background="#c00";btn.style.color="#fff";btn.textContent="\\u26A0 Error al guardar";btn.disabled=false;}',
+    '    setTimeout(function(){if(btn){btn.style.background="#1A1A1A";btn.style.color="#F4B400";btn.textContent="\\uD83D\\uDCBE Guardar";btn.disabled=false;}},3000);',
+    '  };',
+    '  xhr.send(JSON.stringify(payload));',
+    '}'
+  ].join('\n');
 
-<div class="no-print">
-  <button class="btn-print" onclick="window.print()">🖨️ IMPRIMIR / GUARDAR PDF</button>
-  <button style="background:#003B70;color:#fff;padding:8px 14px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer;border:none" onclick="agregarFoto()">📷 Agregar foto</button>
-  <button style="background:#555;color:#fff;padding:8px 14px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer;border:none" onclick="agregarVideo()">🎥 Agregar video</button>
-  <button class="btn-close" onclick="window.close()">✕ Cerrar</button>
-  <span style="font-size:11px;color:#888;flex:1">✏️ Todos los campos son editables · Las fotos se pueden pegar (Ctrl+V) o agregar por URL</span>
-</div>
+  const clNombre = cl ? cl.nombre : '—';
+  const clEmpresa = cl ? (cl.empresa||cl.nombre) : '—';
+  const clZona = cl ? (cl.zona||'—') : '—';
+  const clTel = cl ? (cl.telefono||'—') : '—';
+  const maqDesc = maq ? maq.marca+' '+maq.modelo : '—';
+  const maqSerie = maq ? (maq.serie||'—') : '—';
+  const maqTipo = maq ? (maq.tipo||'—') : '—';
 
-<div class="header">
-  <div class="logo"><img src="${LOGO}" alt="MEB"/></div>
-  <div class="empresa-info">
-    <strong style="font-size:14px;color:#1A1A1A;display:block;letter-spacing:1px">MEB MACHINERY SOLUTIONS</strong>
-    <span>Servicio técnico especializado en maquinaria pesada</span><br>
-    <span>mebmachinerysolutions@gmail.com · +54 11 3392-3254</span>
-  </div>
-</div>
+  const htmlContent = '<!DOCTYPE html><html lang="es"><head>'
+    + '<meta charset="UTF-8">'
+    + '<title>Informe T\u00E9cnico N\u00B0 ' + numPresup + ' \u2014 MEB</title>'
+    + '<style>'
+    + '*{margin:0;padding:0;box-sizing:border-box}'
+    + 'body{font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;background:#fff;padding:32px;max-width:960px;margin:0 auto}'
+    + '.no-print{margin-bottom:20px;display:flex;gap:8px;flex-wrap:wrap;padding:12px 14px;background:#f5f5f5;border-radius:6px;border-left:4px solid #F4B400;align-items:center}'
+    + '.no-print button{padding:8px 16px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer;border:none;letter-spacing:.5px}'
+    + '.btn-print{background:#F4B400;color:#1A1A1A}'
+    + '.btn-foto{background:#003B70;color:#fff}'
+    + '.btn-video{background:#555;color:#fff}'
+    + '.btn-save{background:#1A1A1A;color:#F4B400;border:2px solid #F4B400!important}'
+    + '.btn-close{background:#888;color:#fff}'
+    + '.tip{font-size:11px;color:#888;flex:1;min-width:180px}'
+    + '.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #F4B400}'
+    + '.logo img{height:52px}'
+    + '.empresa-info{text-align:right;font-size:11px;color:#555;line-height:1.8}'
+    + '.titulo-doc{background:#1A1A1A;color:#F4B400;padding:10px 18px;font-size:20px;font-weight:900;letter-spacing:2px;border-radius:4px 4px 0 0;display:flex;justify-content:space-between;align-items:center}'
+    + '.estado-bar{background:#F4B400;padding:6px 18px;margin-bottom:20px;border-radius:0 0 4px 4px;font-size:11px;font-weight:700;letter-spacing:1px;color:#1A1A1A}'
+    + '.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}'
+    + '.seccion{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden}'
+    + '.seccion-titulo{background:#F4B400;color:#1A1A1A;font-weight:700;font-size:10px;letter-spacing:2px;padding:7px 12px;text-transform:uppercase}'
+    + '.seccion-body{padding:12px}'
+    + '.campo{margin-bottom:6px;font-size:12px}'
+    + '.campo label{color:#999;font-size:10px;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:1px}'
+    + '.campo span{font-weight:600;color:#1A1A1A}'
+    + '.bloque{border:1px solid #e0e0e0;border-radius:6px;margin-bottom:16px;overflow:hidden}'
+    + '.bloque-titulo{background:#1A1A1A;color:#F4B400;padding:9px 14px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}'
+    + '.bloque-body{padding:14px;min-height:80px}'
+    + '.texto-libre{width:100%;min-height:80px;border:none;outline:none;font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;resize:vertical;background:transparent}'
+    + '.editable-bloque{width:100%;min-height:80px;outline:none;font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A}'
+    + '.fotos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:8px}'
+    + '.foto-item{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;position:relative}'
+    + '.foto-item img{width:100%;max-height:180px;object-fit:cover;display:block}'
+    + '.foto-caption{padding:6px 8px}'
+    + '.foto-caption input{width:100%;border:none;outline:none;font-size:11px;color:#555;background:transparent}'
+    + '.foto-drop{border:2px dashed #F4B400;border-radius:6px;padding:20px;text-align:center;cursor:pointer;color:#888;font-size:12px;background:#fffdf0}'
+    + '.diagnostico-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:14px}'
+    + '.diag-cell{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden}'
+    + '.diag-label{background:#F4B400;color:#1A1A1A;font-size:10px;font-weight:700;letter-spacing:1px;padding:6px 10px;text-transform:uppercase}'
+    + '.diag-body{padding:8px;min-height:80px}'
+    + '.diag-body textarea{width:100%;min-height:72px;border:none;outline:none;font-family:Arial,sans-serif;font-size:12px;color:#1A1A1A;resize:vertical;background:transparent}'
+    + '.firma-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:32px;padding-top:16px;border-top:1px solid #e0e0e0}'
+    + '.firma-box{text-align:center}'
+    + '.firma-linea{border-top:2px solid #1A1A1A;margin:8px 0}'
+    + '.firma-label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:2px}'
+    + '.firma-nombre{font-size:12px;font-weight:700;color:#1A1A1A;margin-top:4px}'
+    + '.footer{margin-top:24px;padding-top:10px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;font-size:10px;color:#aaa}'
+    + '@media print{.no-print{display:none}body{padding:16px}.btn-del{display:none!important}}'
+    + '</style></head><body>'
 
-<div class="titulo-doc">
-  🔧 INFORME TÉCNICO
-  <span style="font-size:13px;color:#aaa;font-weight:400">Ref. Presupuesto N° ${numPresup} · ${fechaHoy}</span>
-</div>
-<div class="estado-bar">INFORME TÉCNICO DE DIAGNÓSTICO Y TRABAJO REALIZADO</div>
+    + '<div class="no-print">'
+    + '<button class="btn-print" onclick="window.print()">\uD83D\uDDA8 IMPRIMIR / PDF</button>'
+    + '<button class="btn-foto" onclick="agregarFoto()">\uD83D\uDCF7 Agregar foto</button>'
+    + '<button class="btn-video" onclick="agregarVideo()">\uD83C\uDFA5 Agregar video</button>'
+    + '<button class="btn-save" id="btnGuardar" onclick="guardarInforme()">\uD83D\uDCBE Guardar</button>'
+    + '<button class="btn-close" onclick="window.close()">\u00D7 Cerrar</button>'
+    + '<span class="tip">\u270F Edit\u00E1 cualquier campo \u00B7 Ctrl+V para pegar fotos \u00B7 \uD83D\uDCBE guarda en Sheets</span>'
+    + '</div>'
 
-<div class="grid-2">
-  <div class="seccion">
-    <div class="seccion-titulo">Datos del cliente</div>
-    <div class="seccion-body">
-      <div class="campo"><label>Empresa / Nombre</label><span contenteditable="true">${cl ? cl.nombre : '—'}</span></div>
-      <div class="campo"><label>Razón social</label><span contenteditable="true">${cl ? cl.empresa||cl.nombre : '—'}</span></div>
-      <div class="campo"><label>Zona</label><span contenteditable="true">${cl ? cl.zona||'—' : '—'}</span></div>
-      <div class="campo"><label>Teléfono</label><span contenteditable="true">${cl ? cl.telefono||'—' : '—'}</span></div>
-    </div>
-  </div>
-  <div class="seccion">
-    <div class="seccion-titulo">Datos de la máquina</div>
-    <div class="seccion-body">
-      <div class="campo"><label>Máquina</label><span contenteditable="true">${maq ? maq.marca+' '+maq.modelo : '—'}</span></div>
-      <div class="campo"><label>N° de serie</label><span contenteditable="true">${maq ? maq.serie||'—' : '—'}</span></div>
-      <div class="campo"><label>Tipo</label><span contenteditable="true">${maq ? maq.tipo||'—' : '—'}</span></div>
-      <div class="campo"><label>Fecha del informe</label><span contenteditable="true">${fechaHoy}</span></div>
-    </div>
-  </div>
-</div>
+    + '<div class="header">'
+    + '<div class="logo"><img src="' + LOGO + '" alt="MEB"/></div>'
+    + '<div class="empresa-info">'
+    + '<strong style="font-size:14px;color:#1A1A1A;display:block;letter-spacing:1px">MEB MACHINERY SOLUTIONS</strong>'
+    + '<span>Servicio t\u00E9cnico especializado en maquinaria pesada</span><br>'
+    + '<span>mebmachinerysolutions@gmail.com \u00B7 +54 11 3392-3254</span>'
+    + '</div></div>'
 
-<div class="bloque">
-  <div class="bloque-titulo">🗣️ QUEJA / SÍNTOMA REPORTADO POR EL CLIENTE</div>
-  <div class="bloque-body">
-    <textarea class="texto-libre" placeholder="Describí la queja o síntoma que reportó el cliente..."></textarea>
-  </div>
-</div>
+    + '<div class="titulo-doc">\uD83D\uDD27 INFORME T\u00C9CNICO'
+    + '<span style="font-size:13px;color:#aaa;font-weight:400">Ref. Presupuesto N\u00B0 ' + numPresup + ' \u00B7 ' + fechaHoy + '</span></div>'
+    + '<div class="estado-bar">INFORME T\u00C9CNICO DE DI\u00C1GN\u00D3STICO Y TRABAJO REALIZADO</div>'
 
-<div class="bloque">
-  <div class="bloque-titulo">
-    📷 REGISTRO FOTOGRÁFICO
-    <span style="font-size:10px;font-weight:400;color:#aaa">Podés pegar imágenes (Ctrl+V), agregar por URL o arrastrar</span>
-  </div>
-  <div class="bloque-body" style="padding:8px">
-    <div class="foto-drop" id="fotoDropZone" ondragover="event.preventDefault()" ondrop="_dropFoto(event)" onclick="agregarFoto()">
-      📷 Hacé clic aquí o arrastrá una foto · También podés pegar con <strong>Ctrl+V</strong>
-    </div>
-    <div class="fotos-grid" id="fotosContainer"></div>
-  </div>
-</div>
+    + '<div class="grid-2">'
+    + '<div class="seccion"><div class="seccion-titulo">Datos del cliente</div><div class="seccion-body">'
+    + '<div class="campo"><label>Empresa / Nombre</label><span contenteditable="true">' + clNombre + '</span></div>'
+    + '<div class="campo"><label>Raz\u00F3n social</label><span contenteditable="true">' + clEmpresa + '</span></div>'
+    + '<div class="campo"><label>Zona</label><span contenteditable="true">' + clZona + '</span></div>'
+    + '<div class="campo"><label>Tel\u00E9fono</label><span contenteditable="true">' + clTel + '</span></div>'
+    + '</div></div>'
+    + '<div class="seccion"><div class="seccion-titulo">Datos de la m\u00E1quina</div><div class="seccion-body">'
+    + '<div class="campo"><label>M\u00E1quina</label><span contenteditable="true">' + maqDesc + '</span></div>'
+    + '<div class="campo"><label>N\u00BA de serie</label><span contenteditable="true">' + maqSerie + '</span></div>'
+    + '<div class="campo"><label>Tipo</label><span contenteditable="true">' + maqTipo + '</span></div>'
+    + '<div class="campo"><label>Fecha del informe</label><span contenteditable="true">' + fechaHoy + '</span></div>'
+    + '</div></div>'
+    + '</div>'
 
-<div class="bloque">
-  <div class="bloque-titulo">🎥 VIDEOS</div>
-  <div class="bloque-body" id="videosContainer">
-    <div style="font-size:12px;color:#888;margin-bottom:8px">Pegá links de videos (Google Drive, YouTube, WhatsApp Web, etc.)</div>
-    <div id="videosLista"></div>
-  </div>
-</div>
+    + '<div class="bloque">'
+    + '<div class="bloque-titulo">\uD83D\uDDE3\uFE0F QUEJA / S\u00CDNTOMA REPORTADO POR EL CLIENTE</div>'
+    + '<div class="bloque-body"><textarea id="quejaBox" class="texto-libre" placeholder="Describ\u00ED la queja o s\u00EDntoma que report\u00F3 el cliente..."></textarea></div>'
+    + '</div>'
 
-<div class="bloque">
-  <div class="bloque-titulo">🔍 DIAGNÓSTICO</div>
-  <div class="diagnostico-grid">
-    <div class="diag-cell">
-      <div class="diag-label">⚠️ Síntoma</div>
-      <div class="diag-body"><textarea placeholder="Describí el síntoma técnico observado..."></textarea></div>
-    </div>
-    <div class="diag-cell">
-      <div class="diag-label">🔎 Causa</div>
-      <div class="diag-body"><textarea placeholder="Indicá la causa raíz identificada..."></textarea></div>
-    </div>
-    <div class="diag-cell">
-      <div class="diag-label">✅ Solución</div>
-      <div class="diag-body"><textarea placeholder="Describí la solución implementada..."></textarea></div>
-    </div>
-  </div>
-</div>
+    + '<div class="bloque">'
+    + '<div class="bloque-titulo">\uD83D\uDD27 DIAGN\u00D3STICO</div>'
+    + '<div class="diagnostico-grid">'
+    + '<div class="diag-cell"><div class="diag-label">\u26A0\uFE0F S\u00EDntoma</div><div class="diag-body"><textarea id="sintomaBox" placeholder="S\u00EDntoma t\u00E9cnico observado..."></textarea></div></div>'
+    + '<div class="diag-cell"><div class="diag-label">\uD83D\uDD0E Causa</div><div class="diag-body"><textarea id="causaBox" placeholder="Causa ra\u00EDz identificada..."></textarea></div></div>'
+    + '<div class="diag-cell"><div class="diag-label">\u2705 Soluci\u00F3n</div><div class="diag-body"><textarea id="solucionBox" placeholder="Soluci\u00F3n implementada..."></textarea></div></div>'
+    + '</div></div>'
 
-<div class="footer">
-  <span>MEB MACHINERY SOLUTIONS · mebmachinerysolutions@gmail.com · +54 11 3392-3254</span>
-  <span>Informe Técnico Ref. Presupuesto N° ${numPresup}</span>
-</div>
+    + '<div class="bloque">'
+    + '<div class="bloque-titulo">\uD83D\uDEE0\uFE0F TRABAJO REALIZADO</div>'
+    + '<div class="bloque-body"><div id="trabajoBox" class="editable-bloque" contenteditable="true" data-placeholder="Describ\u00ED detalladamente el trabajo realizado..." style="outline:none;min-height:80px"></div></div>'
+    + '</div>'
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:32px;padding-top:16px;border-top:1px solid #e0e0e0">
-  <div style="text-align:center">
-    <div style="margin-top:64px;border-top:2px solid #1A1A1A;margin-bottom:8px"></div>
-    <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:2px">Firma del cliente</div>
-    <div style="font-size:12px;font-weight:700;color:#1A1A1A;margin-top:4px" contenteditable="true">${cl?cl.nombre:'Nombre del cliente'}</div>
-  </div>
-  <div style="text-align:center">
-    <img src="${FIRMA_IT}" style="height:420px;width:auto;max-width:500px;object-fit:contain;display:block;margin:0 auto 8px;" alt="Firma MEB"/>
-    <div style="border-top:2px solid #1A1A1A;margin-bottom:8px;margin-top:4px"></div>
-    <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:2px">MEB Machinery Solutions</div>
-    <div style="font-size:12px;font-weight:700;color:#1A1A1A;margin-top:4px" contenteditable="true">Marcos Bellando</div>
-  </div>
-</div>
+    + '<div class="bloque">'
+    + '<div class="bloque-titulo">\uD83D\uDCE6 REPUESTOS Y MATERIALES UTILIZADOS</div>'
+    + '<div class="bloque-body"><div id="repuestosBox" class="editable-bloque" contenteditable="true" data-placeholder="Lista de repuestos y materiales..." style="outline:none;min-height:60px"></div></div>'
+    + '</div>'
 
-${'<script>'}
-// Pegar imagen con Ctrl+V
-document.addEventListener('paste', function(e){
-  var items = e.clipboardData && e.clipboardData.items;
-  if(!items) return;
-  for(var i=0;i<items.length;i++){
-    if(items[i].type.indexOf('image')>=0){
-      var blob = items[i].getAsFile();
-      var reader = new FileReader();
-      reader.onload = function(ev){ _addFotoImg(ev.target.result, ''); };
-      reader.readAsDataURL(blob);
-    }
-  }
-});
+    + '<div class="bloque">'
+    + '<div class="bloque-titulo">\uD83D\uDCF7 REGISTRO FOTOGR\u00C1FICO'
+    + '<span style="font-size:10px;font-weight:400;color:#aaa">Ctrl+V para pegar \u00B7 bot\u00F3n para elegir archivo</span>'
+    + '</div>'
+    + '<div class="bloque-body" style="padding:12px">'
+    + '<div class="foto-drop" id="fotoDropZone" ondragover="event.preventDefault()" ondrop="_dropFoto(event)" onclick="agregarFoto()" style="cursor:pointer">'
+    + '\uD83D\uDCF7 Clic aqu\u00ED para elegir fotos \u00B7 o arrastr\u00E1 archivos \u00B7 o peg\u00E1 con <strong>Ctrl+V</strong>'
+    + '</div>'
+    + '<div class="fotos-grid" id="fotosContainer"></div>'
+    + '</div></div>'
 
-function _dropFoto(e){
-  e.preventDefault();
-  var files = e.dataTransfer.files;
-  for(var i=0;i<files.length;i++){
-    if(files[i].type.indexOf('image')>=0){
-      var reader = new FileReader();
-      reader.onload = (function(f){ return function(ev){ _addFotoImg(ev.target.result, f.name); }; })(files[i]);
-      reader.readAsDataURL(files[i]);
-    }
-  }
-}
+    + '<div class="bloque">'
+    + '<div class="bloque-titulo">\uD83C\uDFA5 VIDEOS</div>'
+    + '<div class="bloque-body" id="videosContainer">'
+    + '<div id="videoDropZone" style="border:2px dashed #ccc;border-radius:6px;padding:14px;text-align:center;color:#888;font-size:12px;cursor:pointer;margin-bottom:8px" onclick="agregarVideo()">'
+    + '\uD83C\uDFA5 Clic para agregar link de video (Drive, YouTube, WhatsApp Web...)'
+    + '</div>'
+    + '<div id="videosLista"></div>'
+    + '</div></div>'
 
-function agregarFoto(){
-  var url = prompt('URL de la imagen (o dejá vacío y pegá con Ctrl+V):','');
-  if(url && url.trim()) _addFotoImg(url.trim(), '');
-}
+    + '<div class="bloque">'
+    + '<div class="bloque-titulo">\uD83D\uDCCB OBSERVACIONES / RECOMENDACIONES</div>'
+    + '<div class="bloque-body"><div id="obsBox" class="editable-bloque" contenteditable="true" style="outline:none;min-height:60px" data-placeholder="Observaciones o recomendaciones para el cliente..."></div></div>'
+    + '</div>'
 
-function _addFotoImg(src, caption){
-  var cont = document.getElementById('fotosContainer');
-  var div = document.createElement('div');
-  div.className = 'foto-item';
-  div.style.position = 'relative';
-  div.innerHTML = '<img src="'+src+'" onerror="this.src=\\'data:image/svg+xml,<svg xmlns=\\"http://www.w3.org/2000/svg\\" width=\\"200\\" height=\\"150\\"><rect fill=\\"%23f0f0f0\\" width=\\"200\\" height=\\"150\\"/><text x=\\"50%\\" y=\\"50%\\" text-anchor=\\"middle\\" fill=\\"%23888\\" font-size=\\"12\\">Imagen no disponible</text></svg>\\'"+'>'
-    + '<div class="foto-caption"><input type="text" placeholder="Descripción de la foto..." value="'+caption+'" style="width:100%;border:none;outline:none;font-size:11px;color:#555"></div>'
-    + '<button onclick="this.parentNode.remove()" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:11px">✕</button>';
-  cont.appendChild(div);
-}
+    + '<div class="footer">'
+    + '<span>MEB MACHINERY SOLUTIONS \u00B7 mebmachinerysolutions@gmail.com \u00B7 +54 11 3392-3254</span>'
+    + '<span>Informe T\u00E9cnico N\u00B0 ' + numPresup + ' \u00B7 ' + fechaHoy + '</span>'
+    + '</div>'
 
-function agregarVideo(){
-  var url = prompt('URL del video (Drive, YouTube, WhatsApp Web):','');
-  if(!url||!url.trim()) return;
-  var lista = document.getElementById('videosLista');
-  var div = document.createElement('div');
-  div.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:#f8f8f8;border-radius:6px';
-  div.innerHTML = '<span style="font-size:16px">🎥</span>'
-    + '<a href="'+url+'" target="_blank" style="font-size:12px;color:#003B70;flex:1;word-break:break-all">'+url+'</a>'
-    + '<input type="text" placeholder="Descripción del video..." style="border:1px solid #ddd;border-radius:4px;padding:4px 8px;font-size:11px;width:200px">'
-    + '<button onclick="this.parentNode.remove()" style="background:#e0e0e0;border:none;border-radius:4px;padding:4px 8px;cursor:pointer;font-size:11px">✕</button>';
-  lista.appendChild(div);
-}
-<\/script>
-</body></html>`);
-  w.document.close();
+    + '<div class="firma-grid">'
+    + '<div class="firma-box">'
+    + '<div style="margin-top:64px"></div>'
+    + '<div class="firma-linea"></div>'
+    + '<div class="firma-label">Firma del cliente</div>'
+    + '<div class="firma-nombre" contenteditable="true">' + clNombre + '</div>'
+    + '</div>'
+    + '<div class="firma-box">'
+    + '<img src="' + FIRMA_IT + '" style="height:160px;width:auto;max-width:320px;object-fit:contain;display:block;margin:0 auto 4px;" alt="Firma MEB"/>'
+    + '<div class="firma-linea"></div>'
+    + '<div class="firma-label">MEB Machinery Solutions</div>'
+    + '<div class="firma-nombre" contenteditable="true">Marcos Bellando</div>'
+    + '</div></div>'
+
+    + '<script>' + jsCode + '<\/script>'
+    + '</body></html>';
+
+  const blob = new Blob([htmlContent], {type:'text/html;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, '_blank', 'width=1040,height=920');
+  if(w) setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
+  else { alert('Bloqueador de popups activo. Permit\u00ED los popups para este sitio.'); URL.revokeObjectURL(url); }
 }
 
 let _waAlertaTelefono = '';
@@ -3171,7 +3271,7 @@ function generarPresupuestoPDF(presupId) {
     + '<div class="firma-nombre" contenteditable="true">' + clienteNombre + '</div>'
     + '</div>'
     + '<div class="firma-box">'
-    + '<img src="' + FIRMA + '" style="height:420px;width:auto;max-width:500px;object-fit:contain;display:block;margin:0 auto 8px;" alt="Firma MEB"/>'
+    + '<img src="' + FIRMA + '" style="height:160px;width:auto;max-width:320px;object-fit:contain;display:block;margin:0 auto 4px;" alt="Firma MEB"/>'
     + '<div class="firma-linea"></div>'
     + '<div class="firma-label">MEB Machinery Solutions</div>'
     + '<div class="firma-nombre" contenteditable="true">Marcos Bellando</div>'
