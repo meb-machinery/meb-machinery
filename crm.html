@@ -934,14 +934,33 @@ async function syncAll() {
           const _desc = r.DESCRIPCION||r['DESCRIPCIÓN']||r.DECSRIPCION||r.TITULO||'';
           const _monto = parseMonto(r.TOTAL_PRESUP_||r['TOTAL_PRESUP.']||r.MONTO_TOTAL||r.SUBTOTAL||r.MONTO||'0');
           const _estado = String(r.ESTADO||'pendiente').toLowerCase().trim();
+          // Column shift recovery: if monto=0, scan all values for the largest number
+          let _montoFinal = _monto;
+          if(_montoFinal === 0) {
+            Object.values(r).forEach(v => {
+              const n = parseMonto(v);
+              if(n > _montoFinal) _montoFinal = n;
+            });
+          }
+          // If estado looks like a number, it's actually NUMERO shifted - use pendiente
+          const _estadoFinal = isNaN(_estado) ? _estado : 'pendiente';
+          // Try to find clienteId from any column value that matches a client name
+          let _cidFinal = _cid;
+          if(!_cidFinal) {
+            Object.values(r).forEach(v => {
+              if(_cidFinal || !v || v.length < 3) return;
+              const found = DB.clientes.find(c => c.nombre.toUpperCase() === v.toUpperCase().trim());
+              if(found) _cidFinal = found.id;
+            });
+          }
           presupMap[pid] = {
             id:pid,
             num:_num||i+1,
-            clienteId:_cid,
+            clienteId:_cidFinal,
             clienteNombreSheet:_cnm||_clienteResolved,
             descripcion:_desc,
-            monto:_monto,
-            estado:isNaN(_estado)?_estado:'pendiente',
+            monto:_montoFinal,
+            estado:_estadoFinal,
             fecha:r.FECHA||'', notas:r.NOTAS||''
           };
         } else {
