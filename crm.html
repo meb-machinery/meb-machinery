@@ -1012,7 +1012,6 @@ async function syncAll() {
     } else if(!DB.presupuestos.length) DB.presupuestos=[];
     if(al.length) DB.alertas = al.map(r=>{
       let acid = String(r.CLIENTE_ID||'').trim();
-      // Resolve cliente by name if id not found
       if(!acid && r.CLIENTE) {
         const fc = DB.clientes.find(c=>c.nombre.toUpperCase()===r.CLIENTE.toUpperCase());
         if(fc) acid = fc.id;
@@ -1020,7 +1019,8 @@ async function syncAll() {
       return {
         id:String(r.ID||uid()).trim(), titulo:r.TITULO||'', clienteId:acid,
         fecha:r.FECHA||'', prioridad:(r.PRIORIDAD||'media').toLowerCase(),
-        descripcion:r.DESCRIPCION||'', resuelta:r.RESUELTA==='TRUE'||r.RESUELTA==='true'||r.RESUELTA==='1'
+        descripcion:r.DESCRIPCION||r.DESCRIPCIÓN||'',
+        resuelta:r.RESUELTA==='TRUE'||r.RESUELTA==='true'||r.RESUELTA==='1'||r.RESUELTA==='SI'
       };
     }); else if(!DB.alertas.length) DB.alertas=[];
     if(pv.length) {
@@ -1288,12 +1288,17 @@ function renderDashboard() {
   const alMant=calcularAlertasRepuesto().slice(0,3);
   const totalAlertas = la.length + alMant.length;
   da.innerHTML = totalAlertas ? [
-    ...alMant.map(a=>`<div class="alert-item">
+    ...alMant.map(a=>{
+      const rawKey=a.clienteNombre+'|'+a.maquinaDesc+'|'+a.label;
+      const histM=(DB.alertasRepuesto&&DB.alertasRepuesto[rawKey])||[];
+      const ultimaM=histM.length>0?histM[histM.length-1]:null;
+      return `<div class="alert-item">
       <div class="alert-dot ${a.urgencia==='vencido'?'red':'orange'}"></div>
       <div class="alert-text">
-        <div class="alert-title">⚙️ ${a.clienteNombre} · ${a.maquinaDesc}</div>
+        <div class="alert-title">⚙️ ${a.clienteNombre} · ${a.maquinaDesc}${ultimaM?` <span style="color:#25d366;font-size:10px">✔ ${ultimaM.tipo} ${ultimaM.fecha}</span>`:''}</div>
         <div class="alert-sub">${a.label} · ${a.urgencia==='vencido'?'VENCIDO hace '+Math.abs(a.diasRestantes)+'d':'en '+a.diasRestantes+'d'}</div>
-      </div></div>`),
+      </div></div>`;
+    }),
     ...la.map(a=>{
       const col=a.prioridad==='alta'?'red':a.prioridad==='media'?'orange':'yellow';
       const clA=DB.clientes.find(c=>String(c.id)===String(a.clienteId));
@@ -1858,7 +1863,15 @@ function renderAlertas() {
 
 function resolverAlerta(id) {
   const a=DB.alertas.find(x=>x.id===id);
-  if(a){a.resuelta=!a.resuelta;saveLocal();updateBadges();renderAlertas();renderDashboard();}
+  if(!a) return;
+  a.resuelta=!a.resuelta;
+  saveLocal();updateBadges();renderAlertas();renderDashboard();
+  const cl=DB.clientes.find(c=>String(c.id)===String(a.clienteId));
+  writeToSheet({action:'addAlerta', row:{
+    id:a.id, titulo:a.titulo, cliente:cl?cl.nombre:'',
+    fecha:a.fecha||'', prioridad:a.prioridad||'media',
+    descripcion:a.descripcion||'', resuelta:a.resuelta
+  }});
 }
 
 function guardarAlertaSheets(id) {
@@ -1876,6 +1889,13 @@ function registrarComm(id, tipo) {
   a.tipoComm=tipo;
   a.resuelta=true;
   saveLocal();updateBadges();renderAlertas();renderDashboard();
+  const cl=DB.clientes.find(c=>String(c.id)===String(a.clienteId));
+  writeToSheet({action:'addAlerta', row:{
+    id:a.id, titulo:a.titulo, cliente:cl?cl.nombre:'',
+    fecha:a.fecha||'', prioridad:a.prioridad||'media',
+    descripcion:(a.descripcion||'')+' | Comunicación: '+tipo+' — '+new Date().toLocaleDateString('es-AR'),
+    resuelta:true
+  }});
   showToast('Comunicación '+tipo+' registrada — alerta resuelta ✔','success');
 }
 
@@ -1885,8 +1905,23 @@ function regCommMant(keyEncoded, tipo) {
   if(!DB.alertasRepuesto) DB.alertasRepuesto={};
   if(!DB.alertasRepuesto[key]) DB.alertasRepuesto[key]=[];
   const fecha = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
-  DB.alertasRepuesto[key].push({tipo, fecha, hora: new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})});
+  const hora = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  DB.alertasRepuesto[key].push({tipo, fecha, hora});
   saveLocal(); renderAlertas(); renderDashboard();
+  // Parse key to get cliente and maquina for Sheets
+  const parts = key.split('|');
+  const clienteNom = parts[0]||'';
+  const maquinaDesc = parts[1]||'';
+  const label = parts[2]||'';
+  writeToSheet({action:'addAlerta', row:{
+    id: 'mant_'+Date.now(),
+    titulo: label + ' — ' + maquinaDesc,
+    cliente: clienteNom,
+    fecha: fecha,
+    prioridad: 'alta',
+    descripcion: 'Comunicación '+tipo+' registrada a las '+hora,
+    resuelta: true
+  }});
   showToast('Comunicación '+tipo+' registrada ✔','success');
 }
 
