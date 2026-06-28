@@ -333,6 +333,27 @@ select option { background:var(--dark); }
         <div class="stat-sub" id="s-por-cobrar-sub">Trabajos completados sin cobrar</div>
       </div>
     </div>
+    <!-- GANANCIA REAL DEL MES -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px" id="ganancia-mes-bar">
+      <div class="stat-card green" style="border:2px solid #25d366">
+        <div class="stat-val" id="s-ganancia-mes">$0</div>
+        <div class="stat-label">💰 Cobrado este mes</div>
+        <div class="stat-icon">📈</div>
+        <div class="stat-sub" id="s-ganancia-mes-sub">Trabajos cobrados en el mes actual</div>
+      </div>
+      <div class="stat-card blue" style="border:2px solid #6fa8dc">
+        <div class="stat-val" id="s-presup-mes">$0</div>
+        <div class="stat-label">📋 Presupuestado este mes</div>
+        <div class="stat-icon">📊</div>
+        <div class="stat-sub" id="s-presup-mes-sub">Presupuestos aprobados del mes</div>
+      </div>
+      <div class="stat-card orange" style="border:2px solid var(--orange)">
+        <div class="stat-val" id="s-gastos-mes">$0</div>
+        <div class="stat-label">🧾 Gastos este mes</div>
+        <div class="stat-icon">💸</div>
+        <div class="stat-sub" id="s-gastos-mes-sub">Compras y movilidad del mes</div>
+      </div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
       <div class="card">
         <div class="card-header"><span class="card-title">ÚLTIMOS CLIENTES</span><button class="btn-secondary" onclick="showPage('clientes')">Ver todos</button></div>
@@ -1199,6 +1220,58 @@ function renderDashboard() {
   if(pcEl) pcEl.textContent = fmtMonto(montoPorCobrar);
   if(pcSub) pcSub.textContent = `${porCobrarTrabajos.length} trabajo${porCobrarTrabajos.length!==1?'s':''} completado${porCobrarTrabajos.length!==1?'s':''} sin cobrar`;
 
+  // ── GANANCIA REAL DEL MES ─────────────────────────────────────────────────
+  const ahora = new Date();
+  const mesActual = ahora.getMonth();
+  const anioActual = ahora.getFullYear();
+  const nombreMes = ahora.toLocaleDateString('es-AR',{month:'long'});
+
+  // Cobrado real del mes: trabajos con estadoCobro='cobrado' y fecha en este mes
+  const trabajosCobradosMes = DB.trabajos.filter(t => {
+    if(t.estadoCobro !== 'cobrado') return false;
+    const raw = t.fechaFin || t.fechaInicio || '';
+    if(!raw) return false;
+    const parts = raw.includes('/') ? raw.split('/').reverse() : raw.split('-');
+    const d = new Date(parts[0], parseInt(parts[1]||0)-1, parts[2]||1);
+    return d.getMonth()===mesActual && d.getFullYear()===anioActual;
+  });
+  const cobradoMes = trabajosCobradosMes.reduce((s,t)=>s+Number(t.montoCobrado||t.manoObraCobrada||0),0);
+
+  // Presupuestado del mes: presupuestos aprobados con fecha en este mes
+  const presupMes = DB.presupuestos.filter(p => {
+    if(p.estado!=='aprobado') return false;
+    const raw = p.fecha||'';
+    if(!raw) return false;
+    const parts = raw.includes('/') ? raw.split('/').reverse() : raw.split('-');
+    const d = new Date(parts[0], parseInt(parts[1]||0)-1, parts[2]||1);
+    return d.getMonth()===mesActual && d.getFullYear()===anioActual;
+  });
+  const montoPresupMes = presupMes.reduce((s,p)=>s+Number(p.monto||0),0);
+
+  // Gastos del mes: compras + movilidad
+  const comprasMes = (DB.compras||[]).filter(c => {
+    const raw = c.fecha||'';
+    if(!raw) return false;
+    const parts = raw.includes('/') ? raw.split('/').reverse() : raw.split('-');
+    const d = new Date(parts[0], parseInt(parts[1]||0)-1, parts[2]||1);
+    return d.getMonth()===mesActual && d.getFullYear()===anioActual;
+  });
+  const gastosMes = comprasMes.reduce((s,c)=>s+Number(c.monto||0),0)
+    + trabajosCobradosMes.reduce((s,t)=>s+Number(t.movilidad||0),0);
+
+  const elGanancia = document.getElementById('s-ganancia-mes');
+  const elGananciaSub = document.getElementById('s-ganancia-mes-sub');
+  const elPresupMes = document.getElementById('s-presup-mes');
+  const elPresupMesSub = document.getElementById('s-presup-mes-sub');
+  const elGastosMes = document.getElementById('s-gastos-mes');
+  const elGastosMesSub = document.getElementById('s-gastos-mes-sub');
+  if(elGanancia) elGanancia.textContent = fmtMonto(cobradoMes);
+  if(elGananciaSub) elGananciaSub.textContent = `${trabajosCobradosMes.length} trabajo${trabajosCobradosMes.length!==1?'s':''} cobrados en ${nombreMes}`;
+  if(elPresupMes) elPresupMes.textContent = fmtMonto(montoPresupMes);
+  if(elPresupMesSub) elPresupMesSub.textContent = `${presupMes.length} presupuesto${presupMes.length!==1?'s':''} aprobados en ${nombreMes}`;
+  if(elGastosMes) elGastosMes.textContent = fmtMonto(gastosMes);
+  if(elGastosMesSub) elGastosMesSub.textContent = `${comprasMes.length} compra${comprasMes.length!==1?'s':''} + movilidad en ${nombreMes}`;
+
   // últimos clientes
   const dc=document.getElementById('dash-clientes');
   const lc=[...DB.clientes].slice(-5).reverse();
@@ -1570,7 +1643,7 @@ function renderPresupuestos() {
     });
   }
   const tbody=document.getElementById('tabla-presupuestos');
-  if(!data.length){tbody.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="icon">📋</div><p>Sin presupuestos</p></div></td></tr>`;return;}
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="icon">📋</div><p>Sin presupuestos</p></div></td></tr>`;return;}
   tbody.innerHTML=data.map(p=>{
     const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId))||DB.clientes.find(c=>c.nombre.toUpperCase()===(p.clienteNombreSheet||p.clienteId||'').toUpperCase());
     const descCorta=(p.descripcion||'—').split('\n')[0].split('|')[0];
@@ -1581,6 +1654,8 @@ function renderPresupuestos() {
       <td><span class="monto">${fmtMonto(p.monto)}</span></td>
       <td>${badgeEstado(p.estado)}</td>
       <td class="td-muted">${fmtDate(p.fecha)}</td>
+      <td style="font-size:10px;color:${p.fechaDescarga?'#25d366':'var(--muted2)'};text-align:center;white-space:nowrap">${p.fechaDescarga?'✔ '+p.fechaDescarga:'—'}</td>
+      <td style="font-size:10px;color:${p.fechaEnviado?'#6fa8dc':'var(--muted2)'};text-align:center;white-space:nowrap">${p.fechaEnviado?'✔ '+p.fechaEnviado:'—'}</td>
       <td><div class="actions">
         <button class="btn-secondary" title="Editar" onclick="openModal('presupuesto',DB.presupuestos.find(x=>x.id==='${p.id}'))">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','rechazado'])">Estado</button>
@@ -3460,12 +3535,12 @@ function generarPresupuestoPDF(presupId) {
   const blob = new Blob([htmlContent], {type:'text/html;charset=utf-8'});
   const url = URL.createObjectURL(blob);
   const w = window.open(url, '_blank', 'width=1040,height=900');
-  if(w) setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
-  else { alert('Bloqueador de popups activo. Permit\u00ED los popups para este sitio.'); URL.revokeObjectURL(url); }
+  if(w) {
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
+    const _pd=DB.presupuestos.find(x=>x.id===presupId);
+    if(_pd&&!_pd.fechaDescarga){_pd.fechaDescarga=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});saveLocal();try{renderPresupuestos();}catch(e){}}
+  } else { alert('Bloqueador de popups activo. Permit\u00ED los popups para este sitio.'); URL.revokeObjectURL(url); }
 }
-
-
-function clienteOptions(selectedId='') {
   return DB.clientes.map(c =>
     `<option value="${c.id}" ${c.id===selectedId?'selected':''}>${c.nombre}</option>`
   ).join('');
@@ -3582,7 +3657,17 @@ function openModal(type, data={}) {
     }
 
     body=`<div class="form-grid">
-      <div class="form-group full"><label>Cliente *</label><select id="f-pcli"><option value="">Seleccionar...</option>${clienteOptions(data.clienteId)}</select></div>
+      <div class="form-group full"><label>Cliente *</label>
+        <select id="f-pcli" style="width:100%" onchange="document.getElementById('nuevo-cliente-fields').style.display=this.value==='__nuevo__'?'grid':'none'">
+          <option value="">Seleccionar...</option>
+          ${clienteOptions(data.clienteId)}
+          <option value="__nuevo__" style="color:var(--yellow);font-weight:700">➕ Crear cliente nuevo</option>
+        </select>
+        <div id="nuevo-cliente-fields" style="display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;padding:10px;background:rgba(244,180,0,0.06);border:1px dashed var(--yellow);border-radius:6px">
+          <div><label style="font-size:10px;color:var(--muted)">Nombre / Empresa *</label><input id="f-pcli-nuevo-nombre" placeholder="Ej: GARCIA HNOS" style="width:100%;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:6px;border-radius:4px;font-family:Barlow;font-size:12px;margin-top:3px"/></div>
+          <div><label style="font-size:10px;color:var(--muted)">Teléfono (opcional)</label><input id="f-pcli-nuevo-tel" placeholder="+54 9 11..." style="width:100%;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:6px;border-radius:4px;font-family:Barlow;font-size:12px;margin-top:3px"/></div>
+        </div>
+      </div>
       <div class="form-group"><label>Fecha</label><input id="f-pfecha" type="date" value="${data.fecha||today()}"/></div>
       <div class="form-group"><label>Moneda</label>
         <select id="f-pmoneda" style="background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:8px;border-radius:6px;font-family:Barlow;font-size:13px;width:100%">
@@ -3625,6 +3710,8 @@ function openModal(type, data={}) {
       </div>
 
       <div class="form-group full"><label>Notas (opcional)</label><textarea id="f-pnotas">${data.notas||''}</textarea></div>
+      <div class="form-group"><label>📅 Enviado al cliente</label><input id="f-penviado" type="date" value="${data.fechaEnviado?(data.fechaEnviado.split('/').length===3?(data.fechaEnviado.split('/')[2]+'-'+data.fechaEnviado.split('/')[1]+'-'+data.fechaEnviado.split('/')[0]):data.fechaEnviado):''}"/></div>
+      <div class="form-group"><label>⬇️ Descargado</label><input type="text" value="${data.fechaDescarga||''}" placeholder="Se completa al abrir PDF" readonly style="opacity:.55;cursor:default"/></div>
     </div>`;
 
     onSave=()=>{
@@ -3648,17 +3735,33 @@ function openModal(type, data={}) {
       const descripcion = lineas.join('\n');
       const monedaVal = gv('f-pmoneda')||'ARS';
       const monedaSym = monedaVal==='USD'?'USD ':'$';
+      let clienteIdFinal = clienteId;
+      if(clienteId === '__nuevo__') {
+        const nomNuevo = (document.getElementById('f-pcli-nuevo-nombre')||{}).value||'';
+        const telNuevo = (document.getElementById('f-pcli-nuevo-tel')||{}).value||'';
+        if(!nomNuevo.trim()){showToast('Ingresá el nombre del cliente','error');return;}
+        const nuevoCliente = {id:uid(),nombre:nomNuevo.trim().toUpperCase(),empresa:nomNuevo.trim(),telefono:telNuevo.trim(),email:'',zona:'',estado:'activo',notas:''};
+        DB.clientes.push(nuevoCliente);
+        saveLocal();
+        writeToSheet({action:'addCliente',row:nuevoCliente});
+        clienteIdFinal = nuevoCliente.id;
+        showToast('Cliente '+nomNuevo+' creado ✔','success');
+      }
+      const fEnviadoRaw = gv('f-penviado')||'';
+      const fEnviPts = fEnviadoRaw.split('-'); const fEnviadoFmt = fEnviadoRaw ? (fEnviPts.length===3?fEnviPts[2]+'/'+fEnviPts[1]+'/'+fEnviPts[0]:fEnviadoRaw) : (data.fechaEnviado||'');
       guardar('presupuestos',{
         id:data.id||uid(),
         num:data.num||DB.presupCounter++,
-        clienteId,
+        clienteId:clienteIdFinal,
         descripcion,
         monto:totalMonto||data.monto||0,
         moneda:monedaVal,
         monedaSym:monedaSym,
         estado:gv('f-pestado'),
         fecha:gv('f-pfecha'),
-        notas:gv('f-pnotas')
+        notas:gv('f-pnotas'),
+        fechaDescarga:data.fechaDescarga||'',
+        fechaEnviado:fEnviadoFmt
       },'descripcion');
     };
 
@@ -3671,7 +3774,7 @@ function openModal(type, data={}) {
     body=`<div class="form-grid">
       <div class="form-group full"><label>Título *</label><input id="f-atit" value="${data.titulo||''}"/></div>
       <div class="form-group full"><label>Cliente (opcional)</label><select id="f-acli"><option value="">Sin cliente</option>${clienteOptions(data.clienteId)}</select></div>
-      <div class="form-group"><label>Fecha recordatorio</label><input id="f-afecha" type="date" value="${(()=>{ if(!data.fecha) return ''; const p=data.fecha.split('/'); return p.length===3?p[2]+'-'+p[1]+'-'+p[0]:data.fecha; })()||''}"/></div>
+      <div class="form-group"><label>Fecha recordatorio</label><input id="f-afecha" type="date" value="${data.fecha?(data.fecha.split('/').length===3?(data.fecha.split('/')[2]+'-'+data.fecha.split('/')[1]+'-'+data.fecha.split('/')[0]):data.fecha):''}"/></div>
       <div class="form-group"><label>Prioridad</label>
         <select id="f-aprio"><option value="alta"${data.prioridad==='alta'?' selected':''}>Alta 🔴</option><option value="media"${(!data.prioridad||data.prioridad==='media')?' selected':''}>Media 🟠</option><option value="baja"${data.prioridad==='baja'?' selected':''}>Baja 🟡</option></select>
       </div>
