@@ -3541,6 +3541,8 @@ function generarPresupuestoPDF(presupId) {
     if(_pd&&!_pd.fechaDescarga){_pd.fechaDescarga=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});saveLocal();try{renderPresupuestos();}catch(e){}}
   } else { alert('Bloqueador de popups activo. Permit\u00ED los popups para este sitio.'); URL.revokeObjectURL(url); }
 }
+
+function clienteOptions(selectedId='') {
   return DB.clientes.map(c =>
     `<option value="${c.id}" ${c.id===selectedId?'selected':''}>${c.nombre}</option>`
   ).join('');
