@@ -898,6 +898,14 @@ async function syncAll() {
   if(status){status.textContent='● Sincronizando...'; status.style.color='var(--yellow)';}
   showLoading('SINCRONIZANDO CON GOOGLE SHEETS...');
 
+  // Preserve local data that may not be in Sheets yet
+  const _localClientes    = DB.clientes.filter(x=>x._local);
+  const _localPresupuestos = DB.presupuestos.filter(x=>x._local);
+  const _localAlertas     = DB.alertas.filter(x=>x._local);
+  const _alertasRepuesto  = DB.alertasRepuesto || {};
+  const _presupCounter    = DB.presupCounter || 1;
+  const _calendarioEventos = DB.calendarioEventos || [];
+
   try {
     const [cl,mq,tr,pr,al,pv] = await Promise.all([
       fetchSheet('CLIENTES'), fetchSheet('MAQUINAS'),
@@ -1037,6 +1045,15 @@ async function syncAll() {
       }));
     } else { if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; }
 
+    // Restore preserved local data + alertasRepuesto
+    DB.alertasRepuesto = _alertasRepuesto;
+    DB.presupCounter = Math.max(DB.presupCounter||1, _presupCounter);
+    DB.calendarioEventos = DB.calendarioEventos.length ? DB.calendarioEventos : _calendarioEventos;
+    // Re-merge locally created items not yet confirmed in Sheet
+    _localClientes.forEach(lc => { if(!DB.clientes.find(x=>x.id===lc.id)) DB.clientes.push(lc); });
+    _localPresupuestos.forEach(lp => { if(!DB.presupuestos.find(x=>x.id===lp.id)) DB.presupuestos.push(lp); });
+    _localAlertas.forEach(la => { if(!DB.alertas.find(x=>x.id===la.id)) DB.alertas.push(la); });
+
     // ── Reparar clienteId corruptos o vacíos ──────────────────────────────────
     DB.presupuestos.forEach(p => {
       // Skip only if clienteId already resolves to a valid client
@@ -1091,17 +1108,24 @@ function fmtDate(d) {
 }
 // Parsear montos con coma decimal (formato argentino del Sheet)
 function parseMonto(v) {
-  if(!v) return 0;
-  // "1.234.567,89" o "1234567,89" o "1234567.89"
-  const s = String(v).trim();
-  // Si tiene coma y la coma parece separador decimal (últimos 1-2 dígitos después)
-  if(s.includes(',')) {
-    // Eliminar puntos de miles, reemplazar coma por punto
+  if(!v && v!==0) return 0;
+  const s = String(v).trim().replace(/[$USD\s]/g,'');
+  if(!s) return 0;
+  // Detect Argentine format: "1.234.567,89" vs US format "1,234,567.89"
+  const lastDot = s.lastIndexOf('.');
+  const lastComma = s.lastIndexOf(',');
+  if(lastComma > lastDot) {
+    // Comma is decimal separator: "1.234.567,89" → remove dots, replace comma
     return parseFloat(s.replace(/\./g,'').replace(',','.')) || 0;
+  } else if(lastDot > lastComma) {
+    // Dot is decimal separator: "1,234,567.89" → remove commas
+    return parseFloat(s.replace(/,/g,'')) || 0;
+  } else {
+    // No separator or ambiguous: just parse
+    return parseFloat(s.replace(/,/g,'')) || 0;
   }
-  return parseFloat(s) || 0;
 }
-function fmtMonto(n) { const v=parseFloat(String(n||0).replace(/[$USD]/g,'').replace(/\./g,'').replace(',','.')); return '$'+(isNaN(v)?0:v).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+function fmtMonto(n) { const v=parseMonto(n); return '$'+(isNaN(v)?0:v).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}); }
 function gv(id) { return document.getElementById(id)?.value?.trim()||''; }
 
 function badgeEstado(e) {
@@ -3777,7 +3801,7 @@ function openModal(type, data={}) {
         const nomNuevo = (document.getElementById('f-pcli-nuevo-nombre')||{}).value||'';
         const telNuevo = (document.getElementById('f-pcli-nuevo-tel')||{}).value||'';
         if(!nomNuevo.trim()){showToast('Ingresá el nombre del cliente','error');return;}
-        const nuevoCliente = {id:uid(),nombre:nomNuevo.trim().toUpperCase(),empresa:nomNuevo.trim(),telefono:telNuevo.trim(),email:'',zona:'',estado:'activo',notas:''};
+        const nuevoCliente = {id:uid(),nombre:nomNuevo.trim().toUpperCase(),empresa:nomNuevo.trim(),telefono:telNuevo.trim(),email:'',zona:'',estado:'activo',notas:'',_local:true};
         DB.clientes.push(nuevoCliente);
         saveLocal();
         writeToSheet({action:'addCliente',row:nuevoCliente});
@@ -3920,6 +3944,8 @@ function guardar(tipo, obj, campoRequerido) {
   const idx=DB[tipo].findIndex(x=>x.id===obj.id);
   const esNuevo = idx < 0;
   pushUndo((esNuevo?'Nuevo ':'Editar ')+tipo.replace('s',''));
+  // Mark new items as local so they survive syncAll until confirmed in Sheet
+  if(esNuevo) obj._local = true;
   if(idx>=0) DB[tipo][idx]=obj;
   else DB[tipo].push(obj);
   saveLocal(); updateBadges(); closeModal(); refreshCurrentPage();
