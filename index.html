@@ -120,38 +120,23 @@ section{padding:6rem 3rem}
 /* MOBILE */
 @media(max-width:768px){
   .galeria-layout{grid-template-columns:1fr;max-width:100%;gap:16px}
+  /* Video primero */
   .galeria-right{order:-1}
-  .slideshow-wrap{
-    height:auto;
-    box-shadow:0 4px 16px rgba(0,0,0,0.5);
-    background:#111;
-    border-radius:16px;
-    overflow:hidden;
-    /* Centrar el slideshow-aspect dentro */
-    display:flex;
-    justify-content:center;
-    padding:0;
-  }
+  /* Slideshow: mismo ancho que video, altura fija tipo thumbnail */
+  .slideshow-wrap{height:auto;border-radius:16px;overflow:hidden}
   .slideshow-aspect{
-    width:60vw;
-    max-width:240px;
-    aspect-ratio:9/16;
+    width:100%;
+    aspect-ratio:16/9;
     height:auto;
     border-radius:16px;
     overflow:hidden;
-    flex-shrink:0;
   }
-  /* En mobile las fotos se ven completas sin recorte */
   .slide img{
-    object-fit:contain;
+    object-fit:cover;
     object-position:center center;
-    background:#111;
   }
-  .slideshow-dots{bottom:6px}
-  .slideshow-label{
-    /* Mover label fuera del aspect para que se vea */
-    display:none;
-  }
+  .slideshow-dots{bottom:8px}
+  .slideshow-label{bottom:8px;font-size:0.65rem;padding:3px 8px}
 }
 
 .marcas{background:#111;text-align:center}
