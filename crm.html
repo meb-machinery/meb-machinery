@@ -2216,6 +2216,8 @@ function generarInformeTecnico(presupId) {
     '  };',
     '',
     '  // Guardar via window.opener (el CRM hace el XHR, evita CORS del blob)',
+    '  console.log("opener:", window.opener ? "existe" : "null");',
+    '  console.log("_guardarInformeDesdeCRM:", window.opener && window.opener._guardarInformeDesdeCRM ? "existe" : "no existe");',
     '  if(window.opener && window.opener._guardarInformeDesdeCRM) {',
     '    window.opener._guardarInformeDesdeCRM({',
     '      id: informeData.id,',
