@@ -437,7 +437,7 @@ select option { background:var(--dark); }
     </div>
     <div class="search-bar"><span>🔍</span><input type="text" placeholder="Buscar número, cliente, descripción..." id="searchPresupuestos" oninput="renderPresupuestos()"></div>
     <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>#</th><th>Cliente</th><th>Descripción</th><th>Monto</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
+      <thead><tr><th>#</th><th>Cliente</th><th>Descripción</th><th>Monto</th><th>Estado</th><th>Fecha</th><th style="color:#9b59b6">Informe</th><th>Acciones</th></tr></thead>
       <tbody id="tabla-presupuestos"></tbody>
     </table></div></div>
   </div>
@@ -1045,7 +1045,10 @@ async function syncAll() {
             descripcion:_desc,
             monto:_montoFinal,
             estado:_estadoFinal,
-            fecha:r.FECHA||'', notas:r.NOTAS||''
+            fecha:r.FECHA||'', notas:r.NOTAS||'',
+            informeGenerado:r.INFORME_GENERADO||r.INFORME||'',
+            informeGuardado:r.INFORME_GUARDADO||'',
+            informeDriveUrl:r.INFORME_DRIVE_URL||r.LINK_DRIVE||''
           };
         } else {
           // Append item description from subsequent rows
@@ -1733,7 +1736,7 @@ function renderPresupuestos() {
     });
   }
   const tbody=document.getElementById('tabla-presupuestos');
-  if(!data.length){tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="icon">📋</div><p>Sin presupuestos</p></div></td></tr>`;return;}
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="10"><div class="empty-state"><div class="icon">📋</div><p>Sin presupuestos</p></div></td></tr>`;return;}
   tbody.innerHTML=data.map(p=>{
     const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId))||DB.clientes.find(c=>c.nombre.toUpperCase()===(p.clienteNombreSheet||p.clienteId||'').toUpperCase());
     const descCorta=(p.descripcion||'—').split('\n')[0].split('|')[0];
@@ -1746,6 +1749,7 @@ function renderPresupuestos() {
       <td class="td-muted">${fmtDate(p.fecha)}</td>
       <td style="font-size:10px;color:${p.fechaDescarga?'#25d366':'var(--muted2)'};text-align:center;white-space:nowrap">${p.fechaDescarga?'✔ '+p.fechaDescarga:'—'}</td>
       <td style="font-size:10px;color:${p.fechaEnviado?'#6fa8dc':'var(--muted2)'};text-align:center;white-space:nowrap">${p.fechaEnviado?'✔ '+p.fechaEnviado:'—'}</td>
+      <td style="font-size:9px;text-align:center;white-space:nowrap">${p.informeGuardado?`<a href="${p.informeDriveUrl||'#'}" target="_blank" style="color:#25d366;text-decoration:none" title="Guardado en Drive">✔ Drive<br><span style='color:var(--muted);font-size:8px'>${p.informeGuardado}</span></a>`:p.informeGenerado?`<span style='color:#9b59b6'>📋 ${p.informeGenerado}</span>`:'—'}</td>
       <td><div class="actions">
         <button class="btn-secondary" title="Editar" onclick="openModal('presupuesto',DB.presupuestos.find(x=>x.id==='${p.id}'))">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','rechazado'])">Estado</button>
@@ -2439,11 +2443,18 @@ function generarInformeTecnico(presupId) {
   const blob = new Blob([htmlContent], {type:'text/html;charset=utf-8'});
   const url = URL.createObjectURL(blob);
   const w = window.open(url, '_blank', 'width=1040,height=920');
-  if(w) setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
-  else { alert('Bloqueador de popups activo. Permit\u00ED los popups para este sitio.'); URL.revokeObjectURL(url); }
+  if(w) {
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
+    // Register informe generation date/time in presupuesto
+    const _pi = DB.presupuestos.find(x=>x.id===presupId);
+    if(_pi) {
+      const _aho = new Date();
+      _pi.informeGenerado = _aho.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' + _aho.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+      saveLocal();
+      try{renderPresupuestos();}catch(e){}
+    }
+  } else { alert('Bloqueador de popups activo. Permit\u00ED los popups para este sitio.'); URL.revokeObjectURL(url); }
 }
-
-let _waAlertaTelefono = '';
 
 function previewMsgAlerta(aJsonEncoded) {
   const a = JSON.parse(decodeURIComponent(aJsonEncoded));
@@ -3752,13 +3763,25 @@ async function _guardarInformeDesdeCRM(data, btn) {
 }
 
 function _registrarInformeCRM(inf) {
-  // Save informe metadata to DB for the Informes page
   if(!DB.informes) DB.informes = [];
   const existing = DB.informes.findIndex(x=>x.id===inf.id);
   if(existing>=0) DB.informes[existing] = inf;
   else DB.informes.push(inf);
+  // Also update the presupuesto with drive save date
+  const _pp = DB.presupuestos.find(x=>x.num===inf.num || x.id===inf.presupId);
+  if(_pp) {
+    const _ahora = new Date();
+    _pp.informeGuardado = _ahora.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' + _ahora.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+    _pp.informeDriveUrl = inf.driveUrl||'';
+    writeToSheet({action:'updatePresupuesto', id:_pp.id, row:{
+      informeGenerado:_pp.informeGenerado||'',
+      informeGuardado:_pp.informeGuardado,
+      informeDriveUrl:_pp.informeDriveUrl
+    }});
+  }
   saveLocal();
   try { renderInformes(); } catch(e){}
+  try { renderPresupuestos(); } catch(e){}
   showToast('Informe guardado en Drive ✔', 'success');
 }
 
@@ -4056,7 +4079,10 @@ function openModal(type, data={}) {
         fecha:gv('f-pfecha'),
         notas:gv('f-pnotas'),
         fechaDescarga:data.fechaDescarga||'',
-        fechaEnviado:fEnviadoFmt
+        fechaEnviado:fEnviadoFmt,
+        informeGenerado:data.informeGenerado||'',
+        informeGuardado:data.informeGuardado||'',
+        informeDriveUrl:data.informeDriveUrl||''
       },'descripcion');
     };
 
