@@ -2362,7 +2362,7 @@ function generarInformeTecnico(presupId) {
     + '<div class="campo"><label>N\u00BA de serie</label><span contenteditable="true">' + maqSerie + '</span></div>'
     + '<div class="campo"><label>Tipo</label><span contenteditable="true">' + maqTipo + '</span></div>'
     + '<div class="campo"><label>Fecha del informe</label><span contenteditable="true">' + fechaHoy + '</span></div>'
-    + '<div class="campo"><label>Horas de la m\u00e1quina</label><span id="horasMaquina" contenteditable="true" style="color:var(--yellow);font-size:15px;font-weight:700" placeholder="Ej: 3.250 hs"></span></div>'
+    + '<div class="campo"><label>Horas de la m\u00e1quina</label><span id="horasMaquina" contenteditable="true" style="color:var(--yellow);font-size:15px;font-weight:700;display:block;min-height:24px;border-bottom:1px dashed #F4B400;outline:none" data-placeholder="Ej: 3.250 hs"></span></div>'
     + '</div></div>'
     + '</div>'
 
@@ -3710,24 +3710,45 @@ function generarPresupuestoPDF(presupId) {
 
 async function _guardarInformeDesdeCRM(data, btn) {
   if(btn){btn.disabled=true;btn.textContent='\u231B Guardando en Drive...';}
-  try {
-    const resp = await writeToSheet({action:'guardarInformeDrive', row:data});
-    if(resp && resp.ok && resp.url) {
-      if(btn){btn.style.background='#25d366';btn.style.color='#fff';btn.textContent='\u2714 Guardado en Drive';}
-      setTimeout(function(){if(btn){btn.style.background='#1A1A1A';btn.style.color='#F4B400';btn.textContent='\uD83D\uDCBE Guardar';btn.disabled=false;}},4000);
-      _registrarInformeCRM({
-        id:data.id, num:data.num, cliente:data.cliente, fecha:data.fecha,
-        queja:(data.queja||'').substring(0,100),
-        solucion:(data.solucion||'').substring(0,100),
-        fotosCount:data.fotosCount||0,
-        driveUrl:resp.url, driveId:resp.id
-      });
-    } else {
-      if(btn){btn.style.background='#e74c3c';btn.style.color='#fff';btn.textContent='\u26A0 Error Drive';btn.disabled=false;}
-    }
-  } catch(e) {
-    if(btn){btn.style.background='#e74c3c';btn.style.color='#fff';btn.textContent='\u26A0 Error';btn.disabled=false;}
+  if(!SCRIPT_URL){
+    if(btn){btn.style.background='#e74c3c';btn.style.color='#fff';btn.textContent='\u26A0 Sin URL';btn.disabled=false;}
+    return;
   }
+  // Use direct XHR from CRM context (not blob) - no CORS issues here
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', SCRIPT_URL, true);
+  xhr.setRequestHeader('Content-Type','text/plain');
+  xhr.timeout = 60000; // 60 seconds for large HTML
+  xhr.onload = function() {
+    try {
+      const resp = JSON.parse(xhr.responseText);
+      if(resp && resp.ok && resp.url) {
+        if(btn){btn.style.background='#25d366';btn.style.color='#fff';btn.textContent='\u2714 Guardado en Drive';}
+        setTimeout(function(){if(btn){btn.style.background='#1A1A1A';btn.style.color='#F4B400';btn.textContent='\uD83D\uDCBE Guardar';btn.disabled=false;}},4000);
+        _registrarInformeCRM({
+          id:data.id, num:data.num, cliente:data.cliente, fecha:data.fecha,
+          queja:(data.queja||'').substring(0,100),
+          solucion:(data.solucion||'').substring(0,100),
+          fotosCount:data.fotosCount||0,
+          driveUrl:resp.url, driveId:resp.id
+        });
+        showToast('Informe guardado en Drive \u2714','success');
+      } else {
+        console.error('Drive resp:', resp);
+        if(btn){btn.style.background='#e74c3c';btn.style.color='#fff';btn.textContent='\u26A0 Error: '+(resp&&resp.error||'desconocido');btn.disabled=false;}
+      }
+    } catch(e) {
+      console.error('Parse error:', e, xhr.responseText.substring(0,200));
+      if(btn){btn.style.background='#e74c3c';btn.style.color='#fff';btn.textContent='\u26A0 Error respuesta';btn.disabled=false;}
+    }
+  };
+  xhr.onerror = function(){
+    if(btn){btn.style.background='#e74c3c';btn.style.color='#fff';btn.textContent='\u26A0 Sin conexi\u00f3n';btn.disabled=false;}
+  };
+  xhr.ontimeout = function(){
+    if(btn){btn.style.background='#e67e22';btn.style.color='#fff';btn.textContent='\u26A0 Tiempo agotado';btn.disabled=false;}
+  };
+  xhr.send(JSON.stringify({action:'guardarInformeDrive', row:data}));
 }
 
 function _registrarInformeCRM(inf) {
