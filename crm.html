@@ -772,7 +772,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxd3SdQ5NUOndWeLS2TEQeQF0vdv6G-O3iuoJ7EBJbz3KITZrQJEZG4WJqceO_ij7bJaA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzE7TAqgH7EtwSb-aA7Xi7Kd1glgftrC3KfGMxP2bWGc_5JOQ7pmDuKFEdO0_KN0gZW1Q/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -2175,6 +2175,7 @@ function generarInformeTecnico(presupId) {
     '  var trabajoRealizado=(document.getElementById("trabajoBox")||{}).innerText||"";',
     '  var repuestosUsados=(document.getElementById("repuestosBox")||{}).innerText||"";',
     '  var observaciones=(document.getElementById("obsBox")||{}).innerText||"";',
+    '  var horasMaquina=(document.getElementById("horasMaquina")||{}).innerText||"";',
     '',
     '  // Collect fotos with base64 images',
     '  var fotos=[];',
@@ -2207,6 +2208,7 @@ function generarInformeTecnico(presupId) {
     '    trabajo: trabajoRealizado,',
     '    repuestos: repuestosUsados,',
     '    observaciones: observaciones,',
+    '    horasMaquina: horasMaquina,',
     '    fotos: fotos.join(" | "),',
     '    fotosCount: fotosCount,',
     '    videos: videos.join(" | "),',
@@ -2252,6 +2254,7 @@ function generarInformeTecnico(presupId) {
     '      trabajo:trabajoRealizado,',
     '      repuestos:repuestosUsados,',
     '      observaciones:observaciones,',
+    '      horasMaquina:horasMaquina,',
     '      fotos:fotos.join(" | "),',
     '      videos:videos.join(" | ")',
     '    }',
@@ -2357,6 +2360,7 @@ function generarInformeTecnico(presupId) {
     + '<div class="campo"><label>N\u00BA de serie</label><span contenteditable="true">' + maqSerie + '</span></div>'
     + '<div class="campo"><label>Tipo</label><span contenteditable="true">' + maqTipo + '</span></div>'
     + '<div class="campo"><label>Fecha del informe</label><span contenteditable="true">' + fechaHoy + '</span></div>'
+    + '<div class="campo"><label>Horas de la m\u00e1quina</label><span id="horasMaquina" contenteditable="true" style="color:var(--yellow);font-size:15px;font-weight:700" placeholder="Ej: 3.250 hs"></span></div>'
     + '</div></div>'
     + '</div>'
 
