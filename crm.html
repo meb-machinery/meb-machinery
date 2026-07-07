@@ -772,7 +772,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzE7TAqgH7EtwSb-aA7Xi7Kd1glgftrC3KfGMxP2bWGc_5JOQ7pmDuKFEdO0_KN0gZW1Q/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwon4Stl-R_WjSOrRbaY_Rv6s6MWSOEQaMQ73koGGd_LKQz_RWkHP82sXancGBiGQNnfA/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1048,7 +1048,7 @@ async function syncAll() {
             fecha:r.FECHA||'', notas:r.NOTAS||'',
             informeGenerado:r.INFORME_GENERADO||r.INFORME||'',
             informeGuardado:r.INFORME_GUARDADO||'',
-            informeDriveUrl:r.INFORME_DRIVE_URL||r.LINK_DRIVE||''
+            informeDriveUrl:r.INFORME_DRIVE_URL||r.LINK_DRIVE||r.INFORME_DRIVE_URL_||''
           };
         } else {
           // Append item description from subsequent rows
@@ -2194,8 +2194,12 @@ function generarInformeTecnico(presupId) {
     '  var videos=[];',
     '  document.querySelectorAll("#videosLista a").forEach(function(a){ videos.push(a.href); });',
     '',
-    '  // Capture full HTML of the page (with photos embedded)',
-    '  var fullHtml = "<!DOCTYPE html><html>"+document.documentElement.innerHTML+"</html>";',
+    '  // Capture full HTML but remove the no-print toolbar before saving',
+    '  var tempDiv = document.createElement("div");',
+    '  tempDiv.innerHTML = document.documentElement.outerHTML;',
+    '  var noPrint = tempDiv.querySelector(".no-print");',
+    '  if(noPrint) noPrint.remove();',
+    '  var fullHtml = "<!DOCTYPE html>" + tempDiv.innerHTML;',
     '',
     '  // Save to IndexedDB via window.opener',
     '  var informeData = {',
@@ -2452,6 +2456,12 @@ function generarInformeTecnico(presupId) {
       _pi.informeGenerado = _aho.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' + _aho.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
       saveLocal();
       try{renderPresupuestos();}catch(e){}
+      // Also persist to Sheet
+      writeToSheet({action:'registrarInformeEnPresupuesto', id:_pi.id, row:{
+        informeGenerado:_pi.informeGenerado,
+        informeGuardado:_pi.informeGuardado||'',
+        informeDriveUrl:_pi.informeDriveUrl||''
+      }});
     }
   } else { alert('Bloqueador de popups activo. Permit\u00ED los popups para este sitio.'); URL.revokeObjectURL(url); }
 }
@@ -3772,9 +3782,13 @@ function _registrarInformeCRM(inf) {
   if(_pp) {
     const _ahora = new Date();
     _pp.informeGuardado = _ahora.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' + _ahora.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
-    _pp.informeDriveUrl = inf.driveUrl||'';
-    writeToSheet({action:'updatePresupuesto', id:_pp.id, row:{
-      informeGenerado:_pp.informeGenerado||'',
+    // Use direct download URL so browser opens HTML properly
+    const _driveId = inf.driveId||'';
+    _pp.informeDriveUrl = _driveId ? 'https://drive.google.com/uc?export=download&id='+_driveId : (inf.driveUrl||'');
+    _pp.informeGenerado = _pp.informeGenerado || _pp.informeGuardado;
+    // Persist to Sheet so it survives sync
+    writeToSheet({action:'registrarInformeEnPresupuesto', id:_pp.id, row:{
+      informeGenerado:_pp.informeGenerado,
       informeGuardado:_pp.informeGuardado,
       informeDriveUrl:_pp.informeDriveUrl
     }});
