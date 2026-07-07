@@ -1527,8 +1527,13 @@ async function writeToSheet(payload) {
       xhr.open('POST', SCRIPT_URL, true);
       xhr.setRequestHeader('Content-Type', 'text/plain');
       xhr.onload = () => {
+        try {
+          const resp = JSON.parse(xhr.responseText);
+          resolve(resp);
+        } catch(e) {
+          resolve({ ok: true });
+        }
         console.log('Sheet write OK:', payload.action, payload.id || '');
-        resolve({ ok: true });
       };
       xhr.onerror = () => {
         console.warn('Sheet write error');
@@ -2208,64 +2213,29 @@ function generarInformeTecnico(presupId) {
     '    htmlContent: fullHtml',
     '  };',
     '',
-    '  // Guardar en Drive via Apps Script',
-    '  if(SHEET_URL) {',
-    '    var drivePayload = {',
-    '      action: "guardarInformeDrive",',
-    '      row: {',
-    '        id: informeData.id,',
-    '        num: NUM_PRESUP,',
-    '        cliente: CLIENTE_NOMBRE,',
-    '        fecha: informeData.fecha,',
-    '        queja: queja,',
-    '        sintoma: sintoma,',
-    '        causa: causa,',
-    '        solucion: solucion,',
-    '        trabajo: trabajoRealizado,',
-    '        repuestos: repuestosUsados,',
-    '        observaciones: observaciones,',
-    '        fotos: fotos.join(" | "),',
-    '        videos: videos.join(" | "),',
-    '        guardadoPor: "CRM",',
-    '        htmlContent: fullHtml',
-    '      }',
-    '    };',
-    '    var xhrDrive = new XMLHttpRequest();',
-    '    xhrDrive.open("POST", SHEET_URL, true);',
-    '    xhrDrive.setRequestHeader("Content-Type","text/plain");',
-    '    xhrDrive.onload = function(){',
-    '      try {',
-    '        var resp = JSON.parse(xhrDrive.responseText);',
-    '        if(resp.ok && resp.url) {',
-    '          if(btn){btn.style.background="#25d366";btn.style.color="#fff";btn.textContent="\u2714 Guardado en Drive";}',
-    '          setTimeout(function(){if(btn){btn.style.background="#1A1A1A";btn.style.color="#F4B400";btn.textContent="\uD83D\uDCBE Guardar";btn.disabled=false;}},4000);',
-    '          // Store link in parent CRM',
-    '          if(window.opener && window.opener._registrarInformeCRM) {',
-    '            window.opener._registrarInformeCRM({',
-    '              id: informeData.id,',
-    '              num: NUM_PRESUP,',
-    '              cliente: CLIENTE_NOMBRE,',
-    '              fecha: informeData.fecha,',
-    '              queja: queja.substring(0,100),',
-    '              solucion: solucion.substring(0,100),',
-    '              fotosCount: fotosCount,',
-    '              driveUrl: resp.url,',
-    '              driveId: resp.id',
-    '            });',
-    '          }',
-    '        } else {',
-    '          if(btn){btn.style.background="#e74c3c";btn.style.color="#fff";btn.textContent="\u26A0 Error Drive";btn.disabled=false;}',
-    '        }',
-    '      } catch(e) {',
-    '        if(btn){btn.style.background="#e74c3c";btn.style.color="#fff";btn.textContent="\u26A0 Error";btn.disabled=false;}',
-    '      }',
-    '    };',
-    '    xhrDrive.onerror = function(){',
-    '      if(btn){btn.style.background="#e74c3c";btn.style.color="#fff";btn.textContent="\u26A0 Sin conexión";btn.disabled=false;}',
-    '    };',
-    '    xhrDrive.send(JSON.stringify(drivePayload));',
+    '  // Guardar via window.opener (el CRM hace el XHR, evita CORS del blob)',
+    '  if(window.opener && window.opener._guardarInformeDesdeCRM) {',
+    '    window.opener._guardarInformeDesdeCRM({',
+    '      id: informeData.id,',
+    '      num: NUM_PRESUP,',
+    '      cliente: CLIENTE_NOMBRE,',
+    '      fecha: informeData.fecha,',
+    '      queja: queja,',
+    '      sintoma: sintoma,',
+    '      causa: causa,',
+    '      solucion: solucion,',
+    '      trabajo: trabajoRealizado,',
+    '      repuestos: repuestosUsados,',
+    '      observaciones: observaciones,',
+    '      fotos: fotos.join(" | "),',
+    '      fotosCount: fotosCount,',
+    '      videos: videos.join(" | "),',
+    '      guardadoPor: "CRM",',
+    '      htmlContent: fullHtml',
+    '    }, btn);',
     '  } else {',
-    '    if(btn){btn.disabled=false;btn.textContent="\uD83D\uDCBE Guardar";}',
+    '    if(btn){btn.style.background="#e74c3c";btn.style.color="#fff";btn.textContent="\u26A0 Abrí desde el CRM";btn.disabled=false;}',
+    '    setTimeout(function(){if(btn){btn.style.background="#1A1A1A";btn.style.color="#F4B400";btn.textContent="\uD83D\uDCBE Guardar";btn.disabled=false;}},3000);',
     '  }',
     '',
     '  // Also sync text to Sheets',
@@ -3730,6 +3700,28 @@ function generarPresupuestoPDF(presupId) {
     const _pd=DB.presupuestos.find(x=>x.id===presupId);
     if(_pd&&!_pd.fechaDescarga){_pd.fechaDescarga=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});saveLocal();try{renderPresupuestos();}catch(e){}}
   } else { alert('Bloqueador de popups activo. Permit\u00ED los popups para este sitio.'); URL.revokeObjectURL(url); }
+}
+
+async function _guardarInformeDesdeCRM(data, btn) {
+  if(btn){btn.disabled=true;btn.textContent='\u231B Guardando en Drive...';}
+  try {
+    const resp = await writeToSheet({action:'guardarInformeDrive', row:data});
+    if(resp && resp.ok && resp.url) {
+      if(btn){btn.style.background='#25d366';btn.style.color='#fff';btn.textContent='\u2714 Guardado en Drive';}
+      setTimeout(function(){if(btn){btn.style.background='#1A1A1A';btn.style.color='#F4B400';btn.textContent='\uD83D\uDCBE Guardar';btn.disabled=false;}},4000);
+      _registrarInformeCRM({
+        id:data.id, num:data.num, cliente:data.cliente, fecha:data.fecha,
+        queja:(data.queja||'').substring(0,100),
+        solucion:(data.solucion||'').substring(0,100),
+        fotosCount:data.fotosCount||0,
+        driveUrl:resp.url, driveId:resp.id
+      });
+    } else {
+      if(btn){btn.style.background='#e74c3c';btn.style.color='#fff';btn.textContent='\u26A0 Error Drive';btn.disabled=false;}
+    }
+  } catch(e) {
+    if(btn){btn.style.background='#e74c3c';btn.style.color='#fff';btn.textContent='\u26A0 Error';btn.disabled=false;}
+  }
 }
 
 function _registrarInformeCRM(inf) {
