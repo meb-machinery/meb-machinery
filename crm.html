@@ -772,7 +772,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwon4Stl-R_WjSOrRbaY_Rv6s6MWSOEQaMQ73koGGd_LKQz_RWkHP82sXancGBiGQNnfA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwb4UOwyFNnpThMAL-uE6BkQbZbSZO_dnidsY9cHaFZRwmDcHaTIsio5XNsQBQipJiUUg/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -2198,7 +2198,51 @@ function generarInformeTecnico(presupId) {
     '  if(drop) drop.style.display="none";',
     '}',
     '',
-    'function guardarInforme(){',
+    'function generarYGuardarPDF() {',
+    '  var btnPDF = document.getElementById("btnPDF");',
+    '  if(btnPDF){btnPDF.disabled=true;btnPDF.textContent="\u231B Generando PDF...";}',
+    '  // Hide toolbar before capture',
+    '  var noPrint = document.querySelector(".no-print");',
+    '  if(noPrint) noPrint.style.display="none";',
+    '  var opt = {',
+    '    margin: [10,10,10,10],',
+    '    filename: "Informe_" + NUM_PRESUP + "_" + CLIENTE_NOMBRE.replace(/[^a-zA-Z0-9]/g,"_") + ".pdf",',
+    '    image: {type:"jpeg", quality:0.92},',
+    '    html2canvas: {scale:1.5, useCORS:true, allowTaint:true},',
+    '    jsPDF: {unit:"mm", format:"a4", orientation:"portrait"}',
+    '  };',
+    '  html2pdf().set(opt).from(document.body).outputPdf("blob").then(function(pdfBlob) {',
+    '    if(noPrint) noPrint.style.display="flex";',
+    '    // Download the PDF locally',
+    '    var pdfUrl = URL.createObjectURL(pdfBlob);',
+    '    var a = document.createElement("a");',
+    '    a.href = pdfUrl;',
+    '    a.download = opt.filename;',
+    '    a.click();',
+    '    setTimeout(function(){ URL.revokeObjectURL(pdfUrl); }, 5000);',
+    '    if(btnPDF){btnPDF.style.background="#25d366";btnPDF.style.color="#fff";btnPDF.textContent="\u2714 PDF descargado";}',
+    '    setTimeout(function(){if(btnPDF){btnPDF.style.background="#F4B400";btnPDF.style.color="#1A1A1A";btnPDF.textContent="\uD83D\uDDA8 PDF + Drive";btnPDF.disabled=false;}},3000);',
+    '    // Now upload to Drive via opener',
+    '    var reader = new FileReader();',
+    '    reader.onload = function(ev) {',
+    '      var b64 = ev.target.result.split(",")[1];',
+    '      if(window.opener && window.opener._subirPDFaDrive) {',
+    '        window.opener._subirPDFaDrive({',
+    '          num: NUM_PRESUP,',
+    '          cliente: CLIENTE_NOMBRE,',
+    '          pdfBase64: b64,',
+    '          filename: opt.filename',
+    '        });',
+    '      }',
+    '    };',
+    '    reader.readAsDataURL(pdfBlob);',
+    '  }).catch(function(e) {',
+    '    if(noPrint) noPrint.style.display="flex";',
+    '    console.error("PDF error:", e);',
+    '    if(btnPDF){btnPDF.style.background="#e74c3c";btnPDF.style.color="#fff";btnPDF.textContent="\u26A0 Error PDF";btnPDF.disabled=false;}',
+    '  });',
+    '}',
+    '',
     '  var btn=document.getElementById("btnGuardar");',
     '  if(btn){btn.disabled=true;btn.textContent="\u231B Guardando...";}',
     '',
@@ -2366,17 +2410,19 @@ function generarInformeTecnico(presupId) {
     + '.firma-nombre{font-size:12px;font-weight:700;color:#1A1A1A;margin-top:4px}'
     + '.footer{margin-top:24px;padding-top:10px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;font-size:10px;color:#aaa}'
     + '@media print{.no-print{display:none}body{padding:16px}.btn-del{display:none!important}}'
-    + '</style></head><body>'
+    + '</style>'
+    + '<scr' + 'ipt src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></' + 'script>'
+    + '</head><body>'
 
     + '<div class="no-print">'
-    + '<button class="btn-print" onclick="window.print()">\uD83D\uDDA8 IMPRIMIR / PDF</button>'
+    + '<button class="btn-print" id="btnPDF" onclick="generarYGuardarPDF()">\uD83D\uDDA8 PDF + Drive</button>'
     + '<button class="btn-wa" onclick="envWA_informe()">\uD83D\uDCF2 WA</button>'
     + '<button class="btn-mail" onclick="envMail_informe()">\uD83D\uDCE7 MAIL</button>'
     + '<button class="btn-foto" onclick="agregarFoto()">\uD83D\uDCF7 Agregar foto</button>'
     + '<button class="btn-video" onclick="agregarVideo()">\uD83C\uDFA5 Agregar video</button>'
     + '<button class="btn-save" id="btnGuardar" onclick="guardarInforme()">\uD83D\uDCBE Guardar</button>'
     + '<button class="btn-close" onclick="window.close()">\u00D7 Cerrar</button>'
-    + '<span class="tip">\u270F Edit\u00E1 cualquier campo \u00B7 Ctrl+V para pegar fotos \u00B7 \uD83D\uDCBE guarda en Sheets</span>'
+    + '<span class="tip">\u270F Edit\u00E1 cualquier campo \u00B7 Ctrl+V para pegar fotos \u00B7 PDF+Drive sube autom\u00e1ticamente</span>'
     + '</div>'
 
     + '<div class="header">'
@@ -3760,6 +3806,36 @@ function generarPresupuestoPDF(presupId) {
     const _pd=DB.presupuestos.find(x=>x.id===presupId);
     if(_pd&&!_pd.fechaDescarga){_pd.fechaDescarga=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});saveLocal();try{renderPresupuestos();}catch(e){}}
   } else { alert('Bloqueador de popups activo. Permit\u00ED los popups para este sitio.'); URL.revokeObjectURL(url); }
+}
+
+async function _subirPDFaDrive(data) {
+  if(!SCRIPT_URL) return;
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', SCRIPT_URL, true);
+  xhr.setRequestHeader('Content-Type','text/plain');
+  xhr.timeout = 120000; // 2 min for PDF upload
+  xhr.onload = function() {
+    try {
+      const resp = JSON.parse(xhr.responseText);
+      if(resp && resp.ok && resp.url) {
+        // Update presupuesto with PDF Drive URL
+        const _pp = DB.presupuestos.find(x=>x.num===data.num);
+        if(_pp) {
+          _pp.informePDFUrl = resp.url;
+          _pp.informePDFId = resp.id;
+          saveLocal();
+          try{renderPresupuestos();}catch(e){}
+        }
+        showToast('PDF guardado en Drive \u2714','success');
+      }
+    } catch(e) { console.warn('PDF Drive upload error:', e); }
+  };
+  xhr.send(JSON.stringify({action:'guardarPDFDrive', row:{
+    num: data.num,
+    cliente: data.cliente,
+    filename: data.filename,
+    pdfBase64: data.pdfBase64
+  }}));
 }
 
 async function _guardarInformeDesdeCRM(data, btn) {
