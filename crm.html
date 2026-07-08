@@ -2090,12 +2090,43 @@ function generarInformeTecnico(presupId) {
   const LOGO = typeof MEB_LOGO_PDF_B64 !== 'undefined' ? MEB_LOGO_PDF_B64 : '';
   const FIRMA_IT = typeof MEB_FIRMA_B64 !== 'undefined' ? MEB_FIRMA_B64 : '';
 
+  const clTelIT = cl ? (cl.telefono||'').replace(/\D/g,'') : '';
+  const clEmailIT = cl ? (cl.email||'') : '';
+
   // JS code as array of strings - safe, no template literal issues
   const jsCode = [
     'var PRESUP_ID=' + JSON.stringify(presupId) + ';',
     'var SHEET_URL=' + JSON.stringify((typeof SCRIPT_URL!=='undefined'?SCRIPT_URL:'')) + ';',
     'var NUM_PRESUP=' + JSON.stringify(numPresup) + ';',
     'var CLIENTE_NOMBRE=' + JSON.stringify(cl?cl.nombre:'') + ';',
+    'var CLIENTE_TEL=' + JSON.stringify(clTelIT) + ';',
+    'var CLIENTE_EMAIL=' + JSON.stringify(clEmailIT) + ';',
+    '',
+    'function envWA_informe() {',
+    '  if(!CLIENTE_TEL){alert("Este cliente no tiene tel\\u00e9fono registrado.");return;}',
+    '  var msg = "Hola " + CLIENTE_NOMBRE + "!\\n\\nLe enviamos el *Informe T\\u00e9cnico N\\u00b0 " + NUM_PRESUP + "* de *MEB Machinery Solutions*."',
+    '    + "\\n\\nEn el archivo adjunto encontrar\\u00e1 el detalle completo del trabajo realizado."',
+    '    + "\\n\\nAntes de imprimir el informe, presione el bot\\u00f3n IMPRIMIR / PDF para guardarlo como PDF."',
+    '    + "\\n\\nQuedamos a disposici\\u00f3n para cualquier consulta."',
+    '    + "\\n\\n\\uD83D\\uDCDE +54 11 3392-3254\\n\\uD83D\\uDCE7 mebmachinerysolutions@gmail.com";',
+    '  window.open("https://wa.me/"+CLIENTE_TEL+"?text="+encodeURIComponent(msg),"_blank");',
+    '}',
+    'function envMail_informe() {',
+    '  var asunto = "Informe T\\u00e9cnico N\\u00b0 " + NUM_PRESUP + " \\u2014 MEB Machinery Solutions";',
+    '  var cuerpo = "Estimado/a " + CLIENTE_NOMBRE + ","',
+    '    + "\\n\\nAdjuntamos el Informe T\\u00e9cnico N\\u00b0 " + NUM_PRESUP + " de MEB Machinery Solutions."',
+    '    + "\\n\\nEl informe detalla el diagn\\u00f3stico y trabajo realizado en su m\\u00e1quina."',
+    '    + "\\n\\nPara verlo, descargue el archivo adjunto y \\u00e1bralo en su navegador."',
+    '    + "\\n\\nQuedamos a disposici\\u00f3n para cualquier consulta."',
+    '    + "\\n\\nEquipo MEB Machinery Solutions"',
+    '    + "\\nTel: +54 11 3392-3254"',
+    '    + "\\nEmail: mebmachinerysolutions@gmail.com";',
+    '  var url = "https://mail.google.com/mail/?view=cm&fs=1"',
+    '    + "&to=" + encodeURIComponent(CLIENTE_EMAIL)',
+    '    + "&su=" + encodeURIComponent(asunto)',
+    '    + "&body=" + encodeURIComponent(cuerpo);',
+    '  window.open(url,"_blank");',
+    '}',
     '',
     '// Pegar imagen con Ctrl+V',
     'document.addEventListener("paste", function(e){',
@@ -2281,7 +2312,7 @@ function generarInformeTecnico(presupId) {
   const clNombre = cl ? cl.nombre : '—';
   const clEmpresa = cl ? (cl.empresa||cl.nombre) : '—';
   const clZona = cl ? (cl.zona||'—') : '—';
-  const clTel = cl ? (cl.telefono||'—') : '—';
+  const clTelDisplay = cl ? (cl.telefono||'—') : '—';
   const maqDesc = maq ? maq.marca+' '+maq.modelo : '—';
   const maqSerie = maq ? (maq.serie||'—') : '—';
   const maqTipo = maq ? (maq.tipo||'—') : '—';
@@ -2339,6 +2370,8 @@ function generarInformeTecnico(presupId) {
 
     + '<div class="no-print">'
     + '<button class="btn-print" onclick="window.print()">\uD83D\uDDA8 IMPRIMIR / PDF</button>'
+    + '<button class="btn-wa" onclick="envWA_informe()">\uD83D\uDCF2 WA</button>'
+    + '<button class="btn-mail" onclick="envMail_informe()">\uD83D\uDCE7 MAIL</button>'
     + '<button class="btn-foto" onclick="agregarFoto()">\uD83D\uDCF7 Agregar foto</button>'
     + '<button class="btn-video" onclick="agregarVideo()">\uD83C\uDFA5 Agregar video</button>'
     + '<button class="btn-save" id="btnGuardar" onclick="guardarInforme()">\uD83D\uDCBE Guardar</button>'
@@ -2363,7 +2396,7 @@ function generarInformeTecnico(presupId) {
     + '<div class="campo"><label>Empresa / Nombre</label><span contenteditable="true">' + clNombre + '</span></div>'
     + '<div class="campo"><label>Raz\u00F3n social</label><span contenteditable="true">' + clEmpresa + '</span></div>'
     + '<div class="campo"><label>Zona</label><span contenteditable="true">' + clZona + '</span></div>'
-    + '<div class="campo"><label>Tel\u00E9fono</label><span contenteditable="true">' + clTel + '</span></div>'
+    + '<div class="campo"><label>Tel\u00E9fono</label><span contenteditable="true">' + clTelDisplay + '</span></div>'
     + '</div></div>'
     + '<div class="seccion"><div class="seccion-titulo">Datos de la m\u00E1quina</div><div class="seccion-body">'
     + '<div class="campo"><label>M\u00E1quina</label><span contenteditable="true">' + maqDesc + '</span></div>'
