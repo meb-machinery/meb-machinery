@@ -1098,7 +1098,7 @@ async function syncAll() {
             }
           }
           const _num = r.NUMERO||r['N°']||r['N°']||r.NUM||'';
-          const _desc = r.DESCRIPCION||r['DESCRIPCIÓN']||r.DECSRIPCION||r.TITULO||'';
+          const _desc = (r.DESCRIPCION||r['DESCRIPCIÓN']||r.DECSRIPCION||r.TITULO||'').split(ITEM_SEP).join('\n');
           const _monto = parseMonto(r.TOTAL_PRESUP_||r['TOTAL_PRESUP.']||r.MONTO_TOTAL||r.SUBTOTAL||r.MONTO||'0');
           const _estado = String(r.ESTADO||'pendiente').toLowerCase().trim();
           // Column shift recovery: if monto=0, scan all values for the largest number
@@ -1278,6 +1278,11 @@ async function syncAll() {
 // UTILS
 // ============================================================
 function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+// Los ítems de un presupuesto se guardan internamente separados por '\n', pero
+// un salto de línea real dentro de una celda del Sheet rompe el parser CSV
+// (que separa filas por '\n'). Por eso, al escribir al Sheet se reemplaza por
+// este separador seguro, y al leer se vuelve a convertir a '\n'.
+const ITEM_SEP = ' §§ ';
 function today() { return new Date().toISOString().split('T')[0]; }
 function fmtDate(d) {
   if(!d) return '—';
@@ -3795,10 +3800,15 @@ function generarDocumentoOpcionesPago(presupId) {
       .nota{background:#F5F2EC;border-left:3px solid #F4B400;padding:10px 14px;font-size:12.5px;color:#333;margin-top:16px;line-height:1.5}
       .firma{margin-top:50px;display:flex;justify-content:space-between;font-size:12px;color:#6E6E6E}
       .linea{border-top:1px solid #999;width:220px;padding-top:4px;text-align:center}
+      .header{display:flex;align-items:center;gap:14px;margin-bottom:4px}
+      .header img{height:52px}
       .print-btn{margin-top:24px;background:#003B70;color:#fff;border:none;padding:10px 18px;border-radius:4px;cursor:pointer;font-family:'Barlow';font-weight:600}
       @media print{.print-btn{display:none}}
     </style></head><body>
-    <h1>MEB <span>MACHINERY SOLUTIONS</span></h1>
+    <div class="header">
+      <img src="${typeof MEB_LOGO_PDF_B64!=='undefined'?MEB_LOGO_PDF_B64:''}" alt="MEB"/>
+      <h1 style="margin:0">MEB <span>MACHINERY SOLUTIONS</span></h1>
+    </div>
     <div class="meta">Opciones de pago — Presupuesto N° ${numPresup} · ${fechaHoy}<br/>Cliente: ${clienteNombre}</div>
     <table>
       <thead><tr><th></th><th>Modalidad</th><th style="text-align:right">Monto ARS</th><th style="text-align:right">Referencia USD</th></tr></thead>
@@ -4968,18 +4978,14 @@ function guardar(tipo, obj, campoRequerido) {
       const monedaSym = obj.moneda==='USD' ? 'USD ' : '$';
       // FIX: antes se hacía un writeToSheet por cada ítem y cada uno pisaba al
       // anterior (solo sobrevivía el último). Ahora se manda TODO en un único
-      // envío, con la descripción combinada — igual que hace la edición.
-      const descsAlta = items.map(x=>x.desc).filter(Boolean).join(' / ');
-      const tiposAlta = items.map(x=>x.tipo).filter(Boolean).join(' / ');
-      const cantsAlta = items.map(x=>x.cant).filter(Boolean).join(' / ');
-      const preciosAlta = items.map(x=>{
-        const precioNum = parseFloat(String(x.precio).replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
-        return precioNum>0 ? monedaSym+precioNum.toLocaleString('es-AR') : '';
-      }).filter(Boolean).join(' / ');
+      // envío. Además, el desglose completo (desc|tipo|cant|precio de CADA
+      // ítem) va en el campo DESCRIPCION con el separador seguro — antes se
+      // aplanaba todo en columnas separadas con ' / ' y se perdía la
+      // estructura por ítem al releer desde el Sheet.
+      const descripcionCompleta = obj.descripcion.split('\n').join(ITEM_SEP);
       writeToSheet({ action:'addPresupuesto', row: {
         id:obj.id, num:obj.num, cliente_id:obj.clienteId, cliente:clNom,
-        descripcion:descsAlta, tipo:tiposAlta, cantidad:cantsAlta,
-        precio_unitario:preciosAlta,
+        descripcion:descripcionCompleta,
         monto: monedaSym + (obj.monto||0).toLocaleString('es-AR'),
         monto_total: monedaSym + (obj.monto||0).toLocaleString('es-AR'),
         precio_usd: obj.montoUsd||0, tc_al_momento: obj.tcAlMomento||0,
@@ -4997,15 +5003,13 @@ function guardar(tipo, obj, campoRequerido) {
     if(tipo==='presupuestos') {
       const clObj3 = DB.clientes.find(x=>x.id===obj.clienteId);
       const clNom3 = clObj3 ? clObj3.nombre : '';
-      const lineas3 = (obj.descripcion||'').split('\n').filter(l=>l.trim());
-      const items3 = lineas3.map(l=>{ const pts=l.split('|'); return {desc:pts[0]||'',tipo:pts[1]||'',cant:pts[2]||'',precio:pts[3]||''}; });
-      const descs3 = items3.map(x=>x.desc).filter(Boolean).join(' / ');
-      const tipos3 = items3.map(x=>x.tipo).filter(Boolean).join(' / ');
-      const cants3 = items3.map(x=>x.cant).filter(Boolean).join(' / ');
-      const precios3 = items3.map(x=>x.precio).filter(Boolean).join(' / ');
+      // FIX: acá se aplanaban los ítems en columnas separadas con ' / ' y se
+      // perdía la estructura por ítem. Ahora se manda la descripción completa
+      // (desc|tipo|cant|precio de cada ítem) con el separador seguro.
+      const descripcionCompleta3 = (obj.descripcion||'').split('\n').join(ITEM_SEP);
       writeToSheet({ action:'updatePresupuesto', id:obj.id, row:{
-        cliente_id:obj.clienteId, cliente:clNom3, descripcion:descs3, tipo:tipos3, cantidad:cants3,
-        precio_unitario:precios3, monto:obj.monto,
+        cliente_id:obj.clienteId, cliente:clNom3, descripcion:descripcionCompleta3,
+        monto:obj.monto,
         precio_usd:obj.montoUsd||0, tc_al_momento:obj.tcAlMomento||0,
         plazo_pago:obj.plazoPago||'contado', recargo_pct:obj.recargoPct||0,
         estado:obj.estado, notas:obj.notas||''
