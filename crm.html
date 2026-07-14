@@ -837,7 +837,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzuVlVs-JF42-IXkQPUIFwlPDsCCN18lR-Lj6DGp-fREso0ERECY22s_85ajtHeBp-NcQ/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxItDQLntOg9NrHmPjczmn_i9mAeros2803KQzdZmTCZfBBfPfzBYF9Ctu28raXL2kjQw/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1114,6 +1114,8 @@ async function syncAll() {
             // Si no está, queda en 0 y el CRM no muestra el bloque USD para ese presupuesto viejo.
             montoUsd:parseMonto(r.PRECIO_USD||r.MONTO_USD||'0'),
             tcAlMomento:parseFloat(r.TC_AL_MOMENTO||r.TC||0)||0,
+            plazoPago:r.PLAZO_PAGO||'contado',
+            recargoPct:parseFloat(r.RECARGO_PCT)||0,
             estado:_estadoFinal,
             fecha:r.FECHA||'', notas:r.NOTAS||'',
             informeGenerado:r.INFORME_GENERADO||r.INFORME||'',
@@ -1841,7 +1843,7 @@ function renderPresupuestos() {
       <td><span style="font-family:'Bebas Neue';color:var(--yellow);font-size:15px">#${String(p.num||0).padStart(4,'0')}</span></td>
       <td>${cl?`<div class="td-name">${cl.nombre}</div><div class="td-muted">${cl.empresa||''}</div>`:'—'}</td>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${descCorta}</td>
-      <td><span class="monto">${fmtMonto(p.monto)}</span>${p.montoUsd?`<div style="font-size:10px;color:var(--blue-light)" title="El valor en dólares está sujeto al tipo de cambio del día de la fecha">USD ${p.montoUsd.toLocaleString('es-AR')}</div>`:''}</td>
+      <td><span class="monto">${fmtMonto(p.monto)}</span>${p.montoUsd?`<div style="font-size:10px;color:var(--blue-light)" title="El valor en dólares está sujeto al tipo de cambio del día de la fecha">USD ${p.montoUsd.toLocaleString('es-AR')}</div>`:''}${p.plazoPago&&p.plazoPago!=='contado'?`<div style="font-size:9px;color:var(--orange)">A ${p.plazoPago} días (+${p.recargoPct}%)</div>`:''}</td>
       <td>${badgeEstado(p.estado)}</td>
       <td class="td-muted">${fmtDate(p.fecha)}</td>
       <td style="font-size:10px;color:${p.fechaDescarga?'#25d366':'var(--muted2)'};text-align:center;white-space:nowrap">${p.fechaDescarga?'✔ '+p.fechaDescarga:'—'}</td>
@@ -4478,6 +4480,20 @@ function openModal(type, data={}) {
         <div style="text-align:right;font-size:10px;color:var(--muted);margin-top:2px">
           El valor en dólares está sujeto al tipo de cambio del día de la fecha.
         </div>
+
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+          <label style="display:block;margin-bottom:8px">Opciones de pago para el cliente</label>
+          <div id="presup-opciones-pago" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px"></div>
+          <div class="form-group" style="margin-top:10px">
+            <label>Plazo elegido por el cliente</label>
+            <select id="f-pplazo" onchange="recalcularTotal()">
+              <option value="contado" ${data.plazoPago==='contado'||!data.plazoPago?'selected':''}>Contado</option>
+              <option value="30" ${data.plazoPago==='30'?'selected':''}>30 días</option>
+              <option value="60" ${data.plazoPago==='60'?'selected':''}>60 días</option>
+              <option value="90" ${data.plazoPago==='90'?'selected':''}>90 días</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <div class="form-group full"><label>Notas (opcional)</label><textarea id="f-pnotas">${data.notas||''}</textarea></div>
@@ -4523,6 +4539,11 @@ function openModal(type, data={}) {
       const tcVal = parseFloat(gv('f-ptc'))||0;
       const montoArsFinal = totalMonto||data.monto||0;
       const montoUsdFinal = tcVal>0 ? (monedaVal==='USD' ? montoArsFinal : montoArsFinal/tcVal) : 0;
+      const plazoPago = gv('f-pplazo')||'contado';
+      const tfVigente = tarifarioVigente();
+      const recargoPct = plazoPago==='30' ? (tfVigente?tfVigente.recargo30:3)
+                        : plazoPago==='60' ? (tfVigente?tfVigente.recargo60:6)
+                        : plazoPago==='90' ? (tfVigente?tfVigente.recargo90:9) : 0;
       guardar('presupuestos',{
         id:data.id||uid(),
         num:data.num||DB.presupCounter++,
@@ -4531,6 +4552,8 @@ function openModal(type, data={}) {
         monto:montoArsFinal,
         montoUsd:Math.round(montoUsdFinal),
         tcAlMomento:tcVal,
+        plazoPago:plazoPago,
+        recargoPct:recargoPct,
         moneda:monedaVal,
         monedaSym:monedaSym,
         estado:gv('f-pestado'),
@@ -4656,10 +4679,36 @@ function recalcularTotal() {
 
   const tc = parseFloat((document.getElementById('f-ptc')||{}).value) || 0;
   const usdEl = document.getElementById('presup-usd-display');
+  const usdAncla = (tc > 0 && total > 0) ? (total / tc) : 0;
   if(usdEl) {
-    usdEl.textContent = (tc > 0 && total > 0)
-      ? `USD ${(total / tc).toLocaleString('es-AR', {maximumFractionDigits:0})} (TC $${tc})`
+    usdEl.textContent = usdAncla
+      ? `USD ${usdAncla.toLocaleString('es-AR', {maximumFractionDigits:0})} (TC $${tc})`
       : 'Cargá el dólar del día para ver el equivalente en USD';
+  }
+
+  const opcionesEl = document.getElementById('presup-opciones-pago');
+  if(opcionesEl) {
+    if(!usdAncla) {
+      opcionesEl.innerHTML = `<div style="grid-column:1/-1;font-size:11px;color:var(--muted)">Cargá el total y el dólar para ver las opciones de pago</div>`;
+    } else {
+      const tf = tarifarioVigente();
+      const tramos = [
+        {label:'Contado', pct:0, dias:0},
+        {label:'30 días', pct:tf?tf.recargo30:3, dias:30},
+        {label:'60 días', pct:tf?tf.recargo60:6, dias:60},
+        {label:'90 días', pct:tf?tf.recargo90:9, dias:90},
+      ];
+      opcionesEl.innerHTML = tramos.map(t=>{
+        const usdConRecargo = usdAncla * (1 + t.pct/100);
+        const arsConRecargo = usdConRecargo * tc;
+        return `<div style="background:var(--dark);border:1px solid var(--border2);border-radius:6px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:var(--muted);letter-spacing:1px">${t.label.toUpperCase()}${t.pct>0?` (+${t.pct}%)`:''}</div>
+          <div style="font-family:'Bebas Neue';font-size:16px;color:var(--yellow);margin-top:2px">${fmtMonto(arsConRecargo)}</div>
+          <div style="font-size:10px;color:var(--blue-light)">USD ${usdConRecargo.toLocaleString('es-AR',{maximumFractionDigits:0})}</div>
+        </div>`;
+      }).join('');
+      if(!tf) opcionesEl.insertAdjacentHTML('beforeend', `<div style="grid-column:1/-1;font-size:10px;color:var(--muted);margin-top:4px">⚠ Usando recargos de referencia (3/6/9%) — cargá el Tarifario real para que esto sea preciso</div>`);
+    }
   }
 }
 
@@ -4710,6 +4759,7 @@ function guardar(tipo, obj, campoRequerido) {
           monto: subtotal > 0 ? monedaSym + subtotal.toLocaleString('es-AR') : (monedaSym + (obj.monto||0).toLocaleString('es-AR')),
           monto_total: monedaSym + (obj.monto||0).toLocaleString('es-AR'),
           precio_usd: obj.montoUsd||0, tc_al_momento: obj.tcAlMomento||0,
+          plazo_pago: obj.plazoPago||'contado', recargo_pct: obj.recargoPct||0,
           estado:obj.estado, fecha:obj.fecha, notas:obj.notas||''
         }});
       });
@@ -4734,6 +4784,7 @@ function guardar(tipo, obj, campoRequerido) {
         cliente:clNom3, descripcion:descs3, tipo:tipos3, cantidad:cants3,
         precio_unitario:precios3, monto:obj.monto,
         precio_usd:obj.montoUsd||0, tc_al_momento:obj.tcAlMomento||0,
+        plazo_pago:obj.plazoPago||'contado', recargo_pct:obj.recargoPct||0,
         estado:obj.estado, notas:obj.notas||''
       }});
     }
