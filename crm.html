@@ -791,7 +791,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVnr8qiKe4AJMCaC8vTqnVAPTphdZ7BDcKww9gPgF-UBFogoH9rHWjyHQLOONtu_N70A/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxn63-a7Y1y4q9Gw76sZEVDO1kyiHJ2tqBKiuPckBOFXj10goyVCjH7Vatmz6tP052aiQ/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1064,6 +1064,10 @@ async function syncAll() {
             clienteNombreSheet:_cnm||_clienteResolved,
             descripcion:_desc,
             monto:_montoFinal,
+            // Dólar: solo existe en presupuestos hechos a partir de ahora (columnas nuevas).
+            // Si no está, queda en 0 y el CRM no muestra el bloque USD para ese presupuesto viejo.
+            montoUsd:parseMonto(r.PRECIO_USD||r.MONTO_USD||'0'),
+            tcAlMomento:parseFloat(r.TC_AL_MOMENTO||r.TC||0)||0,
             estado:_estadoFinal,
             fecha:r.FECHA||'', notas:r.NOTAS||'',
             informeGenerado:r.INFORME_GENERADO||r.INFORME||'',
@@ -1122,16 +1126,16 @@ async function syncAll() {
         fecha:r.FECHA||'', notas:r.NOTAS||''
       }));
     } else { if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; }
-    if(ct.length) {
-      DB.contratos = ct.map(r=>({
-        id:String(r.ID||uid()).trim(), clienteId:String(r.CLIENTE_ID||'').trim(), maquinaId:String(r.MAQUINA_ID||'').trim(),
-        plan:(r.PLAN||'basico').toLowerCase(), fechaInicio:r.FECHA_INICIO||'', fechaVencimiento:r.FECHA_VENCIMIENTO||'',
-        proximoServiceHs:r.PROXIMO_SERVICE_HS||'', ultimoServiceHs:r.ULTIMO_SERVICE_HS||'',
-        precioArs:parseMonto(r.PRECIO_ARS), precioUsd:parseMonto(r.PRECIO_USD),
-        tcAlMomento:parseFloat(r.TC_AL_MOMENTO)||0, estado:(r.ESTADO||'activo').toLowerCase(),
-        notas:r.NOTAS||'', fechaCreado:r.FECHA_CREADO||''
-      }));
-    } else if(!DB.contratos) DB.contratos=[];
+    // Siempre refleja lo que hay en el Sheet (incluso si está vacío) — evita que
+    // datos viejos de localStorage queden pegados para siempre.
+    DB.contratos = (ct.length ? ct.filter(r=>r.CLIENTE_ID!==undefined) : []).map(r=>({
+      id:String(r.ID||uid()).trim(), clienteId:String(r.CLIENTE_ID||'').trim(), maquinaId:String(r.MAQUINA_ID||'').trim(),
+      plan:(r.PLAN||'basico').toLowerCase(), fechaInicio:r.FECHA_INICIO||'', fechaVencimiento:r.FECHA_VENCIMIENTO||'',
+      proximoServiceHs:r.PROXIMO_SERVICE_HS||'', ultimoServiceHs:r.ULTIMO_SERVICE_HS||'',
+      precioArs:parseMonto(r.PRECIO_ARS), precioUsd:parseMonto(r.PRECIO_USD),
+      tcAlMomento:parseFloat(r.TC_AL_MOMENTO)||0, estado:(r.ESTADO||'activo').toLowerCase(),
+      notas:r.NOTAS||'', fechaCreado:r.FECHA_CREADO||''
+    }));
 
     // Restore preserved local data + alertasRepuesto
     DB.alertasRepuesto = _alertasRepuesto;
@@ -1778,7 +1782,7 @@ function renderPresupuestos() {
       <td><span style="font-family:'Bebas Neue';color:var(--yellow);font-size:15px">#${String(p.num||0).padStart(4,'0')}</span></td>
       <td>${cl?`<div class="td-name">${cl.nombre}</div><div class="td-muted">${cl.empresa||''}</div>`:'—'}</td>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${descCorta}</td>
-      <td><span class="monto">${fmtMonto(p.monto)}</span></td>
+      <td><span class="monto">${fmtMonto(p.monto)}</span>${p.montoUsd?`<div style="font-size:10px;color:var(--blue-light)" title="El valor en dólares está sujeto al tipo de cambio del día de la fecha">USD ${p.montoUsd.toLocaleString('es-AR')}</div>`:''}</td>
       <td>${badgeEstado(p.estado)}</td>
       <td class="td-muted">${fmtDate(p.fecha)}</td>
       <td style="font-size:10px;color:${p.fechaDescarga?'#25d366':'var(--muted2)'};text-align:center;white-space:nowrap">${p.fechaDescarga?'✔ '+p.fechaDescarga:'—'}</td>
@@ -4339,6 +4343,14 @@ function openModal(type, data={}) {
           <span style="color:var(--muted);font-size:12px;margin-right:12px;line-height:2">TOTAL:</span>
           <span id="presup-total-display" style="font-family:'Bebas Neue';font-size:22px;color:var(--yellow)">—</span>
         </div>
+        <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:6px">
+          <span id="presup-usd-display" style="font-size:13px;color:var(--blue-light)">—</span>
+          <input id="f-ptc" type="number" value="${data.tcAlMomento||''}" placeholder="TC" oninput="recalcularTotal()" style="width:80px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:4px 6px;border-radius:4px;font-family:Barlow;font-size:11px;text-align:right"/>
+          <button type="button" class="btn-secondary" onclick="actualizarTCPresupuesto()" style="white-space:nowrap;font-size:11px;padding:4px 10px">↻ Dólar en vivo</button>
+        </div>
+        <div style="text-align:right;font-size:10px;color:var(--muted);margin-top:2px">
+          El valor en dólares está sujeto al tipo de cambio del día de la fecha.
+        </div>
       </div>
 
       <div class="form-group full"><label>Notas (opcional)</label><textarea id="f-pnotas">${data.notas||''}</textarea></div>
@@ -4381,12 +4393,17 @@ function openModal(type, data={}) {
       }
       const fEnviadoRaw = gv('f-penviado')||'';
       const fEnviPts = fEnviadoRaw.split('-'); const fEnviadoFmt = fEnviadoRaw ? (fEnviPts.length===3?fEnviPts[2]+'/'+fEnviPts[1]+'/'+fEnviPts[0]:fEnviadoRaw) : (data.fechaEnviado||'');
+      const tcVal = parseFloat(gv('f-ptc'))||0;
+      const montoArsFinal = totalMonto||data.monto||0;
+      const montoUsdFinal = tcVal>0 ? (monedaVal==='USD' ? montoArsFinal : montoArsFinal/tcVal) : 0;
       guardar('presupuestos',{
         id:data.id||uid(),
         num:data.num||DB.presupCounter++,
         clienteId:clienteIdFinal,
         descripcion,
-        monto:totalMonto||data.monto||0,
+        monto:montoArsFinal,
+        montoUsd:Math.round(montoUsdFinal),
+        tcAlMomento:tcVal,
         moneda:monedaVal,
         monedaSym:monedaSym,
         estado:gv('f-pestado'),
@@ -4509,6 +4526,28 @@ function recalcularTotal() {
   });
   const totalEl = document.getElementById('presup-total-display');
   if(totalEl) totalEl.textContent = total > 0 ? fmtMonto(total) : '—';
+
+  const tc = parseFloat((document.getElementById('f-ptc')||{}).value) || 0;
+  const usdEl = document.getElementById('presup-usd-display');
+  if(usdEl) {
+    usdEl.textContent = (tc > 0 && total > 0)
+      ? `USD ${(total / tc).toLocaleString('es-AR', {maximumFractionDigits:0})} (TC $${tc})`
+      : 'Cargá el dólar del día para ver el equivalente en USD';
+  }
+}
+
+async function actualizarTCPresupuesto() {
+  const tcInput = document.getElementById('f-ptc');
+  try {
+    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
+    if(!res.ok) throw new Error('fail');
+    const data = await res.json();
+    const valor = Math.round(data.venta);
+    if(tcInput) tcInput.value = valor;
+    recalcularTotal();
+  } catch(e) {
+    showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
+  }
 }
 
 // ============================================================
@@ -4543,6 +4582,7 @@ function guardar(tipo, obj, campoRequerido) {
           precio_unitario: precioNum > 0 ? monedaSym + precioNum.toLocaleString('es-AR') : '',
           monto: subtotal > 0 ? monedaSym + subtotal.toLocaleString('es-AR') : (monedaSym + (obj.monto||0).toLocaleString('es-AR')),
           monto_total: monedaSym + (obj.monto||0).toLocaleString('es-AR'),
+          precio_usd: obj.montoUsd||0, tc_al_momento: obj.tcAlMomento||0,
           estado:obj.estado, fecha:obj.fecha, notas:obj.notas||''
         }});
       });
@@ -4565,7 +4605,9 @@ function guardar(tipo, obj, campoRequerido) {
       const precios3 = items3.map(x=>x.precio).filter(Boolean).join(' / ');
       writeToSheet({ action:'updatePresupuesto', id:obj.id, row:{
         cliente:clNom3, descripcion:descs3, tipo:tipos3, cantidad:cants3,
-        precio_unitario:precios3, monto:obj.monto, estado:obj.estado, notas:obj.notas||''
+        precio_unitario:precios3, monto:obj.monto,
+        precio_usd:obj.montoUsd||0, tc_al_momento:obj.tcAlMomento||0,
+        estado:obj.estado, notas:obj.notas||''
       }});
     }
   }
