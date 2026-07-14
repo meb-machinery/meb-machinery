@@ -571,6 +571,23 @@ select option { background:var(--dark); }
       <div class="stat-card red"><div class="stat-val" id="e-cobro-pendiente">$0</div><div class="stat-label">🔴 Por cobrar</div><div class="stat-sub" id="e-cobro-pendiente-n">0 trabajos completados</div></div>
       <div class="stat-card orange"><div class="stat-val" id="e-cobro-pct">0%</div><div class="stat-label">📈 Tasa de cobro</div><div class="stat-sub">% del completado cobrado</div></div>
     </div>
+    <!-- Fila 3.5: Impacto cambiario en cobros -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header"><span class="card-title">💱 Impacto cambiario en cobros</span></div>
+      <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">
+        Compara, para los presupuestos ya marcados como cobrados, cuántos dólares reales terminó recibiendo Emmanuel contra lo que esperaba con el recargo por plazo aplicado. Sirve para saber si el 3/6/9% del Tarifario alcanza o hay que ajustarlo.
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+        <div class="stat-card blue"><div class="stat-val" id="e-camb-registrados">0</div><div class="stat-label">Cobros registrados</div></div>
+        <div class="stat-card green"><div class="stat-val" id="e-camb-ganancia">USD 0</div><div class="stat-label">Ganancia real acumulada</div></div>
+        <div class="stat-card red"><div class="stat-val" id="e-camb-perdida">USD 0</div><div class="stat-label">Pérdida real acumulada</div></div>
+        <div class="stat-card orange"><div class="stat-val" id="e-camb-neto">USD 0</div><div class="stat-label">Neto (ganancia − pérdida)</div></div>
+      </div>
+      <div class="table-wrap" style="margin-top:12px"><table>
+        <thead><tr><th>Plazo</th><th>Cobros</th><th style="text-align:right">Diferencia neta USD</th><th style="text-align:right">Diferencia promedio %</th></tr></thead>
+        <tbody id="tabla-impacto-cambiario"></tbody>
+      </table></div>
+    </div>
     <!-- Fila 4: desglose -->
     <div class="stats-grid">
       <div class="stat-card orange"><div class="stat-val" id="e-rentabilidad">0%</div><div class="stat-label">Rentabilidad real</div><div class="stat-icon">📈</div><div class="stat-sub">Sobre monto cobrado real</div></div>
@@ -837,7 +854,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxItDQLntOg9NrHmPjczmn_i9mAeros2803KQzdZmTCZfBBfPfzBYF9Ctu28raXL2kjQw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzBXdEtY3pAbbxu4BiUyQVul0zIT95mSrjXagERh_mTocAIaCH4er0_VcqPdOeEaGY31A/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1116,6 +1133,12 @@ async function syncAll() {
             tcAlMomento:parseFloat(r.TC_AL_MOMENTO||r.TC||0)||0,
             plazoPago:r.PLAZO_PAGO||'contado',
             recargoPct:parseFloat(r.RECARGO_PCT)||0,
+            estadoCobro:r.ESTADO_COBRO||'pendiente',
+            fechaCobroReal:r.FECHA_COBRO_REAL||'', tcCobro:parseFloat(r.TC_COBRO)||0,
+            montoCobradoReal:parseMonto(r.MONTO_COBRADO_REAL||'0'),
+            usdRecibido:parseFloat(r.USD_RECIBIDO)||0,
+            diferenciaUsd:parseFloat(r.DIFERENCIA_USD)||0,
+            diferenciaPct:parseFloat(r.DIFERENCIA_PCT)||0,
             estado:_estadoFinal,
             fecha:r.FECHA||'', notas:r.NOTAS||'',
             informeGenerado:r.INFORME_GENERADO||r.INFORME||'',
@@ -1852,9 +1875,12 @@ function renderPresupuestos() {
       <td><div class="actions">
         <button class="btn-secondary" title="Editar" onclick="openModal('presupuesto',DB.presupuestos.find(x=>x.id==='${p.id}'))">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','rechazado'])">Estado</button>
+        ${p.estado==='aprobado'&&p.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Registrar cobro real">💰 Cobro</button>`:''}
+        ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span>`:''}
         <button class="btn-secondary" onclick="duplicarPresupuesto('${p.id}')" title="Duplicar">⧉</button>
         <button class="btn-secondary" onclick="generarPresupuestoPDF('${p.id}')">📄 PDF</button>
         <button class="btn-secondary" style="background:rgba(0,59,112,0.2);border-color:#003B70;color:#6fa8dc" onclick="generarInformeTecnico('${p.id}')">🔧 Informe</button>
+        <button class="btn-secondary" style="background:rgba(244,180,0,0.15);border-color:var(--yellow);color:var(--yellow)" onclick="generarDocumentoOpcionesPago('${p.id}')" title="Documento de opciones de pago para el cliente">📑 Opciones pago</button>
         <button class="btn-danger" onclick="eliminar('presupuestos','${p.id}')">✕</button>
       </div></td>
     </tr>`;
@@ -2880,6 +2906,34 @@ function renderEstadisticas() {
   const ec3n=document.getElementById('e-cobro-pendiente-n'); if(ec3n) ec3n.textContent=`${tPendComp.length} completados sin cobrar`;
   const ec4=document.getElementById('e-cobro-pct'); if(ec4) ec4.textContent=tasaCobro+'%';
 
+  // ── Impacto cambiario en cobros (presupuestos con cobro real registrado)
+  const presCobrados = DB.presupuestos.filter(p=>p.estadoCobro==='cobrado');
+  const gananciaAcum = presCobrados.filter(p=>(p.diferenciaUsd||0)>0).reduce((s,p)=>s+p.diferenciaUsd,0);
+  const perdidaAcum  = presCobrados.filter(p=>(p.diferenciaUsd||0)<0).reduce((s,p)=>s+Math.abs(p.diferenciaUsd),0);
+  const netoAcum = gananciaAcum - perdidaAcum;
+  const setTxt=(id,val)=>{ const el=document.getElementById(id); if(el) el.textContent=val; };
+  setTxt('e-camb-registrados', presCobrados.length);
+  setTxt('e-camb-ganancia', 'USD '+gananciaAcum.toLocaleString('es-AR'));
+  setTxt('e-camb-perdida', 'USD '+perdidaAcum.toLocaleString('es-AR'));
+  const netoEl = document.getElementById('e-camb-neto');
+  if(netoEl){ netoEl.textContent = (netoAcum>=0?'+':'')+'USD '+netoAcum.toLocaleString('es-AR'); netoEl.style.color = netoAcum>=0?'var(--green)':'var(--red)'; }
+
+  const porPlazo = {contado:[], '30':[], '60':[], '90':[]};
+  presCobrados.forEach(p=>{ const k=p.plazoPago||'contado'; if(porPlazo[k]) porPlazo[k].push(p); });
+  const tbodyImp = document.getElementById('tabla-impacto-cambiario');
+  if(tbodyImp) {
+    const labels = {contado:'Contado', '30':'A 30 días', '60':'A 60 días', '90':'A 90 días'};
+    const filas = Object.keys(labels).map(k=>{
+      const arr = porPlazo[k];
+      if(!arr.length) return `<tr><td>${labels[k]}</td><td class="td-muted">0</td><td class="td-muted" style="text-align:right">—</td><td class="td-muted" style="text-align:right">—</td></tr>`;
+      const neto = arr.reduce((s,p)=>s+(p.diferenciaUsd||0),0);
+      const pctProm = arr.reduce((s,p)=>s+(p.diferenciaPct||0),0)/arr.length;
+      const color = neto>=0?'var(--green)':'var(--red)';
+      return `<tr><td>${labels[k]}</td><td>${arr.length}</td><td style="text-align:right;color:${color}">${neto>=0?'+':''}USD ${neto.toLocaleString('es-AR')}</td><td style="text-align:right;color:${color}">${pctProm>=0?'+':''}${pctProm.toFixed(1)}%</td></tr>`;
+    });
+    tbodyImp.innerHTML = presCobrados.length ? filas.join('') : `<tr><td colspan="4"><div class="empty-state"><div class="icon">💱</div><p>Todavía no hay cobros reales registrados</p></div></td></tr>`;
+  }
+
   // ── Presupuestado aprobado (referencia, no necesariamente cobrado)
   const presAprobados = DB.presupuestos.filter(p=>p.estado==='aprobado');
   const totalPresupuestado = presAprobados.reduce((s,p)=>s+Number(p.monto||0),0);
@@ -3685,6 +3739,84 @@ function maquinaOptions(selected='') {
 // ============================================================
 // GENERADOR DE PRESUPUESTO PDF
 // ============================================================
+function generarDocumentoOpcionesPago(presupId) {
+  const p = DB.presupuestos.find(x => x.id === presupId);
+  if (!p) return;
+  const cl = DB.clientes.find(c => String(c.id) === String(p.clienteId))
+          || DB.clientes.find(c => c.nombre.toUpperCase() === String(p.clienteNombreSheet||'').toUpperCase())
+          || DB.clientes.find(c => c.nombre.toUpperCase() === String(p.clienteId||'').toUpperCase());
+  const clienteNombre = cl ? cl.nombre : (p.clienteNombreSheet||p.clienteId||'—');
+  const numPresup = String(p.num||p.id).padStart(4,'0');
+  const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const tc = p.tcAlMomento || 0;
+  const usdAncla = p.montoUsd || 0;
+
+  if(!tc || !usdAncla) {
+    showToast('Este presupuesto todavía no tiene dólar/USD cargado — abrilo y guardalo con el TC del día primero', 'error');
+    return;
+  }
+
+  const tf = tarifarioVigente();
+  const tramos = [
+    {label:'CONTADO', pct:0},
+    {label:'A 30 DÍAS', pct:tf?tf.recargo30:3},
+    {label:'A 60 DÍAS', pct:tf?tf.recargo60:6},
+    {label:'A 90 DÍAS', pct:tf?tf.recargo90:9},
+  ];
+  const marcado = p.plazoPago==='30'?1:p.plazoPago==='60'?2:p.plazoPago==='90'?3:0;
+
+  const filasHTML = tramos.map((t,i)=>{
+    const usdT = usdAncla*(1+t.pct/100);
+    const arsT = usdT*tc;
+    return `<tr${i===marcado?' style="background:#FFF7DE"':''}>
+      <td style="text-align:center;font-weight:bold">${i===marcado?'☑':'☐'}</td>
+      <td>${t.label}${t.pct>0?` <span style="color:#6E6E6E;font-size:11px">(+${t.pct}%)</span>`:''}</td>
+      <td style="text-align:right;font-weight:bold">$${Math.round(arsT).toLocaleString('es-AR')}</td>
+      <td style="text-align:right;color:#003B70">USD ${Math.round(usdT).toLocaleString('es-AR')}</td>
+    </tr>`;
+  }).join('');
+
+  const htmlContent = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+    <title>Opciones de pago — Presupuesto ${numPresup}</title>
+    <style>
+      body{font-family:'Barlow',Arial,sans-serif;color:#1A1A1A;max-width:720px;margin:24px auto;padding:0 20px}
+      h1{font-family:'Bebas Neue',Arial,sans-serif;letter-spacing:2px;color:#1A1A1A;font-size:26px;margin-bottom:2px}
+      h1 span{color:#F4B400}
+      .meta{color:#6E6E6E;font-size:13px;margin-bottom:18px}
+      table{width:100%;border-collapse:collapse;margin:14px 0}
+      th{background:#1A1A1A;color:#F4B400;padding:8px;font-size:12px;text-align:left}
+      td{padding:9px 8px;border-bottom:1px solid #eee;font-size:14px}
+      .nota{background:#F5F2EC;border-left:3px solid #F4B400;padding:10px 14px;font-size:12.5px;color:#333;margin-top:16px;line-height:1.5}
+      .firma{margin-top:50px;display:flex;justify-content:space-between;font-size:12px;color:#6E6E6E}
+      .linea{border-top:1px solid #999;width:220px;padding-top:4px;text-align:center}
+      .print-btn{margin-top:24px;background:#003B70;color:#fff;border:none;padding:10px 18px;border-radius:4px;cursor:pointer;font-family:'Barlow';font-weight:600}
+      @media print{.print-btn{display:none}}
+    </style></head><body>
+    <h1>MEB <span>MACHINERY SOLUTIONS</span></h1>
+    <div class="meta">Opciones de pago — Presupuesto N° ${numPresup} · ${fechaHoy}<br/>Cliente: ${clienteNombre}</div>
+    <table>
+      <thead><tr><th></th><th>Modalidad</th><th style="text-align:right">Monto ARS</th><th style="text-align:right">Referencia USD</th></tr></thead>
+      <tbody>${filasHTML}</tbody>
+    </table>
+    <div class="nota">
+      Los precios están expresados en su equivalente en dólares al tipo de cambio del día de emisión (TC $${tc}).
+      El monto final en pesos para pagos a 30/60/90 días se actualiza al tipo de cambio vigente el día efectivo del pago,
+      manteniéndose fijo el recargo pactado en esta tabla. Por favor, marque la opción elegida antes de comenzar el trabajo.
+    </div>
+    <div class="firma">
+      <div class="linea">Firma del cliente</div>
+      <div class="linea">Aclaración y fecha</div>
+    </div>
+    <button class="print-btn" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
+    </body></html>`;
+
+  const blob = new Blob([htmlContent], {type:'text/html;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, '_blank', 'width=820,height=920');
+  if(w) setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
+  else { alert('Bloqueador de popups activo. Permití los popups para este sitio.'); URL.revokeObjectURL(url); }
+}
+
 function generarPresupuestoPDF(presupId) {
   const p = DB.presupuestos.find(x => x.id === presupId);
   if (!p) return;
@@ -4622,6 +4754,52 @@ function openModal(type, data={}) {
     };
   }
 
+  else if(type==='cobroReal') {
+    const p = data;
+    const usdAncla = p.montoUsd || 0;
+    const recargoPct = p.recargoPct || 0;
+    const usdEsperado = usdAncla * (1 + recargoPct/100);
+    title='REGISTRAR COBRO REAL — Presupuesto N°'+String(p.num||p.id).padStart(4,'0');
+    body=`<div class="form-grid">
+      <div class="form-group full" style="background:var(--dark);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--muted)">
+        Ancla al cotizar: <b style="color:var(--blue-light)">USD ${usdAncla.toLocaleString('es-AR')}</b> ·
+        Plazo: <b style="text-transform:capitalize">${p.plazoPago||'contado'}</b>${recargoPct>0?` (+${recargoPct}%)`:''} ·
+        Esperado con recargo: <b style="color:var(--yellow)">USD ${usdEsperado.toLocaleString('es-AR',{maximumFractionDigits:0})}</b>
+      </div>
+      <div class="form-group"><label>Fecha de cobro real *</label><input id="f-crfecha" type="date" value="${data.fechaCobroReal||today()}"/></div>
+      <div class="form-group"><label>Monto realmente cobrado (ARS) *</label><input id="f-crmonto" type="number" value="${data.montoCobradoReal||''}" oninput="calcularDiferenciaCobro(${usdEsperado})"/></div>
+      <div class="form-group">
+        <label>TC del día del cobro *</label>
+        <div style="display:flex;gap:6px">
+          <input id="f-crtc" type="number" value="${data.tcCobro||''}" oninput="calcularDiferenciaCobro(${usdEsperado})" style="flex:1"/>
+          <button type="button" class="btn-secondary" onclick="actualizarTCCobro(${usdEsperado})" style="white-space:nowrap;font-size:11px">↻ En vivo</button>
+        </div>
+      </div>
+      <div class="form-group full" id="cr-resultado" style="text-align:center;padding:10px;border-radius:6px;background:var(--dark);border:1px solid var(--border2)">
+        Completá monto y TC para ver si ganó o perdió en dólares reales
+      </div>
+    </div>`;
+    onSave=()=>{
+      const fechaCobroReal=gv('f-crfecha'), montoCobradoReal=parseFloat(gv('f-crmonto'))||0, tcCobro=parseFloat(gv('f-crtc'))||0;
+      if(!montoCobradoReal||!tcCobro){ showToast('Cargá monto y TC del día del cobro','error'); return; }
+      const usdRecibido = montoCobradoReal/tcCobro;
+      const diferenciaUsd = usdRecibido - usdEsperado;
+      const diferenciaPct = usdEsperado>0 ? (diferenciaUsd/usdEsperado*100) : 0;
+      const item = DB.presupuestos.find(x=>x.id===p.id);
+      if(item){
+        Object.assign(item,{estadoCobro:'cobrado',fechaCobroReal,tcCobro,montoCobradoReal,usdRecibido:Math.round(usdRecibido),diferenciaUsd:Math.round(diferenciaUsd),diferenciaPct:Math.round(diferenciaPct*10)/10});
+        saveLocal();
+        writeToSheet({action:'registrarCobroPresupuesto', id:p.id, row:{
+          fecha_cobro_real:fechaCobroReal, tc_cobro:tcCobro, monto_cobrado_real:montoCobradoReal,
+          usd_recibido:item.usdRecibido, diferencia_usd:item.diferenciaUsd, diferencia_pct:item.diferenciaPct
+        }});
+        closeModal();
+        renderPresupuestos();
+        showToast(diferenciaUsd>=0 ? `Cobro registrado — ganó USD ${item.diferenciaUsd}` : `Cobro registrado — perdió USD ${Math.abs(item.diferenciaUsd)}`, diferenciaUsd>=0?'success':'error');
+      }
+    };
+  }
+
   document.getElementById('modalTitle').textContent=title;
   document.getElementById('modalBody').innerHTML=body;
   if(type==='contrato') setTimeout(calcularCotizacionContrato, 0);
@@ -4721,6 +4899,34 @@ async function actualizarTCPresupuesto() {
     const valor = Math.round(data.venta);
     if(tcInput) tcInput.value = valor;
     recalcularTotal();
+  } catch(e) {
+    showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
+  }
+}
+
+function calcularDiferenciaCobro(usdEsperado) {
+  const monto = parseFloat((document.getElementById('f-crmonto')||{}).value) || 0;
+  const tc = parseFloat((document.getElementById('f-crtc')||{}).value) || 0;
+  const el = document.getElementById('cr-resultado');
+  if(!el) return;
+  if(!monto || !tc) { el.textContent = 'Completá monto y TC para ver si ganó o perdió en dólares reales'; el.style.color=''; return; }
+  const usdRecibido = monto/tc;
+  const diferencia = usdRecibido - usdEsperado;
+  const pct = usdEsperado>0 ? (diferencia/usdEsperado*100) : 0;
+  const gano = diferencia >= 0;
+  el.style.color = gano ? 'var(--green)' : 'var(--red)';
+  el.innerHTML = `Recibió <b>USD ${usdRecibido.toLocaleString('es-AR',{maximumFractionDigits:0})}</b> reales ·
+    ${gano?'Ganó':'Perdió'} <b>USD ${Math.abs(diferencia).toLocaleString('es-AR',{maximumFractionDigits:0})}</b> (${pct.toFixed(1)}%) frente a lo esperado`;
+}
+
+async function actualizarTCCobro(usdEsperado) {
+  const tcInput = document.getElementById('f-crtc');
+  try {
+    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
+    if(!res.ok) throw new Error('fail');
+    const data = await res.json();
+    if(tcInput) tcInput.value = Math.round(data.venta);
+    calcularDiferenciaCobro(usdEsperado);
   } catch(e) {
     showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
   }
