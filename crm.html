@@ -1877,7 +1877,7 @@ function renderPresupuestos() {
       <td><span style="font-family:'Bebas Neue';color:var(--yellow);font-size:15px">#${String(p.num||0).padStart(4,'0')}</span></td>
       <td>${cl?`<div class="td-name">${cl.nombre}</div><div class="td-muted">${cl.empresa||''}</div>`:'—'}</td>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${descCorta}</td>
-      <td><span class="monto">${fmtMonto((p.recargoPct?p.monto*(1+p.recargoPct/100):p.monto))}</span>${p.montoUsd?`<div style="font-size:10px;color:var(--blue-light)" title="El valor en dólares está sujeto al tipo de cambio del día de la fecha">USD ${Math.round(p.recargoPct?p.montoUsd*(1+p.recargoPct/100):p.montoUsd).toLocaleString('es-AR')}</div>`:''}${p.plazoPago&&p.plazoPago!=='contado'?`<div style="font-size:9px;color:var(--orange)">A ${p.plazoPago} días (+${p.recargoPct}%)</div>`:''}</td>
+      <td><span class="monto">${fmtMonto((()=>{const a=p.recargoPct?p.monto*(1+p.recargoPct/100):p.monto;return Math.round(a);})())}</span>${p.montoUsd&&p.tcAlMomento?`<div style="font-size:10px;color:var(--blue-light)" title="El valor en dólares está sujeto al tipo de cambio del día de la fecha">USD ${Math.round((p.recargoPct?Math.round(p.monto*(1+p.recargoPct/100)):p.monto)/p.tcAlMomento).toLocaleString('es-AR')}</div>`:''}${p.plazoPago&&p.plazoPago!=='contado'?`<div style="font-size:9px;color:var(--orange)">A ${p.plazoPago} días (+${p.recargoPct}%)</div>`:''}</td>
       <td>${badgeEstado(p.estado)}</td>
       <td class="td-muted">${fmtDate(p.fecha)}</td>
       <td style="font-size:10px;color:${p.fechaDescarga?'#25d366':'var(--muted2)'};text-align:center;white-space:nowrap">${p.fechaDescarga?'✔ '+p.fechaDescarga:'—'}</td>
@@ -3757,11 +3757,9 @@ function generarDocumentoOpcionesPago(presupId) {
   const numPresup = String(p.num||p.id).padStart(4,'0');
   const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const tc = p.tcAlMomento || 0;
-  // REDISEÑO: p.montoUsd ya vuelve a ser el ancla pura (contado), guardada
-  // sin recargo adentro — no hace falta revertir nada acá.
-  const usdAncla = p.montoUsd || 0;
+  const montoArsAncla = p.monto || 0;
 
-  if(!tc || !usdAncla) {
+  if(!tc || !montoArsAncla) {
     showToast('Este presupuesto todavía no tiene dólar/USD cargado — abrilo y guardalo con el TC del día primero', 'error');
     return;
   }
@@ -3775,13 +3773,17 @@ function generarDocumentoOpcionesPago(presupId) {
   ];
   const marcado = p.plazoPago==='30'?1:p.plazoPago==='60'?2:p.plazoPago==='90'?3:0;
 
+  // FIX: antes se calculaba yendo y viniendo por el dólar (ars = usd*(1+%)*tc),
+  // y el redondeo del dólar generaba números feos ("$3.150.002" en vez de
+  // "$3.150.000"). Ahora el ARS sale directo del monto en pesos del
+  // presupuesto (exacto) y el dólar es solo una referencia derivada.
   const filasHTML = tramos.map((t,i)=>{
-    const usdT = usdAncla*(1+t.pct/100);
-    const arsT = usdT*tc;
+    const arsT = Math.round(montoArsAncla*(1+t.pct/100));
+    const usdT = tc>0 ? arsT/tc : 0;
     return `<tr${i===marcado?' style="background:#FFF7DE"':''}>
       <td style="text-align:center;font-weight:bold">${i===marcado?'☑':'☐'}</td>
       <td>${t.label}${t.pct>0?` <span style="color:#6E6E6E;font-size:11px">(+${t.pct}%)</span>`:''}</td>
-      <td style="text-align:right;font-weight:bold">$${Math.round(arsT).toLocaleString('es-AR')}</td>
+      <td style="text-align:right;font-weight:bold">$${arsT.toLocaleString('es-AR')}</td>
       <td style="text-align:right;color:#003B70">USD ${Math.round(usdT).toLocaleString('es-AR')}</td>
     </tr>`;
   }).join('');
@@ -4898,8 +4900,13 @@ function recalcularTotal() {
         {label:'90 días', pct:tf?tf.recargo90:9, dias:90},
       ];
       opcionesEl.innerHTML = tramos.map(t=>{
-        const usdConRecargo = usdAncla * (1 + t.pct/100);
-        const arsConRecargo = usdConRecargo * tc;
+        // FIX: antes se calculaba yendo y viniendo por el dólar
+        // (ars = usd*(1+%)*tc), y el redondeo del dólar generaba números
+        // feos ("$3.150.002" en vez de "$3.150.000"). Ahora el ARS sale
+        // directo del total en pesos (exacto, sin vueltas) y el dólar es
+        // solo una referencia derivada, sin volver a afectar el número final.
+        const arsConRecargo = Math.round(total * (1 + t.pct/100));
+        const usdConRecargo = tc>0 ? arsConRecargo/tc : 0;
         return `<div style="background:var(--dark);border:1px solid var(--border2);border-radius:6px;padding:8px;text-align:center">
           <div style="font-size:10px;color:var(--muted);letter-spacing:1px">${t.label.toUpperCase()}${t.pct>0?` (+${t.pct}%)`:''}</div>
           <div style="font-family:'Bebas Neue';font-size:16px;color:var(--yellow);margin-top:2px">${fmtMonto(arsConRecargo)}</div>
