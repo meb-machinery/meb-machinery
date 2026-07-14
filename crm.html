@@ -854,7 +854,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxm1Ys4QY1NJ-DqBqSZfAbV-kX1FJrEM3njdzBERY_6j-8zkq4jOMWXVbuzMqi34Jq2GQ/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx6VnKZLgww6q8A20sX5TpDmwKhtNu7GmU0eMInLXTeM1vFO7RWezABkTTxlBr4YSva4g/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1877,7 +1877,7 @@ function renderPresupuestos() {
       <td><span style="font-family:'Bebas Neue';color:var(--yellow);font-size:15px">#${String(p.num||0).padStart(4,'0')}</span></td>
       <td>${cl?`<div class="td-name">${cl.nombre}</div><div class="td-muted">${cl.empresa||''}</div>`:'—'}</td>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${descCorta}</td>
-      <td><span class="monto">${fmtMonto(p.monto)}</span>${p.montoUsd?`<div style="font-size:10px;color:var(--blue-light)" title="El valor en dólares está sujeto al tipo de cambio del día de la fecha">USD ${p.montoUsd.toLocaleString('es-AR')}</div>`:''}${p.plazoPago&&p.plazoPago!=='contado'?`<div style="font-size:9px;color:var(--orange)">A ${p.plazoPago} días (+${p.recargoPct}%)</div>`:''}</td>
+      <td><span class="monto">${fmtMonto((p.recargoPct?p.monto*(1+p.recargoPct/100):p.monto))}</span>${p.montoUsd?`<div style="font-size:10px;color:var(--blue-light)" title="El valor en dólares está sujeto al tipo de cambio del día de la fecha">USD ${Math.round(p.recargoPct?p.montoUsd*(1+p.recargoPct/100):p.montoUsd).toLocaleString('es-AR')}</div>`:''}${p.plazoPago&&p.plazoPago!=='contado'?`<div style="font-size:9px;color:var(--orange)">A ${p.plazoPago} días (+${p.recargoPct}%)</div>`:''}</td>
       <td>${badgeEstado(p.estado)}</td>
       <td class="td-muted">${fmtDate(p.fecha)}</td>
       <td style="font-size:10px;color:${p.fechaDescarga?'#25d366':'var(--muted2)'};text-align:center;white-space:nowrap">${p.fechaDescarga?'✔ '+p.fechaDescarga:'—'}</td>
@@ -2361,22 +2361,19 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas) {
   showToast('Presupuesto actualizado y guardado ✔','success');
   const clObj2 = DB.clientes.find(x=>x.id===p.clienteId);
   const clNom2 = clObj2 ? clObj2.nombre : '';
-  const lineas2 = (descripcion||'').split('\n').filter(l=>l.trim());
-  const items2 = lineas2.length ? lineas2.map(l=>{ const pts=l.split('|'); return {desc:pts[0]||'',tipo:pts[1]||'Servicio',cant:pts[2]||'1',precio:pts[3]||''}; }) : [{desc:descripcion||'',tipo:'Servicio',cant:'1',precio:String(monto||p.monto||0)}];
-  items2.forEach(function(item2) {
-    const precioNum2 = parseFloat(String(item2.precio).replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
-    const cantNum2 = parseFloat(item2.cant) || 1;
-    const subtotal2 = cantNum2 * precioNum2;
-    writeToSheet({ action:'addPresupuesto', row:{
-      id:p.id, num:p.num, cliente_id:p.clienteId, cliente:clNom2,
-      descripcion:item2.desc, tipo:item2.tipo,
-      cantidad:item2.cant,
-      precio_unitario: precioNum2>0 ? '$'+precioNum2.toLocaleString('es-AR') : '',
-      monto: '$'+(subtotal2||monto||p.monto||0).toLocaleString('es-AR'),
-      monto_total: '$'+(monto||p.monto||0).toLocaleString('es-AR'),
-      estado:p.estado, fecha:p.fecha||'', notas:notas||p.notas||''
-    }});
-  });
+  // FIX: esta función tenía el MISMO bug que ya arreglamos en el alta/edición
+  // normal — hacía un writeToSheet por cada ítem y cada uno pisaba al
+  // anterior en el Sheet (solo sobrevivía el último). Por eso editar en el
+  // PDF y guardar hacía que, al volver a abrirlo, no quedara como se editó.
+  // Ahora se manda todo en un único envío, con el separador seguro.
+  const descripcionCompleta2 = (descripcion||'').split('\n').join(ITEM_SEP);
+  writeToSheet({ action:'updatePresupuesto', id:p.id, row:{
+    cliente_id:p.clienteId, cliente:clNom2, descripcion:descripcionCompleta2,
+    monto: monto||p.monto||0,
+    precio_usd:p.montoUsd||0, tc_al_momento:p.tcAlMomento||0,
+    plazo_pago:p.plazoPago||'contado', recargo_pct:p.recargoPct||0,
+    estado:p.estado, notas:notas||p.notas||''
+  }});
 }
 
 // Genera el Informe Técnico en ventana nueva
@@ -3760,12 +3757,9 @@ function generarDocumentoOpcionesPago(presupId) {
   const numPresup = String(p.num||p.id).padStart(4,'0');
   const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const tc = p.tcAlMomento || 0;
-  // FIX: p.montoUsd es el monto FINAL, ya con el recargo del plazo elegido
-  // aplicado (desde que se corrigió el guardado del presupuesto). Acá hay
-  // que revertir ese recargo para volver al ancla pura y recién ahí
-  // recalcular los 4 tramos — si no, quedaba aplicado dos veces.
-  const recargoYaAplicado = p.recargoPct || 0;
-  const usdAncla = (p.montoUsd || 0) / (1 + recargoYaAplicado/100);
+  // REDISEÑO: p.montoUsd ya vuelve a ser el ancla pura (contado), guardada
+  // sin recargo adentro — no hace falta revertir nada acá.
+  const usdAncla = p.montoUsd || 0;
 
   if(!tc || !usdAncla) {
     showToast('Este presupuesto todavía no tiene dólar/USD cargado — abrilo y guardalo con el TC del día primero', 'error');
@@ -3811,8 +3805,7 @@ function generarDocumentoOpcionesPago(presupId) {
       @media print{.print-btn{display:none}}
     </style></head><body>
     <div class="header">
-      <img src="${typeof MEB_LOGO_PDF_B64!=='undefined'?MEB_LOGO_PDF_B64:''}" alt="MEB"/>
-      <h1 style="margin:0">MEB <span>MACHINERY SOLUTIONS</span></h1>
+      <img src="${typeof MEB_LOGO_PDF_B64!=='undefined'?MEB_LOGO_PDF_B64:''}" alt="MEB" style="height:70px"/>
     </div>
     <div class="meta">Opciones de pago — Presupuesto N° ${numPresup} · ${fechaHoy}<br/>Cliente: ${clienteNombre}</div>
     <table>
@@ -4696,20 +4689,21 @@ function openModal(type, data={}) {
       const recargoPct = plazoPago==='30' ? (tfVigente?tfVigente.recargo30:3)
                         : plazoPago==='60' ? (tfVigente?tfVigente.recargo60:6)
                         : plazoPago==='90' ? (tfVigente?tfVigente.recargo90:9) : 0;
-      // FIX: antes el monto guardado quedaba siempre en el valor de contado,
-      // sin importar el plazo elegido. Ahora se le aplica el recargo del plazo
-      // al monto y al USD que efectivamente quedan guardados/mostrados.
+      // REDISEÑO: monto/montoUsd guardan SIEMPRE el valor puro de contado
+      // (ancla), nunca con el recargo ya aplicado adentro. Antes se guardaba
+      // el valor final con el recargo horneado y redondeado a USD entero —
+      // al necesitar reconstruir el ancla en otro lugar (ej. el documento de
+      // opciones de pago), ese redondeo se amplificaba y los números no
+      // coincidían entre pantallas. Ahora el recargo se aplica siempre al
+      // vuelo, en el momento de mostrar cada plazo, nunca se guarda mezclado.
       const usdAncla = tcVal>0 ? (monedaVal==='USD' ? montoContadoArs : montoContadoArs/tcVal) : 0;
-      const usdFinal = usdAncla * (1 + recargoPct/100);
-      const montoArsFinal = tcVal>0 ? usdFinal*tcVal : montoContadoArs*(1+recargoPct/100);
-      const montoUsdFinal = usdFinal;
       guardar('presupuestos',{
         id:data.id||uid(),
         num:data.num||DB.presupCounter++,
         clienteId:clienteIdFinal,
         descripcion,
-        monto:Math.round(montoArsFinal),
-        montoUsd:Math.round(montoUsdFinal),
+        monto:Math.round(montoContadoArs),
+        montoUsd:Math.round(usdAncla*100)/100,
         tcAlMomento:tcVal,
         plazoPago:plazoPago,
         recargoPct:recargoPct,
@@ -4783,11 +4777,10 @@ function openModal(type, data={}) {
 
   else if(type==='cobroReal') {
     const p = data;
-    // FIX: p.montoUsd ya es el monto FINAL con el recargo del plazo aplicado
-    // (se corrigió en el guardado del presupuesto) — acá NO hay que volver a
-    // multiplicarlo por (1+recargoPct/100), sería aplicarlo dos veces.
-    const usdEsperado = p.montoUsd || 0;
+    // REDISEÑO: p.montoUsd es el ancla pura de contado — el esperado para
+    // este plazo se calcula al vuelo aplicando el recargo acá.
     const recargoPct = p.recargoPct || 0;
+    const usdEsperado = (p.montoUsd || 0) * (1 + recargoPct/100);
     title='REGISTRAR COBRO REAL — Presupuesto N°'+String(p.num||p.id).padStart(4,'0');
     body=`<div class="form-grid">
       <div class="form-group full" style="background:var(--dark);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--muted)">
@@ -5040,6 +5033,9 @@ function eliminar(tipo, id) {
   pushUndo('Eliminar '+tipo.replace('s',''));
   DB[tipo]=DB[tipo].filter(x=>x.id!==id);
   saveLocal(); updateBadges(); refreshCurrentPage();
+  // FIX: antes esto solo borraba localmente — el registro seguía en el Sheet
+  // y "revivía" en el próximo Sincronizar. Ahora avisa al Sheet también.
+  writeToSheet({ action:'deleteRow', tipo:tipo, id:id });
   showToast('Eliminado — podés deshacer con ↩','');
 }
 
