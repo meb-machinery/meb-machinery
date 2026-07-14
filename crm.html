@@ -3760,7 +3760,12 @@ function generarDocumentoOpcionesPago(presupId) {
   const numPresup = String(p.num||p.id).padStart(4,'0');
   const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const tc = p.tcAlMomento || 0;
-  const usdAncla = p.montoUsd || 0;
+  // FIX: p.montoUsd es el monto FINAL, ya con el recargo del plazo elegido
+  // aplicado (desde que se corrigió el guardado del presupuesto). Acá hay
+  // que revertir ese recargo para volver al ancla pura y recién ahí
+  // recalcular los 4 tramos — si no, quedaba aplicado dos veces.
+  const recargoYaAplicado = p.recargoPct || 0;
+  const usdAncla = (p.montoUsd || 0) / (1 + recargoYaAplicado/100);
 
   if(!tc || !usdAncla) {
     showToast('Este presupuesto todavía no tiene dólar/USD cargado — abrilo y guardalo con el TC del día primero', 'error');
