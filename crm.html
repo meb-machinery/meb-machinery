@@ -1184,7 +1184,9 @@ async function syncAll() {
     }));
 
     // TARIFARIO — historial completo; el más reciente por fecha es el "vigente"
-    DB.tarifario = tf.map(r=>({
+    // (mismo blindaje que Contratos: si la pestaña TARIFARIO no existe todavía,
+    // gviz cae a la primera hoja del Sheet — filtramos eso acá)
+    DB.tarifario = (tf.length ? tf.filter(r=>r.DIAGNOSTICO_USD!==undefined) : []).map(r=>({
       fecha:r.FECHA||'', diagnostico:parseFloat(r.DIAGNOSTICO_USD)||0,
       horaNormal:parseFloat(r.HORA_NORMAL_USD)||0, horaUrgencia:parseFloat(r.HORA_URGENCIA_USD)||0,
       km:parseFloat(r.KM_USD)||0, contrato1000:parseFloat(r.CONTRATO_1000_USD)||0,
