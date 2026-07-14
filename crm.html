@@ -854,7 +854,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzBXdEtY3pAbbxu4BiUyQVul0zIT95mSrjXagERh_mTocAIaCH4er0_VcqPdOeEaGY31A/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxm1Ys4QY1NJ-DqBqSZfAbV-kX1FJrEM3njdzBERY_6j-8zkq4jOMWXVbuzMqi34Jq2GQ/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1170,6 +1170,11 @@ async function syncAll() {
         }
         return p;
       });
+      // FIX: el contador de N° tiene que reflejar el máximo real que ya existe
+      // en el Sheet — antes se comparaba contra sí mismo y nunca avanzaba,
+      // lo que hacía que presupuestos nuevos reusaran números viejos.
+      const maxNum = DB.presupuestos.reduce((m,p)=>Math.max(m, parseInt(p.num)||0), 0);
+      DB.presupCounter = Math.max(DB.presupCounter||1, maxNum+1);
     } else if(!DB.presupuestos.length) DB.presupuestos=[];
     if(al.length) DB.alertas = al.map(r=>{
       let acid = String(r.CLIENTE_ID||'').trim();
@@ -1222,7 +1227,8 @@ async function syncAll() {
 
     // Restore preserved local data + alertasRepuesto
     DB.alertasRepuesto = _alertasRepuesto;
-    DB.presupCounter = Math.max(DB.presupCounter||1, _presupCounter);
+    // (el contador de presupuestos ya se recalculó correctamente más arriba,
+    // a partir del máximo real leído del Sheet — ver comentario del FIX)
     DB.calendarioEventos = DB.calendarioEventos.length ? DB.calendarioEventos : _calendarioEventos;
     // Re-merge locally created items not yet confirmed in Sheet
     _localClientes.forEach(lc => { if(!DB.clientes.find(x=>x.id===lc.id)) DB.clientes.push(lc); });
@@ -4669,19 +4675,25 @@ function openModal(type, data={}) {
       const fEnviadoRaw = gv('f-penviado')||'';
       const fEnviPts = fEnviadoRaw.split('-'); const fEnviadoFmt = fEnviadoRaw ? (fEnviPts.length===3?fEnviPts[2]+'/'+fEnviPts[1]+'/'+fEnviPts[0]:fEnviadoRaw) : (data.fechaEnviado||'');
       const tcVal = parseFloat(gv('f-ptc'))||0;
-      const montoArsFinal = totalMonto||data.monto||0;
-      const montoUsdFinal = tcVal>0 ? (monedaVal==='USD' ? montoArsFinal : montoArsFinal/tcVal) : 0;
+      const montoContadoArs = totalMonto||data.monto||0;
       const plazoPago = gv('f-pplazo')||'contado';
       const tfVigente = tarifarioVigente();
       const recargoPct = plazoPago==='30' ? (tfVigente?tfVigente.recargo30:3)
                         : plazoPago==='60' ? (tfVigente?tfVigente.recargo60:6)
                         : plazoPago==='90' ? (tfVigente?tfVigente.recargo90:9) : 0;
+      // FIX: antes el monto guardado quedaba siempre en el valor de contado,
+      // sin importar el plazo elegido. Ahora se le aplica el recargo del plazo
+      // al monto y al USD que efectivamente quedan guardados/mostrados.
+      const usdAncla = tcVal>0 ? (monedaVal==='USD' ? montoContadoArs : montoContadoArs/tcVal) : 0;
+      const usdFinal = usdAncla * (1 + recargoPct/100);
+      const montoArsFinal = tcVal>0 ? usdFinal*tcVal : montoContadoArs*(1+recargoPct/100);
+      const montoUsdFinal = usdFinal;
       guardar('presupuestos',{
         id:data.id||uid(),
         num:data.num||DB.presupCounter++,
         clienteId:clienteIdFinal,
         descripcion,
-        monto:montoArsFinal,
+        monto:Math.round(montoArsFinal),
         montoUsd:Math.round(montoUsdFinal),
         tcAlMomento:tcVal,
         plazoPago:plazoPago,
@@ -4756,15 +4768,16 @@ function openModal(type, data={}) {
 
   else if(type==='cobroReal') {
     const p = data;
-    const usdAncla = p.montoUsd || 0;
+    // FIX: p.montoUsd ya es el monto FINAL con el recargo del plazo aplicado
+    // (se corrigió en el guardado del presupuesto) — acá NO hay que volver a
+    // multiplicarlo por (1+recargoPct/100), sería aplicarlo dos veces.
+    const usdEsperado = p.montoUsd || 0;
     const recargoPct = p.recargoPct || 0;
-    const usdEsperado = usdAncla * (1 + recargoPct/100);
     title='REGISTRAR COBRO REAL — Presupuesto N°'+String(p.num||p.id).padStart(4,'0');
     body=`<div class="form-grid">
       <div class="form-group full" style="background:var(--dark);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--muted)">
-        Ancla al cotizar: <b style="color:var(--blue-light)">USD ${usdAncla.toLocaleString('es-AR')}</b> ·
-        Plazo: <b style="text-transform:capitalize">${p.plazoPago||'contado'}</b>${recargoPct>0?` (+${recargoPct}%)`:''} ·
-        Esperado con recargo: <b style="color:var(--yellow)">USD ${usdEsperado.toLocaleString('es-AR',{maximumFractionDigits:0})}</b>
+        Esperado según cotización: <b style="color:var(--blue-light)">USD ${usdEsperado.toLocaleString('es-AR')}</b> ·
+        Plazo: <b style="text-transform:capitalize">${p.plazoPago||'contado'}</b>${recargoPct>0?` (+${recargoPct}%)`:''}
       </div>
       <div class="form-group"><label>Fecha de cobro real *</label><input id="f-crfecha" type="date" value="${data.fechaCobroReal||today()}"/></div>
       <div class="form-group"><label>Monto realmente cobrado (ARS) *</label><input id="f-crmonto" type="number" value="${data.montoCobradoReal||''}" oninput="calcularDiferenciaCobro(${usdEsperado})"/></div>
@@ -4953,22 +4966,26 @@ function guardar(tipo, obj, campoRequerido) {
       const lineas = (obj.descripcion||'').split('\n').filter(l=>l.trim());
       const items = lineas.length ? lineas.map(l=>{ const pts=l.split('|'); return {desc:pts[0]||'',tipo:pts[1]||'Servicio',cant:pts[2]||'1',precio:pts[3]||''}; }) : [{desc:obj.descripcion||'',tipo:'Servicio',cant:'1',precio:String(obj.monto||0)}];
       const monedaSym = obj.moneda==='USD' ? 'USD ' : '$';
-      items.forEach(function(item) {
-        const precioNum = parseFloat(String(item.precio).replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
-        const cantNum = parseFloat(item.cant) || 1;
-        const subtotal = cantNum * precioNum;
-        writeToSheet({ action:'addPresupuesto', row: {
-          id:obj.id, num:obj.num, cliente_id:obj.clienteId, cliente:clNom,
-          descripcion:item.desc, tipo:item.tipo,
-          cantidad:item.cant,
-          precio_unitario: precioNum > 0 ? monedaSym + precioNum.toLocaleString('es-AR') : '',
-          monto: subtotal > 0 ? monedaSym + subtotal.toLocaleString('es-AR') : (monedaSym + (obj.monto||0).toLocaleString('es-AR')),
-          monto_total: monedaSym + (obj.monto||0).toLocaleString('es-AR'),
-          precio_usd: obj.montoUsd||0, tc_al_momento: obj.tcAlMomento||0,
-          plazo_pago: obj.plazoPago||'contado', recargo_pct: obj.recargoPct||0,
-          estado:obj.estado, fecha:obj.fecha, notas:obj.notas||''
-        }});
-      });
+      // FIX: antes se hacía un writeToSheet por cada ítem y cada uno pisaba al
+      // anterior (solo sobrevivía el último). Ahora se manda TODO en un único
+      // envío, con la descripción combinada — igual que hace la edición.
+      const descsAlta = items.map(x=>x.desc).filter(Boolean).join(' / ');
+      const tiposAlta = items.map(x=>x.tipo).filter(Boolean).join(' / ');
+      const cantsAlta = items.map(x=>x.cant).filter(Boolean).join(' / ');
+      const preciosAlta = items.map(x=>{
+        const precioNum = parseFloat(String(x.precio).replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
+        return precioNum>0 ? monedaSym+precioNum.toLocaleString('es-AR') : '';
+      }).filter(Boolean).join(' / ');
+      writeToSheet({ action:'addPresupuesto', row: {
+        id:obj.id, num:obj.num, cliente_id:obj.clienteId, cliente:clNom,
+        descripcion:descsAlta, tipo:tiposAlta, cantidad:cantsAlta,
+        precio_unitario:preciosAlta,
+        monto: monedaSym + (obj.monto||0).toLocaleString('es-AR'),
+        monto_total: monedaSym + (obj.monto||0).toLocaleString('es-AR'),
+        precio_usd: obj.montoUsd||0, tc_al_momento: obj.tcAlMomento||0,
+        plazo_pago: obj.plazoPago||'contado', recargo_pct: obj.recargoPct||0,
+        estado:obj.estado, fecha:obj.fecha, notas:obj.notas||''
+      }});
     }
     if(tipo==='clientes') writeToSheet({ action:'addCliente', row: {
       ID:obj.id, NOMBRE:obj.nombre, EMPRESA:obj.empresa||'',
@@ -4987,7 +5004,7 @@ function guardar(tipo, obj, campoRequerido) {
       const cants3 = items3.map(x=>x.cant).filter(Boolean).join(' / ');
       const precios3 = items3.map(x=>x.precio).filter(Boolean).join(' / ');
       writeToSheet({ action:'updatePresupuesto', id:obj.id, row:{
-        cliente:clNom3, descripcion:descs3, tipo:tipos3, cantidad:cants3,
+        cliente_id:obj.clienteId, cliente:clNom3, descripcion:descs3, tipo:tipos3, cantidad:cants3,
         precio_unitario:precios3, monto:obj.monto,
         precio_usd:obj.montoUsd||0, tc_al_momento:obj.tcAlMomento||0,
         plazo_pago:obj.plazoPago||'contado', recargo_pct:obj.recargoPct||0,
