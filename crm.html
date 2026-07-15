@@ -103,7 +103,11 @@ body { background:var(--black); color:var(--text); font-family:'Barlow',sans-ser
 .card-title { font-family:'Bebas Neue'; font-size:15px; color:var(--yellow); letter-spacing:2px; }
 
 /* TABLE */
-.table-wrap { overflow-x:auto; }
+.table-wrap { overflow-x:auto; scrollbar-width:auto; scrollbar-color:var(--yellow) var(--dark); }
+.table-wrap::-webkit-scrollbar { height:14px; }
+.table-wrap::-webkit-scrollbar-track { background:var(--dark); border-radius:7px; }
+.table-wrap::-webkit-scrollbar-thumb { background:var(--yellow); border-radius:7px; border:3px solid var(--dark); }
+.table-wrap::-webkit-scrollbar-thumb:hover { background:#ffcc33; }
 table { width:100%; border-collapse:collapse; }
 th { text-align:left; padding:9px 13px; font-size:9px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; border-bottom:1px solid var(--border); background:var(--dark); white-space:nowrap; }
 td { padding:10px 13px; font-size:13px; color:var(--text); border-bottom:1px solid var(--border); }
