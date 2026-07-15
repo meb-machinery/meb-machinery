@@ -588,6 +588,30 @@ select option { background:var(--dark); }
         <tbody id="tabla-impacto-cambiario"></tbody>
       </table></div>
     </div>
+    <!-- Fila 3.6: Por cobrar según Presupuestos, desglose por plazo -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header"><span class="card-title">📅 Por cobrar según Presupuestos — desglose por plazo</span></div>
+      <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">
+        Presupuestos aprobados que todavía no se marcaron como cobrados, agrupados por el plazo que eligió el cliente. Esto es distinto del "Por cobrar" de Trabajos de arriba — ese mira trabajos técnicos, esto mira presupuestos con plazo.
+      </p>
+      <div id="por-cobrar-plazos-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px"></div>
+      <div id="por-cobrar-plazos-chart" style="margin-top:16px"></div>
+
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px;flex-wrap:wrap">
+          <span style="font-size:13px;color:var(--yellow);font-weight:600">⚡ Exposición cambiaria en tiempo real</span>
+          <button class="btn-secondary" onclick="actualizarExposicionCambiaria()" style="font-size:11px">↻ Actualizar con dólar de hoy</button>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin:-4px 0 10px">
+          Compara el dólar del día que se cotizó cada presupuesto pendiente contra el dólar de HOY. Si la devaluación desde entonces ya superó el recargo pactado para ese plazo, ese presupuesto está perdiendo valor real ahora mismo — aunque todavía no se cobró y nada "salió mal" todavía.
+        </p>
+        <div id="exposicion-cambiaria-resumen" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:10px"></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Presupuesto</th><th>Cliente</th><th>Plazo</th><th style="text-align:right">TC cotización</th><th style="text-align:right">TC hoy</th><th style="text-align:right">Devaluación</th><th style="text-align:right">Estado</th></tr></thead>
+          <tbody id="tabla-exposicion-cambiaria"><tr><td colspan="7"><div class="empty-state"><div class="icon">⚡</div><p>Tocá "Actualizar" para calcular con el dólar de hoy</p></div></td></tr></tbody>
+        </table></div>
+      </div>
+    </div>
     <!-- Fila 4: desglose -->
     <div class="stats-grid">
       <div class="stat-card orange"><div class="stat-val" id="e-rentabilidad">0%</div><div class="stat-label">Rentabilidad real</div><div class="stat-icon">📈</div><div class="stat-sub">Sobre monto cobrado real</div></div>
@@ -1293,6 +1317,26 @@ function fmtDate(d) {
   if(p.length===3) return `${p[2]}/${p[1]}/${p[0]}`;
   return d;
 }
+// Convierte fecha en cualquier formato del sistema (DD/MM/YYYY o YYYY-MM-DD) a Date
+function parseFechaAny(d) {
+  if(!d) return null;
+  if(/^\d{4}-\d{1,2}-\d{1,2}$/.test(d)) return new Date(d+'T00:00:00');
+  const m = String(d).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m) return new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}T00:00:00`);
+  return null;
+}
+// Días de plazo vencido sin cobro real registrado — null si no aplica
+function diasPlazoVencido(p) {
+  if(!p || p.estadoCobro==='cobrado' || p.estado!=='aprobado') return null;
+  const dias = p.plazoPago==='30'?30:p.plazoPago==='60'?60:p.plazoPago==='90'?90:0;
+  if(!dias) return null;
+  const base = parseFechaAny(p.fecha);
+  if(!base) return null;
+  const vencimiento = new Date(base.getTime() + dias*86400000);
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const diff = Math.floor((hoy - vencimiento) / 86400000);
+  return diff > 0 ? diff : null;
+}
 // Parsear montos con coma decimal (formato argentino del Sheet)
 function parseMonto(v) {
   if(!v && v!==0) return 0;
@@ -1338,7 +1382,8 @@ function updateBadges() {
   document.getElementById('badge-presup').textContent=DB.presupuestos.length;
   const contratosActivos=DB.contratos.filter(c=>c.estado==='activo').length;
   const bc=document.getElementById('badge-contratos'); if(bc) bc.textContent=contratosActivos;
-  const al=DB.alertas.filter(a=>!a.resuelta).length + (typeof calcularAlertasRepuesto==="function" ? calcularAlertasRepuesto().length : 0);
+  const vencidosPlazo = DB.presupuestos.filter(p=>diasPlazoVencido(p)).length;
+  const al=DB.alertas.filter(a=>!a.resuelta).length + (typeof calcularAlertasRepuesto==="function" ? calcularAlertasRepuesto().length : 0) + vencidosPlazo;
   document.getElementById('badge-alertas').textContent=al;
   document.getElementById('s-clientes').textContent=DB.clientes.length;
   document.getElementById('s-presup').textContent=DB.presupuestos.length;
@@ -1878,7 +1923,7 @@ function renderPresupuestos() {
       <td>${cl?`<div class="td-name">${cl.nombre}</div><div class="td-muted">${cl.empresa||''}</div>`:'—'}</td>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${descCorta}</td>
       <td><span class="monto">${fmtMonto((()=>{const a=p.recargoPct?p.monto*(1+p.recargoPct/100):p.monto;return Math.round(a);})())}</span>${p.montoUsd&&p.tcAlMomento?`<div style="font-size:10px;color:var(--blue-light)" title="El valor en dólares está sujeto al tipo de cambio del día de la fecha">USD ${Math.round((p.recargoPct?Math.round(p.monto*(1+p.recargoPct/100)):p.monto)/p.tcAlMomento).toLocaleString('es-AR')}</div>`:''}${p.plazoPago&&p.plazoPago!=='contado'?`<div style="font-size:9px;color:var(--orange)">A ${p.plazoPago} días (+${p.recargoPct}%)</div>`:''}</td>
-      <td>${badgeEstado(p.estado)}</td>
+      <td>${badgeEstado(p.estado)}${diasPlazoVencido(p)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${p.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencido(p)}d</div>`:''}</td>
       <td class="td-muted">${fmtDate(p.fecha)}</td>
       <td style="font-size:10px;color:${p.fechaDescarga?'#25d366':'var(--muted2)'};text-align:center;white-space:nowrap">${p.fechaDescarga?'✔ '+p.fechaDescarga:'—'}</td>
       <td style="font-size:10px;color:${p.fechaEnviado?'#6fa8dc':'var(--muted2)'};text-align:center;white-space:nowrap">${p.fechaEnviado?'✔ '+p.fechaEnviado:'—'}</td>
@@ -3276,6 +3321,99 @@ function renderEstadisticas() {
       }).join('')}</tbody></table></div></div>` :
       `<div class="card"><div class="empty-state"><div class="icon">✅</div><p>Sin alertas de mantenimiento pendientes</p></div></div>`;
   }
+  renderPorCobrarPlazos();
+}
+
+// ── POR COBRAR SEGÚN PRESUPUESTOS, DESGLOSADO POR PLAZO ──────────────────────
+function renderPorCobrarPlazos() {
+  const pendientes = DB.presupuestos.filter(p=>p.estado==='aprobado' && p.estadoCobro!=='cobrado');
+  const labels = {contado:'Contado', '30':'30 días', '60':'60 días', '90':'90 días'};
+  const colors = {contado:'var(--green)', '30':'#6fa8dc', '60':'var(--yellow)', '90':'var(--orange)'};
+  const grupos = {contado:[], '30':[], '60':[], '90':[]};
+  pendientes.forEach(p=>{ const k=(grupos[p.plazoPago]?p.plazoPago:'contado'); grupos[k].push(p); });
+
+  let maxMonto = 0;
+  const datos = Object.keys(labels).map(k=>{
+    const arr = grupos[k];
+    const monto = arr.reduce((s,p)=>{ const m = p.recargoPct ? Math.round(p.monto*(1+p.recargoPct/100)) : (p.monto||0); return s+m; },0);
+    maxMonto = Math.max(maxMonto, monto);
+    return {k, label:labels[k], count:arr.length, monto};
+  });
+
+  const grid = document.getElementById('por-cobrar-plazos-grid');
+  if(grid) grid.innerHTML = datos.map(d=>
+    `<div class="stat-card" style="border-left:3px solid ${colors[d.k]}">
+      <div class="stat-val" style="font-size:20px">${fmtMonto(d.monto)}</div>
+      <div class="stat-label">${d.label.toUpperCase()}</div>
+      <div class="stat-sub">${d.count} presupuesto${d.count===1?'':'s'}</div>
+    </div>`).join('');
+
+  const chartEl = document.getElementById('por-cobrar-plazos-chart');
+  if(chartEl) chartEl.innerHTML = datos.map(d=>{
+    const pct = maxMonto>0 ? Math.round(d.monto/maxMonto*100) : 0;
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <div style="width:64px;font-size:11px;color:var(--muted)">${d.label}</div>
+      <div style="flex:1;background:var(--dark);border-radius:4px;height:18px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${colors[d.k]};transition:width .3s ease"></div>
+      </div>
+      <div style="width:110px;text-align:right;font-size:11px;color:var(--text)">${fmtMonto(d.monto)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── EXPOSICIÓN CAMBIARIA EN TIEMPO REAL ───────────────────────────────────────
+// Compara el TC del día de cada presupuesto pendiente contra el TC de HOY.
+// Si la devaluación acumulada ya superó el recargo pactado para ese plazo,
+// el presupuesto está perdiendo valor real ahora mismo, aunque no se cobró.
+async function actualizarExposicionCambiaria() {
+  const tbody = document.getElementById('tabla-exposicion-cambiaria');
+  const resumen = document.getElementById('exposicion-cambiaria-resumen');
+  if(tbody) tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">⏳</div><p>Consultando el dólar de hoy…</p></div></td></tr>`;
+
+  let tcHoy = 0;
+  try {
+    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
+    if(!res.ok) throw new Error('fail');
+    const data = await res.json();
+    tcHoy = Math.round(data.venta);
+  } catch(e) {
+    if(tbody) tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">⚠️</div><p>No se pudo traer el dólar en vivo — probá de nuevo</p></div></td></tr>`;
+    return;
+  }
+
+  const pendientes = DB.presupuestos.filter(p=>p.estado==='aprobado' && p.estadoCobro!=='cobrado' && p.tcAlMomento>0);
+  if(!pendientes.length) {
+    if(tbody) tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">✅</div><p>No hay presupuestos pendientes con dólar cargado</p></div></td></tr>`;
+    if(resumen) resumen.innerHTML = '';
+    return;
+  }
+
+  let totalEnRiesgo=0, countEnRiesgo=0, totalCubierto=0;
+  const filas = pendientes.map(p=>{
+    const cl = DB.clientes.find(c=>String(c.id)===String(p.clienteId));
+    const devaluacionPct = (tcHoy - p.tcAlMomento) / p.tcAlMomento * 100;
+    const recargoPct = p.recargoPct || 0;
+    const enRiesgo = devaluacionPct > recargoPct;
+    const montoArs = p.recargoPct ? Math.round(p.monto*(1+p.recargoPct/100)) : (p.monto||0);
+    if(enRiesgo) { totalEnRiesgo += montoArs; countEnRiesgo++; } else { totalCubierto += montoArs; }
+    return {p, cl, devaluacionPct, recargoPct, enRiesgo, montoArs};
+  });
+
+  if(resumen) resumen.innerHTML = `
+    <div class="stat-card red"><div class="stat-val">${countEnRiesgo}</div><div class="stat-label">En riesgo hoy</div><div class="stat-sub">Devaluación &gt; recargo pactado</div></div>
+    <div class="stat-card red"><div class="stat-val">${fmtMonto(totalEnRiesgo)}</div><div class="stat-label">Monto expuesto</div></div>
+    <div class="stat-card green"><div class="stat-val">${fmtMonto(totalCubierto)}</div><div class="stat-label">Todavía cubierto por el recargo</div></div>
+  `;
+
+  if(tbody) tbody.innerHTML = filas.sort((a,b)=>b.devaluacionPct-a.devaluacionPct).map(f=>`<tr>
+    <td>#${String(f.p.num||0).padStart(4,'0')}</td>
+    <td>${f.cl?f.cl.nombre:(f.p.clienteNombreSheet||'—')}</td>
+    <td style="text-transform:capitalize">${f.p.plazoPago||'contado'}${f.recargoPct?' (+'+f.recargoPct+'%)':''}</td>
+    <td style="text-align:right">$${f.p.tcAlMomento.toLocaleString('es-AR')}</td>
+    <td style="text-align:right">$${tcHoy.toLocaleString('es-AR')}</td>
+    <td style="text-align:right;color:${f.devaluacionPct>0?'var(--red)':'var(--green)'}">${f.devaluacionPct>=0?'+':''}${f.devaluacionPct.toFixed(1)}%</td>
+    <td style="text-align:right;color:${f.enRiesgo?'var(--red)':'var(--green)'};font-weight:bold">${f.enRiesgo?'⚠ En riesgo':'✔ Cubierto'}</td>
+  </tr>`).join('');
 }
 
 // ============================================================
