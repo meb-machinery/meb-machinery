@@ -1751,6 +1751,7 @@ async function writeToSheet(payload) {
 }
 
 function cambiarCobro(id, nuevoEstado, divId) {
+  alert('[MEB DIAG] cambiarCobro llamada con estado=' + nuevoEstado + ' id=' + id);
   const t = DB.trabajos.find(x=>x.id===id);
   if(!t) return;
 
