@@ -1755,14 +1755,21 @@ function cambiarCobro(id, nuevoEstado, divId) {
   if(!t) return;
 
   if(nuevoEstado === 'cobrado') {
+    console.log('[MEB DIAG] cambiarCobro: entrando a rama cobrado, id=', id, 'divId=', divId);
     // NUEVO: para "Cobrado" se pide el dólar del día en un paso extra.
     // Pendiente y Parcial no pasan por acá — siguen 100% igual que antes.
     // Primero revierte visualmente el <select>: si el usuario cancela el
     // modal, no queda "Cobrado" mostrado sin haberse confirmado de verdad.
-    const wrapEl = document.getElementById(divId);
-    const selectEl = wrapEl ? wrapEl.querySelector('select') : null;
-    if(selectEl) selectEl.value = t.estadoCobro || 'pendiente';
-    openModal('cobroTrabajoTC', t);
+    try {
+      const wrapEl = document.getElementById(divId);
+      const selectEl = wrapEl ? wrapEl.querySelector('select') : null;
+      if(selectEl) selectEl.value = t.estadoCobro || 'pendiente';
+      console.log('[MEB DIAG] llamando a openModal cobroTrabajoTC');
+      openModal('cobroTrabajoTC', t);
+      console.log('[MEB DIAG] openModal ejecutado sin excepción');
+    } catch(errDiag) {
+      console.error('[MEB DIAG] ERROR en rama cobrado:', errDiag);
+    }
     return;
   }
 
