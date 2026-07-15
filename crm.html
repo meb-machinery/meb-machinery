@@ -1751,26 +1751,18 @@ async function writeToSheet(payload) {
 }
 
 function cambiarCobro(id, nuevoEstado, divId) {
-  alert('[MEB DIAG] cambiarCobro llamada con estado=' + nuevoEstado + ' id=' + id);
   const t = DB.trabajos.find(x=>x.id===id);
   if(!t) return;
 
   if(nuevoEstado === 'cobrado') {
-    console.log('[MEB DIAG] cambiarCobro: entrando a rama cobrado, id=', id, 'divId=', divId);
     // NUEVO: para "Cobrado" se pide el dólar del día en un paso extra.
     // Pendiente y Parcial no pasan por acá — siguen 100% igual que antes.
     // Primero revierte visualmente el <select>: si el usuario cancela el
     // modal, no queda "Cobrado" mostrado sin haberse confirmado de verdad.
-    try {
-      const wrapEl = document.getElementById(divId);
-      const selectEl = wrapEl ? wrapEl.querySelector('select') : null;
-      if(selectEl) selectEl.value = t.estadoCobro || 'pendiente';
-      console.log('[MEB DIAG] llamando a openModal cobroTrabajoTC');
-      openModal('cobroTrabajoTC', t);
-      console.log('[MEB DIAG] openModal ejecutado sin excepción');
-    } catch(errDiag) {
-      console.error('[MEB DIAG] ERROR en rama cobrado:', errDiag);
-    }
+    const wrapEl = document.getElementById(divId);
+    const selectEl = wrapEl ? wrapEl.querySelector('select') : null;
+    if(selectEl) selectEl.value = t.estadoCobro || 'pendiente';
+    openModal('cobroTrabajoTC', t);
     return;
   }
 
@@ -1929,7 +1921,7 @@ function renderTrabajos() {
         <div style="font-family:'Bebas Neue';font-size:14px;color:${ganancia>=0?'var(--yellow)':'var(--red)'}">${fmtMonto(ganancia)}</div>
         <div style="font-size:10px;color:${margenColor}">${margen}% margen</div>
       </td>
-      <td>${badgeCobro(t.estadoCobro||'pendiente','${t.id}')}</td>
+      <td>${badgeCobro(t.estadoCobro||'pendiente', t.id)}</td>
       <td><div class="actions">
         <button class="btn-secondary" onclick="verTrabajo('${t.id}')">Ver</button>
         <button class="btn-secondary" onclick="cambiarEstado('trabajos','${t.id}',['pendiente','en curso','completado','cancelado','no aprobado'])">Estado</button>
