@@ -1759,7 +1759,8 @@ function cambiarCobro(id, nuevoEstado, divId) {
     // Pendiente y Parcial no pasan por acá — siguen 100% igual que antes.
     // Primero revierte visualmente el <select>: si el usuario cancela el
     // modal, no queda "Cobrado" mostrado sin haberse confirmado de verdad.
-    const selectEl = document.querySelector('#'+divId+' select');
+    const wrapEl = document.getElementById(divId);
+    const selectEl = wrapEl ? wrapEl.querySelector('select') : null;
     if(selectEl) selectEl.value = t.estadoCobro || 'pendiente';
     openModal('cobroTrabajoTC', t);
     return;
