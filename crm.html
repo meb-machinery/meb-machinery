@@ -879,7 +879,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxiH7NFqGPup3dRSh8XvftN5RsuGiRKG5VnDxPOy6OennRsNihywryrXqonvWhpgGh0Rg/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz6D9sy8RpVas1q4VFfPh0q1-TlIVhoCNVodrPYq5CKKq-EMKbZrvmR51o5BvJQ-hJtXg/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1256,7 +1256,12 @@ async function syncAll() {
       proximoServiceHs:r.PROXIMO_SERVICE_HS||'', ultimoServiceHs:r.ULTIMO_SERVICE_HS||'',
       precioArs:parseMonto(r.PRECIO_ARS), precioUsd:parseMonto(r.PRECIO_USD),
       tcAlMomento:parseFloat(r.TC_AL_MOMENTO)||0, estado:(r.ESTADO||'activo').toLowerCase(),
-      notas:r.NOTAS||'', fechaCreado:r.FECHA_CREADO||''
+      notas:r.NOTAS||'', fechaCreado:r.FECHA_CREADO||'',
+      plazoPago:r.PLAZO_PAGO||'contado', recargoPct:parseFloat(r.RECARGO_PCT)||0,
+      estadoCobro:r.ESTADO_COBRO||'pendiente', fechaCobroReal:r.FECHA_COBRO_REAL||'',
+      tcCobro:parseFloat(r.TC_COBRO)||0, montoCobradoReal:parseMonto(r.MONTO_COBRADO_REAL||'0'),
+      usdRecibido:parseFloat(r.USD_RECIBIDO)||0, diferenciaUsd:parseFloat(r.DIFERENCIA_USD)||0,
+      diferenciaPct:parseFloat(r.DIFERENCIA_PCT)||0
     }));
 
     // TARIFARIO — historial completo; el más reciente por fecha es el "vigente"
@@ -1959,7 +1964,7 @@ function renderPresupuestos() {
       <td>${cl?`<div class="td-name">${cl.nombre}</div><div class="td-muted">${cl.empresa||''}</div>`:'—'}</td>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${descCorta}</td>
       <td><span class="monto">${fmtMonto((()=>{const a=p.recargoPct?p.monto*(1+p.recargoPct/100):p.monto;return Math.round(a);})())}</span>${p.montoUsd&&p.tcAlMomento?`<div style="font-size:10px;color:var(--blue-light)" title="El valor en dólares está sujeto al tipo de cambio del día de la fecha">USD ${Math.round((p.recargoPct?Math.round(p.monto*(1+p.recargoPct/100)):p.monto)/p.tcAlMomento).toLocaleString('es-AR')}</div>`:''}${p.plazoPago&&p.plazoPago!=='contado'?`<div style="font-size:9px;color:var(--orange)">A ${p.plazoPago} días (+${p.recargoPct}%)</div>`:''}</td>
-      <td>${badgeEstado(p.estado)}${diasPlazoVencido(p)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${p.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencido(p)}d</div>`:''}</td>
+      <td>${badgeEstado(p.estado)}${diasPlazoVencido(p)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${p.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencido(p)}d</div><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="reclamarPresupuestoWhatsApp('${p.id}')" title="Mandar recordatorio por WhatsApp">📲 Reclamar</button>`:''}</td>
       <td class="td-muted">${fmtDate(p.fecha)}</td>
       <td style="font-size:10px;color:${p.fechaDescarga?'#25d366':'var(--muted2)'};text-align:center;white-space:nowrap">${p.fechaDescarga?'✔ '+p.fechaDescarga:'—'}</td>
       <td style="font-size:10px;color:${p.fechaEnviado?'#6fa8dc':'var(--muted2)'};text-align:center;white-space:nowrap">${p.fechaEnviado?'✔ '+p.fechaEnviado:'—'}</td>
@@ -2009,12 +2014,15 @@ function renderContratos() {
       <td class="td-muted">${fmtDate(c.fechaInicio)}</td>
       <td class="td-muted">${fmtDate(c.fechaVencimiento)}${diasParaVencer!==null?` <span style="color:${estadoColor};font-size:10px">(${diasParaVencer}d)</span>`:''}</td>
       <td>${c.proximoServiceHs||'—'} hs</td>
-      <td><span class="monto">${fmtMonto(c.precioArs)}</span></td>
-      <td><span class="monto" style="color:var(--blue-light)">USD ${(c.precioUsd||0).toLocaleString('es-AR')}</span></td>
+      <td><span class="monto">${fmtMonto(c.recargoPct?Math.round(c.precioArs*(1+c.recargoPct/100)):c.precioArs)}</span>${c.plazoPago&&c.plazoPago!=='contado'?`<div style="font-size:9px;color:var(--orange)">A ${c.plazoPago} días (+${c.recargoPct}%)</div>`:''}</td>
+      <td><span class="monto" style="color:var(--blue-light)">USD ${Math.round(c.recargoPct?(c.precioUsd||0)*(1+c.recargoPct/100):(c.precioUsd||0)).toLocaleString('es-AR')}</span></td>
       <td><span style="color:${estadoColor};text-transform:capitalize;font-family:'Bebas Neue';letter-spacing:1px">${estadoVisual}</span></td>
       <td><div class="actions">
         <button class="btn-secondary" title="Editar" onclick="openModal('contrato',DB.contratos.find(x=>x.id==='${c.id}'))">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('contratos','${c.id}',['activo','pausado','vencido'])">Estado</button>
+        ${c.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Registrar cobro real">💰 Cobro</button>`:`<span style="font-size:10px;color:${(c.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap">${(c.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${c.diferenciaUsd}</span>`}
+        <button class="btn-secondary" onclick="generarContratoPDF('${c.id}')">📄 PDF</button>
+        <button class="btn-secondary" style="background:rgba(244,180,0,0.15);border-color:var(--yellow);color:var(--yellow)" onclick="generarDocumentoOpcionesPagoContrato('${c.id}')" title="Documento de opciones de pago para el cliente">📑 Opciones pago</button>
         <button class="btn-danger" onclick="eliminar('contratos','${c.id}')">✕</button>
       </div></td>
     </tr>`;
@@ -4017,6 +4025,175 @@ function generarDocumentoOpcionesPago(presupId) {
   else { alert('Bloqueador de popups activo. Permití los popups para este sitio.'); URL.revokeObjectURL(url); }
 }
 
+// ── DOCUMENTO DE OPCIONES DE PAGO — CONTRATOS (mismo criterio que Presupuestos) ──
+function generarDocumentoOpcionesPagoContrato(contratoId) {
+  const c = DB.contratos.find(x => x.id === contratoId);
+  if (!c) return;
+  const cl = DB.clientes.find(x => String(x.id) === String(c.clienteId));
+  const clienteNombre = cl ? cl.nombre : (c.clienteId || '—');
+  const mq = DB.maquinas.find(x => x.id === c.maquinaId);
+  const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const tc = c.tcAlMomento || 0;
+  const montoArsAncla = c.precioArs || 0;
+
+  if(!tc || !montoArsAncla) {
+    showToast('Este contrato todavía no tiene dólar/USD cargado — abrilo y guardalo con el TC del día primero', 'error');
+    return;
+  }
+
+  const tf = tarifarioVigente();
+  const tramos = [
+    {label:'CONTADO', pct:0},
+    {label:'A 30 DÍAS', pct:tf?tf.recargo30:3},
+    {label:'A 60 DÍAS', pct:tf?tf.recargo60:6},
+    {label:'A 90 DÍAS', pct:tf?tf.recargo90:9},
+  ];
+  const marcado = c.plazoPago==='30'?1:c.plazoPago==='60'?2:c.plazoPago==='90'?3:0;
+
+  // Mismo criterio que en Presupuestos: el ARS sale directo del monto real
+  // del contrato, el dólar es solo una referencia derivada — así nunca
+  // aparecen centavos raros por ida y vuelta entre monedas.
+  const filasHTML = tramos.map((t,i)=>{
+    const arsT = Math.round(montoArsAncla*(1+t.pct/100));
+    const usdT = tc>0 ? arsT/tc : 0;
+    return `<tr${i===marcado?' style="background:#FFF7DE"':''}>
+      <td style="text-align:center;font-weight:bold">${i===marcado?'☑':'☐'}</td>
+      <td>${t.label}${t.pct>0?` <span style="color:#6E6E6E;font-size:11px">(+${t.pct}%)</span>`:''}</td>
+      <td style="text-align:right;font-weight:bold">$${arsT.toLocaleString('es-AR')}</td>
+      <td style="text-align:right;color:#003B70">USD ${Math.round(usdT).toLocaleString('es-AR')}</td>
+    </tr>`;
+  }).join('');
+
+  const htmlContent = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+    <title>Opciones de pago — Contrato de mantenimiento</title>
+    <style>
+      body{font-family:'Barlow',Arial,sans-serif;color:#1A1A1A;max-width:720px;margin:24px auto;padding:0 20px}
+      .meta{color:#6E6E6E;font-size:13px;margin-bottom:18px}
+      table{width:100%;border-collapse:collapse;margin:14px 0}
+      th{background:#1A1A1A;color:#F4B400;padding:8px;font-size:12px;text-align:left}
+      td{padding:9px 8px;border-bottom:1px solid #eee;font-size:14px}
+      .nota{background:#F5F2EC;border-left:3px solid #F4B400;padding:10px 14px;font-size:12.5px;color:#333;margin-top:16px;line-height:1.5}
+      .firma{margin-top:50px;display:flex;justify-content:space-between;font-size:12px;color:#6E6E6E}
+      .linea{border-top:1px solid #999;width:220px;padding-top:4px;text-align:center}
+      .header{display:flex;align-items:center;gap:14px;margin-bottom:4px}
+      .header img{height:70px}
+      .print-btn{margin-top:24px;background:#003B70;color:#fff;border:none;padding:10px 18px;border-radius:4px;cursor:pointer;font-family:'Barlow';font-weight:600}
+      @media print{.print-btn{display:none}}
+    </style></head><body>
+    <div class="header"><img src="${typeof MEB_LOGO_PDF_B64!=='undefined'?MEB_LOGO_PDF_B64:''}" alt="MEB"/></div>
+    <div class="meta">Opciones de pago — Contrato de mantenimiento (${c.plan||'básico'}) · ${fechaHoy}<br/>
+      Cliente: ${clienteNombre}${mq?' · Máquina: '+mq.marca+' '+mq.modelo:''}</div>
+    <table>
+      <thead><tr><th></th><th>Modalidad</th><th style="text-align:right">Monto ARS</th><th style="text-align:right">Referencia USD</th></tr></thead>
+      <tbody>${filasHTML}</tbody>
+    </table>
+    <div class="nota">
+      Los precios están expresados en su equivalente en dólares al tipo de cambio del día de emisión (TC $${tc}).
+      El monto final en pesos para pagos a 30/60/90 días se actualiza al tipo de cambio vigente el día efectivo del pago,
+      manteniéndose fijo el recargo pactado en esta tabla. Por favor, marque la opción elegida antes de comenzar el contrato.
+    </div>
+    <div class="firma">
+      <div class="linea">Firma del cliente</div>
+      <div class="linea">Aclaración y fecha</div>
+    </div>
+    <button class="print-btn" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
+    </body></html>`;
+
+  const blob = new Blob([htmlContent], {type:'text/html;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, '_blank', 'width=820,height=920');
+  if(w) setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
+  else { alert('Bloqueador de popups activo. Permití los popups para este sitio.'); URL.revokeObjectURL(url); }
+}
+
+// ── PDF DEL CONTRATO (resumen, no editable — más simple que el de Presupuestos) ──
+function generarContratoPDF(contratoId) {
+  const c = DB.contratos.find(x => x.id === contratoId);
+  if (!c) return;
+  const cl = DB.clientes.find(x => String(x.id) === String(c.clienteId));
+  const clienteNombre = cl ? cl.nombre : (c.clienteId || '—');
+  const mq = DB.maquinas.find(x => x.id === c.maquinaId);
+  const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const montoFinal = c.recargoPct ? Math.round(c.precioArs*(1+c.recargoPct/100)) : (c.precioArs||0);
+  const usdFinal = c.tcAlMomento>0 ? Math.round(montoFinal/c.tcAlMomento) : 0;
+
+  const htmlContent = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+    <title>Contrato de mantenimiento — ${clienteNombre}</title>
+    <style>
+      body{font-family:'Barlow',Arial,sans-serif;color:#1A1A1A;max-width:720px;margin:24px auto;padding:0 20px}
+      .header{display:flex;align-items:center;gap:14px;margin-bottom:8px}
+      .header img{height:70px}
+      h1{font-family:'Bebas Neue',Arial,sans-serif;letter-spacing:2px;font-size:24px;margin:0}
+      h1 span{color:#F4B400}
+      .meta{color:#6E6E6E;font-size:13px;margin-bottom:18px}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:18px 0}
+      .box{background:#F5F2EC;border-radius:6px;padding:14px}
+      .box label{display:block;font-size:10px;color:#6E6E6E;letter-spacing:1px;text-transform:uppercase}
+      .box .val{font-size:16px;font-weight:bold;margin-top:2px}
+      .total{background:#1A1A1A;color:#fff;border-radius:6px;padding:16px;margin:18px 0;display:flex;justify-content:space-between;align-items:center}
+      .total .val{font-family:'Bebas Neue';font-size:26px;color:#F4B400}
+      .nota{background:#F5F2EC;border-left:3px solid #F4B400;padding:10px 14px;font-size:12.5px;color:#333;margin-top:16px;line-height:1.5}
+      .firma{margin-top:50px;display:flex;justify-content:space-between;font-size:12px;color:#6E6E6E}
+      .linea{border-top:1px solid #999;width:220px;padding-top:4px;text-align:center}
+      .print-btn{margin-top:24px;background:#003B70;color:#fff;border:none;padding:10px 18px;border-radius:4px;cursor:pointer;font-family:'Barlow';font-weight:600}
+      @media print{.print-btn{display:none}}
+    </style></head><body>
+    <div class="header">
+      <img src="${typeof MEB_LOGO_PDF_B64!=='undefined'?MEB_LOGO_PDF_B64:''}" alt="MEB"/>
+      <h1>CONTRATO <span>DE MANTENIMIENTO</span></h1>
+    </div>
+    <div class="meta">Emitido el ${fechaHoy}</div>
+    <div class="grid">
+      <div class="box"><label>Cliente</label><div class="val">${clienteNombre}</div></div>
+      <div class="box"><label>Máquina</label><div class="val">${mq?mq.marca+' '+mq.modelo:'—'}</div></div>
+      <div class="box"><label>Plan</label><div class="val" style="text-transform:capitalize">${c.plan||'básico'}</div></div>
+      <div class="box"><label>Próximo service</label><div class="val">${c.proximoServiceHs||'—'} hs</div></div>
+      <div class="box"><label>Fecha de inicio</label><div class="val">${fmtDate(c.fechaInicio)}</div></div>
+      <div class="box"><label>Vencimiento</label><div class="val">${fmtDate(c.fechaVencimiento)||'—'}</div></div>
+    </div>
+    <div class="total">
+      <div>
+        <div style="font-size:11px;color:#ccc;letter-spacing:1px">MONTO ${c.plazoPago&&c.plazoPago!=='contado'?('· A '+c.plazoPago+' DÍAS (+'+c.recargoPct+'%)'):'· CONTADO'}</div>
+        <div style="font-size:11px;color:#7bb3e0">≈ USD ${usdFinal.toLocaleString('es-AR')}</div>
+      </div>
+      <div class="val">$${montoFinal.toLocaleString('es-AR')}</div>
+    </div>
+    <div class="nota">
+      El valor en dólares está sujeto al tipo de cambio del día de la fecha (TC $${c.tcAlMomento||'—'}).
+      Los pagos a 30/60/90 días se ajustan al tipo de cambio vigente el día efectivo del pago, manteniendo el recargo pactado.
+    </div>
+    <div class="firma">
+      <div class="linea">Firma del cliente</div>
+      <div class="linea">MEB Machinery Solutions</div>
+    </div>
+    <button class="print-btn" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
+    </body></html>`;
+
+  const blob = new Blob([htmlContent], {type:'text/html;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, '_blank', 'width=820,height=920');
+  if(w) setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
+  else { alert('Bloqueador de popups activo. Permití los popups para este sitio.'); URL.revokeObjectURL(url); }
+}
+
+function reclamarPresupuestoWhatsApp(presupId) {
+  const p = DB.presupuestos.find(x => x.id === presupId);
+  if (!p) return;
+  const cl = DB.clientes.find(c => String(c.id) === String(p.clienteId));
+  if (!cl || !cl.telefono) {
+    showToast('Este cliente no tiene teléfono cargado — no se puede mandar el recordatorio', 'error');
+    return;
+  }
+  const dias = diasPlazoVencido(p);
+  const montoFinal = p.recargoPct ? Math.round(p.monto*(1+p.recargoPct/100)) : (p.monto||0);
+  const numPresup = String(p.num||p.id).padStart(4,'0');
+  const msg = `Hola ${cl.nombre}! Te escribimos de MEB Machinery Solutions. `
+    + `El presupuesto N° ${numPresup} (a ${p.plazoPago} días) venció hace ${dias} día${dias===1?'':'s'} sin que hayamos registrado el cobro. `
+    + `El monto es de $${montoFinal.toLocaleString('es-AR')}. ¿Podemos coordinar el pago? Gracias!`;
+  const tel = cl.telefono.replace(/\D/g,'');
+  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
 function generarPresupuestoPDF(presupId) {
   const p = DB.presupuestos.find(x => x.id === presupId);
   if (!p) return;
@@ -4698,15 +4875,31 @@ function openModal(type, data={}) {
       </div>
       <div class="form-group"><label>Precio anual ARS (final)</label><input id="f-con-precioars" type="number" value="${data.precioArs||''}"/></div>
       <div class="form-group"><label>Precio anual USD (final)</label><input id="f-con-preciousd" type="number" value="${data.precioUsd||''}"/></div>
+      <div class="form-group full" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+        <label>Plazo de pago del contrato</label>
+        <select id="f-con-plazo">
+          <option value="contado" ${(!data.plazoPago||data.plazoPago==='contado')?'selected':''}>Contado</option>
+          <option value="30" ${data.plazoPago==='30'?'selected':''}>30 días</option>
+          <option value="60" ${data.plazoPago==='60'?'selected':''}>60 días</option>
+          <option value="90" ${data.plazoPago==='90'?'selected':''}>90 días</option>
+        </select>
+      </div>
       <div class="form-group full"><label>Notas</label><textarea id="f-con-notas">${data.notas||''}</textarea></div>
     </div>`;
     onSave=()=>{
+      const plazoPagoCon = gv('f-con-plazo')||'contado';
+      const tfCon = tarifarioVigente();
+      const recargoPctCon = plazoPagoCon==='30' ? (tfCon?tfCon.recargo30:3)
+                           : plazoPagoCon==='60' ? (tfCon?tfCon.recargo60:6)
+                           : plazoPagoCon==='90' ? (tfCon?tfCon.recargo90:9) : 0;
       const obj = {
         id:data.id||uid(), clienteId:gv('f-con-cli'), maquinaId:gv('f-con-maq'),
         plan:gv('f-con-plan'), fechaInicio:gv('f-con-inicio'), fechaVencimiento:gv('f-con-vencimiento'),
         proximoServiceHs:gv('f-con-proxhs'), ultimoServiceHs:gv('f-con-ultimahs'),
         precioArs:parseFloat(gv('f-con-precioars'))||0, precioUsd:parseFloat(gv('f-con-preciousd'))||0,
-        tcAlMomento:parseFloat(gv('f-con-tc'))||0, estado:gv('f-con-estado')||'activo', notas:gv('f-con-notas')
+        tcAlMomento:parseFloat(gv('f-con-tc'))||0, estado:gv('f-con-estado')||'activo', notas:gv('f-con-notas'),
+        plazoPago:plazoPagoCon, recargoPct:recargoPctCon,
+        estadoCobro:data.estadoCobro||'pendiente'
       };
       guardar('contratos', obj, 'clienteId');
       writeToSheet({ action:'addContrato', row: {
@@ -4714,7 +4907,8 @@ function openModal(type, data={}) {
         fechaInicio:obj.fechaInicio, fechaVencimiento:obj.fechaVencimiento,
         proximoServiceHs:obj.proximoServiceHs, ultimoServiceHs:obj.ultimoServiceHs,
         precioArs:obj.precioArs, precioUsd:obj.precioUsd, tcAlMomento:obj.tcAlMomento,
-        estado:obj.estado, notas:obj.notas||''
+        estado:obj.estado, notas:obj.notas||'',
+        plazoPago:obj.plazoPago, recargoPct:obj.recargoPct
       }});
     };
   }
@@ -5055,6 +5249,52 @@ function openModal(type, data={}) {
     };
   }
 
+  // NUEVO: cobro real de Contratos — mismo criterio que Presupuestos (ancla
+  // pura en USD, recargo aplicado al vuelo, nunca horneado en el guardado).
+  else if(type==='cobroContratoReal') {
+    const c = data;
+    const recargoPctCon = c.recargoPct || 0;
+    const usdEsperadoCon = (c.precioUsd || 0) * (1 + recargoPctCon/100);
+    title='REGISTRAR COBRO REAL — Contrato';
+    body=`<div class="form-grid">
+      <div class="form-group full" style="background:var(--dark);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--muted)">
+        Esperado según cotización: <b style="color:var(--blue-light)">USD ${usdEsperadoCon.toLocaleString('es-AR')}</b> ·
+        Plazo: <b style="text-transform:capitalize">${c.plazoPago||'contado'}</b>${recargoPctCon>0?` (+${recargoPctCon}%)`:''}
+      </div>
+      <div class="form-group"><label>Fecha de cobro real *</label><input id="f-ccfecha" type="date" value="${today()}"/></div>
+      <div class="form-group"><label>Monto realmente cobrado (ARS) *</label><input id="f-ccmonto" type="number" oninput="calcularDiferenciaCobroContrato(${usdEsperadoCon})"/></div>
+      <div class="form-group">
+        <label>TC del día del cobro *</label>
+        <div style="display:flex;gap:6px">
+          <input id="f-cctc" type="number" oninput="calcularDiferenciaCobroContrato(${usdEsperadoCon})" style="flex:1"/>
+          <button type="button" class="btn-secondary" onclick="actualizarTCCobroContrato(${usdEsperadoCon})" style="white-space:nowrap;font-size:11px">↻ En vivo</button>
+        </div>
+      </div>
+      <div class="form-group full" id="cc-resultado" style="text-align:center;padding:10px;border-radius:6px;background:var(--dark);border:1px solid var(--border2)">
+        Completá monto y TC para ver si ganó o perdió en dólares reales
+      </div>
+    </div>`;
+    onSave=()=>{
+      const fechaCC=gv('f-ccfecha'), montoCC=parseFloat(gv('f-ccmonto'))||0, tcCC=parseFloat(gv('f-cctc'))||0;
+      if(!montoCC||!tcCC){ showToast('Cargá monto y TC del día del cobro','error'); return; }
+      const usdRecibidoCC = montoCC/tcCC;
+      const difUsdCC = usdRecibidoCC - usdEsperadoCon;
+      const difPctCC = usdEsperadoCon>0 ? (difUsdCC/usdEsperadoCon*100) : 0;
+      const item = DB.contratos.find(x=>x.id===c.id);
+      if(item){
+        Object.assign(item,{estadoCobro:'cobrado',fechaCobroReal:fechaCC,tcCobro:tcCC,montoCobradoReal:montoCC,usdRecibido:Math.round(usdRecibidoCC),diferenciaUsd:Math.round(difUsdCC),diferenciaPct:Math.round(difPctCC*10)/10});
+        saveLocal();
+        writeToSheet({action:'registrarCobroContrato', id:c.id, row:{
+          fecha_cobro_real:fechaCC, tc_cobro:tcCC, monto_cobrado_real:montoCC,
+          usd_recibido:item.usdRecibido, diferencia_usd:item.diferenciaUsd, diferencia_pct:item.diferenciaPct
+        }});
+        closeModal();
+        renderContratos();
+        showToast(difUsdCC>=0 ? `Cobro registrado — ganó USD ${item.diferenciaUsd}` : `Cobro registrado — perdió USD ${Math.abs(item.diferenciaUsd)}`, difUsdCC>=0?'success':'error');
+      }
+    };
+  }
+
   document.getElementById('modalTitle').textContent=title;
   document.getElementById('modalBody').innerHTML=body;
   if(type==='contrato') setTimeout(calcularCotizacionContrato, 0);
@@ -5199,6 +5439,34 @@ async function actualizarTCTrabajo() {
     if(!res.ok) throw new Error('fail');
     const data = await res.json();
     if(tcInput) tcInput.value = Math.round(data.venta);
+  } catch(e) {
+    showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
+  }
+}
+
+function calcularDiferenciaCobroContrato(usdEsperado) {
+  const monto = parseFloat((document.getElementById('f-ccmonto')||{}).value) || 0;
+  const tc = parseFloat((document.getElementById('f-cctc')||{}).value) || 0;
+  const el = document.getElementById('cc-resultado');
+  if(!el) return;
+  if(!monto || !tc) { el.textContent = 'Completá monto y TC para ver si ganó o perdió en dólares reales'; el.style.color=''; return; }
+  const usdRecibido = monto/tc;
+  const diferencia = usdRecibido - usdEsperado;
+  const pct = usdEsperado>0 ? (diferencia/usdEsperado*100) : 0;
+  const gano = diferencia >= 0;
+  el.style.color = gano ? 'var(--green)' : 'var(--red)';
+  el.innerHTML = `Recibió <b>USD ${usdRecibido.toLocaleString('es-AR',{maximumFractionDigits:0})}</b> reales ·
+    ${gano?'Ganó':'Perdió'} <b>USD ${Math.abs(diferencia).toLocaleString('es-AR',{maximumFractionDigits:0})}</b> (${pct.toFixed(1)}%) frente a lo esperado`;
+}
+
+async function actualizarTCCobroContrato(usdEsperado) {
+  const tcInput = document.getElementById('f-cctc');
+  try {
+    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
+    if(!res.ok) throw new Error('fail');
+    const data = await res.json();
+    if(tcInput) tcInput.value = Math.round(data.venta);
+    calcularDiferenciaCobroContrato(usdEsperado);
   } catch(e) {
     showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
   }
