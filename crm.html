@@ -4177,6 +4177,16 @@ function generarPresupuestoPDF(presupId) {
     + '<div class="total-row"><span>Traslado / vi\u00E1ticos</span><span id="tMov">&mdash;</span></div>'
     + '<div class="total-row"><span>Descuento</span><span contenteditable="true" id="tDesc">&mdash;</span></div>'
     + '<div class="total-row main"><span>TOTAL</span><span id="tTotal">&mdash;</span></div>'
+    // Línea de plazo acordado — se arma con el plazo/recargo que tenga
+    // guardado el presupuesto en ese momento. Si en el CRM se edita y se
+    // cambia el plazo, la próxima vez que se genere este PDF va a traer el
+    // plazo nuevo automáticamente (lee directo de p.plazoPago/p.recargoPct).
+    + (p.plazoPago && p.plazoPago!=='contado' ? (
+      '<div class="total-row" style="margin-top:8px;padding-top:8px;border-top:2px dashed #F4B400">'
+      + '<span style="color:#003B70;font-weight:bold">Plazo acordado: A ' + p.plazoPago + ' d\u00EDas (+' + (p.recargoPct||0) + '%)</span>'
+      + '<span style="font-weight:bold;color:#F4B400">$' + Math.round((p.monto||0)*(1+(p.recargoPct||0)/100)).toLocaleString('es-AR') + '</span>'
+      + '</div>'
+    ) : '')
     + '</div></div>'
 
     + '<div class="notas-box" id="notasBox" contenteditable="true">' + (p.notas||'Agregar notas, condiciones especiales o aclaraciones...') + '</div>'
