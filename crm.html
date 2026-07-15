@@ -545,6 +545,7 @@ select option { background:var(--dark); }
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
       <div class="stat-card green" style="border:2px solid var(--green)">
         <div class="stat-val" id="e-cobrado-real">$0</div>
+        <div id="e-cobrado-real-usd" style="font-size:12px;color:var(--blue-light);margin-top:2px"></div>
         <div class="stat-label">💰 MONTO COBRADO REAL</div>
         <div class="stat-sub" style="margin-top:4px">Suma de MONTO_COBRADO en trabajos — lo que MEB efectivamente cobró</div>
       </div>
@@ -878,7 +879,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx6VnKZLgww6q8A20sX5TpDmwKhtNu7GmU0eMInLXTeM1vFO7RWezABkTTxlBr4YSva4g/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxiH7NFqGPup3dRSh8XvftN5RsuGiRKG5VnDxPOy6OennRsNihywryrXqonvWhpgGh0Rg/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1097,7 +1098,8 @@ async function syncAll() {
       movilidad:parseMonto(r.MOVILIDAD),
       repuestosDetalle:r.REPUESTOS_DETALLE||'',
       notas:r.NOTAS||'', fotoUrl:r.FOTO_URL||'',
-      estadoCobro:(r.ESTADO_COBRO||'pendiente').toLowerCase().trim()
+      estadoCobro:(r.ESTADO_COBRO||'pendiente').toLowerCase().trim(),
+      tcCobro:parseFloat(r.TC_COBRO)||0, montoCobradoUsd:parseFloat(r.MONTO_COBRADO_USD)||0
     })); else if(!DB.trabajos.length) DB.trabajos=[];
     if(pr.length) {
       // Deduplicate: if multiple rows have same ID (one row per item), keep first occurrence for presupuesto header
@@ -1731,6 +1733,18 @@ async function writeToSheet(payload) {
 function cambiarCobro(id, nuevoEstado, divId) {
   const t = DB.trabajos.find(x=>x.id===id);
   if(!t) return;
+
+  if(nuevoEstado === 'cobrado') {
+    // NUEVO: para "Cobrado" se pide el dólar del día en un paso extra.
+    // Pendiente y Parcial no pasan por acá — siguen 100% igual que antes.
+    // Primero revierte visualmente el <select>: si el usuario cancela el
+    // modal, no queda "Cobrado" mostrado sin haberse confirmado de verdad.
+    const selectEl = document.querySelector('#'+divId+' select');
+    if(selectEl) selectEl.value = t.estadoCobro || 'pendiente';
+    openModal('cobroTrabajoTC', t);
+    return;
+  }
+
   t.estadoCobro = nuevoEstado;
   saveLocal();
 
@@ -3010,6 +3024,16 @@ function renderEstadisticas() {
   // ── Actualizar tarjetas
   const diferencia = totalCobradoReal - totalPresupuestado;
   document.getElementById('e-cobrado-real').textContent    = fmtMonto(totalCobradoReal);
+  // Equivalente en USD — solo se puede calcular para los trabajos que tienen
+  // el dólar del día del cobro cargado (a partir de ahora, los viejos no).
+  const trabConUsd = DB.trabajos.filter(t=>t.estadoCobro==='cobrado' && t.tcCobro>0);
+  const usdCobradoTotal = trabConUsd.reduce((s,t)=>s+Number(t.montoCobradoUsd||0),0);
+  const cCobradoUsdEl = document.getElementById('e-cobrado-real-usd');
+  if(cCobradoUsdEl) {
+    cCobradoUsdEl.textContent = trabConUsd.length
+      ? `≈ USD ${usdCobradoTotal.toLocaleString('es-AR')} (${trabConUsd.length} de ${DB.trabajos.filter(t=>t.estadoCobro==='cobrado').length} con dólar cargado)`
+      : '';
+  }
   document.getElementById('e-ingresos').textContent        = fmtMonto(totalPresupuestado);
   document.getElementById('e-conversion').textContent      = conversion+'%';
   document.getElementById('e-ticket').textContent          = fmtMonto(ticketProm);
@@ -4971,6 +4995,43 @@ function openModal(type, data={}) {
     };
   }
 
+  // NUEVO: al marcar un Trabajo como "Cobrado" (no Pendiente ni Parcial —
+  // esos siguen exactamente igual que siempre) se pide el dólar del día,
+  // opcional, para poder ver después cuánto significó en USD.
+  else if(type==='cobroTrabajoTC') {
+    const t = data;
+    const montoCobrado = Number(t.montoCobrado||0);
+    title='CONFIRMAR COBRO — '+(t.titulo||t.descripcion||'Trabajo');
+    body=`<div class="form-grid">
+      <div class="form-group full" style="background:var(--dark);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--muted)">
+        Monto a cobrar: <b style="color:var(--yellow)">${fmtMonto(montoCobrado)}</b>
+      </div>
+      <div class="form-group full">
+        <label>TC del día del cobro (opcional — para ver el equivalente en USD)</label>
+        <div style="display:flex;gap:6px">
+          <input id="f-tctrab" type="number" value="" style="flex:1"/>
+          <button type="button" class="btn-secondary" onclick="actualizarTCTrabajo()" style="white-space:nowrap;font-size:11px">↻ En vivo</button>
+        </div>
+      </div>
+      <div class="form-group full" style="font-size:11px;color:var(--muted)">
+        Si dejás esto vacío, el cobro se confirma igual — solo no vas a tener el equivalente en USD para este trabajo en Estadísticas.
+      </div>
+    </div>`;
+    onSave=()=>{
+      const tcTrab = parseFloat(gv('f-tctrab'))||0;
+      t.estadoCobro = 'cobrado';
+      if(tcTrab>0) { t.tcCobro = tcTrab; t.montoCobradoUsd = Math.round(montoCobrado/tcTrab); }
+      saveLocal();
+      const badge = document.getElementById(`cobro-badge-${t.id}`);
+      if(badge) { badge.className = 'badge badge-cobro-cobrado'; badge.textContent = '✅ Cobrado'; }
+      updateBadges();
+      renderDashboard();
+      writeToSheet({ action:'updateCobro', id:t.id, estadoCobro:'cobrado', tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0 });
+      closeModal();
+      showToast(tcTrab>0 ? `Cobro confirmado ✔ — USD ${t.montoCobradoUsd}` : 'Cobro confirmado ✔', 'success');
+    };
+  }
+
   document.getElementById('modalTitle').textContent=title;
   document.getElementById('modalBody').innerHTML=body;
   if(type==='contrato') setTimeout(calcularCotizacionContrato, 0);
@@ -5103,6 +5164,18 @@ async function actualizarTCCobro(usdEsperado) {
     const data = await res.json();
     if(tcInput) tcInput.value = Math.round(data.venta);
     calcularDiferenciaCobro(usdEsperado);
+  } catch(e) {
+    showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
+  }
+}
+
+async function actualizarTCTrabajo() {
+  const tcInput = document.getElementById('f-tctrab');
+  try {
+    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
+    if(!res.ok) throw new Error('fail');
+    const data = await res.json();
+    if(tcInput) tcInput.value = Math.round(data.venta);
   } catch(e) {
     showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
   }
