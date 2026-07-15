@@ -19,7 +19,7 @@
   --green:#2ecc71; --orange:#e67e22; --red:#e74c3c; --purple:#9b59b6;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background:var(--black); color:var(--text); font-family:'Barlow',sans-serif; min-height:100vh; }
+body { background:var(--black); color:var(--text); font-family:'Barlow',sans-serif; min-height:100vh; overflow-x:hidden; }
 ::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-track { background:var(--dark); } ::-webkit-scrollbar-thumb { background:var(--border2); border-radius:2px; }
 
 /* LOGIN */
@@ -98,7 +98,7 @@ body { background:var(--black); color:var(--text); font-family:'Barlow',sans-ser
 .stat-sub { font-size:11px; color:var(--muted2); margin-top:6px; letter-spacing:0.5px; }
 
 /* CARD */
-.card { background:var(--panel); border:1px solid var(--border); border-radius:6px; margin-bottom:16px; }
+.card { background:var(--panel); border:1px solid var(--border); border-radius:6px; margin-bottom:16px; max-width:100%; overflow:hidden; }
 .card-header { padding:13px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .card-title { font-family:'Bebas Neue'; font-size:15px; color:var(--yellow); letter-spacing:2px; }
 
