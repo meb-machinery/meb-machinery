@@ -3713,7 +3713,7 @@ function renderProveedores() {
 
 function showModalProveedores(data={}) {
   const m = document.createElement('div');
-  m.className = 'modal-overlay active';
+  m.className = 'modal-overlay open';
   m.id = 'modal-proveedor';
   const catActual = data.categoria||'repuestos';
   m.innerHTML = `<div class="modal">
@@ -3791,7 +3791,7 @@ function showModalCompra() {
   const opts = DB.proveedores.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
   const today = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}).split('/').reverse().join('-');
   const m = document.createElement('div');
-  m.className = 'modal-overlay active';
+  m.className = 'modal-overlay open';
   m.id = 'modal-compra';
   m.innerHTML = `<div class="modal">
     <div class="modal-header"><span class="modal-title">REGISTRAR COMPRA</span><button class="modal-close" onclick="document.getElementById('modal-compra').remove()">✕</button></div>
