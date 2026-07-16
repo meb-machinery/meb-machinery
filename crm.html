@@ -635,6 +635,24 @@ select option { background:var(--dark); }
         </table></div>
       </div>
     </div>
+    <!-- Fila 3.7: Proyección financiera a futuro -->
+    <div class="card" style="margin-bottom:12px;border-left:3px solid var(--yellow)">
+      <div class="card-header"><span class="card-title">🔮 PROYECCIÓN — SI COBRO TODO LO PENDIENTE, ASÍ CIERRA EL MES</span></div>
+      <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">
+        Toma lo que ya cobraste este mes, le suma todo lo que está aprobado/activo y todavía no cobraste (Presupuestos + Contratos), y lo compara contra los gastos que ya cargaste este mes. No inventa fechas exactas de cobro ni gastos futuros que no cargaste — es un "mejor caso" asumiendo que cobrás todo lo pendiente antes de fin de mes.
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+        <div class="stat-card green"><div class="stat-val" id="proy-cobrado-mes">$0</div><div class="stat-label">✅ Ya cobrado este mes</div></div>
+        <div class="stat-card yellow"><div class="stat-val" id="proy-pendiente">$0</div><div class="stat-label">⏳ Pendiente (aprobado/activo)</div><div class="stat-sub" id="proy-pendiente-n">0 ítems</div></div>
+        <div class="stat-card red"><div class="stat-val" id="proy-gastos-mes">$0</div><div class="stat-label">📤 Gastos ya cargados este mes</div></div>
+        <div class="stat-card orange"><div class="stat-val" id="proy-resultado">$0</div><div class="stat-label">📊 Resultado si cobro todo</div><div class="stat-sub" id="proy-resultado-actual">Hoy: $0</div></div>
+      </div>
+      <div id="proy-usd-nota" style="font-size:11px;color:var(--blue-light);margin-top:10px"></div>
+      <div class="table-wrap" style="margin-top:12px"><table>
+        <thead><tr><th>ORIGEN</th><th>CLIENTE</th><th>CONCEPTO</th><th style="text-align:right">MONTO ARS</th><th>PLAZO / VENCIMIENTO</th></tr></thead>
+        <tbody id="tabla-proyeccion-pendientes"></tbody>
+      </table></div>
+    </div>
     <!-- Fila 4: desglose -->
     <div class="stats-grid">
       <div class="stat-card orange"><div class="stat-val" id="e-rentabilidad">0%</div><div class="stat-label">Rentabilidad real</div><div class="stat-icon">📈</div><div class="stat-sub">Sobre monto cobrado real</div></div>
@@ -3457,6 +3475,7 @@ function renderEstadisticas() {
       `<div class="card"><div class="empty-state"><div class="icon">✅</div><p>Sin alertas de mantenimiento pendientes</p></div></div>`;
   }
   renderPorCobrarPlazos();
+  renderProyeccionMes();
 }
 
 // ── POR COBRAR SEGÚN PRESUPUESTOS, DESGLOSADO POR PLAZO ──────────────────────
@@ -3549,6 +3568,95 @@ async function actualizarExposicionCambiaria() {
     <td style="text-align:right;color:${f.devaluacionPct>0?'var(--red)':'var(--green)'}">${f.devaluacionPct>=0?'+':''}${f.devaluacionPct.toFixed(1)}%</td>
     <td style="text-align:right;color:${f.enRiesgo?'var(--red)':'var(--green)'};font-weight:bold">${f.enRiesgo?'⚠ En riesgo':'✔ Cubierto'}</td>
   </tr>`).join('');
+}
+
+// ============================================================
+// PROYECCIÓN FINANCIERA A FUTURO
+// ============================================================
+// "Si cobro todo lo pendiente, así cierra el mes": combina lo ya cobrado
+// este mes (Presupuestos + Contratos) con todo lo aprobado/activo que
+// todavía no se cobró, y lo compara contra los gastos ya cargados este mes.
+// Deliberadamente NO inventa una fecha exacta de cobro para cada pendiente
+// ni proyecta gastos futuros que no se cargaron — es un "mejor caso"
+// explícito, no una promesa.
+function renderProyeccionMes() {
+  const ahora = new Date();
+  const mesActual = ahora.getMonth();
+  const anioActual = ahora.getFullYear();
+  const parseFechaLocal = (raw) => {
+    if(!raw) return null;
+    const parts = raw.includes('/') ? raw.split('/').reverse() : raw.split('-');
+    const d = new Date(parts[0], parseInt(parts[1]||0)-1, parts[2]||1);
+    return isNaN(d.getTime()) ? null : d;
+  };
+  const esEsteMes = (raw) => { const d = parseFechaLocal(raw); return !!d && d.getMonth()===mesActual && d.getFullYear()===anioActual; };
+
+  // Ya cobrado este mes
+  const presupCobradosMes = DB.presupuestos.filter(p=>p.estadoCobro==='cobrado' && esEsteMes(p.fechaCobroReal));
+  const contratosCobradosMes = (DB.contratos||[]).filter(c=>c.estadoCobro==='cobrado' && esEsteMes(c.fechaCobroReal));
+  const cobradoMes = presupCobradosMes.reduce((s,p)=>s+Number(p.montoCobradoReal||p.monto||0),0)
+                    + contratosCobradosMes.reduce((s,c)=>s+Number(c.montoCobradoReal||c.precioArs||0),0);
+
+  // Pendiente: todo lo aprobado/activo que todavía no se cobró (sin importar el mes)
+  const presupPend = DB.presupuestos.filter(p=>p.estado==='aprobado' && p.estadoCobro!=='cobrado');
+  const contratosPend = (DB.contratos||[]).filter(c=>(c.estado||'activo')==='activo' && c.estadoCobro!=='cobrado');
+  const montoPresupPend = presupPend.reduce((s,p)=>{ const m = p.recargoPct?Math.round(p.monto*(1+p.recargoPct/100)):(p.monto||0); return s+m; },0);
+  const montoContratosPend = contratosPend.reduce((s,c)=>{ const m = c.recargoPct?Math.round(c.precioArs*(1+c.recargoPct/100)):(c.precioArs||0); return s+m; },0);
+  const totalPendiente = montoPresupPend + montoContratosPend;
+  const nPendiente = presupPend.length + contratosPend.length;
+
+  // Gastos ya cargados este mes (Compras)
+  const comprasMes = (DB.compras||[]).filter(c=>esEsteMes(c.fecha));
+  const gastosMes = comprasMes.reduce((s,c)=>s+Number(c.monto||0),0);
+
+  const resultadoActual = cobradoMes - gastosMes;
+  const resultadoProyectado = (cobradoMes + totalPendiente) - gastosMes;
+
+  const set = (id,val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
+  set('proy-cobrado-mes', fmtMonto(cobradoMes));
+  set('proy-pendiente', fmtMonto(totalPendiente));
+  set('proy-pendiente-n', nPendiente + (nPendiente===1?' ítem':' ítems'));
+  set('proy-gastos-mes', fmtMonto(gastosMes));
+  set('proy-resultado', fmtMonto(resultadoProyectado));
+  set('proy-resultado-actual', 'Hoy (solo lo ya cobrado): ' + fmtMonto(resultadoActual));
+  const resEl = document.getElementById('proy-resultado');
+  if(resEl) resEl.style.color = resultadoProyectado>=0 ? 'var(--green)' : 'var(--red)';
+
+  // USD histórico de lo pendiente — cada ítem al TC de cuando se cotizó, nunca
+  // recalculado con la cotización de hoy (mismo criterio del resto del CRM).
+  const usdPresupPend = presupPend.reduce((s,p)=>s+Number(p.montoUsd||0),0);
+  const usdContratosPend = contratosPend.reduce((s,c)=>s+Number(c.precioUsd||0),0);
+  const usdPendTotal = usdPresupPend + usdContratosPend;
+  const notaEl = document.getElementById('proy-usd-nota');
+  if(notaEl) notaEl.textContent = usdPendTotal>0
+    ? `De lo pendiente, USD ${usdPendTotal.toLocaleString('es-AR',{maximumFractionDigits:0})} está dolarizado — al tipo de cambio de cuando se cotizó cada ítem, no al de hoy.`
+    : '';
+
+  // Detalle línea por línea
+  const tbody = document.getElementById('tabla-proyeccion-pendientes');
+  if(tbody) {
+    const filas = [];
+    presupPend.forEach(p=>{
+      const cl = DB.clientes.find(c=>String(c.id)===String(p.clienteId));
+      const m = p.recargoPct?Math.round(p.monto*(1+p.recargoPct/100)):(p.monto||0);
+      filas.push({ origen:'Presupuesto', badge:'badge-yellow', cliente: cl?cl.nombre:'—',
+        concepto:'Presupuesto Nº'+(p.num||'—'), monto:m, plazo:(p.plazoPago||'contado') });
+    });
+    contratosPend.forEach(c=>{
+      const cl = DB.clientes.find(x=>String(x.id)===String(c.clienteId));
+      const m = c.recargoPct?Math.round(c.precioArs*(1+c.recargoPct/100)):(c.precioArs||0);
+      filas.push({ origen:'Contrato', badge:'badge-blue', cliente: cl?cl.nombre:'—',
+        concepto:'Contrato '+(c.plan||''), monto:m, plazo: c.fechaVencimiento?fmtDate(c.fechaVencimiento):'—' });
+    });
+    filas.sort((a,b)=>b.monto-a.monto);
+    tbody.innerHTML = filas.length ? filas.map(f=>`<tr>
+      <td><span class="badge ${f.badge}">${f.origen.toUpperCase()}</span></td>
+      <td class="td-name">${f.cliente}</td>
+      <td>${f.concepto}</td>
+      <td style="text-align:right"><span class="monto">${fmtMonto(f.monto)}</span></td>
+      <td class="td-muted">${f.plazo}</td>
+    </tr>`).join('') : `<tr><td colspan="5"><div class="empty-state"><div class="icon">✅</div><p>No hay nada pendiente de cobro — todo lo aprobado/activo ya está cobrado</p></div></td></tr>`;
+  }
 }
 
 // ============================================================
