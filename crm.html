@@ -1168,6 +1168,30 @@ async function syncAll() {
       fetchSheet('PROVEEDORES'), fetchSheet('CONTRATOS'), fetchSheet('TARIFARIO')
     ]);
 
+    // ── Salvavidas: detectar encabezados rotos ──────────────────────────────
+    // Si alguien inserta sin querer una fila en blanco arriba de los
+    // encabezados reales (o los borra), el CRM antes mostraba todo en
+    // "$0 / Pendiente" en silencio, sin avisar que algo estaba mal — parecía
+    // que se había perdido todo, cuando en realidad los datos seguían
+    // intactos en el Sheet. Ahora, si una hoja trae filas pero ninguna tiene
+    // valor en ninguna de sus columnas clave, se avisa en vez de fallar mudo.
+    const _hojasSospechosas = [];
+    const _chequearEncabezados = (nombre, filas, camposClave) => {
+      if(!filas.length) return; // hoja vacía de verdad no es sospechosa
+      const algunaConDato = filas.some(r => camposClave.some(c => r[c] && String(r[c]).trim()));
+      if(!algunaConDato) _hojasSospechosas.push(nombre);
+    };
+    _chequearEncabezados('CLIENTES', cl, ['NOMBRE']);
+    _chequearEncabezados('MAQUINAS', mq, ['MARCA']);
+    _chequearEncabezados('TRABAJOS', tr, ['TITULO','ESTADO']);
+    _chequearEncabezados('PRESUPUESTOS', pr, ['ESTADO','MONTO','MONTO_TOTAL']);
+    _chequearEncabezados('PROVEEDORES', pv, ['NOMBRE','TIPO']);
+    _chequearEncabezados('CONTRATOS', ct, ['PLAN','ESTADO']);
+    if(_hojasSospechosas.length) {
+      showToast(`⚠️ Revisá la fila 1 (encabezados) de: ${_hojasSospechosas.join(', ')} — no se reconocieron sus columnas`, 'error');
+      console.warn('Encabezados no reconocidos en:', _hojasSospechosas);
+    }
+
     if(cl.length) DB.clientes = cl.map(r=>({
       id:String(r.ID||uid()).trim(), nombre:r.NOMBRE||'', empresa:r.EMPRESA||'',
       telefono:r.TELEFONO||'', email:r.EMAIL||'', zona:r.ZONA||'',
@@ -6194,7 +6218,9 @@ function showToast(msg, type='') {
   const t=document.getElementById('toast');
   t.textContent=msg; t.className='toast '+(type?type:'');
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),3000);
+  // Los avisos de error quedan más tiempo en pantalla — suelen tener texto
+  // más largo y ser más importantes que una confirmación de "Guardado ✓".
+  setTimeout(()=>t.classList.remove('show'), type==='error' ? 8000 : 3000);
 }
 function showLoading(txt='CARGANDO...') {
   document.getElementById('loadingText').textContent=txt;
