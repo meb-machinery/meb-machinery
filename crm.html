@@ -594,6 +594,23 @@ select option { background:var(--dark); }
         <tbody id="tabla-impacto-cambiario"></tbody>
       </table></div>
     </div>
+    <!-- Fila 3.55: Impacto cambiario en cobros — CONTRATOS (misma lógica que Presupuestos) -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header"><span class="card-title">💱 Impacto cambiario en cobros — Contratos</span></div>
+      <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">
+        Lo mismo que arriba, pero para Contratos de mantenimiento cobrados.
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+        <div class="stat-card blue"><div class="stat-val" id="e-camb-con-registrados">0</div><div class="stat-label">Cobros registrados</div></div>
+        <div class="stat-card green"><div class="stat-val" id="e-camb-con-ganancia">USD 0</div><div class="stat-label">Ganancia real acumulada</div></div>
+        <div class="stat-card red"><div class="stat-val" id="e-camb-con-perdida">USD 0</div><div class="stat-label">Pérdida real acumulada</div></div>
+        <div class="stat-card orange"><div class="stat-val" id="e-camb-con-neto">USD 0</div><div class="stat-label">Neto (ganancia − pérdida)</div></div>
+      </div>
+      <div class="table-wrap" style="margin-top:12px"><table>
+        <thead><tr><th>Plazo</th><th>Cobros</th><th style="text-align:right">Diferencia neta USD</th><th style="text-align:right">Diferencia promedio %</th></tr></thead>
+        <tbody id="tabla-impacto-cambiario-con"></tbody>
+      </table></div>
+    </div>
     <!-- Fila 3.6: Por cobrar según Presupuestos, desglose por plazo -->
     <div class="card" style="margin-bottom:12px">
       <div class="card-header"><span class="card-title">📅 Por cobrar según Presupuestos — desglose por plazo</span></div>
@@ -884,7 +901,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz6D9sy8RpVas1q4VFfPh0q1-TlIVhoCNVodrPYq5CKKq-EMKbZrvmR51o5BvJQ-hJtXg/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw2P99uLWMq0BgJOV9VSUPtqkoUx78DHvDaQ-6kwSH91HqCPGE0y2y6PnvcckzN4Hqjxw/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1369,6 +1386,19 @@ function diasPlazoVencido(p) {
   const diff = Math.floor((hoy - vencimiento) / 86400000);
   return diff > 0 ? diff : null;
 }
+// Igual que diasPlazoVencido, pero para Contratos — la base es la fecha de
+// inicio del contrato (no tiene "fecha de cotización" como el presupuesto).
+function diasPlazoVencidoContrato(c) {
+  if(!c || c.estadoCobro==='cobrado' || c.estado!=='activo') return null;
+  const dias = c.plazoPago==='30'?30:c.plazoPago==='60'?60:c.plazoPago==='90'?90:0;
+  if(!dias) return null;
+  const base = parseFechaAny(c.fechaInicio);
+  if(!base) return null;
+  const vencimiento = new Date(base.getTime() + dias*86400000);
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const diff = Math.floor((hoy - vencimiento) / 86400000);
+  return diff > 0 ? diff : null;
+}
 // Parsear montos con coma decimal (formato argentino del Sheet)
 function parseMonto(v) {
   if(!v && v!==0) return 0;
@@ -1415,7 +1445,8 @@ function updateBadges() {
   const contratosActivos=DB.contratos.filter(c=>c.estado==='activo').length;
   const bc=document.getElementById('badge-contratos'); if(bc) bc.textContent=contratosActivos;
   const vencidosPlazo = DB.presupuestos.filter(p=>diasPlazoVencido(p)).length;
-  const al=DB.alertas.filter(a=>!a.resuelta).length + (typeof calcularAlertasRepuesto==="function" ? calcularAlertasRepuesto().length : 0) + vencidosPlazo;
+  const vencidosPlazoCon = DB.contratos.filter(c=>diasPlazoVencidoContrato(c)).length;
+  const al=DB.alertas.filter(a=>!a.resuelta).length + (typeof calcularAlertasRepuesto==="function" ? calcularAlertasRepuesto().length : 0) + vencidosPlazo + vencidosPlazoCon;
   document.getElementById('badge-alertas').textContent=al;
   document.getElementById('s-clientes').textContent=DB.clientes.length;
   document.getElementById('s-presup').textContent=DB.presupuestos.length;
@@ -1978,7 +2009,7 @@ function renderPresupuestos() {
         <button class="btn-secondary" title="Editar" onclick="openModal('presupuesto',DB.presupuestos.find(x=>x.id==='${p.id}'))">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','rechazado'])">Estado</button>
         ${p.estado==='aprobado'&&p.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Registrar cobro real">💰 Cobro</button>`:''}
-        ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span>`:''}
+        ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroPresupuesto('${p.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`:''}
         <button class="btn-secondary" onclick="duplicarPresupuesto('${p.id}')" title="Duplicar">⧉</button>
         <button class="btn-secondary" onclick="generarPresupuestoPDF('${p.id}')">📄 PDF</button>
         <button class="btn-secondary" style="background:rgba(0,59,112,0.2);border-color:#003B70;color:#6fa8dc" onclick="generarInformeTecnico('${p.id}')">🔧 Informe</button>
@@ -2021,11 +2052,11 @@ function renderContratos() {
       <td>${c.proximoServiceHs||'—'} hs</td>
       <td><span class="monto">${fmtMonto(c.recargoPct?Math.round(c.precioArs*(1+c.recargoPct/100)):c.precioArs)}</span>${c.plazoPago&&c.plazoPago!=='contado'?`<div style="font-size:9px;color:var(--orange)">A ${c.plazoPago} días (+${c.recargoPct}%)</div>`:''}</td>
       <td><span class="monto" style="color:var(--blue-light)">USD ${Math.round(c.recargoPct?(c.precioUsd||0)*(1+c.recargoPct/100):(c.precioUsd||0)).toLocaleString('es-AR')}</span></td>
-      <td><span style="color:${estadoColor};text-transform:capitalize;font-family:'Bebas Neue';letter-spacing:1px">${estadoVisual}</span></td>
+      <td><span style="color:${estadoColor};text-transform:capitalize;font-family:'Bebas Neue';letter-spacing:1px">${estadoVisual}</span>${diasPlazoVencidoContrato(c)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${c.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencidoContrato(c)}d</div><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="reclamarContratoWhatsApp('${c.id}')" title="Mandar recordatorio por WhatsApp">📲 Reclamar</button>`:''}</td>
       <td><div class="actions">
         <button class="btn-secondary" title="Editar" onclick="openModal('contrato',DB.contratos.find(x=>x.id==='${c.id}'))">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('contratos','${c.id}',['activo','pausado','vencido'])">Estado</button>
-        ${c.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Registrar cobro real">💰 Cobro</button>`:`<span style="font-size:10px;color:${(c.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap">${(c.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${c.diferenciaUsd}</span>`}
+        ${c.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Registrar cobro real">💰 Cobro</button>`:`<span style="font-size:10px;color:${(c.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap">${(c.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${c.diferenciaUsd}</span> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroContrato('${c.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`}
         <button class="btn-secondary" onclick="generarContratoPDF('${c.id}')">📄 PDF</button>
         <button class="btn-secondary" style="background:rgba(244,180,0,0.15);border-color:var(--yellow);color:var(--yellow)" onclick="generarDocumentoOpcionesPagoContrato('${c.id}')" title="Documento de opciones de pago para el cliente">📑 Opciones pago</button>
         <button class="btn-danger" onclick="eliminar('contratos','${c.id}')">✕</button>
@@ -3034,6 +3065,33 @@ function renderEstadisticas() {
       return `<tr><td>${labels[k]}</td><td>${arr.length}</td><td style="text-align:right;color:${color}">${neto>=0?'+':''}USD ${neto.toLocaleString('es-AR')}</td><td style="text-align:right;color:${color}">${pctProm>=0?'+':''}${pctProm.toFixed(1)}%</td></tr>`;
     });
     tbodyImp.innerHTML = presCobrados.length ? filas.join('') : `<tr><td colspan="4"><div class="empty-state"><div class="icon">💱</div><p>Todavía no hay cobros reales registrados</p></div></td></tr>`;
+  }
+
+  // ── Impacto cambiario en cobros — CONTRATOS (misma lógica que Presupuestos)
+  const conCobrados = DB.contratos.filter(c=>c.estadoCobro==='cobrado');
+  const gananciaAcumCon = conCobrados.filter(c=>(c.diferenciaUsd||0)>0).reduce((s,c)=>s+c.diferenciaUsd,0);
+  const perdidaAcumCon  = conCobrados.filter(c=>(c.diferenciaUsd||0)<0).reduce((s,c)=>s+Math.abs(c.diferenciaUsd),0);
+  const netoAcumCon = gananciaAcumCon - perdidaAcumCon;
+  setTxt('e-camb-con-registrados', conCobrados.length);
+  setTxt('e-camb-con-ganancia', 'USD '+gananciaAcumCon.toLocaleString('es-AR'));
+  setTxt('e-camb-con-perdida', 'USD '+perdidaAcumCon.toLocaleString('es-AR'));
+  const netoElCon = document.getElementById('e-camb-con-neto');
+  if(netoElCon){ netoElCon.textContent = (netoAcumCon>=0?'+':'')+'USD '+netoAcumCon.toLocaleString('es-AR'); netoElCon.style.color = netoAcumCon>=0?'var(--green)':'var(--red)'; }
+
+  const porPlazoCon = {contado:[], '30':[], '60':[], '90':[]};
+  conCobrados.forEach(c=>{ const k=c.plazoPago||'contado'; if(porPlazoCon[k]) porPlazoCon[k].push(c); });
+  const tbodyImpCon = document.getElementById('tabla-impacto-cambiario-con');
+  if(tbodyImpCon) {
+    const labelsCon = {contado:'Contado', '30':'A 30 días', '60':'A 60 días', '90':'A 90 días'};
+    const filasCon = Object.keys(labelsCon).map(k=>{
+      const arr = porPlazoCon[k];
+      if(!arr.length) return `<tr><td>${labelsCon[k]}</td><td class="td-muted">0</td><td class="td-muted" style="text-align:right">—</td><td class="td-muted" style="text-align:right">—</td></tr>`;
+      const neto = arr.reduce((s,c)=>s+(c.diferenciaUsd||0),0);
+      const pctProm = arr.reduce((s,c)=>s+(c.diferenciaPct||0),0)/arr.length;
+      const color = neto>=0?'var(--green)':'var(--red)';
+      return `<tr><td>${labelsCon[k]}</td><td>${arr.length}</td><td style="text-align:right;color:${color}">${neto>=0?'+':''}USD ${neto.toLocaleString('es-AR')}</td><td style="text-align:right;color:${color}">${pctProm>=0?'+':''}${pctProm.toFixed(1)}%</td></tr>`;
+    });
+    tbodyImpCon.innerHTML = conCobrados.length ? filasCon.join('') : `<tr><td colspan="4"><div class="empty-state"><div class="icon">💱</div><p>Todavía no hay cobros reales registrados</p></div></td></tr>`;
   }
 
   // ── Presupuestado aprobado (referencia, no necesariamente cobrado)
@@ -4181,6 +4239,23 @@ function generarContratoPDF(contratoId) {
   else { alert('Bloqueador de popups activo. Permití los popups para este sitio.'); URL.revokeObjectURL(url); }
 }
 
+function reclamarContratoWhatsApp(contratoId) {
+  const c = DB.contratos.find(x => x.id === contratoId);
+  if (!c) return;
+  const cl = DB.clientes.find(x => String(x.id) === String(c.clienteId));
+  if (!cl || !cl.telefono) {
+    showToast('Este cliente no tiene teléfono cargado — no se puede mandar el recordatorio', 'error');
+    return;
+  }
+  const dias = diasPlazoVencidoContrato(c);
+  const montoFinal = c.recargoPct ? Math.round(c.precioArs*(1+c.recargoPct/100)) : (c.precioArs||0);
+  const msg = `Hola ${cl.nombre}! Te escribimos de MEB Machinery Solutions. `
+    + `El contrato de mantenimiento (plan ${c.plan||'básico'}, a ${c.plazoPago} días) venció hace ${dias} día${dias===1?'':'s'} sin que hayamos registrado el cobro. `
+    + `El monto es de $${montoFinal.toLocaleString('es-AR')}. ¿Podemos coordinar el pago? Gracias!`;
+  const tel = cl.telefono.replace(/\D/g,'');
+  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
 function reclamarPresupuestoWhatsApp(presupId) {
   const p = DB.presupuestos.find(x => x.id === presupId);
   if (!p) return;
@@ -4865,7 +4940,7 @@ function openModal(type, data={}) {
         <label>Dólar (USD/ARS)</label>
         <div style="display:flex;gap:6px">
           <input id="f-con-tc" type="number" value="${tcInicial}" oninput="calcularCotizacionContrato()" style="flex:1"/>
-          <button type="button" class="btn-secondary" onclick="actualizarTCContrato()" style="white-space:nowrap">↻ En vivo</button>
+          <button type="button" class="btn-secondary" onclick="actualizarTCContrato()" style="white-space:nowrap" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
         </div>
         <div id="tcContratoInfo" style="font-size:10px;color:var(--muted);margin-top:4px">Tocá "En vivo" para traer el dólar blue actual</div>
       </div>
@@ -5016,7 +5091,7 @@ function openModal(type, data={}) {
         <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:6px">
           <span id="presup-usd-display" style="font-size:13px;color:var(--blue-light)">—</span>
           <input id="f-ptc" type="number" value="${data.tcAlMomento||''}" placeholder="TC" oninput="recalcularTotal()" style="width:80px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:4px 6px;border-radius:4px;font-family:Barlow;font-size:11px;text-align:right"/>
-          <button type="button" class="btn-secondary" onclick="actualizarTCPresupuesto()" style="white-space:nowrap;font-size:11px;padding:4px 10px">↻ Dólar en vivo</button>
+          <button type="button" class="btn-secondary" onclick="actualizarTCPresupuesto()" style="white-space:nowrap;font-size:11px;padding:4px 10px" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ Dólar en vivo</button>
         </div>
         <div style="text-align:right;font-size:10px;color:var(--muted);margin-top:2px">
           El valor en dólares está sujeto al tipo de cambio del día de la fecha.
@@ -5188,7 +5263,7 @@ function openModal(type, data={}) {
         <label>TC del día del cobro *</label>
         <div style="display:flex;gap:6px">
           <input id="f-crtc" type="number" value="${data.tcCobro||''}" oninput="calcularDiferenciaCobro(${usdEsperado})" style="flex:1"/>
-          <button type="button" class="btn-secondary" onclick="actualizarTCCobro(${usdEsperado})" style="white-space:nowrap;font-size:11px">↻ En vivo</button>
+          <button type="button" class="btn-secondary" onclick="actualizarTCCobro(${usdEsperado})" style="white-space:nowrap;font-size:11px" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
         </div>
       </div>
       <div class="form-group full" id="cr-resultado" style="text-align:center;padding:10px;border-radius:6px;background:var(--dark);border:1px solid var(--border2)">
@@ -5231,7 +5306,7 @@ function openModal(type, data={}) {
         <label>TC del día del cobro (opcional — para ver el equivalente en USD)</label>
         <div style="display:flex;gap:6px">
           <input id="f-tctrab" type="number" value="" style="flex:1"/>
-          <button type="button" class="btn-secondary" onclick="actualizarTCTrabajo()" style="white-space:nowrap;font-size:11px">↻ En vivo</button>
+          <button type="button" class="btn-secondary" onclick="actualizarTCTrabajo()" style="white-space:nowrap;font-size:11px" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
         </div>
       </div>
       <div class="form-group full" style="font-size:11px;color:var(--muted)">
@@ -5272,7 +5347,7 @@ function openModal(type, data={}) {
         <label>TC del día del cobro *</label>
         <div style="display:flex;gap:6px">
           <input id="f-cctc" type="number" oninput="calcularDiferenciaCobroContrato(${usdEsperadoCon})" style="flex:1"/>
-          <button type="button" class="btn-secondary" onclick="actualizarTCCobroContrato(${usdEsperadoCon})" style="white-space:nowrap;font-size:11px">↻ En vivo</button>
+          <button type="button" class="btn-secondary" onclick="actualizarTCCobroContrato(${usdEsperadoCon})" style="white-space:nowrap;font-size:11px" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
         </div>
       </div>
       <div class="form-group full" id="cc-resultado" style="text-align:center;padding:10px;border-radius:6px;background:var(--dark);border:1px solid var(--border2)">
@@ -5447,6 +5522,30 @@ async function actualizarTCTrabajo() {
   } catch(e) {
     showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
   }
+}
+
+function revertirCobroPresupuesto(id) {
+  if(!confirm('¿Deshacer el cobro registrado? El presupuesto vuelve a quedar pendiente de cobro.')) return;
+  const p = DB.presupuestos.find(x=>x.id===id);
+  if(!p) return;
+  p.estadoCobro='pendiente';
+  p.fechaCobroReal=''; p.tcCobro=0; p.montoCobradoReal=0; p.usdRecibido=0; p.diferenciaUsd=0; p.diferenciaPct=0;
+  saveLocal();
+  renderPresupuestos();
+  writeToSheet({action:'revertirCobro', tipo:'presupuestos', id:p.id});
+  showToast('Cobro deshecho — vuelve a pendiente','success');
+}
+
+function revertirCobroContrato(id) {
+  if(!confirm('¿Deshacer el cobro registrado? El contrato vuelve a quedar pendiente de cobro.')) return;
+  const c = DB.contratos.find(x=>x.id===id);
+  if(!c) return;
+  c.estadoCobro='pendiente';
+  c.fechaCobroReal=''; c.tcCobro=0; c.montoCobradoReal=0; c.usdRecibido=0; c.diferenciaUsd=0; c.diferenciaPct=0;
+  saveLocal();
+  renderContratos();
+  writeToSheet({action:'revertirCobro', tipo:'contratos', id:c.id});
+  showToast('Cobro deshecho — vuelve a pendiente','success');
 }
 
 function calcularDiferenciaCobroContrato(usdEsperado) {
