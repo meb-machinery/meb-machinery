@@ -901,7 +901,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw2P99uLWMq0BgJOV9VSUPtqkoUx78DHvDaQ-6kwSH91HqCPGE0y2y6PnvcckzN4Hqjxw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz7P18DyQ-BaRXv_kxzIzcymemunTHWNucEMdk2rxp2BHZb7Gh4SyTJCOs13x1JKYUbUw/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1093,6 +1093,13 @@ async function syncAll() {
   const _localPresupuestos = DB.presupuestos.filter(x=>x._local);
   const _localContratos    = (DB.contratos||[]).filter(x=>x._local);
   const _localAlertas     = DB.alertas.filter(x=>x._local);
+  // v17: antes Máquinas, Trabajos y Proveedores no se preservaban acá —
+  // cualquier alta/edición reciente que todavía no hubiera "pegado" en el
+  // Sheet se borraba en cada sync. Mismo criterio que ya existía para
+  // Clientes/Presupuestos/Contratos/Alertas.
+  const _localMaquinas    = (DB.maquinas||[]).filter(x=>x._local);
+  const _localTrabajos    = (DB.trabajos||[]).filter(x=>x._local);
+  const _localProveedores = (DB.proveedores||[]).filter(x=>x._local);
   const _alertasRepuesto  = DB.alertasRepuesto || {};
   const _presupCounter    = DB.presupCounter || 1;
   const _calendarioEventos = DB.calendarioEventos || [];
@@ -1308,6 +1315,10 @@ async function syncAll() {
     _localPresupuestos.forEach(lp => { if(!DB.presupuestos.find(x=>x.id===lp.id)) DB.presupuestos.push(lp); });
     _localContratos.forEach(lc => { if(!DB.contratos.find(x=>x.id===lc.id)) DB.contratos.push(lc); });
     _localAlertas.forEach(la => { if(!DB.alertas.find(x=>x.id===la.id)) DB.alertas.push(la); });
+    // v17
+    _localMaquinas.forEach(lm => { if(!DB.maquinas.find(x=>x.id===lm.id)) DB.maquinas.push(lm); });
+    _localTrabajos.forEach(lt => { if(!DB.trabajos.find(x=>x.id===lt.id)) DB.trabajos.push(lt); });
+    _localProveedores.forEach(lp => { if(!DB.proveedores.find(x=>x.id===lp.id)) DB.proveedores.push(lp); });
 
     // ── Reparar clienteId corruptos o vacíos ──────────────────────────────────
     DB.presupuestos.forEach(p => {
@@ -1912,6 +1923,7 @@ function verTrabajo(id) {
       <button class="btn-secondary" style="width:100%;margin-top:4px" onclick="verFotos('${t.id}')">📷 Ver fotos del trabajo</button>
     </div>`:''}
 
+    <button class="btn-primary" style="width:100%;margin-top:8px" onclick="editTrabajo('${t.id}')">✏️ Editar trabajo</button>
     <button class="btn-danger" style="width:100%;margin-top:8px" onclick="closeDetail()">✕ Cerrar</button>
   `;
   panel.classList.add('open');
@@ -1965,6 +1977,7 @@ function renderTrabajos() {
       <td>${badgeCobro(t.estadoCobro||'pendiente', t.id)}</td>
       <td><div class="actions">
         <button class="btn-secondary" onclick="verTrabajo('${t.id}')">Ver</button>
+        <button class="btn-secondary" title="Editar" onclick="editTrabajo('${t.id}')">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('trabajos','${t.id}',['pendiente','en curso','completado','cancelado','no aprobado'])">Estado</button>
         <button class="btn-secondary" onclick="verFotos('${t.id}')">📷</button>
         <button class="btn-danger" onclick="eliminar('trabajos','${t.id}')">✕</button>
@@ -3645,6 +3658,7 @@ function renderProveedores() {
       <td><span class="monto">${fmtMonto(totalProv)}</span></td>
       <td class="td-muted">${ultimaCompra ? fmtDate(ultimaCompra.fecha) : '—'}</td>
       <td><div class="actions">
+        <button class="btn-secondary" title="Editar" onclick="editProveedor('${p.id}')">✏️</button>
         <button class="btn-danger" onclick="eliminar('proveedores','${p.id}')">✕</button>
       </div></td>
     </tr>`;
@@ -3666,28 +3680,30 @@ function renderProveedores() {
   }).join('') : `<tr><td colspan="6"><div class="empty-state"><div class="icon">📦</div><p>Sin compras registradas</p></div></td></tr>`;
 }
 
-function showModalProveedores() {
+function showModalProveedores(data={}) {
   const m = document.createElement('div');
   m.className = 'modal-overlay active';
   m.id = 'modal-proveedor';
+  const catActual = data.categoria||'repuestos';
   m.innerHTML = `<div class="modal">
-    <div class="modal-header"><span class="modal-title">NUEVO PROVEEDOR</span><button class="modal-close" onclick="document.getElementById('modal-proveedor').remove()">✕</button></div>
+    <div class="modal-header"><span class="modal-title">${data.id?'EDITAR PROVEEDOR':'NUEVO PROVEEDOR'}</span><button class="modal-close" onclick="document.getElementById('modal-proveedor').remove()">✕</button></div>
     <div class="modal-body">
-      <div class="form-group"><label>NOMBRE *</label><input id="mp-nombre" placeholder="Ej: Kingtex, Kaktus, Linco..."></div>
+      <input type="hidden" id="mp-id" value="${data.id||''}"/>
+      <div class="form-group"><label>NOMBRE *</label><input id="mp-nombre" value="${data.nombre||''}" placeholder="Ej: Kingtex, Kaktus, Linco..."></div>
       <div class="form-group"><label>CATEGORÍA *</label>
         <select id="mp-cat">
-          <option value="repuestos">Repuestos</option>
-          <option value="indumentaria">Indumentaria</option>
-          <option value="herramientas">Herramientas</option>
-          <option value="herreria">Herrería (HARDOX, acero)</option>
-          <option value="otros">Otros</option>
+          <option value="repuestos" ${catActual==='repuestos'?'selected':''}>Repuestos</option>
+          <option value="indumentaria" ${catActual==='indumentaria'?'selected':''}>Indumentaria</option>
+          <option value="herramientas" ${catActual==='herramientas'?'selected':''}>Herramientas</option>
+          <option value="herreria" ${catActual==='herreria'?'selected':''}>Herrería (HARDOX, acero)</option>
+          <option value="otros" ${catActual==='otros'?'selected':''}>Otros</option>
         </select>
       </div>
-      <div class="form-group"><label>CONTACTO</label><input id="mp-contacto" placeholder="Nombre del contacto"></div>
-      <div class="form-group"><label>TELÉFONO</label><input id="mp-tel" placeholder="+54 11 ..."></div>
-      <div class="form-group"><label>EMAIL</label><input id="mp-email" type="email"></div>
-      <div class="form-group"><label>DIRECCIÓN / CIUDAD</label><input id="mp-dir" placeholder="Ej: Once, CABA · Online"></div>
-      <div class="form-group"><label>NOTAS</label><textarea id="mp-notas" rows="2"></textarea></div>
+      <div class="form-group"><label>CONTACTO</label><input id="mp-contacto" value="${data.contacto||''}" placeholder="Nombre del contacto"></div>
+      <div class="form-group"><label>TELÉFONO</label><input id="mp-tel" value="${data.telefono||''}" placeholder="+54 11 ..."></div>
+      <div class="form-group"><label>EMAIL</label><input id="mp-email" type="email" value="${data.email||''}"></div>
+      <div class="form-group"><label>DIRECCIÓN / CIUDAD</label><input id="mp-dir" value="${data.direccion||''}" placeholder="Ej: Once, CABA · Online"></div>
+      <div class="form-group"><label>NOTAS</label><textarea id="mp-notas" rows="2">${data.notas||''}</textarea></div>
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="document.getElementById('modal-proveedor').remove()">Cancelar</button>
@@ -3697,25 +3713,39 @@ function showModalProveedores() {
   document.body.appendChild(m);
 }
 
+function editProveedor(id) {
+  const p = DB.proveedores.find(x=>x.id===id);
+  if(p) showModalProveedores(p);
+}
+
 function guardarProveedor() {
   const nombre = document.getElementById('mp-nombre').value.trim();
   if(!nombre) { showToast('Ingresá el nombre del proveedor','error'); return; }
   if(!DB.proveedores) DB.proveedores=[];
+  const idExistente = document.getElementById('mp-id').value;
+  const esNuevo = !idExistente;
+  const idx = esNuevo ? -1 : DB.proveedores.findIndex(x=>x.id===idExistente);
   const prov = {
-    id: uid(), nombre,
+    id: idExistente || uid(), nombre,
     categoria: document.getElementById('mp-cat').value,
     contacto: document.getElementById('mp-contacto').value.trim(),
     telefono: document.getElementById('mp-tel').value.trim(),
     email: document.getElementById('mp-email').value.trim(),
     direccion: document.getElementById('mp-dir').value.trim(),
     notas: document.getElementById('mp-notas').value.trim(),
-    estado: 'activo'
+    estado: (idx>=0 ? DB.proveedores[idx].estado : 'activo') || 'activo'
   };
-  DB.proveedores.push(prov);
+  // v17: marcamos _local igual que el resto de las entidades, para que
+  // syncAll() no lo borre si el sync corre antes de que el Sheet confirme
+  // el alta/edición.
+  if(esNuevo) prov._local = true;
+  if(idx>=0) DB.proveedores[idx] = prov; else DB.proveedores.push(prov);
   saveLocal();
   document.getElementById('modal-proveedor').remove();
   renderProveedores();
   showToast('Proveedor guardado ✓','success');
+  // v17: addProveedor ahora es upsert en el backend — esta misma llamada
+  // sirve tanto para alta como para edición.
   writeToSheet({ action:'addProveedor', row: {
     ID:prov.id, TIPO:'proveedor', NOMBRE:prov.nombre, CATEGORIA:prov.categoria,
     CONTACTO:prov.contacto, TELEFONO:prov.telefono, EMAIL:prov.email,
@@ -4857,7 +4887,7 @@ function openModal(type, data={}) {
   let title='', body='', onSave=null;
 
   if(type==='cliente') {
-    title='NUEVO CLIENTE';
+    title=data.id?'EDITAR CLIENTE':'NUEVO CLIENTE';
     body=`<div class="form-grid">
       <div class="form-group"><label>Nombre *</label><input id="f-nombre" value="${data.nombre||''}"/></div>
       <div class="form-group"><label>Empresa</label><input id="f-empresa" value="${data.empresa||''}"/></div>
@@ -4874,7 +4904,7 @@ function openModal(type, data={}) {
   }
 
   else if(type==='maquina') {
-    title='NUEVA MÁQUINA';
+    title=data.id?'EDITAR MÁQUINA':'NUEVA MÁQUINA';
     body=`<div class="form-grid">
       <div class="form-group full"><label>Cliente *</label><select id="f-mcli"><option value="">Seleccionar...</option>${clienteOptions(data.clienteId)}</select></div>
       <div class="form-group"><label>Marca *</label><input id="f-marca" value="${data.marca||''}"/></div>
@@ -4887,7 +4917,7 @@ function openModal(type, data={}) {
   }
 
   else if(type==='trabajo') {
-    title='NUEVO TRABAJO';
+    title=data.id?'EDITAR TRABAJO':'NUEVO TRABAJO';
     body=`<div class="form-grid">
       <div class="form-group full"><label>Título *</label><input id="f-ttit" value="${data.titulo||''}"/></div>
       <div class="form-group"><label>Cliente</label><select id="f-tcli"><option value="">Sin cliente</option>${clienteOptions(data.clienteId)}</select></div>
@@ -5590,20 +5620,49 @@ function guardar(tipo, obj, campoRequerido) {
   else DB[tipo].push(obj);
   saveLocal(); updateBadges(); closeModal(); refreshCurrentPage();
   showToast('Guardado correctamente','success');
-  if(esNuevo) {
-    if(tipo==='presupuestos') {
-      const clObj = DB.clientes.find(x=>x.id===obj.clienteId);
-      const clNom = clObj ? clObj.nombre : obj.clienteId;
-      const lineas = (obj.descripcion||'').split('\n').filter(l=>l.trim());
-      const items = lineas.length ? lineas.map(l=>{ const pts=l.split('|'); return {desc:pts[0]||'',tipo:pts[1]||'Servicio',cant:pts[2]||'1',precio:pts[3]||''}; }) : [{desc:obj.descripcion||'',tipo:'Servicio',cant:'1',precio:String(obj.monto||0)}];
-      const monedaSym = obj.moneda==='USD' ? 'USD ' : '$';
-      // FIX: antes se hacía un writeToSheet por cada ítem y cada uno pisaba al
-      // anterior (solo sobrevivía el último). Ahora se manda TODO en un único
-      // envío. Además, el desglose completo (desc|tipo|cant|precio de CADA
-      // ítem) va en el campo DESCRIPCION con el separador seguro — antes se
-      // aplanaba todo en columnas separadas con ' / ' y se perdía la
-      // estructura por ítem al releer desde el Sheet.
-      const descripcionCompleta = obj.descripcion.split('\n').join(ITEM_SEP);
+
+  // ── MÁQUINAS (v17) ────────────────────────────────────────────────────
+  // Antes esto no existía: una Máquina nueva o editada nunca llegaba al
+  // Sheet, y se perdía en la próxima sincronización. addMaquina es upsert
+  // en el backend, así que funciona igual para alta y edición.
+  if(tipo==='maquinas') {
+    writeToSheet({ action:'addMaquina', row: {
+      id:obj.id, clienteId:obj.clienteId, marca:obj.marca||'',
+      modelo:obj.modelo||'', serie:obj.serie||'', tipo:obj.tipo||'', notas:obj.notas||''
+    }});
+  }
+
+  // ── TRABAJOS (v17) ────────────────────────────────────────────────────
+  // Antes esto no existía: solo el estado técnico y el estado de cobro se
+  // guardaban en el Sheet por separado (updateEstadoTrabajo/updateCobro).
+  // El resto (título, montos, repuestos, notas) se perdía en cada sync.
+  if(tipo==='trabajos') {
+    writeToSheet({ action:'addTrabajo', row: {
+      id:obj.id, clienteId:obj.clienteId, maquinaId:obj.maquinaId,
+      titulo:obj.titulo||'', tipo:obj.tipo||'', estado:obj.estado||'pendiente',
+      estadoMaquina:obj.estadoMaquina||'', fechaInicio:obj.fechaInicio||'', fechaFin:obj.fechaFin||'',
+      montoCobrado:obj.montoCobrado||0, montoGastos:obj.montoGastos||0,
+      costoRepuesto:obj.costoRepuesto||0, precioRepuestoFacturado:obj.precioRepuestoFacturado||0,
+      manoObraCobrada:obj.manoObraCobrada||0, movilidad:obj.movilidad||0,
+      repuestosDetalle:obj.repuestosDetalle||'', notas:obj.notas||'', fotoUrl:obj.fotoUrl||''
+      // estadoCobro NO se manda acá a propósito: lo maneja updateCobro por
+      // separado (botón "Cobrado"/"Parcial"/"Pendiente"), así este guardado
+      // nunca pisa un cobro ya registrado.
+    }});
+  }
+
+  if(tipo==='presupuestos') {
+    const clObj = DB.clientes.find(x=>x.id===obj.clienteId);
+    const clNom = clObj ? clObj.nombre : obj.clienteId;
+    const monedaSym = obj.moneda==='USD' ? 'USD ' : '$';
+    // FIX: antes se hacía un writeToSheet por cada ítem y cada uno pisaba al
+    // anterior (solo sobrevivía el último). Ahora se manda TODO en un único
+    // envío. Además, el desglose completo (desc|tipo|cant|precio de CADA
+    // ítem) va en el campo DESCRIPCION con el separador seguro — antes se
+    // aplanaba todo en columnas separadas con ' / ' y se perdía la
+    // estructura por ítem al releer desde el Sheet.
+    const descripcionCompleta = (obj.descripcion||'').split('\n').join(ITEM_SEP);
+    if(esNuevo) {
       writeToSheet({ action:'addPresupuesto', row: {
         id:obj.id, num:obj.num, cliente_id:obj.clienteId, cliente:clNom,
         descripcion:descripcionCompleta,
@@ -5613,29 +5672,25 @@ function guardar(tipo, obj, campoRequerido) {
         plazo_pago: obj.plazoPago||'contado', recargo_pct: obj.recargoPct||0,
         estado:obj.estado, fecha:obj.fecha, notas:obj.notas||''
       }});
-    }
-    if(tipo==='clientes') writeToSheet({ action:'addCliente', row: {
-      ID:obj.id, NOMBRE:obj.nombre, EMPRESA:obj.empresa||'',
-      TELEFONO:obj.telefono||'', EMAIL:obj.email||'',
-      ZONA:obj.zona||'', ESTADO:obj.estado||'activo',
-      ULTIMO_CONTACTO:obj.ultimoContacto||'', NOTAS:obj.notas||''
-    }});
-  } else {
-    if(tipo==='presupuestos') {
-      const clObj3 = DB.clientes.find(x=>x.id===obj.clienteId);
-      const clNom3 = clObj3 ? clObj3.nombre : '';
-      // FIX: acá se aplanaban los ítems en columnas separadas con ' / ' y se
-      // perdía la estructura por ítem. Ahora se manda la descripción completa
-      // (desc|tipo|cant|precio de cada ítem) con el separador seguro.
-      const descripcionCompleta3 = (obj.descripcion||'').split('\n').join(ITEM_SEP);
+    } else {
       writeToSheet({ action:'updatePresupuesto', id:obj.id, row:{
-        cliente_id:obj.clienteId, cliente:clNom3, descripcion:descripcionCompleta3,
+        cliente_id:obj.clienteId, cliente:clNom, descripcion:descripcionCompleta,
         monto:obj.monto,
         precio_usd:obj.montoUsd||0, tc_al_momento:obj.tcAlMomento||0,
         plazo_pago:obj.plazoPago||'contado', recargo_pct:obj.recargoPct||0,
         estado:obj.estado, notas:obj.notas||''
       }});
     }
+  }
+
+  // ── CLIENTES (v17: ahora también sincroniza al EDITAR, no solo al crear) ──
+  if(tipo==='clientes') {
+    writeToSheet({ action:'addCliente', row: {
+      ID:obj.id, NOMBRE:obj.nombre, EMPRESA:obj.empresa||'',
+      TELEFONO:obj.telefono||'', EMAIL:obj.email||'',
+      ZONA:obj.zona||'', ESTADO:obj.estado||'activo',
+      ULTIMO_CONTACTO:obj.ultimoContacto||'', NOTAS:obj.notas||''
+    }});
   }
 }
 
@@ -5664,6 +5719,7 @@ function eliminar(tipo, id) {
 
 function editCliente(id) { const c=DB.clientes.find(x=>x.id===id); if(c) openModal('cliente',c); }
 function editMaquina(id) { const m=DB.maquinas.find(x=>x.id===id); if(m) openModal('maquina',m); }
+function editTrabajo(id) { const t=DB.trabajos.find(x=>x.id===id); if(t) { closeDetail(); openModal('trabajo',t); } }
 
 function closeDetail() {
   document.getElementById('detailPanel').classList.remove('open');
