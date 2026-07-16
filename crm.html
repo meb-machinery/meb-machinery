@@ -692,6 +692,17 @@ select option { background:var(--dark); }
       <div class="chart-card"><div class="chart-title">COBRADO POR MES</div><div class="chart-wrap chart-wrap-tall"><canvas id="chartMensual"></canvas></div></div>
     </div>
 
+    <!-- IMPACTO CAMBIARIO MES A MES (Presupuestos + Contratos + Trabajos) -->
+    <div style="margin-top:16px">
+      <div class="chart-card">
+        <div class="chart-title">💱 IMPACTO CAMBIARIO POR MES — GANANCIA / PÉRDIDA EN USD</div>
+        <p style="font-size:11px;color:var(--muted);margin:-6px 0 10px">
+          Compara, para cada cobro registrado, el dólar del momento en que se cotizó/hizo contra el dólar del día que se cobró — agrupado por mes de cobro. Barras verdes = ganaste valor real en dólares; rojas = perdiste. Incluye Presupuestos, Contratos y Trabajos (los que tengan el dólar de origen cargado).
+        </p>
+        <div class="chart-wrap chart-wrap-tall"><canvas id="chartImpactoCambiarioMensual"></canvas></div>
+      </div>
+    </div>
+
     <!-- RENTABILIDAD POR CLIENTE -->
     <div style="margin-top:16px">
       <div class="page-title" style="font-size:18px;margin-bottom:12px">RENTABILIDAD <span>POR CLIENTE</span></div>
@@ -920,7 +931,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxVTUG4jmSMGjhCmTSohjtVUzGQcPRaPpe52AI7UJzsD9-3lU_j2XNoMsWbr7P01H__IA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzWwDypYBG3wAnCUgaZw5a6ClIlmEXkHI5LzOQIm2NwVp_J1AgpKri6GUUyKHEYfm5HGw/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1181,7 +1192,10 @@ async function syncAll() {
       notas:r.NOTAS||'', fotoUrl:r.FOTO_URL||'',
       estadoCobro:(r.ESTADO_COBRO||'pendiente').toLowerCase().trim(),
       tcCobro:parseFloat(r.TC_COBRO)||0, montoCobradoUsd:parseFloat(r.MONTO_COBRADO_USD)||0,
-      gananciaUsd:parseFloat(r.GANANCIA_USD)||0
+      gananciaUsd:parseFloat(r.GANANCIA_USD)||0,
+      tcAlMomento:parseFloat(r.TC_AL_MOMENTO)||0, gananciaUsdEsperada:parseFloat(r.GANANCIA_USD_ESPERADA)||0,
+      diferenciaUsd:parseFloat(r.DIFERENCIA_USD)||0, diferenciaPct:parseFloat(r.DIFERENCIA_PCT)||0,
+      fechaCobroReal:r.FECHA_COBRO_REAL||''
     })); else if(!DB.trabajos.length) DB.trabajos=[];
     // FIX carrera de sincronización: si un cambio de cobro se hizo hace menos
     // de 90s, se respeta lo local en vez de lo que trajo el Sheet (que puede
@@ -1194,6 +1208,9 @@ async function syncAll() {
         t.tcCobro = cambio.tcCobro;
         t.montoCobradoUsd = cambio.montoCobradoUsd;
         t.gananciaUsd = cambio.gananciaUsd;
+        t.diferenciaUsd = cambio.diferenciaUsd;
+        t.diferenciaPct = cambio.diferenciaPct;
+        t.fechaCobroReal = cambio.fechaCobroReal;
       } else if(cambio) {
         delete cambiosCobroRecientes[t.id];
       }
@@ -1823,6 +1840,7 @@ function badgeCobro(estado, id) {
   };
   const e = map[estado] || map.pendiente;
   const divId = `cobro-wrap-${id}`;
+  const botonEditar = estado==='cobrado' ? `<button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="editarCobroTrabajo('${id}')" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button>` : '';
   return `<div id="${divId}" style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">
     <span id="cobro-badge-${id}" class="badge ${e.cls}">${e.icon} ${e.label}</span>
     <select onchange="cambiarCobro('${id}',this.value,'${divId}')" style="font-size:10px;background:var(--dark);border:1px solid var(--border2);color:var(--muted);border-radius:3px;padding:2px 4px;cursor:pointer">
@@ -1830,7 +1848,13 @@ function badgeCobro(estado, id) {
       <option value="parcial"   ${estado==='parcial'  ?'selected':''}>🟡 Parcial</option>
       <option value="cobrado"   ${estado==='cobrado'  ?'selected':''}>✅ Cobrado</option>
     </select>
+    ${botonEditar}
   </div>`;
+}
+
+function editarCobroTrabajo(id) {
+  const t = DB.trabajos.find(x=>x.id===id);
+  if(t) openModal('cobroTrabajoTC', t);
 }
 
 // ============================================================
@@ -1882,9 +1906,10 @@ function cambiarCobro(id, nuevoEstado, divId) {
 
   t.estadoCobro = nuevoEstado;
   // Si se revierte de Cobrado a Pendiente/Parcial, no tiene sentido dejar
-  // colgada una "ganancia al cobro" de un cobro que ya no está confirmado.
-  if(nuevoEstado !== 'cobrado') { t.tcCobro = 0; t.montoCobradoUsd = 0; t.gananciaUsd = 0; }
-  cambiosCobroRecientes[id] = { estadoCobro:t.estadoCobro, tcCobro:t.tcCobro||0, montoCobradoUsd:t.montoCobradoUsd||0, gananciaUsd:t.gananciaUsd||0, ts:Date.now() };
+  // colgada una "ganancia al cobro" (ni su diferencia vs lo esperado ni la
+  // fecha) de un cobro que ya no está confirmado.
+  if(nuevoEstado !== 'cobrado') { t.tcCobro = 0; t.montoCobradoUsd = 0; t.gananciaUsd = 0; t.diferenciaUsd = 0; t.diferenciaPct = 0; t.fechaCobroReal = ''; }
+  cambiosCobroRecientes[id] = { estadoCobro:t.estadoCobro, tcCobro:t.tcCobro||0, montoCobradoUsd:t.montoCobradoUsd||0, gananciaUsd:t.gananciaUsd||0, diferenciaUsd:t.diferenciaUsd||0, diferenciaPct:t.diferenciaPct||0, fechaCobroReal:t.fechaCobroReal||'', ts:Date.now() };
   saveLocal();
 
   // FIX: antes solo se pintaba el chip a mano — la fila completa (incluida
@@ -1895,7 +1920,7 @@ function cambiarCobro(id, nuevoEstado, divId) {
   renderDashboard();
 
   // Escribir al Sheet
-  writeToSheet({ action: 'updateCobro', id: id, estadoCobro: nuevoEstado, tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0, ganancia_usd:t.gananciaUsd||0 });
+  writeToSheet({ action: 'updateCobro', id: id, estadoCobro: nuevoEstado, tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0, ganancia_usd:t.gananciaUsd||0, diferencia_usd:t.diferenciaUsd||0, diferencia_pct:t.diferenciaPct||0, fecha_cobro_real:t.fechaCobroReal||'' });
   const labelCobro = {cobrado:'Cobrado', parcial:'Parcial', pendiente:'Pendiente'}[nuevoEstado] || nuevoEstado;
   showToast(`Cobro → ${labelCobro} ✓`, 'success');
 }
@@ -1964,6 +1989,8 @@ function verTrabajo(id) {
       <div class="detail-row"><span class="detail-key">Ganancia neta</span><span class="detail-val" style="font-family:'Bebas Neue';font-size:16px;color:${ganancia>=0?'var(--green)':'var(--red)'}">${fmtMonto(ganancia)}</span></div>
       <div class="detail-row"><span class="detail-key">Margen</span><span class="detail-val"><span class="badge ${margen>=30?'badge-green':margen>=10?'badge-yellow':'badge-red'}">${margen}%</span></span></div>
       ${t.gananciaUsd?`<div class="detail-row"><span class="detail-key">Ganancia en USD (al cobro)</span><span class="detail-val" style="color:var(--blue-light)">USD ${t.gananciaUsd.toLocaleString('es-AR')} <span style="font-size:10px;color:var(--muted2)">— TC $${t.tcCobro||'—'} del día que se cobró, no se recalcula</span></span></div>`:''}
+      ${t.tcAlMomento?`<div class="detail-row"><span class="detail-key">Dólar del día del trabajo</span><span class="detail-val">$${t.tcAlMomento} <span style="font-size:10px;color:var(--muted2)">→ esperaba USD ${t.gananciaUsdEsperada||0} de ganancia</span></span></div>`:''}
+      ${(t.gananciaUsd && t.diferenciaUsd!==undefined && t.gananciaUsdEsperada)?`<div class="detail-row"><span class="detail-key">Diferencia real vs esperado</span><span class="detail-val" style="color:${t.diferenciaUsd>=0?'var(--green)':'var(--red)'}">${t.diferenciaUsd>=0?'✓ +':'⚠️ '}USD ${t.diferenciaUsd} (${t.diferenciaPct>0?'+':''}${t.diferenciaPct}%)</span></div>`:''}
     </div>
 
     ${t.repuestosDetalle?`<div class="detail-section">
@@ -2032,6 +2059,7 @@ function renderTrabajos() {
         <div style="font-family:'Bebas Neue';font-size:14px;color:${ganancia>=0?'var(--yellow)':'var(--red)'}">${fmtMonto(ganancia)}</div>
         <div style="font-size:10px;color:${margenColor}">${margen}% margen</div>
         ${t.gananciaUsd?`<div style="font-size:10px;color:var(--blue-light);margin-top:1px">USD ${t.gananciaUsd.toLocaleString('es-AR')} <span style="color:var(--muted2)">(TC $${t.tcCobro||'—'} del cobro)</span></div>`:''}
+        ${(t.gananciaUsd && t.diferenciaUsd!==undefined && t.gananciaUsdEsperada)?`<div style="font-size:10px;margin-top:1px;color:${t.diferenciaUsd>=0?'var(--green)':'var(--red)'}">${t.diferenciaUsd>=0?'✓ +':'⚠️ '}USD ${t.diferenciaUsd} vs esperado (${t.diferenciaPct>0?'+':''}${t.diferenciaPct}%)</div>`:''}
       </td>
       <td>${badgeCobro(t.estadoCobro||'pendiente', t.id)}</td>
       <td><div class="actions">
@@ -2081,7 +2109,7 @@ function renderPresupuestos() {
         <button class="btn-secondary" title="Editar" onclick="openModal('presupuesto',DB.presupuestos.find(x=>x.id==='${p.id}'))">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','rechazado'])">Estado</button>
         ${p.estado==='aprobado'&&p.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Registrar cobro real">💰 Cobro</button>`:''}
-        ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroPresupuesto('${p.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`:''}
+        ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroPresupuesto('${p.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`:''}
         <button class="btn-secondary" onclick="duplicarPresupuesto('${p.id}')" title="Duplicar">⧉</button>
         <button class="btn-secondary" onclick="generarPresupuestoPDF('${p.id}')">📄 PDF</button>
         <button class="btn-secondary" style="background:rgba(0,59,112,0.2);border-color:#003B70;color:#6fa8dc" onclick="generarInformeTecnico('${p.id}')">🔧 Informe</button>
@@ -2128,7 +2156,7 @@ function renderContratos() {
       <td><div class="actions">
         <button class="btn-secondary" title="Editar" onclick="openModal('contrato',DB.contratos.find(x=>x.id==='${c.id}'))">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('contratos','${c.id}',['activo','pausado','vencido'])">Estado</button>
-        ${c.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Registrar cobro real">💰 Cobro</button>`:`<span style="font-size:10px;color:${(c.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap">${(c.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${c.diferenciaUsd}</span> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroContrato('${c.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`}
+        ${c.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Registrar cobro real">💰 Cobro</button>`:`<span style="font-size:10px;color:${(c.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap">${(c.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${c.diferenciaUsd}</span> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroContrato('${c.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`}
         <button class="btn-secondary" onclick="generarContratoPDF('${c.id}')">📄 PDF</button>
         <button class="btn-secondary" style="background:rgba(244,180,0,0.15);border-color:var(--yellow);color:var(--yellow)" onclick="generarDocumentoOpcionesPagoContrato('${c.id}')" title="Documento de opciones de pago para el cliente">📑 Opciones pago</button>
         <button class="btn-danger" onclick="eliminar('contratos','${c.id}')">✕</button>
@@ -3406,6 +3434,54 @@ function renderEstadisticas() {
         <div class="td-sub">${fmtDate(c.fecha)} · ${c.categoria}</div></div>
         <span class="monto" style="font-size:13px">${fmtMonto(c.monto)}</span>
       </div>`).join(''):`<div class="empty-state"><div class="icon">📦</div><p>Sin compras registradas</p></div>`;
+  }
+
+  // ── IMPACTO CAMBIARIO POR MES (Presupuestos + Contratos + Trabajos) ──
+  // Agrupa por mes de COBRO (no de creación) la diferencia real en USD entre
+  // lo esperado (dólar de cuando se cotizó/hizo) y lo recibido (dólar del
+  // día del cobro). Cada barra usa datos ya congelados históricamente —
+  // nunca se recalcula con la cotización de hoy.
+  destroyChart('impactoCambiarioMensual');
+  const porMesCambiario = {};
+  const _addAlMesCambiario = (fechaStr, monto, campo) => {
+    if(!fechaStr || !monto) return;
+    const parts = fechaStr.includes('/') ? fechaStr.split('/').reverse() : fechaStr.split('-');
+    if(parts.length<3) return;
+    const y = parts[0].length===4 ? parts[0] : '20'+parts[0];
+    const m = String(parseInt(parts[1])||1).padStart(2,'0');
+    const key = `${y}-${m}`;
+    if(!porMesCambiario[key]) porMesCambiario[key] = {presupuestos:0, contratos:0, trabajos:0};
+    porMesCambiario[key][campo] += monto;
+  };
+  DB.presupuestos.filter(p=>p.estadoCobro==='cobrado').forEach(p=>_addAlMesCambiario(p.fechaCobroReal, Number(p.diferenciaUsd||0), 'presupuestos'));
+  (DB.contratos||[]).filter(c=>c.estadoCobro==='cobrado').forEach(c=>_addAlMesCambiario(c.fechaCobroReal, Number(c.diferenciaUsd||0), 'contratos'));
+  DB.trabajos.filter(t=>t.estadoCobro==='cobrado' && t.gananciaUsdEsperada).forEach(t=>_addAlMesCambiario(t.fechaCobroReal, Number(t.diferenciaUsd||0), 'trabajos'));
+
+  const mesesCambiarios = Object.keys(porMesCambiario).sort();
+  if(document.getElementById('chartImpactoCambiarioMensual') && mesesCambiarios.length) {
+    const totalesPorMes = mesesCambiarios.map(k => porMesCambiario[k].presupuestos + porMesCambiario[k].contratos + porMesCambiario[k].trabajos);
+    charts.impactoCambiarioMensual = new Chart(document.getElementById('chartImpactoCambiarioMensual'), {
+      data: {
+        labels: mesesCambiarios.map(k=>{ const [y,m]=k.split('-'); return `${m}/${y.slice(2)}`; }),
+        datasets: [
+          { type:'bar', label:'Presupuestos', data: mesesCambiarios.map(k=>Math.round(porMesCambiario[k].presupuestos)), backgroundColor:'rgba(244,180,0,0.75)', borderColor:'#F4B400', borderWidth:1, borderRadius:3 },
+          { type:'bar', label:'Contratos', data: mesesCambiarios.map(k=>Math.round(porMesCambiario[k].contratos)), backgroundColor:'rgba(0,59,112,0.75)', borderColor:'#6fa8dc', borderWidth:1, borderRadius:3 },
+          { type:'bar', label:'Trabajos', data: mesesCambiarios.map(k=>Math.round(porMesCambiario[k].trabajos)), backgroundColor:'rgba(37,211,102,0.6)', borderColor:'#25d366', borderWidth:1, borderRadius:3 },
+          { type:'line', label:'Total del mes', data: totalesPorMes.map(v=>Math.round(v)), borderColor:'#fff', backgroundColor:'#fff', borderWidth:2, pointRadius:3, tension:0.2 }
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{
+          legend:{display:true, labels:{color:'#ccc', font:{size:10}}},
+          tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+': USD '+ctx.raw}}
+        },
+        scales:{
+          y:{ beginAtZero:false, ticks:{color:'#999', callback:v=>'USD '+v} },
+          x:{ ticks:{color:'#999'} }
+        }
+      }
+    });
   }
 
   // ── FINANCIERO MENSUAL ──
@@ -5229,6 +5305,14 @@ function openModal(type, data={}) {
       </div>
       <div class="form-group"><label>Fecha inicio</label><input id="f-tfecha" type="date" value="${data.fechaInicio||today()}"/></div>
       <div class="form-group"><label>Fecha fin</label><input id="f-tfechafin" type="date" value="${data.fechaFin||''}"/></div>
+      <div class="form-group full" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+        <label>Dólar del día del trabajo (opcional — para comparar contra el dólar del día que se cobre)</label>
+        <div style="display:flex;gap:6px">
+          <input id="f-ttc" type="number" value="${data.tcAlMomento||''}" style="flex:1"/>
+          <button type="button" class="btn-secondary" onclick="actualizarTCTrabajoCreacion()" style="white-space:nowrap;font-size:11px" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">Si lo completás, cuando marques este trabajo como "Cobrado" vas a ver si ganaste o perdiste en dólares reales entre el día del trabajo y el día del cobro.</div>
+      </div>
       <div class="form-group"><label>Monto cobrado ($)</label><input id="f-tcobrado" type="number" value="${data.montoCobrado||0}"/></div>
       <div class="form-group"><label>Monto gastos ($)</label><input id="f-tgastos" type="number" value="${data.montoGastos||0}"/></div>
       <div class="form-group full" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><label style="color:var(--yellow);font-size:11px;letter-spacing:2px">DESGLOSE ECONÓMICO</label></div>
@@ -5241,7 +5325,20 @@ function openModal(type, data={}) {
       <div class="form-group"><label>URL foto del trabajo (Google Drive)</label><input id="f-tfoto" value="${data.fotoUrl||''}" placeholder="https://drive.google.com/..."/></div>
       <div class="form-group full"><label>Notas</label><textarea id="f-tnotas">${data.notas||''}</textarea></div>
     </div>`;
-    onSave=()=>guardar('trabajos',{id:data.id||uid(),titulo:gv('f-ttit'),clienteId:gv('f-tcli'),maquinaId:gv('f-tmaq'),tipo:gv('f-ttipo'),estado:gv('f-testado'),estadoMaquina:gv('f-tmaqestado'),fechaInicio:gv('f-tfecha'),fechaFin:gv('f-tfechafin'),montoCobrado:parseFloat(gv('f-tcobrado'))||0,montoGastos:parseFloat(gv('f-tgastos'))||0,costoRepuesto:parseFloat(gv('f-tcostoRep'))||0,precioRepuestoFacturado:parseFloat(gv('f-tprecioRep'))||0,manoObraCobrada:parseFloat(gv('f-tmanoObra'))||0,movilidad:parseFloat(gv('f-tmovilidad'))||0,repuestosDetalle:gv('f-trepdetalle'),fotoUrl:gv('f-tfoto'),notas:gv('f-tnotas')},'titulo');
+    onSave=()=>{
+      const tcMomento = parseFloat(gv('f-ttc'))||0;
+      const manoObraV = parseFloat(gv('f-tmanoObra'))||0;
+      const movilidadV = parseFloat(gv('f-tmovilidad'))||0;
+      const precioRepV = parseFloat(gv('f-tprecioRep'))||0;
+      const costoRepV = parseFloat(gv('f-tcostoRep'))||0;
+      const montoCobradoV = parseFloat(gv('f-tcobrado'))||0;
+      const montoGastosV = parseFloat(gv('f-tgastos'))||0;
+      // Misma fórmula de "Rentabilidad" que se ve en la tabla — así el USD
+      // esperado corresponde exactamente a lo que Emmanuel ve como ganancia.
+      const gananciaArsAlGuardar = (manoObraV+movilidadV+(precioRepV-costoRepV)) || (montoCobradoV-costoRepV-montoGastosV);
+      const gananciaUsdEsperadaCalc = tcMomento>0 ? Math.round(gananciaArsAlGuardar/tcMomento) : (data.gananciaUsdEsperada||0);
+      guardar('trabajos',{id:data.id||uid(),titulo:gv('f-ttit'),clienteId:gv('f-tcli'),maquinaId:gv('f-tmaq'),tipo:gv('f-ttipo'),estado:gv('f-testado'),estadoMaquina:gv('f-tmaqestado'),fechaInicio:gv('f-tfecha'),fechaFin:gv('f-tfechafin'),montoCobrado:montoCobradoV,montoGastos:montoGastosV,costoRepuesto:costoRepV,precioRepuestoFacturado:precioRepV,manoObraCobrada:manoObraV,movilidad:movilidadV,repuestosDetalle:gv('f-trepdetalle'),fotoUrl:gv('f-tfoto'),notas:gv('f-tnotas'),tcAlMomento:tcMomento||data.tcAlMomento||0,gananciaUsdEsperada:gananciaUsdEsperadaCalc},'titulo');
+    };
     setTimeout(()=>compararPisoTarifario(), 50);
   }
 
@@ -5579,7 +5676,7 @@ function openModal(type, data={}) {
     // este plazo se calcula al vuelo aplicando el recargo acá.
     const recargoPct = p.recargoPct || 0;
     const usdEsperado = (p.montoUsd || 0) * (1 + recargoPct/100);
-    title='REGISTRAR COBRO REAL — Presupuesto N°'+String(p.num||p.id).padStart(4,'0');
+    title=(p.estadoCobro==='cobrado'?'EDITAR COBRO — Presupuesto N°':'REGISTRAR COBRO REAL — Presupuesto N°')+String(p.num||p.id).padStart(4,'0');
     body=`<div class="form-grid">
       <div class="form-group full" style="background:var(--dark);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--muted)">
         Esperado según cotización: <b style="color:var(--blue-light)">USD ${usdEsperado.toLocaleString('es-AR')}</b> ·
@@ -5617,6 +5714,7 @@ function openModal(type, data={}) {
         showToast(diferenciaUsd>=0 ? `Cobro registrado — ganó USD ${item.diferenciaUsd}` : `Cobro registrado — perdió USD ${Math.abs(item.diferenciaUsd)}`, diferenciaUsd>=0?'success':'error');
       }
     };
+    setTimeout(()=>calcularDiferenciaCobro(usdEsperado), 50);
   }
 
   // NUEVO: al marcar un Trabajo como "Cobrado" (no Pendiente ni Parcial —
@@ -5631,25 +5729,30 @@ function openModal(type, data={}) {
     const factTercerosT = Number(t.precioRepuestoFacturado||0);
     const costosT = Number(t.costoRepuesto||0)+Number(t.montoGastos||0);
     const gananciaArsT = (Number(t.manoObraCobrada||0)+Number(t.movilidad||0)+(factTercerosT-Number(t.costoRepuesto||0)))||montoCobrado-costosT;
-    title='CONFIRMAR COBRO — '+(t.titulo||t.descripcion||'Trabajo');
+    const tieneAnclaje = t.tcAlMomento>0 && t.gananciaUsdEsperada;
+    title=(t.estadoCobro==='cobrado'?'EDITAR COBRO — ':'CONFIRMAR COBRO — ')+(t.titulo||t.descripcion||'Trabajo');
     body=`<div class="form-grid">
       <div class="form-group full" style="background:var(--dark);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--muted)">
         Monto a cobrar: <b style="color:var(--yellow)">${fmtMonto(montoCobrado)}</b> · Ganancia (MO+Mov+Margen): <b style="color:var(--green)">${fmtMonto(gananciaArsT)}</b>
+        ${tieneAnclaje?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border2)">Ganancia esperada al TC del día del trabajo ($${t.tcAlMomento}): <b style="color:var(--blue-light)">USD ${t.gananciaUsdEsperada}</b></div>`:`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);color:var(--muted2)">Este trabajo no tiene dólar cargado del día que se hizo — no vas a poder comparar contra el del cobro. Podés editarlo antes de confirmar y cargarlo.</div>`}
       </div>
-      <div class="form-group full">
+      <div class="form-group"><label>Fecha de cobro real</label><input id="f-tfechacobro" type="date" value="${t.fechaCobroReal||today()}"/></div>
+      <div class="form-group">
         <label>TC del día del cobro (opcional — para ver el equivalente en USD)</label>
         <div style="display:flex;gap:6px">
-          <input id="f-tctrab" type="number" value="" style="flex:1"/>
-          <button type="button" class="btn-secondary" onclick="actualizarTCTrabajo()" style="white-space:nowrap;font-size:11px" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
+          <input id="f-tctrab" type="number" value="${t.tcCobro||''}" oninput="previewDiferenciaCobroTrabajo(${gananciaArsT}, ${t.gananciaUsdEsperada||0}, ${tieneAnclaje})" style="flex:1"/>
+          <button type="button" class="btn-secondary" onclick="actualizarTCTrabajo(${gananciaArsT}, ${t.gananciaUsdEsperada||0}, ${tieneAnclaje})" style="white-space:nowrap;font-size:11px" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
         </div>
       </div>
       <div class="form-group full" style="font-size:11px;color:var(--muted)" id="cobro-trab-usd-preview">
-        Si dejás esto vacío, el cobro se confirma igual — solo no vas a tener el equivalente en USD (ni la ganancia en USD) para este trabajo en Estadísticas.
+        ${tieneAnclaje ? 'Cargá el TC de hoy para ver si ganaste o perdiste en dólares reales desde que se hizo el trabajo.' : 'Si dejás esto vacío, el cobro se confirma igual — solo no vas a tener el equivalente en USD (ni la ganancia en USD) para este trabajo en Estadísticas.'}
       </div>
     </div>`;
     onSave=()=>{
       const tcTrab = parseFloat(gv('f-tctrab'))||0;
+      const fechaCobroTrab = gv('f-tfechacobro') || today();
       t.estadoCobro = 'cobrado';
+      t.fechaCobroReal = fechaCobroTrab;
       if(tcTrab>0) {
         t.tcCobro = tcTrab;
         t.montoCobradoUsd = Math.round(montoCobrado/tcTrab);
@@ -5657,8 +5760,14 @@ function openModal(type, data={}) {
         // nunca se recalcula con la cotización de otro día (mismo criterio
         // que ya usamos en Presupuestos/Contratos).
         t.gananciaUsd = Math.round(gananciaArsT/tcTrab);
+        // Diferencia contra lo esperado al TC del día del trabajo (si se
+        // cargó). Positivo = ganó valor real en dólares; negativo = perdió.
+        if(tieneAnclaje) {
+          t.diferenciaUsd = t.gananciaUsd - t.gananciaUsdEsperada;
+          t.diferenciaPct = t.gananciaUsdEsperada!==0 ? Math.round((t.diferenciaUsd/Math.abs(t.gananciaUsdEsperada))*1000)/10 : 0;
+        }
       }
-      cambiosCobroRecientes[t.id] = { estadoCobro:'cobrado', tcCobro:t.tcCobro||0, montoCobradoUsd:t.montoCobradoUsd||0, gananciaUsd:t.gananciaUsd||0, ts:Date.now() };
+      cambiosCobroRecientes[t.id] = { estadoCobro:'cobrado', tcCobro:t.tcCobro||0, montoCobradoUsd:t.montoCobradoUsd||0, gananciaUsd:t.gananciaUsd||0, diferenciaUsd:t.diferenciaUsd||0, diferenciaPct:t.diferenciaPct||0, fechaCobroReal:t.fechaCobroReal, ts:Date.now() };
       saveLocal();
       // FIX: antes esto solo pintaba el chip de "Cobrado" a mano, sin volver
       // a dibujar toda la fila — por eso la línea de USD (y el desplegable
@@ -5667,30 +5776,29 @@ function openModal(type, data={}) {
       renderTrabajos();
       updateBadges();
       renderDashboard();
-      writeToSheet({ action:'updateCobro', id:t.id, estadoCobro:'cobrado', tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0, ganancia_usd:t.gananciaUsd||0 });
+      writeToSheet({ action:'updateCobro', id:t.id, estadoCobro:'cobrado', tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0, ganancia_usd:t.gananciaUsd||0, diferencia_usd:t.diferenciaUsd||0, diferencia_pct:t.diferenciaPct||0, fecha_cobro_real:t.fechaCobroReal||'' });
       closeModal();
       showToast(tcTrab>0 ? `Cobro confirmado ✔ — Ganancia USD ${t.gananciaUsd}` : 'Cobro confirmado ✔', 'success');
     };
+    setTimeout(()=>previewDiferenciaCobroTrabajo(gananciaArsT, t.gananciaUsdEsperada||0, tieneAnclaje), 50);
   }
 
-  // NUEVO: cobro real de Contratos — mismo criterio que Presupuestos (ancla
-  // pura en USD, recargo aplicado al vuelo, nunca horneado en el guardado).
   else if(type==='cobroContratoReal') {
     const c = data;
     const recargoPctCon = c.recargoPct || 0;
     const usdEsperadoCon = (c.precioUsd || 0) * (1 + recargoPctCon/100);
-    title='REGISTRAR COBRO REAL — Contrato';
+    title=(c.estadoCobro==='cobrado'?'EDITAR COBRO — Contrato':'REGISTRAR COBRO REAL — Contrato');
     body=`<div class="form-grid">
       <div class="form-group full" style="background:var(--dark);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--muted)">
         Esperado según cotización: <b style="color:var(--blue-light)">USD ${usdEsperadoCon.toLocaleString('es-AR')}</b> ·
         Plazo: <b style="text-transform:capitalize">${c.plazoPago||'contado'}</b>${recargoPctCon>0?` (+${recargoPctCon}%)`:''}
       </div>
-      <div class="form-group"><label>Fecha de cobro real *</label><input id="f-ccfecha" type="date" value="${today()}"/></div>
-      <div class="form-group"><label>Monto realmente cobrado (ARS) *</label><input id="f-ccmonto" type="number" oninput="calcularDiferenciaCobroContrato(${usdEsperadoCon})"/></div>
+      <div class="form-group"><label>Fecha de cobro real *</label><input id="f-ccfecha" type="date" value="${c.fechaCobroReal||today()}"/></div>
+      <div class="form-group"><label>Monto realmente cobrado (ARS) *</label><input id="f-ccmonto" type="number" value="${c.montoCobradoReal||''}" oninput="calcularDiferenciaCobroContrato(${usdEsperadoCon})"/></div>
       <div class="form-group">
         <label>TC del día del cobro *</label>
         <div style="display:flex;gap:6px">
-          <input id="f-cctc" type="number" oninput="calcularDiferenciaCobroContrato(${usdEsperadoCon})" style="flex:1"/>
+          <input id="f-cctc" type="number" value="${c.tcCobro||''}" oninput="calcularDiferenciaCobroContrato(${usdEsperadoCon})" style="flex:1"/>
           <button type="button" class="btn-secondary" onclick="actualizarTCCobroContrato(${usdEsperadoCon})" style="white-space:nowrap;font-size:11px" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
         </div>
       </div>
@@ -5717,6 +5825,7 @@ function openModal(type, data={}) {
         showToast(difUsdCC>=0 ? `Cobro registrado — ganó USD ${item.diferenciaUsd}` : `Cobro registrado — perdió USD ${Math.abs(item.diferenciaUsd)}`, difUsdCC>=0?'success':'error');
       }
     };
+    setTimeout(()=>calcularDiferenciaCobroContrato(usdEsperadoCon), 50);
   }
 
   document.getElementById('modalTitle').textContent=title;
@@ -5856,13 +5965,48 @@ async function actualizarTCCobro(usdEsperado) {
   }
 }
 
-async function actualizarTCTrabajo() {
+async function actualizarTCTrabajoCreacion() {
+  const tcInput = document.getElementById('f-ttc');
+  try {
+    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
+    if(!res.ok) throw new Error('fail');
+    const data = await res.json();
+    if(tcInput) tcInput.value = Math.round(data.venta);
+  } catch(e) {
+    showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
+  }
+}
+
+function previewDiferenciaCobroTrabajo(gananciaArsT, gananciaUsdEsperada, tieneAnclaje) {
+  const prev = document.getElementById('cobro-trab-usd-preview');
+  if(!prev) return;
+  const tc = parseFloat(gv('f-tctrab'))||0;
+  if(tc<=0) {
+    prev.textContent = tieneAnclaje ? 'Cargá el TC de hoy para ver si ganaste o perdiste en dólares reales desde que se hizo el trabajo.' : 'Si dejás esto vacío, el cobro se confirma igual — solo no vas a tener el equivalente en USD (ni la ganancia en USD) para este trabajo en Estadísticas.';
+    prev.style.color = 'var(--muted)';
+    return;
+  }
+  const gananciaUsdReal = Math.round(gananciaArsT/tc);
+  if(!tieneAnclaje) {
+    prev.textContent = `Ganancia real al cobro: USD ${gananciaUsdReal} (este trabajo no tenía dólar del día del trabajo cargado, no hay comparación).`;
+    prev.style.color = 'var(--blue-light)';
+    return;
+  }
+  const dif = gananciaUsdReal - gananciaUsdEsperada;
+  const difPct = gananciaUsdEsperada!==0 ? Math.round((dif/Math.abs(gananciaUsdEsperada))*1000)/10 : 0;
+  const ganoOPerdio = dif >= 0 ? `✓ Ganaste USD ${dif} más de lo esperado (+${difPct}%)` : `⚠️ Perdiste USD ${Math.abs(dif)} respecto a lo esperado (${difPct}%)`;
+  prev.innerHTML = `Ganancia real al cobro: <b>USD ${gananciaUsdReal}</b> vs esperada <b>USD ${gananciaUsdEsperada}</b> → <span style="color:${dif>=0?'var(--green)':'var(--red)'}">${ganoOPerdio}</span>`;
+  prev.style.color = dif>=0 ? 'var(--green)' : 'var(--red)';
+}
+
+async function actualizarTCTrabajo(gananciaArsT, gananciaUsdEsperada, tieneAnclaje) {
   const tcInput = document.getElementById('f-tctrab');
   try {
     const res = await fetch('https://dolarapi.com/v1/dolares/blue');
     if(!res.ok) throw new Error('fail');
     const data = await res.json();
     if(tcInput) tcInput.value = Math.round(data.venta);
+    previewDiferenciaCobroTrabajo(gananciaArsT, gananciaUsdEsperada, tieneAnclaje);
   } catch(e) {
     showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
   }
@@ -5958,7 +6102,8 @@ function guardar(tipo, obj, campoRequerido) {
       montoCobrado:obj.montoCobrado||0, montoGastos:obj.montoGastos||0,
       costoRepuesto:obj.costoRepuesto||0, precioRepuestoFacturado:obj.precioRepuestoFacturado||0,
       manoObraCobrada:obj.manoObraCobrada||0, movilidad:obj.movilidad||0,
-      repuestosDetalle:obj.repuestosDetalle||'', notas:obj.notas||'', fotoUrl:obj.fotoUrl||''
+      repuestosDetalle:obj.repuestosDetalle||'', notas:obj.notas||'', fotoUrl:obj.fotoUrl||'',
+      tcAlMomento:obj.tcAlMomento||0, gananciaUsdEsperada:obj.gananciaUsdEsperada||0
       // estadoCobro NO se manda acá a propósito: lo maneja updateCobro por
       // separado (botón "Cobrado"/"Parcial"/"Pendiente"), así este guardado
       // nunca pisa un cobro ya registrado.
