@@ -920,7 +920,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxMDykaJ-OTy69ggE9Zhx79OXLlcbC9_Iw7LEfWEiLY6uOqymRI57H0WeKEoMsI6gls_Q/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwRnSnjz3Q71N4VETTx39ceA0P0Eq3IZQCqpP7SkuojinDQPF1NxF1c3mExECgLcTe11g/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -943,9 +943,17 @@ let DB = { clientes:[], maquinas:[], trabajos:[], presupuestos:[], alertas:[], c
 // recuerda qué se borró en los últimos minutos para filtrarlo aunque el
 // Sheet devuelva una versión desactualizada.
 let _recentDeletes = [];
+try {
+  const _rd = localStorage.getItem('meb_recent_deletes');
+  if(_rd) _recentDeletes = JSON.parse(_rd).filter(d => (Date.now()-d.ts) < 5*60*1000);
+} catch(e) {}
+function _guardarRecentDeletes() {
+  try { localStorage.setItem('meb_recent_deletes', JSON.stringify(_recentDeletes)); } catch(e) {}
+}
 function registrarDelete(tipo, id) {
   _recentDeletes.push({ tipo, id, ts: Date.now() });
   _recentDeletes = _recentDeletes.filter(d => (Date.now()-d.ts) < 5*60*1000);
+  _guardarRecentDeletes();
 }
 function filtrarRecienEliminados(tipo, arr) {
   const activos = _recentDeletes.filter(d => d.tipo===tipo && (Date.now()-d.ts) < 5*60*1000);
@@ -1172,7 +1180,8 @@ async function syncAll() {
       repuestosDetalle:r.REPUESTOS_DETALLE||'',
       notas:r.NOTAS||'', fotoUrl:r.FOTO_URL||'',
       estadoCobro:(r.ESTADO_COBRO||'pendiente').toLowerCase().trim(),
-      tcCobro:parseFloat(r.TC_COBRO)||0, montoCobradoUsd:parseFloat(r.MONTO_COBRADO_USD)||0
+      tcCobro:parseFloat(r.TC_COBRO)||0, montoCobradoUsd:parseFloat(r.MONTO_COBRADO_USD)||0,
+      gananciaUsd:parseFloat(r.GANANCIA_USD)||0
     })); else if(!DB.trabajos.length) DB.trabajos=[];
     // FIX carrera de sincronización: si un cambio de cobro se hizo hace menos
     // de 90s, se respeta lo local en vez de lo que trajo el Sheet (que puede
@@ -1184,6 +1193,7 @@ async function syncAll() {
         t.estadoCobro = cambio.estadoCobro;
         t.tcCobro = cambio.tcCobro;
         t.montoCobradoUsd = cambio.montoCobradoUsd;
+        t.gananciaUsd = cambio.gananciaUsd;
       } else if(cambio) {
         delete cambiosCobroRecientes[t.id];
       }
@@ -1958,6 +1968,7 @@ function verTrabajo(id) {
       <div style="border-top:1px solid var(--border);margin:8px 0"></div>
       <div class="detail-row"><span class="detail-key">Ganancia neta</span><span class="detail-val" style="font-family:'Bebas Neue';font-size:16px;color:${ganancia>=0?'var(--green)':'var(--red)'}">${fmtMonto(ganancia)}</span></div>
       <div class="detail-row"><span class="detail-key">Margen</span><span class="detail-val"><span class="badge ${margen>=30?'badge-green':margen>=10?'badge-yellow':'badge-red'}">${margen}%</span></span></div>
+      ${t.gananciaUsd?`<div class="detail-row"><span class="detail-key">Ganancia en USD (al cobro)</span><span class="detail-val" style="color:var(--blue-light)">USD ${t.gananciaUsd.toLocaleString('es-AR')} <span style="font-size:10px;color:var(--muted2)">— TC $${t.tcCobro||'—'} del día que se cobró, no se recalcula</span></span></div>`:''}
     </div>
 
     ${t.repuestosDetalle?`<div class="detail-section">
@@ -2025,6 +2036,7 @@ function renderTrabajos() {
         <div style="font-size:11px;color:var(--muted);margin-bottom:1px">MO+Mov+Margen</div>
         <div style="font-family:'Bebas Neue';font-size:14px;color:${ganancia>=0?'var(--yellow)':'var(--red)'}">${fmtMonto(ganancia)}</div>
         <div style="font-size:10px;color:${margenColor}">${margen}% margen</div>
+        ${t.gananciaUsd?`<div style="font-size:10px;color:var(--blue-light);margin-top:1px">USD ${t.gananciaUsd.toLocaleString('es-AR')} <span style="color:var(--muted2)">(TC $${t.tcCobro||'—'} del cobro)</span></div>`:''}
       </td>
       <td>${badgeCobro(t.estadoCobro||'pendiente', t.id)}</td>
       <td><div class="actions">
@@ -5618,10 +5630,16 @@ function openModal(type, data={}) {
   else if(type==='cobroTrabajoTC') {
     const t = data;
     const montoCobrado = Number(t.montoCobrado||0);
+    // Misma fórmula de "Rentabilidad" que se muestra en la tabla de Trabajos —
+    // para que el USD histórico corresponda exactamente a lo que Emmanuel ve
+    // como ganancia, no solo al monto cobrado.
+    const factTercerosT = Number(t.precioRepuestoFacturado||0);
+    const costosT = Number(t.costoRepuesto||0)+Number(t.montoGastos||0);
+    const gananciaArsT = (Number(t.manoObraCobrada||0)+Number(t.movilidad||0)+(factTercerosT-Number(t.costoRepuesto||0)))||montoCobrado-costosT;
     title='CONFIRMAR COBRO — '+(t.titulo||t.descripcion||'Trabajo');
     body=`<div class="form-grid">
       <div class="form-group full" style="background:var(--dark);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--muted)">
-        Monto a cobrar: <b style="color:var(--yellow)">${fmtMonto(montoCobrado)}</b>
+        Monto a cobrar: <b style="color:var(--yellow)">${fmtMonto(montoCobrado)}</b> · Ganancia (MO+Mov+Margen): <b style="color:var(--green)">${fmtMonto(gananciaArsT)}</b>
       </div>
       <div class="form-group full">
         <label>TC del día del cobro (opcional — para ver el equivalente en USD)</label>
@@ -5630,23 +5648,30 @@ function openModal(type, data={}) {
           <button type="button" class="btn-secondary" onclick="actualizarTCTrabajo()" style="white-space:nowrap;font-size:11px" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
         </div>
       </div>
-      <div class="form-group full" style="font-size:11px;color:var(--muted)">
-        Si dejás esto vacío, el cobro se confirma igual — solo no vas a tener el equivalente en USD para este trabajo en Estadísticas.
+      <div class="form-group full" style="font-size:11px;color:var(--muted)" id="cobro-trab-usd-preview">
+        Si dejás esto vacío, el cobro se confirma igual — solo no vas a tener el equivalente en USD (ni la ganancia en USD) para este trabajo en Estadísticas.
       </div>
     </div>`;
     onSave=()=>{
       const tcTrab = parseFloat(gv('f-tctrab'))||0;
       t.estadoCobro = 'cobrado';
-      if(tcTrab>0) { t.tcCobro = tcTrab; t.montoCobradoUsd = Math.round(montoCobrado/tcTrab); }
-      cambiosCobroRecientes[t.id] = { estadoCobro:'cobrado', tcCobro:t.tcCobro||0, montoCobradoUsd:t.montoCobradoUsd||0, ts:Date.now() };
+      if(tcTrab>0) {
+        t.tcCobro = tcTrab;
+        t.montoCobradoUsd = Math.round(montoCobrado/tcTrab);
+        // Ganancia en USD, al TC de ESTE momento — queda fija para siempre,
+        // nunca se recalcula con la cotización de otro día (mismo criterio
+        // que ya usamos en Presupuestos/Contratos).
+        t.gananciaUsd = Math.round(gananciaArsT/tcTrab);
+      }
+      cambiosCobroRecientes[t.id] = { estadoCobro:'cobrado', tcCobro:t.tcCobro||0, montoCobradoUsd:t.montoCobradoUsd||0, gananciaUsd:t.gananciaUsd||0, ts:Date.now() };
       saveLocal();
       const badge = document.getElementById(`cobro-badge-${t.id}`);
       if(badge) { badge.className = 'badge badge-cobro-cobrado'; badge.textContent = '✅ Cobrado'; }
       updateBadges();
       renderDashboard();
-      writeToSheet({ action:'updateCobro', id:t.id, estadoCobro:'cobrado', tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0 });
+      writeToSheet({ action:'updateCobro', id:t.id, estadoCobro:'cobrado', tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0, ganancia_usd:t.gananciaUsd||0 });
       closeModal();
-      showToast(tcTrab>0 ? `Cobro confirmado ✔ — USD ${t.montoCobradoUsd}` : 'Cobro confirmado ✔', 'success');
+      showToast(tcTrab>0 ? `Cobro confirmado ✔ — Ganancia USD ${t.gananciaUsd}` : 'Cobro confirmado ✔', 'success');
     };
   }
 
