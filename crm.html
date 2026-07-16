@@ -920,7 +920,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwRnSnjz3Q71N4VETTx39ceA0P0Eq3IZQCqpP7SkuojinDQPF1NxF1c3mExECgLcTe11g/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxVTUG4jmSMGjhCmTSohjtVUzGQcPRaPpe52AI7UJzsD9-3lU_j2XNoMsWbr7P01H__IA/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1881,28 +1881,23 @@ function cambiarCobro(id, nuevoEstado, divId) {
   }
 
   t.estadoCobro = nuevoEstado;
-  cambiosCobroRecientes[id] = { estadoCobro:t.estadoCobro, tcCobro:t.tcCobro||0, montoCobradoUsd:t.montoCobradoUsd||0, ts:Date.now() };
+  // Si se revierte de Cobrado a Pendiente/Parcial, no tiene sentido dejar
+  // colgada una "ganancia al cobro" de un cobro que ya no está confirmado.
+  if(nuevoEstado !== 'cobrado') { t.tcCobro = 0; t.montoCobradoUsd = 0; t.gananciaUsd = 0; }
+  cambiosCobroRecientes[id] = { estadoCobro:t.estadoCobro, tcCobro:t.tcCobro||0, montoCobradoUsd:t.montoCobradoUsd||0, gananciaUsd:t.gananciaUsd||0, ts:Date.now() };
   saveLocal();
 
-  // Actualizar el badge visualmente sin re-renderizar toda la tabla
-  const map = {
-    cobrado:   { cls:'badge-cobro-cobrado',  icon:'✅', label:'Cobrado' },
-    parcial:   { cls:'badge-cobro-parcial',  icon:'🟡', label:'Parcial' },
-    pendiente: { cls:'badge-cobro-pendiente',icon:'🔴', label:'Pendiente' },
-  };
-  const e = map[nuevoEstado] || map.pendiente;
-  const badge = document.getElementById(`cobro-badge-${id}`);
-  if(badge) {
-    badge.className = `badge ${e.cls}`;
-    badge.textContent = `${e.icon} ${e.label}`;
-  }
-
+  // FIX: antes solo se pintaba el chip a mano — la fila completa (incluida
+  // la línea de USD y el desplegable de cobro) no se actualizaba hasta
+  // recargar o sincronizar.
+  renderTrabajos();
   updateBadges();
   renderDashboard();
 
   // Escribir al Sheet
-  writeToSheet({ action: 'updateCobro', id: id, estadoCobro: nuevoEstado });
-  showToast(`Cobro → ${e.label} ✓`, 'success');
+  writeToSheet({ action: 'updateCobro', id: id, estadoCobro: nuevoEstado, tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0, ganancia_usd:t.gananciaUsd||0 });
+  const labelCobro = {cobrado:'Cobrado', parcial:'Parcial', pendiente:'Pendiente'}[nuevoEstado] || nuevoEstado;
+  showToast(`Cobro → ${labelCobro} ✓`, 'success');
 }
 
 let filtroPorCobrar = false;
@@ -5665,8 +5660,11 @@ function openModal(type, data={}) {
       }
       cambiosCobroRecientes[t.id] = { estadoCobro:'cobrado', tcCobro:t.tcCobro||0, montoCobradoUsd:t.montoCobradoUsd||0, gananciaUsd:t.gananciaUsd||0, ts:Date.now() };
       saveLocal();
-      const badge = document.getElementById(`cobro-badge-${t.id}`);
-      if(badge) { badge.className = 'badge badge-cobro-cobrado'; badge.textContent = '✅ Cobrado'; }
+      // FIX: antes esto solo pintaba el chip de "Cobrado" a mano, sin volver
+      // a dibujar toda la fila — por eso la línea de USD (y el desplegable
+      // de cobro, que quedaba en "Pendiente" aunque el chip dijera Cobrado)
+      // no se actualizaban hasta recargar la página o sincronizar.
+      renderTrabajos();
       updateBadges();
       renderDashboard();
       writeToSheet({ action:'updateCobro', id:t.id, estadoCobro:'cobrado', tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0, ganancia_usd:t.gananciaUsd||0 });
