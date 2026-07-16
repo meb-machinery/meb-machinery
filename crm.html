@@ -760,10 +760,11 @@ select option { background:var(--dark); }
         <button class="btn-primary" style="font-size:11px;padding:6px 14px" onclick="openModal('nuevaCompra')">+ REGISTRAR COMPRA</button>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>FECHA</th><th>PROVEEDOR</th><th>DETALLE</th><th>CATEGORÍA</th><th>MONTO</th><th>NOTAS</th></tr></thead>
+        <thead><tr><th>FECHA</th><th>PROVEEDOR</th><th>DETALLE</th><th>CATEGORÍA</th><th>MONTO</th><th>USD</th><th>NOTAS</th></tr></thead>
         <tbody id="tabla-compras"></tbody>
       </table></div>
     </div>
+    <div style="margin-top:12px" id="proveedores-usd-summary"></div>
   </div>
 
   <!-- CALENDARIO -->
@@ -901,7 +902,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzVkE60VrYnmXM4fJOwAIAPz_sUSmdX4gzP573LuiZu7oKoHlTT02fwp6398T09IG-wQg/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxMDykaJ-OTy69ggE9Zhx79OXLlcbC9_Iw7LEfWEiLY6uOqymRI57H0WeKEoMsI6gls_Q/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1100,6 +1101,7 @@ async function syncAll() {
   const _localMaquinas    = (DB.maquinas||[]).filter(x=>x._local);
   const _localTrabajos    = (DB.trabajos||[]).filter(x=>x._local);
   const _localProveedores = (DB.proveedores||[]).filter(x=>x._local);
+  const _localCompras     = (DB.compras||[]).filter(x=>x._local);
   const _alertasRepuesto  = DB.alertasRepuesto || {};
   const _presupCounter    = DB.presupCounter || 1;
   const _calendarioEventos = DB.calendarioEventos || [];
@@ -1274,6 +1276,8 @@ async function syncAll() {
         id:String(r.ID||uid()).trim(), proveedorId:String(r.PROVEEDOR_ID||'').trim(),
         proveedorNombre:r.PROVEEDOR_NOMBRE||'', detalle:r.DETALLE||'',
         categoria:(r.CATEGORIA||'otros').toLowerCase(), monto:parseMonto(r.MONTO),
+        moneda:(r.MONEDA||'ARS').toUpperCase(),
+        montoUsd:parseFloat(r.MONTO_USD)||0, tcAlMomento:parseFloat(r.TC_AL_MOMENTO)||0,
         fecha:r.FECHA||'', notas:r.NOTAS||''
       }));
     } else { if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; }
@@ -1319,6 +1323,7 @@ async function syncAll() {
     _localMaquinas.forEach(lm => { if(!DB.maquinas.find(x=>x.id===lm.id)) DB.maquinas.push(lm); });
     _localTrabajos.forEach(lt => { if(!DB.trabajos.find(x=>x.id===lt.id)) DB.trabajos.push(lt); });
     _localProveedores.forEach(lp => { if(!DB.proveedores.find(x=>x.id===lp.id)) DB.proveedores.push(lp); });
+    _localCompras.forEach(lc => { if(!DB.compras.find(x=>x.id===lc.id)) DB.compras.push(lc); });
 
     // ── Reparar clienteId corruptos o vacíos ──────────────────────────────────
     DB.presupuestos.forEach(p => {
@@ -3675,9 +3680,35 @@ function renderProveedores() {
       <td>${c.detalle||'—'}</td>
       <td><span class="badge ${catColor}">${c.categoria.toUpperCase()}</span></td>
       <td><span class="monto">${fmtMonto(c.monto)}</span></td>
+      <td>${c.montoUsd>0?`<span style="color:var(--blue-light)">USD ${c.montoUsd.toLocaleString('es-AR',{maximumFractionDigits:0})}</span><div style="font-size:9px;color:var(--muted2)">TC $${c.tcAlMomento||'—'}</div>`:'<span style="color:var(--muted)">—</span>'}</td>
       <td class="td-muted">${c.notas||'—'}</td>
     </tr>`;
-  }).join('') : `<tr><td colspan="6"><div class="empty-state"><div class="icon">📦</div><p>Sin compras registradas</p></div></td></tr>`;
+  }).join('') : `<tr><td colspan="7"><div class="empty-state"><div class="icon">📦</div><p>Sin compras registradas</p></div></td></tr>`;
+
+  // Resumen de exposición cambiaria en compras: cada compra dolarizada
+  // conserva su propio USD histórico (calculado con el TC del día que se
+  // hizo, nunca recalculado con la cotización de hoy). Es la misma lógica
+  // que ya usan Presupuestos/Contratos — "USD real histórico" separado de
+  // "snapshot al TC de hoy".
+  const summaryEl = document.getElementById('proveedores-usd-summary');
+  if(summaryEl) {
+    const comprasUsd = DB.compras.filter(c=>c.moneda==='USD' || c.montoUsd>0);
+    const totalUsdHistorico = comprasUsd.reduce((s,c)=>s+Number(c.montoUsd||0),0);
+    const totalArsDolarizado = comprasUsd.reduce((s,c)=>s+Number(c.monto||0),0);
+    if(comprasUsd.length) {
+      summaryEl.innerHTML = `<div class="card" style="border-color:var(--blue-light)">
+        <div class="card-header"><span class="card-title" style="color:var(--blue-light)">💵 EXPOSICIÓN CAMBIARIA EN COMPRAS</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:4px 0">
+          <div><div style="font-size:11px;color:var(--muted)">Compras dolarizadas</div><div style="font-family:'Bebas Neue';font-size:20px">${comprasUsd.length}</div></div>
+          <div><div style="font-size:11px;color:var(--muted)">USD histórico acumulado</div><div style="font-family:'Bebas Neue';font-size:20px;color:var(--blue-light)">USD ${totalUsdHistorico.toLocaleString('es-AR',{maximumFractionDigits:0})}</div></div>
+          <div><div style="font-size:11px;color:var(--muted)">Equivalente ARS al momento de cada compra</div><div style="font-family:'Bebas Neue';font-size:20px;color:var(--yellow)">${fmtMonto(totalArsDolarizado)}</div></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted2);padding-top:6px">Cada compra usa el dólar del día que se cargó — no se recalcula con la cotización de hoy.</div>
+      </div>`;
+    } else {
+      summaryEl.innerHTML = '';
+    }
+  }
 }
 
 function showModalProveedores(data={}) {
@@ -3776,7 +3807,21 @@ function showModalCompra() {
           <option value="otros">Otros</option>
         </select>
       </div>
-      <div class="form-group"><label>MONTO ($)</label><input id="mc-monto" type="number" value="0"></div>
+      <div class="form-group"><label>MONEDA</label>
+        <select id="mc-moneda" onchange="toggleMonedaCompra()">
+          <option value="ARS">$ Pesos argentinos</option>
+          <option value="USD">USD Dólares</option>
+        </select>
+      </div>
+      <div class="form-group"><label id="mc-monto-label">MONTO ($)</label><input id="mc-monto" type="number" value="0" oninput="calcularConversionCompra()"></div>
+      <div class="form-group" id="mc-tc-group" style="display:none">
+        <label>Dólar (USD/ARS) — tipo de cambio del día de la compra</label>
+        <div style="display:flex;gap:6px">
+          <input id="mc-tc" type="number" value="" oninput="calcularConversionCompra()" style="flex:1"/>
+          <button type="button" class="btn-secondary" onclick="actualizarTCCompra()" style="white-space:nowrap" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
+        </div>
+        <div id="mc-conversion" style="font-size:11px;color:var(--blue-light);margin-top:4px">—</div>
+      </div>
       <div class="form-group"><label>FECHA</label><input id="mc-fecha" type="date" value="${today}"></div>
       <div class="form-group"><label>NOTAS</label><textarea id="mc-notas" rows="2"></textarea></div>
     </div>
@@ -3788,19 +3833,65 @@ function showModalCompra() {
   document.body.appendChild(m);
 }
 
+function toggleMonedaCompra() {
+  const moneda = document.getElementById('mc-moneda').value;
+  document.getElementById('mc-monto-label').textContent = moneda==='USD' ? 'MONTO (USD)' : 'MONTO ($)';
+  document.getElementById('mc-tc-group').style.display = moneda==='USD' ? 'block' : 'none';
+  calcularConversionCompra();
+}
+
+async function actualizarTCCompra() {
+  const conv = document.getElementById('mc-conversion');
+  try {
+    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
+    if(!res.ok) throw new Error('fail');
+    const data = await res.json();
+    const valor = Math.round(data.venta);
+    document.getElementById('mc-tc').value = valor;
+    calcularConversionCompra();
+  } catch(e) {
+    if(conv) conv.textContent = '⚠️ No se pudo obtener el dólar en vivo — completalo a mano.';
+  }
+}
+
+function calcularConversionCompra() {
+  const moneda = document.getElementById('mc-moneda').value;
+  const monto = parseFloat(document.getElementById('mc-monto').value)||0;
+  const tc = parseFloat(document.getElementById('mc-tc').value)||0;
+  const conv = document.getElementById('mc-conversion');
+  if(!conv) return;
+  if(moneda==='USD' && tc>0) {
+    conv.textContent = `≈ ${fmtMonto(monto*tc)} al tipo de cambio de hoy`;
+  } else if(moneda==='USD') {
+    conv.textContent = 'Ingresá el dólar del día para ver el equivalente en pesos.';
+  } else {
+    conv.textContent = '—';
+  }
+}
+
 function guardarCompra() {
   const provId = document.getElementById('mc-prov').value;
   const detalle = document.getElementById('mc-det').value.trim();
   if(!detalle) { showToast('Ingresá el detalle de la compra','error'); return; }
   const prov = DB.proveedores.find(p=>p.id===provId);
   if(!DB.compras) DB.compras=[];
+  const moneda = document.getElementById('mc-moneda').value;
+  const montoIngresado = Number(document.getElementById('mc-monto').value||0);
+  const tc = parseFloat(document.getElementById('mc-tc').value)||0;
+  // El campo MONTO principal siempre queda en ARS (para no romper Estadísticas,
+  // que ya suma DB.compras en pesos). Si la compra fue en USD, se convierte a
+  // ARS con el TC del momento — que además queda guardado como histórico y
+  // nunca se recalcula con la cotización de otro día.
+  const montoArs = moneda==='USD' ? montoIngresado * tc : montoIngresado;
+  const montoUsd = moneda==='USD' ? montoIngresado : (tc>0 ? montoIngresado/tc : 0);
   const compra = {
     id: uid(), proveedorId: provId,
     proveedorNombre: prov ? prov.nombre : '',
     detalle, categoria: document.getElementById('mc-cat').value,
-    monto: Number(document.getElementById('mc-monto').value||0),
+    monto: montoArs, moneda, montoUsd, tcAlMomento: tc,
     fecha: document.getElementById('mc-fecha').value,
-    notas: document.getElementById('mc-notas').value.trim()
+    notas: document.getElementById('mc-notas').value.trim(),
+    _local: true
   };
   DB.compras.push(compra);
   saveLocal();
@@ -3808,10 +3899,11 @@ function guardarCompra() {
   renderProveedores();
   showToast('Compra registrada ✓','success');
   writeToSheet({ action:'addCompra', row: {
-    ID:compra.id, TIPO:'compra', PROVEEDOR_ID:compra.proveedorId,
-    PROVEEDOR_NOMBRE:compra.proveedorNombre, DETALLE:compra.detalle,
-    CATEGORIA:compra.categoria, MONTO:compra.monto,
-    FECHA:compra.fecha, NOTAS:compra.notas
+    id:compra.id, proveedorId:compra.proveedorId,
+    proveedor:compra.proveedorNombre, descripcion:compra.detalle,
+    categoria:compra.categoria, monto:compra.monto,
+    moneda:compra.moneda, montoUsd:compra.montoUsd, tcAlMomento:compra.tcAlMomento,
+    fecha:compra.fecha, notas:compra.notas
   }});
 }
 
