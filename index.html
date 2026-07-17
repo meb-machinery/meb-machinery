@@ -52,7 +52,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:cen
 .hamburger{display:none;flex-direction:column;gap:5px;cursor:pointer;background:none;border:none;padding:4px}
 .hamburger span{width:24px;height:2px;background:var(--white)}
 
-.hero{position:relative;height:100vh;min-height:600px;display:flex;align-items:center;overflow:hidden}
+.hero{position:relative;height:min(100vh,780px);min-height:600px;display:flex;align-items:center;overflow:hidden}
 .hero-video-wrap{position:absolute;inset:0;overflow:hidden;background:#0a0a0a}
 .hero-video-wrap video{position:absolute;top:50%;left:50%;min-width:100%;min-height:100%;width:auto;height:auto;transform:translate(-50%,-50%);object-fit:cover;filter:grayscale(100%) brightness(0.45) contrast(1.1)}
 .hero-video-wrap img{position:absolute;top:50%;left:50%;min-width:100%;min-height:100%;width:auto;height:auto;transform:translate(-50%,-50%);object-fit:cover;filter:grayscale(100%) brightness(0.6) contrast(1.1)}
@@ -218,6 +218,7 @@ footer{background:#0e0e0e;border-top:1px solid rgba(244,180,0,0.12);padding:2.5r
   nav.open .nav-links{display:flex;flex-direction:column;position:fixed;top:62px;left:0;right:0;background:rgba(26,26,26,0.98);padding:2rem;gap:1.5rem;border-bottom:1px solid rgba(244,180,0,0.2)}
   nav.open .nav-cta{display:inline-block;margin:0 2rem 2rem}
   .hero-content{padding:1.5rem;margin-top:140px}
+  .hero{height:65vh;min-height:480px;max-height:580px}
   .stats-bar{padding:1rem}
   section{padding:4rem 1.5rem}
   .about,.en-ruta,.contact-wrap{grid-template-columns:1fr;gap:2.5rem}
@@ -296,7 +297,7 @@ footer{background:#0e0e0e;border-top:1px solid rgba(244,180,0,0.12);padding:2.5r
   <div class="hero-video-wrap">
     <picture>
       <source media="(max-width:768px)" srcset="hero-meb-mobile.webp">
-      <img src="hero-meb.jpg" alt="Excavadora en obra al atardecer - MEB Machinery Solutions" loading="eager" fetchpriority="high">
+      <img src="hero-meb.jpg" alt="Maquinaria pesada en obra al atardecer - MEB Machinery Solutions" loading="eager" fetchpriority="high">
     </picture>
   </div>
   <div class="hero-overlay"></div>
