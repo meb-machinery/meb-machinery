@@ -235,6 +235,7 @@ select option { background:var(--dark); }
 .badge-cobro-parcial  { background:rgba(244,180,0,0.12); color:var(--yellow); border:1px solid rgba(244,180,0,0.3); }
 .badge-cobro-pendiente{ background:rgba(231,76,60,0.12); color:var(--red); border:1px solid rgba(231,76,60,0.3); }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -287,6 +288,7 @@ select option { background:var(--dark); }
     </div>
     <span class="sync-status" id="syncStatus">●  Conectado</span>
     <button class="sync-btn" id="syncBtn" onclick="syncAll()">↺ SINCRONIZAR</button>
+    <button class="sync-btn" id="exportBtn" onclick="exportarExcel()" title="Descargar un Excel con todo — para el contador o para respaldo" style="background:var(--dark);border:1px solid var(--border2);color:var(--green)">⬇ Exportar</button>
     <button class="sync-btn" id="undoBtn" onclick="undoLastChange()" title="Deshacer último cambio" style="background:var(--dark);border:1px solid var(--border2);color:var(--muted);padding:6px 12px;font-size:12px">↩ Deshacer</button>
     <button class="logout-btn" onclick="doLogout()">Salir</button>
   </div>
@@ -6214,6 +6216,99 @@ function closeDetail() {
 // ============================================================
 // TOAST / LOADING
 // ============================================================
+// ============================================================
+// EXPORTAR A EXCEL — para mandar al contador o como respaldo
+// ============================================================
+// Arma un .xlsx con una hoja por módulo, en pesos y con nombres de clientes
+// resueltos (no IDs), listo para abrir en Excel/Google Sheets sin tocar el
+// CRM. Todo corre en el navegador — no sube nada a ningún lado.
+function exportarExcel() {
+  if(typeof XLSX === 'undefined') {
+    showToast('No se pudo cargar la librería de Excel — revisá tu conexión e intentá de nuevo', 'error');
+    return;
+  }
+  try {
+    const wb = XLSX.utils.book_new();
+    const nombreCliente = id => { const c = DB.clientes.find(x=>String(x.id)===String(id)); return c ? c.nombre : ''; };
+    const nombreMaquina = id => { const m = DB.maquinas.find(x=>String(x.id)===String(id)); return m ? `${m.marca||''} ${m.modelo||''}`.trim() : ''; };
+
+    // ── PRESUPUESTOS ──
+    const hojaPresup = DB.presupuestos.map(p => ({
+      'N°': p.num||'', 'Cliente': nombreCliente(p.clienteId)||p.clienteId||'',
+      'Descripción': (p.descripcion||'').replace(/\n/g,' | '),
+      'Monto ARS': Number(p.monto)||0, 'Moneda': p.moneda||'ARS',
+      'Monto USD': Number(p.montoUsd)||0, 'TC al cotizar': Number(p.tcAlMomento)||0,
+      'Plazo de pago': p.plazoPago||'contado', 'Recargo %': Number(p.recargoPct)||0,
+      'Estado': p.estado||'', 'Estado de cobro': p.estadoCobro||'pendiente',
+      'Fecha': p.fecha||'', 'Fecha de cobro real': p.fechaCobroReal||'',
+      'TC del cobro': Number(p.tcCobro)||0, 'Monto cobrado real': Number(p.montoCobradoReal)||0,
+      'USD recibido': Number(p.usdRecibido)||0, 'Diferencia USD': Number(p.diferenciaUsd)||0,
+      'Diferencia %': Number(p.diferenciaPct)||0, 'Notas': p.notas||''
+    }));
+    if(hojaPresup.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hojaPresup), 'Presupuestos');
+
+    // ── CONTRATOS ──
+    const hojaContratos = (DB.contratos||[]).map(c => ({
+      'Cliente': nombreCliente(c.clienteId)||c.clienteId||'', 'Máquina': nombreMaquina(c.maquinaId)||'',
+      'Plan': c.plan||'', 'Fecha inicio': c.fechaInicio||'', 'Fecha vencimiento': c.fechaVencimiento||'',
+      'Precio ARS': Number(c.precioArs)||0, 'Precio USD': Number(c.precioUsd)||0,
+      'TC al cotizar': Number(c.tcAlMomento)||0, 'Plazo de pago': c.plazoPago||'contado',
+      'Recargo %': Number(c.recargoPct)||0, 'Estado': c.estado||'', 'Estado de cobro': c.estadoCobro||'pendiente',
+      'Fecha de cobro real': c.fechaCobroReal||'', 'TC del cobro': Number(c.tcCobro)||0,
+      'Monto cobrado real': Number(c.montoCobradoReal)||0, 'Diferencia USD': Number(c.diferenciaUsd)||0,
+      'Diferencia %': Number(c.diferenciaPct)||0, 'Notas': c.notas||''
+    }));
+    if(hojaContratos.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hojaContratos), 'Contratos');
+
+    // ── TRABAJOS ──
+    const hojaTrabajos = DB.trabajos.map(t => {
+      const ganancia = (Number(t.manoObraCobrada||0)+Number(t.movilidad||0)+(Number(t.precioRepuestoFacturado||0)-Number(t.costoRepuesto||0)))
+        || (Number(t.montoCobrado||0)-Number(t.costoRepuesto||0)-Number(t.montoGastos||0));
+      return {
+        'Cliente': nombreCliente(t.clienteId)||t.clienteId||'', 'Máquina': nombreMaquina(t.maquinaId)||'',
+        'Título': t.titulo||'', 'Tipo': t.tipo||'', 'Estado': t.estado||'', 'Estado máquina': t.estadoMaquina||'',
+        'Fecha inicio': t.fechaInicio||'', 'Fecha fin': t.fechaFin||'',
+        'Monto cobrado': Number(t.montoCobrado)||0, 'Costo repuesto': Number(t.costoRepuesto)||0,
+        'Repuesto facturado': Number(t.precioRepuestoFacturado)||0, 'Mano de obra': Number(t.manoObraCobrada)||0,
+        'Movilidad': Number(t.movilidad)||0, 'Ganancia ARS': Math.round(ganancia),
+        'TC del trabajo': Number(t.tcAlMomento)||0, 'Ganancia USD esperada': Number(t.gananciaUsdEsperada)||0,
+        'Estado de cobro': t.estadoCobro||'pendiente', 'Fecha de cobro real': t.fechaCobroReal||'',
+        'TC del cobro': Number(t.tcCobro)||0, 'Ganancia USD real': Number(t.gananciaUsd)||0,
+        'Diferencia USD': Number(t.diferenciaUsd)||0, 'Diferencia %': Number(t.diferenciaPct)||0,
+        'Notas': t.notas||''
+      };
+    });
+    if(hojaTrabajos.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hojaTrabajos), 'Trabajos');
+
+    // ── COMPRAS ──
+    const hojaCompras = (DB.compras||[]).map(c => ({
+      'Fecha': c.fecha||'', 'Proveedor': c.proveedorNombre||'', 'Detalle': c.detalle||'',
+      'Categoría': c.categoria||'', 'Monto ARS': Number(c.monto)||0, 'Moneda': c.moneda||'ARS',
+      'Monto USD': Number(c.montoUsd)||0, 'TC al momento': Number(c.tcAlMomento)||0, 'Notas': c.notas||''
+    }));
+    if(hojaCompras.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hojaCompras), 'Compras');
+
+    // ── CLIENTES ──
+    const hojaClientes = DB.clientes.map(c => ({
+      'Nombre': c.nombre||'', 'Empresa': c.empresa||'', 'Zona': c.zona||'',
+      'Teléfono': c.telefono||'', 'Email': c.email||'', 'Estado': c.estado||'', 'Notas': c.notas||''
+    }));
+    if(hojaClientes.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hojaClientes), 'Clientes');
+
+    if(wb.SheetNames.length === 0) {
+      showToast('No hay datos para exportar todavía', 'error');
+      return;
+    }
+
+    const fechaArchivo = new Date().toISOString().slice(0,10);
+    XLSX.writeFile(wb, `MEB_Reporte_${fechaArchivo}.xlsx`);
+    showToast('Excel descargado ✓ — revisá la carpeta de Descargas', 'success');
+  } catch(e) {
+    console.error('Error exportando Excel:', e);
+    showToast('Error al generar el Excel: ' + e.message, 'error');
+  }
+}
+
 function showToast(msg, type='') {
   const t=document.getElementById('toast');
   t.textContent=msg; t.className='toast '+(type?type:'');
