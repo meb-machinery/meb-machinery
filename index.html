@@ -121,11 +121,12 @@ section{padding:6rem 3rem}
 .service-desc{font-size:0.88rem;color:rgba(245,242,236,0.55);line-height:1.7}
 
 .en-ruta{display:grid;grid-template-columns:1fr 1fr;gap:5rem;align-items:center}
+.ruta-wrap-outer{position:relative;padding:1.5rem}
 .ruta-video-wrap{position:relative;overflow:hidden;border-radius:0 60px 0 60px}
 .ruta-video-wrap::before{content:'';position:absolute;inset:0;z-index:1;background:linear-gradient(135deg,rgba(26,26,26,0.3) 0%,transparent 60%)}
 .ruta-video-wrap video{width:100%;height:340px;object-fit:cover;display:block;filter:brightness(0.85)}
 .ruta-video-wrap img{width:100%;height:340px;object-fit:cover;display:block;filter:brightness(0.85)}
-.ruta-badge{position:absolute;bottom:1.5rem;left:1.5rem;z-index:2;background:var(--blue);color:var(--white);padding:0.8rem 1.2rem;font-size:0.78rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;line-height:1.5}
+.ruta-badge{position:absolute;bottom:1rem;left:1rem;z-index:2;background:var(--blue);color:var(--white);padding:0.8rem 1.2rem;font-size:0.78rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;line-height:1.5}
 .ruta-steps{display:flex;flex-direction:column;gap:1.5rem;margin-top:2rem}
 .ruta-step{display:flex;gap:1.2rem;align-items:flex-start}
 .step-num{min-width:36px;height:36px;background:var(--yellow);color:var(--black);font-family:'Bebas Neue',sans-serif;font-size:1.1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -381,8 +382,10 @@ footer{background:#0e0e0e;border-top:1px solid rgba(244,180,0,0.12);padding:2.5r
 
 <section id="en-ruta">
   <div class="en-ruta reveal">
-    <div class="ruta-video-wrap">
-      <img src="servicio-movil-web.webp" alt="Servicio móvil de MEB Machinery Solutions en obra">
+    <div class="ruta-wrap-outer">
+      <div class="ruta-video-wrap">
+        <img src="servicio-movil-web.webp" alt="Servicio móvil de MEB Machinery Solutions en obra">
+      </div>
       <div class="ruta-badge" data-es="Servicio móvil · Llegamos hasta vos" data-pt="Serviço móvel · Chegamos até você">Servicio móvil · Llegamos hasta vos</div>
     </div>
     <div>
@@ -485,9 +488,21 @@ footer{background:#0e0e0e;border-top:1px solid rgba(244,180,0,0.12);padding:2.5r
   </div>
 </section>
 
-<section style="padding:3rem;text-align:center;background:#141414;border-top:1px solid rgba(244,180,0,0.1)">
-  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden">
-    <iframe src="https://f1d168a4.sibforms.com/serve/MUIFAKaICV4Tg4rIqB9ER05x0PkG9SfN6KrKyRHlF64WNIR_vCHYRyaJBKHsqP-8-5sZB62H9tTLPPP8doG2Cp31FdFi_vhRuLk6m_kDJyybFVNLW-aZs6Zv1USulp7gG3THIQ31h4_ZnpOk9H5GLaX8VK1TGi3TU6tV4CrJvIx1WW4WJHo-IDuHpXq1AUuZrX0J22SgHgHCes9MXw==" width="100%" height="450" style="display:block;border:none" scrolling="auto" allowfullscreen loading="lazy" title="Suscripción Newsletter MEB — Parte de Taller"></iframe>
+<section style="padding:3rem;background:#141414;border-top:1px solid rgba(244,180,0,0.1)">
+  <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:2.5rem;max-width:900px;margin:0 auto">
+    <div style="flex:1;min-width:280px;max-width:480px;text-align:center">
+      <h3 style="font-family:'Bebas Neue',sans-serif;letter-spacing:0.05em;font-size:1.4rem;margin-bottom:0.5rem;color:var(--yellow)" data-es="Sumate a la comunidad MEB" data-pt="Junte-se à comunidade MEB">Sumate a la comunidad MEB</h3>
+      <p style="color:rgba(245,242,236,0.55);font-size:0.85rem;margin-bottom:1.2rem" data-es="Recibí nuestro boletín oficial con novedades del sector, directo en tu email." data-pt="Receba nosso boletim oficial com novidades do setor, direto no seu email.">Recibí nuestro boletín oficial con novedades del sector, directo en tu email.</p>
+      <div style="background:#fff;border-radius:8px;overflow:hidden">
+        <iframe src="https://f1d168a4.sibforms.com/serve/MUIFAKaICV4Tg4rIqB9ER05x0PkG9SfN6KrKyRHlF64WNIR_vCHYRyaJBKHsqP-8-5sZB62H9tTLPPP8doG2Cp31FdFi_vhRuLk6m_kDJyybFVNLW-aZs6Zv1USulp7gG3THIQ31h4_ZnpOk9H5GLaX8VK1TGi3TU6tV4CrJvIx1WW4WJHo-IDuHpXq1AUuZrX0J22SgHgHCes9MXw==" width="100%" height="450" style="display:block;border:none" scrolling="auto" allowfullscreen loading="lazy" title="Suscripción Newsletter MEB — Parte de Taller"></iframe>
+      </div>
+    </div>
+    <div style="flex:1;min-width:280px;max-width:380px;text-align:center">
+      <div style="font-size:2.2rem;margin-bottom:0.6rem">📷</div>
+      <h3 style="font-family:'Bebas Neue',sans-serif;letter-spacing:0.05em;font-size:1.4rem;margin-bottom:0.5rem;color:var(--yellow)" data-es="Seguinos en Instagram" data-pt="Siga-nos no Instagram">Seguinos en Instagram</h3>
+      <p style="color:rgba(245,242,236,0.55);font-size:0.85rem;margin-bottom:1.2rem" data-es="Casos reales, trabajos en obra y novedades del taller." data-pt="Casos reais, trabalhos em obra e novidades da oficina.">Casos reales, trabajos en obra y novedades del taller.</p>
+      <a href="https://www.instagram.com/meb_machinerysolutions/" target="_blank" style="display:inline-block;background:var(--yellow);color:var(--black);padding:0.7rem 1.4rem;font-weight:700;font-size:0.78rem;letter-spacing:0.08em;text-transform:uppercase;text-decoration:none" data-es="Seguir @meb_machinerysolutions" data-pt="Seguir @meb_machinerysolutions">Seguir @meb_machinerysolutions</a>
+    </div>
   </div>
 </section>
 
@@ -498,8 +513,6 @@ footer{background:#0e0e0e;border-top:1px solid rgba(244,180,0,0.12);padding:2.5r
     <a href="#nosotros" data-es="Nosotros" data-pt="Sobre nós">Nosotros</a>
     <a href="#servicios" data-es="Servicios" data-pt="Serviços">Servicios</a>
     <a href="#contacto" data-es="Contacto" data-pt="Contato">Contacto</a>
-    <!-- Activar el 8/8: borrar style="display:none" -->
-    <a href="https://www.instagram.com/meb_machinerysolutions/" target="_blank" style="display:none" data-es="Instagram" data-pt="Instagram">Instagram</a>
   </div>
 </footer>
 
