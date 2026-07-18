@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MEB · Analizador de Mercado</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
 :root {
   --yellow: #F4B400;
@@ -309,32 +308,10 @@ body{background:var(--black);color:var(--text);font-family:'Barlow',sans-serif;m
         <div class="tc-row">
           <span class="tc-label">USD/ARS</span>
           <input type="number" id="tipoCambio" class="tc-input" value="1250" min="1">
-          <span style="font-size:14px;cursor:pointer" id="btnTCRefresh" onclick="actualizarTCEnVivo(true)" title="Actualizar cotización">🔄</span>
-        </div>
-        <div id="tcInfo" style="font-size:9px;color:var(--muted2);margin-top:-4px">Cargando cotización...</div>
-        <div class="tc-row">
           <span class="tc-label">Peso (kg)</span>
           <input type="number" id="pesoKg" class="tc-input" value="1" min="0.1" step="0.1">
         </div>
         <button class="btn-search" id="btnAnalizar" onclick="analizar()">ANALIZAR MERCADO</button>
-      </div>
-    </div>
-
-    <div>
-      <div class="sidebar-section-title">PESOS DEL SCORING</div>
-      <div style="display:flex;flex-direction:column;gap:6px;font-size:10px;color:var(--muted)">
-        <label>Precio <span id="pesoPrecioVal">50</span>%
-          <input type="range" id="pesoPrecio" min="0" max="100" value="50" style="width:100%" oninput="actualizarPesos()">
-        </label>
-        <label>Calidad <span id="pesoCalidadVal">35</span>%
-          <input type="range" id="pesoCalidad" min="0" max="100" value="35" style="width:100%" oninput="actualizarPesos()">
-        </label>
-        <label>Plazo <span id="pesoPlazoVal">15</span>%
-          <input type="range" id="pesoPlazo" min="0" max="100" value="15" style="width:100%" oninput="actualizarPesos()">
-        </label>
-        <label>Costo parada (USD/día)
-          <input type="number" id="costoParadaDia" class="tc-input" value="0" min="0" style="width:100%">
-        </label>
       </div>
     </div>
 
@@ -406,9 +383,8 @@ body{background:var(--black);color:var(--text);font-family:'Barlow',sans-serif;m
         <div class="tab" onclick="switchTab('chile',this)">🇨🇱 CHILE</div>
         <div class="tab" onclick="switchTab('aduana',this)">🛃 ADUANA & COSTOS</div>
         <div class="tab" onclick="switchTab('proveedores',this)">🏭 PROVEEDORES</div>
-        <div class="tab" onclick="switchTab('verificados',this); renderVerificados();">✅ VERIFICADOS</div>
-        <div class="tab" onclick="switchTab('comparativa',this); renderComparativa();">⚖️ COMPARATIVA</div>
         <div class="tab" onclick="switchTab('mensajes',this)">✉️ MENSAJES</div>
+        <div class="tab" onclick="switchTab('lista',this)">📋 BÚSQUEDA POR LISTA</div>
       </div>
 
       <!-- TAB ARGENTINA -->
@@ -450,47 +426,29 @@ body{background:var(--black);color:var(--text);font-family:'Barlow',sans-serif;m
         <div id="proveedoresList"></div>
       </div>
 
-      <!-- TAB VERIFICADOS -->
-      <div class="tab-content" id="tab-verificados">
-        <div class="section-title">PROVEEDORES VERIFICADOS — CARGA MANUAL</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Cargá acá un precio real que cotizaste a mano (Alibaba, Made-in-China, 1688, etc). Queda guardado y entra en la Comparativa como dato REAL, no estimado.</div>
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
-          <input type="text" id="vfPlataforma" class="tc-input" style="width:100%;text-align:left" placeholder="Plataforma (ej. Alibaba)">
-          <input type="number" id="vfPrecioUSD" class="tc-input" style="width:100%;text-align:left" placeholder="Precio USD">
-          <input type="number" id="vfPlazoDias" class="tc-input" style="width:100%;text-align:left" placeholder="Plazo (días)">
-          <select id="vfCalidad" class="tc-input" style="width:100%;text-align:left">
-            <option value="5">⭐⭐⭐⭐⭐ Excelente</option>
-            <option value="4" selected>⭐⭐⭐⭐ Buena</option>
-            <option value="3">⭐⭐⭐ Media</option>
-            <option value="2">⭐⭐ Dudosa</option>
-            <option value="1">⭐ Mala</option>
-          </select>
-          <select id="vfTipoPieza" class="tc-input" style="width:100%;text-align:left">
-            <option value="OEM">OEM</option>
-            <option value="aftermarket">Aftermarket</option>
-            <option value="generico">Genérico</option>
-          </select>
-          <button class="btn-search" onclick="agregarProveedorVerificado()">+ AGREGAR</button>
-        </div>
-        <div id="verificadosList"></div>
-      </div>
-
-      <!-- TAB COMPARATIVA -->
-      <div class="tab-content" id="tab-comparativa">
-        <div class="section-title">COMPARATIVA FINAL — SCORE PRECIO / CALIDAD / PLAZO</div>
-        <div id="comparativaNote" class="chile-note"></div>
-        <div id="comparativaTable" style="margin:14px 0"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-          <div style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:12px;height:260px"><canvas id="chartCostoTotal"></canvas></div>
-          <div style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:12px;height:260px"><canvas id="chartPrecioCalidad"></canvas></div>
-        </div>
-        <button class="btn-search" onclick="generarReporte()">📄 GENERAR REPORTE COMPLETO</button>
-      </div>
-
       <!-- TAB MENSAJES -->
       <div class="tab-content" id="tab-mensajes">
         <div class="section-title">MENSAJES LISTOS PARA ENVIAR</div>
         <div id="mensajesContent"></div>
+      </div>
+
+      <!-- TAB LISTA (BÚSQUEDA AUTÓNOMA) -->
+      <div class="tab-content" id="tab-lista">
+        <div class="section-title">BÚSQUEDA POR LISTA — AUTOMÁTICA (ALIBABA / ALIEXPRESS)</div>
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:14px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">
+            Pegá una lista de productos (uno por línea) o subí un archivo .csv/.txt con un producto por línea.
+            Máximo 15 ítems por corrida — cada uno hace una búsqueda real, así que puede tardar un rato. Después verificá los que interesen en MercadoLibre Argentina.
+          </div>
+          <textarea id="listaTextarea" placeholder="rodamiento 6205&#10;filtro hidráulico serie X&#10;retén de aceite 40x62x8"
+            style="width:100%;min-height:110px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:10px;border-radius:4px;font-size:13px;margin-bottom:10px;font-family:inherit"></textarea>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <input type="file" id="listaFile" accept=".csv,.txt" onchange="cargarListaArchivo(event)" style="font-size:12px;color:var(--muted)">
+            <button class="btn-search" style="width:auto;padding:10px 22px;margin:0" onclick="buscarLista()">🔎 BUSCAR TODA LA LISTA</button>
+          </div>
+          <div id="listaProgreso" style="font-size:11px;color:var(--yellow)"></div>
+        </div>
+        <div id="listaResultados"></div>
       </div>
 
     </div><!-- /results -->
@@ -529,7 +487,7 @@ body{background:var(--black);color:var(--text);font-family:'Barlow',sans-serif;m
 // CONFIG
 // ============================================================
 const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxT4fcHx7ddFIvemh2AvwlUARBpUpf4aQrxV4mLqNTYdYH6BE9rddsObwVvXcyNoG5Seg/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz2mux1lcMX6u8XKsWMeSxfJ3LRJdBJPBaCSdMm_6EAVkD2Bwq2B99jYth71QCmSeRD5Q/exec';
 const SITE_ML = 'MLA';
 
 let currentMode = 'repuestos';
@@ -541,10 +499,6 @@ let historial = JSON.parse(localStorage.getItem('meb_historial_v2') || '[]');
 let savedProveedores = JSON.parse(localStorage.getItem('meb_proveedores_saved') || '{}');
 let provReviews = JSON.parse(localStorage.getItem('meb_prov_reviews') || '{}');
 let aduanaViaSelected = 'courier';
-let proveedoresVerificados = JSON.parse(localStorage.getItem('meb_proveedores_verificados') || '[]');
-let pesosScore = JSON.parse(localStorage.getItem('meb_pesos_score') || '{"precio":50,"calidad":35,"plazo":15}');
-let ultimoTC = { valor: 1250, fuente: 'manual', fecha: null };
-const RAPIDAPI_KEY = localStorage.getItem('meb_rapidapi_key') || '';
 
 // ============================================================
 // QUICK TAGS POR MODO
@@ -587,7 +541,6 @@ function init() {
   renderCart();
   renderWishlist();
   updateCartBadge();
-  actualizarTCEnVivo(false);
 }
 
 function setMode(mode) {
@@ -798,8 +751,8 @@ async function analizarRepuestos(query) {
     }).join('');
   }
 
-  // China
-  renderChinaTab(query, mlItems, tc);
+  // China (búsqueda real Alibaba/AliExpress)
+  await renderChinaTab(query, mlItems, tc);
 
   // Chile
   renderChileTab(query, mlItems, tc);
@@ -822,7 +775,6 @@ async function analizarRepuestos(query) {
 
   showLoading(false);
   document.getElementById('resultsSection').classList.add('show');
-  renderComparativa();
 }
 
 // ============================================================
@@ -891,74 +843,192 @@ function toggleHardoxCard(i) {
 }
 
 // ============================================================
-// CHINA TAB (REPUESTOS)
+// RÉGIMEN DE IMPORTACIÓN — chequeo automático de límites 2026
+// (courier "pequeños envíos": hasta 50kg/bulto, máx 3 unidades
+// de la misma especie, hasta USD 3.000 FOB, exento de derechos
+// y tasa hasta USD 400 — igual paga IVA)
 // ============================================================
-function renderChinaTab(query, mlItems, tc) {
-  const avgML = mlItems.length ? mlItems.reduce((s,i) => s + i.price, 0) / mlItems.length : 0;
-  const avgUSD = avgML / tc;
-  const qEn = encodeURIComponent(query.replace(/ /g,'+'));
+function evaluarRegimenImportacion(pesoKg, cantidad, precioUSD) {
+  const p = parseFloat(pesoKg) || 1;
+  const c = parseInt(cantidad) || 1;
+  const v = parseFloat(precioUSD) || 0;
+  if (p <= 50 && c <= 3 && v <= 3000) {
+    const franquicia = v <= 400 ? ' (dentro de franquicia USD 400, sin derechos)' : ' (paga derechos por superar USD 400)';
+    return { ok:true, texto:`✅ CABE EN RÉGIMEN DE PRUEBA (courier)${franquicia} — ~${p}kg` };
+  }
+  const motivos = [];
+  if (p > 50) motivos.push('supera 50kg/bulto');
+  if (c > 3) motivos.push('supera 3 unidades de la misma especie');
+  if (v > 3000) motivos.push('supera USD 3.000 FOB');
+  return { ok:false, texto:`⚠️ REQUIERE IMPORTACIÓN FORMAL — ${motivos.join(' · ')}` };
+}
 
-  const plataformas = [
-    {
-      name:'ALIBABA', icon:'🏭', color:'var(--orange)',
-      url:`https://www.alibaba.com/trade/search?SearchText=${qEn}`,
-      minUSD: (avgUSD * 0.08).toFixed(2),
-      maxUSD: (avgUSD * 0.20).toFixed(2),
-      moq:'50-500 unidades', tiempo:'25-45 días', nota:'Mejor precio. Requiere negociación y pedido mínimo.',
-      reseña:'⭐⭐⭐⭐ Confiable para pedidos grandes. Verificar proveedor con Trade Assurance.'
-    },
-    {
-      name:'ALIEXPRESS', icon:'🛒', color:'var(--red)',
-      url:`https://www.aliexpress.com/wholesale?SearchText=${qEn}`,
-      minUSD: (avgUSD * 0.12).toFixed(2),
-      maxUSD: (avgUSD * 0.25).toFixed(2),
-      moq:'1 unidad', tiempo:'20-40 días', nota:'Sin cantidad mínima. Ideal para probar calidad.',
-      reseña:'⭐⭐⭐ Bueno para pruebas. Flete puede ser alto en piezas pesadas.'
-    },
-    {
-      name:'DHGATE', icon:'📦', color:'var(--blue-light)',
-      url:`https://www.dhgate.com/wholesale/search.do?searchkey=${qEn}`,
-      minUSD: (avgUSD * 0.10).toFixed(2),
-      maxUSD: (avgUSD * 0.22).toFixed(2),
-      moq:'5-50 unidades', tiempo:'20-35 días', nota:'Buen balance precio/MOQ.',
-      reseña:'⭐⭐⭐⭐ Recomendado para pedidos medianos.'
-    },
-    {
-      name:'MADE-IN-CHINA', icon:'🔩', color:'var(--green)',
-      url:`https://www.made-in-china.com/multi-search/${qEn}`,
-      minUSD: (avgUSD * 0.07).toFixed(2),
-      maxUSD: (avgUSD * 0.18).toFixed(2),
-      moq:'100+ unidades', tiempo:'30-50 días', nota:'Fabricantes directos. Precio más bajo posible.',
-      reseña:'⭐⭐⭐⭐⭐ Mejor para importación formal con volumen.'
-    }
-  ];
+// ============================================================
+// BÚSQUEDA REAL — ALIBABA / ALIEXPRESS (Claude API + web_search)
+// ============================================================
+async function buscarChinaReal(query) {
+  const prompt = `Actuá como un sourcing agent industrial. Buscá el producto/repuesto "${query}" en Alibaba.com y AliExpress.com ÚNICAMENTE (ningún otro sitio).
+Para repuestos industriales/B2B priorizá Alibaba (proveedores con Trade Assurance / Verified Supplier); usá AliExpress solo cuando convenga para comprar una sola unidad de prueba.
+Elegí hasta 5 resultados balanceando MEJOR PRECIO y BUENA REPUTACIÓN del vendedor — nunca elijas el más barato si tiene mala reputación o cero reseñas.
+Para cada resultado estimá el peso aproximado del envío en kg según el tipo de producto (usá tu conocimiento general del producto, aclaralo como estimación).
+Devolvé EXCLUSIVAMENTE un array JSON válido, sin texto antes ni después, sin bloques de código, con este formato exacto:
+[{"plataforma":"Alibaba","producto":"nombre real del producto encontrado","precioUSD":12.50,"moq":"texto tal cual aparece","pesoEstimadoKg":2.5,"reputacion":"rating/badges visibles, ej: Verified Supplier 5 años, 4.8/5","link":"URL directa al producto","recomendado":true}]
+Si no encontrás nada confiable, devolvé [].`;
 
-  document.getElementById('chinaNote').textContent = `Precios estimados basados en promedio MercadoLibre Argentina (${fmtARS(avgML)} promedio). Los precios reales varían por proveedor y cantidad. Siempre cotizar antes de importar.`;
+  const res = await fetch(CLAUDE_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt }],
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }]
+    })
+  });
+  const data = await res.json();
+  const textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+  const clean = textBlocks.replace(/```json|```/g, '').trim();
+  try {
+    const parsed = JSON.parse(clean);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.warn('No se pudo parsear respuesta de búsqueda China:', e, clean);
+    return [];
+  }
+}
 
-  document.getElementById('chinaGrid').innerHTML = plataformas.map(p => `
-    <div class="china-card">
+// ============================================================
+// CHINA TAB (REPUESTOS) — búsqueda real, sin estimaciones
+// ============================================================
+async function renderChinaTab(query, mlItems, tc) {
+  document.getElementById('chinaNote').textContent = '🔎 Buscando proveedores reales en Alibaba y AliExpress...';
+  document.getElementById('chinaGrid').innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--muted);font-size:12px">Esto puede tardar unos segundos — es una búsqueda real, no una estimación.</div>`;
+
+  let items = [];
+  try {
+    items = await buscarChinaReal(query);
+  } catch (e) {
+    console.warn('Error búsqueda China real:', e);
+  }
+
+  const qEn = encodeURIComponent(query.replace(/ /g, '+'));
+
+  if (!items.length) {
+    document.getElementById('chinaNote').textContent = 'No se encontraron resultados confiables de forma automática.';
+    document.getElementById('chinaGrid').innerHTML = `
+      <div style="grid-column:1/-1;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:20px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">La búsqueda automática no trajo resultados confiables para "${query}". Probá reformular el término o buscá manualmente:</div>
+        <a href="https://www.alibaba.com/trade/search?SearchText=${qEn}" target="_blank" class="china-link">🔗 Buscar en Alibaba ↗</a>
+        <a href="https://www.aliexpress.com/wholesale?SearchText=${qEn}" target="_blank" class="china-link" style="margin-top:6px">🔗 Buscar en AliExpress ↗</a>
+      </div>`;
+    return;
+  }
+
+  document.getElementById('chinaNote').textContent = `${items.length} resultado(s) reales — balanceando precio, calidad y reputación del vendedor. Verificá siempre en el link antes de comprar.`;
+
+  document.getElementById('chinaGrid').innerHTML = items.map((it, i) => {
+    const peso = parseFloat(it.pesoEstimadoKg) || getPeso();
+    const precio = parseFloat(it.precioUSD) || 0;
+    const regimen = evaluarRegimenImportacion(peso, 1, precio);
+    const nombreSeguro = (it.producto || query).replace(/'/g, '').replace(/"/g, '');
+    return `<div class="china-card">
       <div class="china-card-header">
-        <div class="china-platform-icon">${p.icon}</div>
+        <div class="china-platform-icon">${it.plataforma === 'Alibaba' ? '🏭' : '🛒'}</div>
         <div>
-          <div class="china-platform-name" style="color:${p.color}">${p.name}</div>
-          <div class="china-platform-sub">${p.moq} · ${p.tiempo}</div>
+          <div class="china-platform-name">${it.plataforma}${it.recomendado ? ' · ⭐ RECOMENDADO' : ''}</div>
+          <div class="china-platform-sub">${it.moq || 'MOQ no especificado'}</div>
         </div>
       </div>
+      <div style="font-size:12px;color:var(--text);margin:6px 0 10px;line-height:1.4">${it.producto || query}</div>
       <div class="china-price-row">
-        <span class="china-price-label">Precio estimado</span>
-        <div><div class="china-price-val">${fmtUSD(p.minUSD)} – ${fmtUSD(p.maxUSD)}</div>
-        <div class="china-price-ars">${fmtARS(p.minUSD * tc)} – ${fmtARS(p.maxUSD * tc)}</div></div>
+        <span class="china-price-label">Precio real</span>
+        <div><div class="china-price-val">${fmtUSD(precio)}</div>
+        <div class="china-price-ars">${fmtARS(precio * tc)}</div></div>
       </div>
-      <div class="china-price-row">
-        <span class="china-price-label">vs precio local</span>
-        <span class="china-price-val" style="color:var(--green)">-${Math.round((1 - p.maxUSD/avgUSD)*100)}% a -${Math.round((1 - p.minUSD/avgUSD)*100)}%</span>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin:8px 0;line-height:1.5">${p.nota}</div>
-      <div style="font-size:11px;color:var(--muted2);margin-bottom:8px">${p.reseña}</div>
-      <a href="${p.url}" target="_blank" class="china-link">🔗 Buscar en ${p.name} <span style="color:var(--muted)">↗</span></a>
-      <button class="btn-sm btn-add" style="margin-top:6px" onclick="addToCart({id:'cn-${p.name}',name:'${query} (${p.name})',price:${Math.round(parseFloat(p.minUSD)*tc)},source:'${p.name} China',url:'${p.url}'})">+ CARRITO</button>
-    </div>
-  `).join('');
+      <div style="font-size:11px;color:var(--muted);margin:8px 0">👤 ${it.reputacion || 'Sin datos de reputación visibles — verificar en la ficha'}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">⚖️ Peso estimado: ~${peso} kg</div>
+      <div class="viabilidad-badge ${regimen.ok ? 'via-viable' : 'via-inviable'}" style="font-size:10px;letter-spacing:0.5px;width:100%;box-sizing:border-box">${regimen.texto}</div>
+      <a href="${it.link}" target="_blank" class="china-link">🔗 Ver y comprar ↗</a>
+      <button class="btn-sm btn-add" style="margin-top:6px" onclick='addToCart({id:"cn-${i}-${Date.now()}",name:"${nombreSeguro} (${it.plataforma})",price:${Math.round(precio * tc)},source:"${it.plataforma} China",url:"${it.link}"})'>+ CARRITO</button>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// BÚSQUEDA POR LISTA — AUTÓNOMA (repuestos)
+// ============================================================
+function cargarListaArchivo(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines = String(e.target.result).split(/\r?\n/)
+      .map(l => l.split(',')[0].trim())
+      .filter(Boolean);
+    const ta = document.getElementById('listaTextarea');
+    ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + lines.join('\n');
+    showToast(`${lines.length} línea(s) cargadas del archivo`, 'success');
+  };
+  reader.readAsText(file);
+  ev.target.value = '';
+}
+
+async function buscarLista() {
+  const raw = document.getElementById('listaTextarea').value;
+  let items = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (!items.length) { showToast('Pegá o subí al menos un producto', 'info'); return; }
+
+  const LIMITE = 15;
+  if (items.length > LIMITE) {
+    items = items.slice(0, LIMITE);
+    showToast(`Se tomaron los primeros ${LIMITE} ítems (límite por corrida)`, 'info');
+  }
+
+  const tc = getTC();
+  const cont = document.getElementById('listaResultados');
+  const prog = document.getElementById('listaProgreso');
+  cont.innerHTML = '';
+
+  for (let i = 0; i < items.length; i++) {
+    const q = items[i];
+    prog.textContent = `Buscando ${i + 1}/${items.length}: "${q}"...`;
+
+    let resultados = [];
+    try { resultados = await buscarChinaReal(q); } catch (e) { console.warn('Error en item de lista:', q, e); }
+
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px;margin-bottom:10px';
+
+    if (!resultados.length) {
+      card.innerHTML = `
+        <div style="font-family:'Bebas Neue';font-size:14px;color:var(--text);letter-spacing:1px">${q}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">⚠️ Sin resultados confiables automáticos.
+          <a href="https://www.alibaba.com/trade/search?SearchText=${encodeURIComponent(q)}" target="_blank" style="color:var(--yellow)">Buscar manual en Alibaba ↗</a></div>`;
+    } else {
+      card.innerHTML = `<div style="font-family:'Bebas Neue';font-size:14px;color:var(--text);letter-spacing:1px;margin-bottom:8px">${q}</div>` +
+        resultados.map(it => {
+          const peso = parseFloat(it.pesoEstimadoKg) || 1;
+          const precio = parseFloat(it.precioUSD) || 0;
+          const regimen = evaluarRegimenImportacion(peso, 1, precio);
+          const nombreSeguro = (it.producto || q).replace(/'/g, '').replace(/"/g, '');
+          return `<div style="display:flex;justify-content:space-between;align-items:flex-start;border-top:1px solid var(--border);padding:10px 0;gap:12px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;color:var(--text)">${it.plataforma} — ${it.producto || q}${it.recomendado ? ' ⭐' : ''}</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px">${it.reputacion || 'Sin datos de reputación visibles'} · ~${peso}kg</div>
+              <div style="font-size:10px;margin-top:4px;color:${regimen.ok ? 'var(--green)' : 'var(--red)'}">${regimen.texto}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:13px;color:var(--yellow)">${fmtUSD(precio)}</div>
+              <div style="font-size:10px;color:var(--muted)">${fmtARS(precio * tc)}</div>
+              <a href="${it.link}" target="_blank" style="font-size:10px;color:var(--blue-light)">Ver →</a><br>
+              <button class="btn-sm btn-add" style="margin-top:4px;padding:3px 8px;font-size:10px" onclick='addToCart({id:"lst-${i}-${Date.now()}",name:"${nombreSeguro} (${it.plataforma})",price:${Math.round(precio * tc)},source:"${it.plataforma} China",url:"${it.link}"})'>+ CARRITO</button>
+            </div>
+          </div>`;
+        }).join('');
+    }
+    cont.appendChild(card);
+  }
+  prog.textContent = `✓ Búsqueda completa — ${items.length} ítem(s) procesados. Ahora verificá los que te interesen en MercadoLibre Argentina.`;
 }
 
 // ============================================================
@@ -1086,12 +1156,12 @@ function renderAduanaTab(query, mlItems, tc) {
   const vias = [
     {
       id:'courier', name:'COURIER PERSONAL', icon:'📦',
-      desc:'Hasta USD 1.000 sin aduana formal. DHL, FedEx, UPS.',
-      franquicia: 1000,
+      desc:'Régimen de pequeños envíos (uso personal, no comercial). Tope USD 3.000 FOB, 50kg/bulto, máx. 3 unidades de la misma especie, máx. 5 envíos/año.',
+      franquicia: 400,
       flete_por_kg: 35,
-      iva: 0, ganancias: 0, derechos: 0, tasa: 0,
+      iva: 21, ganancias: 0, derechos: 0, tasa: 0,
       dias: '5-15 días',
-      nota:'Sin trámite de aduana. Ideal para pruebas y piezas pequeñas.'
+      nota:'Sin trámite de aduana formal. Ideal para PROBAR CALIDAD (1-3 unidades), no para armar stock. Los primeros USD 400 están exentos de derechos/tasa — igual se paga IVA.'
     },
     {
       id:'encomienda', name:'ENCOMIENDA / PUERTA', icon:'🚪',
@@ -1165,7 +1235,7 @@ function calcularAduana(precioUSD, pesoKg, tc, vias) {
     <div style="margin-top:4px;font-size:11px;color:var(--muted)">${fmtUSD(totalUSD)} · Precio local referencia: ${fmtARS(precioUSD * tc)}</div>
     <div class="viabilidad-badge ${viaCls}">${viabilidad}</div>
     <div style="font-size:11px;color:var(--muted);margin-top:10px">${via.nota}</div>
-    ${via.id === 'courier' && precioUSD < 1000 ? '<div style="font-size:11px;color:var(--green);margin-top:6px">✅ Entra dentro de la franquicia USD 1.000 — sin trámite aduanero.</div>' : ''}
+    ${via.id === 'courier' ? `<div style="font-size:11px;margin-top:6px;color:${evaluarRegimenImportacion(pesoKg,1,precioUSD).ok ? 'var(--green)' : 'var(--red)'}">${evaluarRegimenImportacion(pesoKg,1,precioUSD).texto}</div>` : ''}
   `;
 }
 
@@ -1598,269 +1668,6 @@ async function syncHistorialSheet(entry) {
     // fetch con no-cors en GET funciona — no necesitamos leer la respuesta
     fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
   } catch(e) {}
-}
-
-// ============================================================
-// TC EN VIVO (dolarapi.com)
-// ============================================================
-async function actualizarTCEnVivo(manual) {
-  const info = document.getElementById('tcInfo');
-  if (manual) info.textContent = 'Actualizando...';
-  try {
-    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
-    if (!res.ok) throw new Error('fail');
-    const data = await res.json();
-    const valor = Math.round(data.venta);
-    document.getElementById('tipoCambio').value = valor;
-    ultimoTC = { valor, fuente: 'dolarapi blue', fecha: new Date() };
-    info.textContent = `Dólar blue (dolarapi.com): $${valor} · actualizado ${new Date().toLocaleTimeString('es-AR')}`;
-  } catch (e) {
-    ultimoTC = { valor: getTC(), fuente: 'manual', fecha: null };
-    info.textContent = '⚠️ No se pudo obtener cotización en vivo — editá el valor manualmente.';
-  }
-}
-
-// ============================================================
-// PESOS DEL SCORING
-// ============================================================
-function actualizarPesos() {
-  let p = parseInt(document.getElementById('pesoPrecio').value);
-  let c = parseInt(document.getElementById('pesoCalidad').value);
-  let pl = parseInt(document.getElementById('pesoPlazo').value);
-  const total = p + c + pl || 1;
-  p = Math.round(p / total * 100); c = Math.round(c / total * 100); pl = 100 - p - c;
-  document.getElementById('pesoPrecioVal').textContent = p;
-  document.getElementById('pesoCalidadVal').textContent = c;
-  document.getElementById('pesoPlazoVal').textContent = pl;
-  pesosScore = { precio: p, calidad: c, plazo: pl };
-  localStorage.setItem('meb_pesos_score', JSON.stringify(pesosScore));
-}
-
-// ============================================================
-// PROVEEDORES VERIFICADOS (carga manual)
-// ============================================================
-function agregarProveedorVerificado() {
-  const plataforma = document.getElementById('vfPlataforma').value.trim();
-  const precioUSD = parseFloat(document.getElementById('vfPrecioUSD').value);
-  const plazoDias = parseFloat(document.getElementById('vfPlazoDias').value) || 30;
-  const calidad = parseInt(document.getElementById('vfCalidad').value);
-  const tipoPieza = document.getElementById('vfTipoPieza').value;
-  if (!plataforma || !precioUSD) { showToast('Completá plataforma y precio', 'error'); return; }
-  const entry = {
-    id: 'vf-' + Date.now(), producto: currentProduct || '(sin búsqueda activa)',
-    plataforma, precioUSD, plazoDias, calidad, tipoPieza, fecha: new Date().toISOString(), fuente: 'VERIFICADO'
-  };
-  proveedoresVerificados.unshift(entry);
-  localStorage.setItem('meb_proveedores_verificados', JSON.stringify(proveedoresVerificados));
-  syncProveedorVerificado(entry);
-  document.getElementById('vfPlataforma').value = '';
-  document.getElementById('vfPrecioUSD').value = '';
-  document.getElementById('vfPlazoDias').value = '';
-  renderVerificados();
-  showToast('Proveedor verificado agregado ✓', 'success');
-}
-
-function eliminarProveedorVerificado(id) {
-  proveedoresVerificados = proveedoresVerificados.filter(v => v.id !== id);
-  localStorage.setItem('meb_proveedores_verificados', JSON.stringify(proveedoresVerificados));
-  renderVerificados();
-}
-
-function renderVerificados() {
-  const el = document.getElementById('verificadosList');
-  if (!proveedoresVerificados.length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">SIN PROVEEDORES VERIFICADOS</div><div class="empty-sub">Cargá el primero arriba.</div></div>';
-    return;
-  }
-  el.innerHTML = proveedoresVerificados.map(v => `
-    <div class="china-card" style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div class="china-platform-name" style="color:var(--green)">${v.plataforma} <span style="font-size:9px;color:var(--muted)">· ${v.tipoPieza.toUpperCase()}</span></div>
-          <div class="china-platform-sub">${v.producto} · ${'⭐'.repeat(v.calidad)} · ${v.plazoDias} días</div>
-        </div>
-        <div style="text-align:right">
-          <div class="china-price-val">${fmtUSD(v.precioUSD)}</div>
-          <button class="btn-sm" style="background:var(--panel2);color:var(--red);margin-top:4px" onclick="eliminarProveedorVerificado('${v.id}')">eliminar</button>
-        </div>
-      </div>
-    </div>`).join('');
-}
-
-async function syncProveedorVerificado(entry) {
-  if (!SCRIPT_URL) return;
-  try {
-    const params = new URLSearchParams({
-      action: 'proveedor_verificado', producto: entry.producto, plataforma: entry.plataforma,
-      precioUSD: entry.precioUSD, plazoDias: entry.plazoDias, calidad: entry.calidad,
-      tipoPieza: entry.tipoPieza, fecha: entry.fecha
-    });
-    fetch(SCRIPT_URL + '?' + params.toString(), { method: 'GET', mode: 'no-cors' }).catch(() => {});
-  } catch (e) {}
-}
-
-// ============================================================
-// INTENTO DE DATOS REALES ALIEXPRESS (con fallback automático)
-// ============================================================
-async function tryAliExpressReal(query) {
-  if (!RAPIDAPI_KEY) return null;
-  try {
-    const res = await fetch(`https://aliexpress-true-api.p.rapidapi.com/api/v3/search?text=${encodeURIComponent(query)}`, {
-      headers: { 'x-rapidapi-host': 'aliexpress-true-api.p.rapidapi.com', 'x-rapidapi-key': RAPIDAPI_KEY }
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data;
-  } catch (e) {
-    console.warn('AliExpress real API no disponible, usando estimado:', e.message);
-    return null;
-  }
-}
-
-// ============================================================
-// MOTOR DE SCORING
-// ============================================================
-function calcularScore(items) {
-  const precios = items.map(i => i.totalARS).filter(n => n > 0);
-  const minP = Math.min(...precios), maxP = Math.max(...precios);
-  const plazos = items.map(i => i.plazoDias || 30);
-  const minPl = Math.min(...plazos), maxPl = Math.max(...plazos);
-  return items.map(i => {
-    const scorePrecio = maxP > minP ? (1 - (i.totalARS - minP) / (maxP - minP)) * 100 : 100;
-    const scoreCalidad = (i.calidad / 5) * 100;
-    const scorePlazo = maxPl > minPl ? (1 - ((i.plazoDias || 30) - minPl) / (maxPl - minPl)) * 100 : 100;
-    const score = (scorePrecio * pesosScore.precio + scoreCalidad * pesosScore.calidad + scorePlazo * pesosScore.plazo) / 100;
-    return { ...i, score: Math.round(score) };
-  }).sort((a, b) => b.score - a.score);
-}
-
-// ============================================================
-// COMPARATIVA — UNIFICA TODAS LAS FUENTES
-// ============================================================
-let chartCostoTotalInst = null, chartPrecioCalidadInst = null;
-
-function renderComparativa() {
-  if (!currentProduct) {
-    document.getElementById('comparativaNote').textContent = 'Hacé una búsqueda primero para generar la comparativa.';
-    return;
-  }
-  const tc = getTC();
-  const costoParadaDia = parseFloat(document.getElementById('costoParadaDia').value) || 0;
-  const avgML = currentResults.length ? currentResults.reduce((s, i) => s + i.price, 0) / currentResults.length : 0;
-
-  let items = [];
-  if (avgML > 0) {
-    items.push({ proveedor: 'MercadoLibre AR', fuente: 'REAL', precioUSD: avgML / tc, plazoDias: 2, calidad: 4 });
-  }
-  const chinaMult = [
-    { nombre: 'Alibaba', min: 0.08, max: 0.20, plazo: 35, calidad: 4 },
-    { nombre: 'AliExpress', min: 0.12, max: 0.25, plazo: 30, calidad: 3 },
-    { nombre: 'DHgate', min: 0.10, max: 0.22, plazo: 28, calidad: 4 },
-    { nombre: 'Made-in-China', min: 0.07, max: 0.18, plazo: 40, calidad: 5 }
-  ];
-  if (avgML > 0) {
-    const avgUSD = avgML / tc;
-    chinaMult.forEach(p => {
-      items.push({ proveedor: p.nombre, fuente: 'ESTIMADO', precioUSD: avgUSD * ((p.min + p.max) / 2), plazoDias: p.plazo, calidad: p.calidad });
-    });
-  }
-  proveedoresVerificados.filter(v => v.producto === currentProduct).forEach(v => {
-    items.push({ proveedor: v.plataforma + ' (verificado)', fuente: 'VERIFICADO', precioUSD: v.precioUSD, plazoDias: v.plazoDias, calidad: v.calidad });
-  });
-
-  if (!items.length) {
-    document.getElementById('comparativaNote').textContent = 'Sin datos suficientes todavía para comparar.';
-    return;
-  }
-
-  items = items.map(i => ({
-    ...i,
-    totalARS: i.precioUSD * tc + (i.plazoDias * costoParadaDia * tc)
-  }));
-
-  const scored = calcularScore(items);
-  document.getElementById('comparativaNote').textContent =
-    `Comparando ${scored.length} fuentes para "${currentProduct}". Pesos: ${pesosScore.precio}% precio / ${pesosScore.calidad}% calidad / ${pesosScore.plazo}% plazo. Mejor opción: ${scored[0].proveedor} (score ${scored[0].score}).`;
-
-  document.getElementById('comparativaTable').innerHTML = `
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">
-        <th style="padding:6px">PROVEEDOR</th><th>FUENTE</th><th>USD</th><th>TOTAL AR (c/parada)</th><th>PLAZO</th><th>CALIDAD</th><th>SCORE</th>
-      </tr></thead>
-      <tbody>
-        ${scored.map((s, idx) => `
-          <tr style="border-bottom:1px solid var(--border);${idx === 0 ? 'background:rgba(46,204,113,0.08)' : ''}">
-            <td style="padding:6px;font-weight:600">${s.proveedor}${idx === 0 ? ' 🏆' : ''}</td>
-            <td><span style="font-size:10px;color:${s.fuente === 'REAL' ? 'var(--green)' : s.fuente === 'VERIFICADO' ? 'var(--blue-light)' : 'var(--muted)'}">${s.fuente}</span></td>
-            <td>${fmtUSD(s.precioUSD)}</td>
-            <td>${fmtARS(s.totalARS)}</td>
-            <td>${s.plazoDias}d</td>
-            <td>${'⭐'.repeat(s.calidad)}</td>
-            <td style="font-family:'Bebas Neue';color:var(--yellow)">${s.score}</td>
-          </tr>`).join('')}
-      </tbody>
-    </table>`;
-
-  if (chartCostoTotalInst) chartCostoTotalInst.destroy();
-  if (chartPrecioCalidadInst) chartPrecioCalidadInst.destroy();
-  chartCostoTotalInst = new Chart(document.getElementById('chartCostoTotal'), {
-    type: 'bar',
-    data: { labels: scored.map(s => s.proveedor), datasets: [{ label: 'Costo total ARS', data: scored.map(s => Math.round(s.totalARS)), backgroundColor: 'rgba(244,180,0,0.8)' }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, title: { display: true, text: 'Costo total puesto en AR', color: '#aaa' } }, scales: { x: { ticks: { color: '#888', font: { size: 9 } } }, y: { ticks: { color: '#888' } } } }
-  });
-  chartPrecioCalidadInst = new Chart(document.getElementById('chartPrecioCalidad'), {
-    type: 'scatter',
-    data: { datasets: [{ label: 'Proveedores', data: scored.map(s => ({ x: s.precioUSD, y: s.calidad, label: s.proveedor })), backgroundColor: 'rgba(74,158,224,0.8)', pointRadius: 7 }] },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, title: { display: true, text: 'Precio (USD) vs Calidad', color: '#aaa' },
-        tooltip: { callbacks: { label: (ctx) => ctx.raw.label + ': USD ' + ctx.raw.x.toFixed(2) + ' / ' + ctx.raw.y + '★' } } },
-      scales: { x: { title: { display: true, text: 'USD', color: '#888' }, ticks: { color: '#888' } }, y: { title: { display: true, text: 'Calidad (1-5)', color: '#888' }, ticks: { color: '#888' }, min: 0, max: 5 } }
-    }
-  });
-
-  return scored;
-}
-
-// ============================================================
-// GENERADOR DE REPORTE
-// ============================================================
-function generarReporte() {
-  const scored = renderComparativa();
-  if (!scored || !scored.length) { showToast('No hay datos para generar el reporte', 'error'); return; }
-  const ganador = scored[0];
-  const win = window.open('', '_blank');
-  win.document.write(`
-    <html><head><title>Reporte MEB — ${currentProduct}</title>
-    <style>
-      body{font-family:Arial,sans-serif;padding:30px;color:#111}
-      h1{font-size:20px;border-bottom:3px solid #F4B400;padding-bottom:8px}
-      table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
-      th,td{padding:8px;border:1px solid #ddd;text-align:left}
-      th{background:#111;color:#fff}
-      .win{background:#eaffea}
-      .fuente-real{color:#2ECC71;font-weight:bold}
-      .fuente-est{color:#888}
-      .fuente-ver{color:#4A9EE0;font-weight:bold}
-      .footer{margin-top:24px;font-size:11px;color:#888}
-    </style></head><body>
-    <h1>MEB Machinery Solutions — Reporte de Análisis de Mercado</h1>
-    <p><b>Producto:</b> ${currentProduct} &nbsp; | &nbsp; <b>Fecha:</b> ${new Date().toLocaleString('es-AR')} &nbsp; | &nbsp; <b>TC usado:</b> $${getTC()} (${ultimoTC.fuente})</p>
-    <p><b>Pesos de scoring:</b> Precio ${pesosScore.precio}% — Calidad ${pesosScore.calidad}% — Plazo ${pesosScore.plazo}%</p>
-    <h2 style="font-size:15px">Recomendación</h2>
-    <p>El proveedor con mejor puntaje es <b>${ganador.proveedor}</b> (score ${ganador.score}/100), con un costo total estimado puesto en Argentina de <b>${fmtARS(ganador.totalARS)}</b>, calidad ${'★'.repeat(ganador.calidad)} y plazo de ${ganador.plazoDias} días. ${ganador.fuente !== 'REAL' ? 'Atención: este dato es ' + ganador.fuente + ', se recomienda cotizar y verificar antes de confirmar la compra.' : 'Este dato proviene de una fuente real verificada.'}</p>
-    <table>
-      <tr><th>Proveedor</th><th>Fuente</th><th>USD</th><th>Total ARS (c/parada)</th><th>Plazo</th><th>Calidad</th><th>Score</th></tr>
-      ${scored.map(s => `<tr class="${s === ganador ? 'win' : ''}">
-        <td>${s.proveedor}</td>
-        <td class="${s.fuente === 'REAL' ? 'fuente-real' : s.fuente === 'VERIFICADO' ? 'fuente-ver' : 'fuente-est'}">${s.fuente}</td>
-        <td>${fmtUSD(s.precioUSD)}</td><td>${fmtARS(s.totalARS)}</td><td>${s.plazoDias}d</td><td>${'★'.repeat(s.calidad)}</td><td>${s.score}</td>
-      </tr>`).join('')}
-    </table>
-    <p class="footer">Reporte generado automáticamente por el Analizador de Mercado MEB. Los valores marcados como ESTIMADO no provienen de una fuente verificada en tiempo real — cotizar antes de importar. Usá Ctrl+P / Cmd+P para guardar como PDF.</p>
-    </body></html>`);
-  win.document.close();
-  showToast('Reporte generado en nueva pestaña ✓', 'success');
 }
 
 // ============================================================
