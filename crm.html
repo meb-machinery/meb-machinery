@@ -2327,6 +2327,9 @@ function renderTrabajos() {
 function renderPresupuestos() {
   let data=DB.presupuestos;
   if(filters.presup!=='todos') data=data.filter(p=>p.estado===filters.presup);
+  // Orden por N° — antes se mostraban en el orden en que venían del Sheet
+  // (no necesariamente secuencial), independiente de la columna NUMERO.
+  data = [...data].sort((a,b) => (parseInt(a.num)||0) - (parseInt(b.num)||0));
   // Buscador interno
   const search=(document.getElementById('searchPresupuestos')||{value:''}).value.toLowerCase().trim();
   if(search){
