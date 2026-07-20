@@ -1469,11 +1469,6 @@ async function syncAll() {
         }
         return p;
       });
-      // FIX: el contador de N° tiene que reflejar el máximo real que ya existe
-      // en el Sheet — antes se comparaba contra sí mismo y nunca avanzaba,
-      // lo que hacía que presupuestos nuevos reusaran números viejos.
-      const maxNum = DB.presupuestos.reduce((m,p)=>Math.max(m, parseInt(p.num)||0), 0);
-      DB.presupCounter = Math.max(DB.presupCounter||1, maxNum+1);
     } else if(!DB.presupuestos.length) DB.presupuestos=[];
     if(al.length) DB.alertas = al.map(r=>{
       let acid = String(r.CLIENTE_ID||'').trim();
@@ -1539,6 +1534,17 @@ async function syncAll() {
     // Re-merge locally created items not yet confirmed in Sheet
     _localClientes.forEach(lc => { if(!DB.clientes.find(x=>x.id===lc.id)) DB.clientes.push(lc); });
     _localPresupuestos.forEach(lp => { if(!DB.presupuestos.find(x=>x.id===lp.id)) DB.presupuestos.push(lp); });
+
+    // FIX v17.7: el N° de presupuesto siguiente se recalcula siempre desde
+    // los datos reales (Sheet + cualquier presupuesto local todavía no
+    // confirmado) — nunca se queda pegado a un valor viejo. Antes se hacía
+    // Math.max(contador actual, máximo real) — pero como "el contador
+    // actual" nunca puede bajar, si alguna vez quedó inflado por error
+    // (probando el botón Duplicar, por ejemplo) se quedaba así para
+    // siempre, aunque el Sheet tuviera muchos menos presupuestos. Ahora se
+    // autocorrige en cada sincronización.
+    const maxNumReal = DB.presupuestos.reduce((m,p)=>Math.max(m, parseInt(p.num)||0), 0);
+    DB.presupCounter = maxNumReal + 1;
     _localContratos.forEach(lc => { if(!DB.contratos.find(x=>x.id===lc.id)) DB.contratos.push(lc); });
     _localAlertas.forEach(la => { if(!DB.alertas.find(x=>x.id===la.id)) DB.alertas.push(la); });
     // v17
