@@ -1029,7 +1029,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyeTLXVI1HWFC4ZuhZy1pKrrHUP5R-PKcVS-cGNF-D7DF14mVfYJy1JN0VcjIowBk82lQ/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxuY7zScLAOfnDsrRgspKy0UwLbsbfGdJVWTsTPcIA8JA4Rb_nfhibkryifatSa0PWL/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1913,6 +1913,27 @@ function renderDashboard() {
   renderResumenCambiarioDashboard();
 }
 
+// ── FUENTE DEL DÓLAR DE REFERENCIA ──────────────────────────────────────
+// Dólar Banco Nación (venta), vía Ámbito Financiero — es la referencia que
+// usan la mayoría de las empresas viales/de maquinaria (antes se usaba el
+// dólar blue). OJO: a diferencia de dolarapi.com, este endpoint de Ámbito
+// no es una API oficialmente documentada — si alguna vez cambia de formato
+// o deja de responder, hay que ajustarlo (avisar).
+async function obtenerDolarReferencia() {
+  const res = await fetch('https://mercados.ambito.com/dolar/nacion/variacion');
+  if(!res.ok) throw new Error('fail');
+  const data = await res.json();
+  // El valor puede venir como número limpio o como texto con formato
+  // argentino ("1.425,50") según el momento — se contempla cualquiera.
+  const parseArgNum = (v) => {
+    if(typeof v === 'number') return v;
+    return parseFloat(String(v).replace(/\./g,'').replace(',','.'));
+  };
+  const venta = parseArgNum(data.venta);
+  if(!venta || isNaN(venta)) throw new Error('formato inesperado del dólar');
+  return Math.round(venta);
+}
+
 // Resumen de dólar en el Dashboard — la pantalla que Emmanuel ve primero al
 // entrar. Reúne, en 4 números, todo lo que el sistema ya calcula en detalle
 // en Estadísticas: dólar de hoy, cuánto está pendiente de cobro dolarizado,
@@ -1925,14 +1946,12 @@ async function renderResumenCambiarioDashboard() {
   if(elHoy) {
     if(_tcDashboardActual) {
       elHoy.textContent = '$'+_tcDashboardActual;
-      elHoySub.textContent = 'Dólar blue — dolarapi.com';
+      elHoySub.textContent = 'Dólar Banco Nación (venta) — Ámbito';
     } else {
       try {
-        const res = await fetch('https://dolarapi.com/v1/dolares/blue');
-        const d = await res.json();
-        _tcDashboardActual = Math.round(d.venta);
+        _tcDashboardActual = await obtenerDolarReferencia();
         elHoy.textContent = '$'+_tcDashboardActual;
-        elHoySub.textContent = 'Dólar blue — dolarapi.com';
+        elHoySub.textContent = 'Dólar Banco Nación (venta) — Ámbito';
       } catch(e) {
         elHoy.textContent = '—';
         elHoySub.textContent = 'No se pudo traer el dólar';
@@ -2438,9 +2457,7 @@ async function compararPisoTarifario() {
   if(!_tcTrabajoActual) {
     cont.innerHTML = `<div style="font-size:11px;color:var(--muted)">Consultando dólar de referencia...</div>`;
     try {
-      const res = await fetch('https://dolarapi.com/v1/dolares/blue');
-      const d = await res.json();
-      _tcTrabajoActual = Math.round(d.venta);
+      _tcTrabajoActual = await obtenerDolarReferencia();
     } catch(e) { /* si falla, sigue sin TC y se avisa abajo */ }
   }
 
@@ -2573,14 +2590,11 @@ async function actualizarTCContrato() {
   const info = document.getElementById('tcContratoInfo');
   if(info) info.textContent = 'Actualizando...';
   try {
-    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
-    if(!res.ok) throw new Error('fail');
-    const data = await res.json();
-    const valor = Math.round(data.venta);
+    const valor = await obtenerDolarReferencia();
     _tcContratoActual = valor;
     const inputTC = document.getElementById('f-con-tc');
     if(inputTC) inputTC.value = valor;
-    if(info) info.textContent = `Dólar blue: $${valor} · ${new Date().toLocaleTimeString('es-AR')}`;
+    if(info) info.textContent = `Dólar Nación: $${valor} · ${new Date().toLocaleTimeString('es-AR')}`;
     // Log fire-and-forget en el Sheet (COTIZACIONES), no bloquea la UI
     try {
       const url = SCRIPT_URL + '?action=getTC&valor=' + valor + '&fecha=' + encodeURIComponent(new Date().toISOString());
@@ -3971,10 +3985,7 @@ async function actualizarExposicionCambiaria() {
 
   let tcHoy = 0;
   try {
-    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
-    if(!res.ok) throw new Error('fail');
-    const data = await res.json();
-    tcHoy = Math.round(data.venta);
+    tcHoy = await obtenerDolarReferencia();
   } catch(e) {
     if(tbody) tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">⚠️</div><p>No se pudo traer el dólar en vivo — probá de nuevo</p></div></td></tr>`;
     return;
@@ -4371,7 +4382,7 @@ function showModalCompra() {
         <label>Dólar (USD/ARS) — tipo de cambio del día de la compra</label>
         <div style="display:flex;gap:6px">
           <input id="mc-tc" type="number" value="" oninput="calcularConversionCompra()" style="flex:1"/>
-          <button type="button" class="btn-secondary" onclick="actualizarTCCompra()" style="white-space:nowrap" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
+          <button type="button" class="btn-secondary" onclick="actualizarTCCompra()" style="white-space:nowrap" title="Fuente: Ámbito Financiero — dólar Banco Nación (venta)">↻ En vivo</button>
         </div>
         <div id="mc-conversion" style="font-size:11px;color:var(--blue-light);margin-top:4px">—</div>
       </div>
@@ -4396,10 +4407,7 @@ function toggleMonedaCompra() {
 async function actualizarTCCompra() {
   const conv = document.getElementById('mc-conversion');
   try {
-    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
-    if(!res.ok) throw new Error('fail');
-    const data = await res.json();
-    const valor = Math.round(data.venta);
+    const valor = await obtenerDolarReferencia();
     document.getElementById('mc-tc').value = valor;
     calcularConversionCompra();
   } catch(e) {
@@ -5598,7 +5606,7 @@ function openModal(type, data={}) {
         <label>Dólar del día del trabajo (opcional — para comparar contra el dólar del día que se cobre)</label>
         <div style="display:flex;gap:6px">
           <input id="f-ttc" type="number" value="${data.tcAlMomento||''}" style="flex:1"/>
-          <button type="button" class="btn-secondary" onclick="actualizarTCTrabajoCreacion()" style="white-space:nowrap;font-size:11px" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
+          <button type="button" class="btn-secondary" onclick="actualizarTCTrabajoCreacion()" style="white-space:nowrap;font-size:11px" title="Fuente: Ámbito Financiero — dólar Banco Nación (venta)">↻ En vivo</button>
         </div>
         <div style="font-size:10px;color:var(--muted);margin-top:4px">Si lo completás, cuando marques este trabajo como "Cobrado" vas a ver si ganaste o perdiste en dólares reales entre el día del trabajo y el día del cobro.</div>
       </div>
@@ -5654,7 +5662,7 @@ function openModal(type, data={}) {
         <label>Dólar (USD/ARS)</label>
         <div style="display:flex;gap:6px">
           <input id="f-con-tc" type="number" value="${tcInicial}" oninput="calcularCotizacionContrato()" style="flex:1"/>
-          <button type="button" class="btn-secondary" onclick="actualizarTCContrato()" style="white-space:nowrap" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
+          <button type="button" class="btn-secondary" onclick="actualizarTCContrato()" style="white-space:nowrap" title="Fuente: Ámbito Financiero — dólar Banco Nación (venta)">↻ En vivo</button>
         </div>
         <div id="tcContratoInfo" style="font-size:10px;color:var(--muted);margin-top:4px">Tocá "En vivo" para traer el dólar blue actual</div>
       </div>
@@ -5805,7 +5813,7 @@ function openModal(type, data={}) {
         <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:6px">
           <span id="presup-usd-display" style="font-size:13px;color:var(--blue-light)">—</span>
           <input id="f-ptc" type="number" value="${data.tcAlMomento||''}" placeholder="TC" oninput="recalcularTotal()" style="width:80px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:4px 6px;border-radius:4px;font-family:Barlow;font-size:11px;text-align:right"/>
-          <button type="button" class="btn-secondary" onclick="actualizarTCPresupuesto()" style="white-space:nowrap;font-size:11px;padding:4px 10px" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ Dólar en vivo</button>
+          <button type="button" class="btn-secondary" onclick="actualizarTCPresupuesto()" style="white-space:nowrap;font-size:11px;padding:4px 10px" title="Fuente: Ámbito Financiero — dólar Banco Nación (venta)">↻ Dólar en vivo</button>
         </div>
         <div style="text-align:right;font-size:10px;color:var(--muted);margin-top:2px">
           El valor en dólares está sujeto al tipo de cambio del día de la fecha.
@@ -5977,7 +5985,7 @@ function openModal(type, data={}) {
         <label>TC del día del cobro *</label>
         <div style="display:flex;gap:6px">
           <input id="f-crtc" type="number" value="${data.tcCobro||''}" oninput="calcularDiferenciaCobro(${usdEsperado})" style="flex:1"/>
-          <button type="button" class="btn-secondary" onclick="actualizarTCCobro(${usdEsperado})" style="white-space:nowrap;font-size:11px" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
+          <button type="button" class="btn-secondary" onclick="actualizarTCCobro(${usdEsperado})" style="white-space:nowrap;font-size:11px" title="Fuente: Ámbito Financiero — dólar Banco Nación (venta)">↻ En vivo</button>
         </div>
       </div>
       <div class="form-group full" id="cr-resultado" style="text-align:center;padding:10px;border-radius:6px;background:var(--dark);border:1px solid var(--border2)">
@@ -6030,7 +6038,7 @@ function openModal(type, data={}) {
         <label>TC del día del cobro (opcional — para ver el equivalente en USD)</label>
         <div style="display:flex;gap:6px">
           <input id="f-tctrab" type="number" value="${t.tcCobro||''}" oninput="previewDiferenciaCobroTrabajo(${gananciaArsT}, ${t.gananciaUsdEsperada||0}, ${tieneAnclaje})" style="flex:1"/>
-          <button type="button" class="btn-secondary" onclick="actualizarTCTrabajo(${gananciaArsT}, ${t.gananciaUsdEsperada||0}, ${tieneAnclaje})" style="white-space:nowrap;font-size:11px" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
+          <button type="button" class="btn-secondary" onclick="actualizarTCTrabajo(${gananciaArsT}, ${t.gananciaUsdEsperada||0}, ${tieneAnclaje})" style="white-space:nowrap;font-size:11px" title="Fuente: Ámbito Financiero — dólar Banco Nación (venta)">↻ En vivo</button>
         </div>
       </div>
       <div class="form-group full" style="font-size:11px;color:var(--muted)" id="cobro-trab-usd-preview">
@@ -6088,7 +6096,7 @@ function openModal(type, data={}) {
         <label>TC del día del cobro *</label>
         <div style="display:flex;gap:6px">
           <input id="f-cctc" type="number" value="${c.tcCobro||''}" oninput="calcularDiferenciaCobroContrato(${usdEsperadoCon})" style="flex:1"/>
-          <button type="button" class="btn-secondary" onclick="actualizarTCCobroContrato(${usdEsperadoCon})" style="white-space:nowrap;font-size:11px" title="Fuente: dolarapi.com — dólar BLUE, no el oficial">↻ En vivo</button>
+          <button type="button" class="btn-secondary" onclick="actualizarTCCobroContrato(${usdEsperadoCon})" style="white-space:nowrap;font-size:11px" title="Fuente: Ámbito Financiero — dólar Banco Nación (venta)">↻ En vivo</button>
         </div>
       </div>
       <div class="form-group full" id="cc-resultado" style="text-align:center;padding:10px;border-radius:6px;background:var(--dark);border:1px solid var(--border2)">
@@ -6215,10 +6223,7 @@ function recalcularTotal() {
 async function actualizarTCPresupuesto() {
   const tcInput = document.getElementById('f-ptc');
   try {
-    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
-    if(!res.ok) throw new Error('fail');
-    const data = await res.json();
-    const valor = Math.round(data.venta);
+    const valor = await obtenerDolarReferencia();
     if(tcInput) tcInput.value = valor;
     recalcularTotal();
   } catch(e) {
@@ -6244,10 +6249,8 @@ function calcularDiferenciaCobro(usdEsperado) {
 async function actualizarTCCobro(usdEsperado) {
   const tcInput = document.getElementById('f-crtc');
   try {
-    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
-    if(!res.ok) throw new Error('fail');
-    const data = await res.json();
-    if(tcInput) tcInput.value = Math.round(data.venta);
+    const valor = await obtenerDolarReferencia();
+    if(tcInput) tcInput.value = valor;
     calcularDiferenciaCobro(usdEsperado);
   } catch(e) {
     showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
@@ -6257,10 +6260,8 @@ async function actualizarTCCobro(usdEsperado) {
 async function actualizarTCTrabajoCreacion() {
   const tcInput = document.getElementById('f-ttc');
   try {
-    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
-    if(!res.ok) throw new Error('fail');
-    const data = await res.json();
-    if(tcInput) tcInput.value = Math.round(data.venta);
+    const valor = await obtenerDolarReferencia();
+    if(tcInput) tcInput.value = valor;
   } catch(e) {
     showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
   }
@@ -6291,10 +6292,8 @@ function previewDiferenciaCobroTrabajo(gananciaArsT, gananciaUsdEsperada, tieneA
 async function actualizarTCTrabajo(gananciaArsT, gananciaUsdEsperada, tieneAnclaje) {
   const tcInput = document.getElementById('f-tctrab');
   try {
-    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
-    if(!res.ok) throw new Error('fail');
-    const data = await res.json();
-    if(tcInput) tcInput.value = Math.round(data.venta);
+    const valor = await obtenerDolarReferencia();
+    if(tcInput) tcInput.value = valor;
     previewDiferenciaCobroTrabajo(gananciaArsT, gananciaUsdEsperada, tieneAnclaje);
   } catch(e) {
     showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
@@ -6343,10 +6342,8 @@ function calcularDiferenciaCobroContrato(usdEsperado) {
 async function actualizarTCCobroContrato(usdEsperado) {
   const tcInput = document.getElementById('f-cctc');
   try {
-    const res = await fetch('https://dolarapi.com/v1/dolares/blue');
-    if(!res.ok) throw new Error('fail');
-    const data = await res.json();
-    if(tcInput) tcInput.value = Math.round(data.venta);
+    const valor = await obtenerDolarReferencia();
+    if(tcInput) tcInput.value = valor;
     calcularDiferenciaCobroContrato(usdEsperado);
   } catch(e) {
     showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
