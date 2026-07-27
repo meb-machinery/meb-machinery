@@ -1029,7 +1029,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyGL7D_VO_CywB83hQ5Ob7QlrzXSprsWKXZVEncVa3pRQxR7ivEP9eIRXBu-Ncs2ktp5g/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby7axcDGyCBRkJ-tOaQjt7eyV09d-8YzlJdxg7UbyO_ZiVtTVk_JRZV9ZW8hw8aIUPWJg/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1502,7 +1502,8 @@ async function syncAll() {
     // datos viejos de localStorage queden pegados para siempre.
     DB.contratos = (ct.length ? ct.filter(r=>r.CLIENTE_ID!==undefined) : []).map(r=>({
       id:String(r.ID||uid()).trim(), clienteId:String(r.CLIENTE_ID||'').trim(), maquinaId:String(r.MAQUINA_ID||'').trim(),
-      plan:(r.PLAN||'basico').toLowerCase(), fechaInicio:r.FECHA_INICIO||'', fechaVencimiento:r.FECHA_VENCIMIENTO||'',
+      plan:(r.PLAN||'1000').toLowerCase(), tipoMaquina:(r.TIPO_MAQUINA||'liviana').toLowerCase(),
+      fechaInicio:r.FECHA_INICIO||'', fechaVencimiento:r.FECHA_VENCIMIENTO||'',
       proximoServiceHs:r.PROXIMO_SERVICE_HS||'', ultimoServiceHs:r.ULTIMO_SERVICE_HS||'',
       precioArs:parseMonto(r.PRECIO_ARS), precioUsd:parseMonto(r.PRECIO_USD),
       tcAlMomento:parseFloat(r.TC_AL_MOMENTO)||0, estado:(r.ESTADO||'activo').toLowerCase(),
@@ -2416,7 +2417,7 @@ function renderContratos() {
     return `<tr>
       <td>${cl?`<div class="td-name">${cl.nombre}</div><div class="td-muted">${cl.empresa||''}</div>`:'—'}</td>
       <td>${mq?mq.marca+' '+mq.modelo:'—'}</td>
-      <td style="text-transform:capitalize">${c.plan||'—'}</td>
+      <td>${nombrePlanContrato(c)}</td>
       <td class="td-muted">${fmtDate(c.fechaInicio)}</td>
       <td class="td-muted">${fmtDate(c.fechaVencimiento)}${diasParaVencer!==null?` <span style="color:${estadoColor};font-size:10px">(${diasParaVencer}d)</span>`:''}</td>
       <td>${c.proximoServiceHs||'—'} hs</td>
@@ -2606,32 +2607,62 @@ async function actualizarTCContrato() {
   }
 }
 
+function nombrePlanContrato(c) {
+  const plan = (c.plan==='2000') ? '2000hs' : '1000hs';
+  const tipo = c.tipoMaquina==='pesada' ? 'Pesada' : 'Liviana';
+  return `${plan} · ${tipo}`;
+}
+
+// Horas totales de mano de obra por plan y tipo de máquina — datos reales de
+// Emmanuel (no estimados). Cada checkpoint de 250hs "normal" pesa lo mismo,
+// salvo el de 1000hs (service más grande) y el de 2000hs (el mayor de
+// todos), que valen más horas. El de 1000hs aparece una vez en el plan
+// corto, y otra vez a mitad de camino del plan largo — es el mismo tipo de
+// service en los dos casos, no un valor distinto.
+const HORAS_CONTRATO = {
+  '1000': { liviana: 11.5, pesada: 14 },
+  '2000': { liviana: 25,   pesada: 31 }
+};
+const DESCUENTO_CONTRATO = { '1000': 0.15, '2000': 0.20 };
+
+function toggleMonedaContrato() {
+  const moneda = gv('f-con-moneda');
+  const lbl = document.getElementById('f-con-valorhora-label');
+  if(lbl) lbl.textContent = moneda==='USD' ? 'Valor hora (USD)' : 'Valor hora ($ ARS)';
+  calcularCotizacionContrato();
+}
+
 function calcularCotizacionContrato() {
   const tc = parseFloat(gv('f-con-tc'))||0;
-  const manoObraHs = parseFloat(gv('f-con-horas'))||0;
-  const valorHora = parseFloat(gv('f-con-valorhora'))||0;
+  const plan = gv('f-con-plan')||'1000';
+  const tipoMaquina = gv('f-con-tipomaquina')||'liviana';
+  const moneda = gv('f-con-moneda')||'ARS';
+  const valorHoraInput = parseFloat(gv('f-con-valorhora'))||0;
   const repuestosUsd = parseFloat(gv('f-con-repuestosusd'))||0;
-  const traslado = parseFloat(gv('f-con-traslado'))||0;
-  const visitasAnio = parseFloat(gv('f-con-visitas'))||1;
-  const margen = parseFloat(gv('f-con-margen'))||0;
 
-  const manoObraTotal = manoObraHs * valorHora;
-  const repuestosArs = repuestosUsd * tc;
-  const repuestosConMargen = repuestosArs * (1 + margen/100);
-  const totalPorVisita = manoObraTotal + repuestosConMargen + traslado;
-  const totalAnual = totalPorVisita * visitasAnio;
-  const totalUsd = tc>0 ? totalAnual / tc : 0;
+  const horasTotales = (HORAS_CONTRATO[plan]||HORAS_CONTRATO['1000'])[tipoMaquina] || 0;
+  const descuentoPct = DESCUENTO_CONTRATO[plan] || 0;
+
+  // Convierte el valor hora a ambas monedas, sea cual sea la que se cargó.
+  const valorHoraUsd = moneda==='USD' ? valorHoraInput : (tc>0 ? valorHoraInput/tc : 0);
+  const valorHoraArs = moneda==='ARS' ? valorHoraInput : valorHoraInput*tc;
+
+  const manoObraSueltaUsd = horasTotales * valorHoraUsd;
+  const manoObraContratoUsd = manoObraSueltaUsd * (1 - descuentoPct);
+  const totalUsd = manoObraContratoUsd + repuestosUsd;
+  const totalArs = tc>0 ? totalUsd*tc : manoObraContratoUsd*0 /* sin TC no se puede convertir */;
 
   const out = document.getElementById('con-resultado');
   if(out) out.innerHTML = `
-    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px"><span>Mano de obra</span><span>${fmtMonto(manoObraTotal)}</span></div>
-    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px"><span>Repuestos (+ margen ${margen}%)</span><span>${fmtMonto(repuestosConMargen)}</span></div>
-    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px"><span>Traslado / viáticos</span><span>${fmtMonto(traslado)}</span></div>
-    <div style="display:flex;justify-content:space-between;font-size:13px;border-top:1px solid var(--border);padding-top:8px"><span>Por visita</span><span class="monto">${fmtMonto(totalPorVisita)}</span></div>
-    <div style="display:flex;justify-content:space-between;font-size:16px;margin-top:6px"><span style="color:var(--yellow)">TOTAL ANUAL (${visitasAnio} visitas)</span><span class="monto" style="font-family:'Bebas Neue';font-size:18px">${fmtMonto(totalAnual)}</span></div>
-    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--blue-light);margin-top:2px"><span>Equivalente en USD (TC $${tc||'—'})</span><span>USD ${totalUsd.toLocaleString('es-AR',{maximumFractionDigits:0})}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px"><span>Horas totales del plan (${plan}hs · ${tipoMaquina})</span><span>${horasTotales} hs</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px"><span>Mano de obra sin descuento</span><span>USD ${manoObraSueltaUsd.toLocaleString('es-AR',{maximumFractionDigits:2})}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--green);margin-bottom:4px"><span>Descuento por contrato (${Math.round(descuentoPct*100)}%)</span><span>-USD ${(manoObraSueltaUsd-manoObraContratoUsd).toLocaleString('es-AR',{maximumFractionDigits:2})}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px"><span>Mano de obra con descuento</span><span>USD ${manoObraContratoUsd.toLocaleString('es-AR',{maximumFractionDigits:2})}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--blue-light);margin-bottom:8px"><span>+ Repuestos${repuestosUsd?'':' (sin cargar todavía)'}</span><span>USD ${repuestosUsd.toLocaleString('es-AR',{maximumFractionDigits:2})}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:16px;border-top:1px solid var(--border);padding-top:8px"><span style="color:var(--yellow)">TOTAL DEL CONTRATO</span><span class="monto" style="font-family:'Bebas Neue';font-size:18px">USD ${totalUsd.toLocaleString('es-AR',{maximumFractionDigits:0})}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:2px"><span>Equivalente en pesos (TC $${tc||'—'})</span><span>${tc>0?fmtMonto(totalArs):'cargá el dólar para convertir'}</span></div>
   `;
-  const fArs = document.getElementById('f-con-precioars'); if(fArs) fArs.value = Math.round(totalAnual);
+  const fArs = document.getElementById('f-con-precioars'); if(fArs) fArs.value = tc>0 ? Math.round(totalArs) : '';
   const fUsd = document.getElementById('f-con-preciousd'); if(fUsd) fUsd.value = Math.round(totalUsd);
 }
 
@@ -4102,7 +4133,7 @@ function renderProyeccionMes() {
       const cl = DB.clientes.find(x=>String(x.id)===String(c.clienteId));
       const m = c.recargoPct?Math.round(c.precioArs*(1+c.recargoPct/100)):(c.precioArs||0);
       filas.push({ origen:'Contrato', badge:'badge-blue', cliente: cl?cl.nombre:'—',
-        concepto:'Contrato '+(c.plan||''), monto:m, plazo: c.fechaVencimiento?fmtDate(c.fechaVencimiento):'—' });
+        concepto:'Contrato '+nombrePlanContrato(c), monto:m, plazo: c.fechaVencimiento?fmtDate(c.fechaVencimiento):'—' });
     });
     filas.sort((a,b)=>b.monto-a.monto);
     tbody.innerHTML = filas.length ? filas.map(f=>`<tr>
@@ -4827,7 +4858,7 @@ function generarDocumentoOpcionesPagoContrato(contratoId) {
       @media print{.print-btn{display:none}}
     </style></head><body>
     <div class="header"><img src="${typeof MEB_LOGO_PDF_B64!=='undefined'?MEB_LOGO_PDF_B64:''}" alt="MEB"/></div>
-    <div class="meta">Opciones de pago — Contrato de mantenimiento (${c.plan||'básico'}) · ${fechaHoy}<br/>
+    <div class="meta">Opciones de pago — Contrato de mantenimiento (${nombrePlanContrato(c)}) · ${fechaHoy}<br/>
       Cliente: ${clienteNombre}${mq?' · Máquina: '+mq.marca+' '+mq.modelo:''}</div>
     <table>
       <thead><tr><th></th><th>Modalidad</th><th style="text-align:right">Monto ARS</th><th style="text-align:right">Referencia USD</th></tr></thead>
@@ -4892,7 +4923,7 @@ function generarContratoPDF(contratoId) {
     <div class="grid">
       <div class="box"><label>Cliente</label><div class="val">${clienteNombre}</div></div>
       <div class="box"><label>Máquina</label><div class="val">${mq?mq.marca+' '+mq.modelo:'—'}</div></div>
-      <div class="box"><label>Plan</label><div class="val" style="text-transform:capitalize">${c.plan||'básico'}</div></div>
+      <div class="box"><label>Plan</label><div class="val">${nombrePlanContrato(c)}</div></div>
       <div class="box"><label>Próximo service</label><div class="val">${c.proximoServiceHs||'—'} hs</div></div>
       <div class="box"><label>Fecha de inicio</label><div class="val">${fmtDate(c.fechaInicio)}</div></div>
       <div class="box"><label>Vencimiento</label><div class="val">${fmtDate(c.fechaVencimiento)||'—'}</div></div>
@@ -4933,7 +4964,7 @@ function reclamarContratoWhatsApp(contratoId) {
   const dias = diasPlazoVencidoContrato(c);
   const montoFinal = c.recargoPct ? Math.round(c.precioArs*(1+c.recargoPct/100)) : (c.precioArs||0);
   const msg = `Hola ${cl.nombre}! Te escribimos de MEB Machinery Solutions. `
-    + `El contrato de mantenimiento (plan ${c.plan||'básico'}, a ${c.plazoPago} días) venció hace ${dias} día${dias===1?'':'s'} sin que hayamos registrado el cobro. `
+    + `El contrato de mantenimiento (plan ${nombrePlanContrato(c)}, a ${c.plazoPago} días) venció hace ${dias} día${dias===1?'':'s'} sin que hayamos registrado el cobro. `
     + `El monto es de $${montoFinal.toLocaleString('es-AR')}. ¿Podemos coordinar el pago? Gracias!`;
   const tel = cl.telefono.replace(/\D/g,'');
   window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -5645,8 +5676,17 @@ function openModal(type, data={}) {
     body=`<div class="form-grid">
       <div class="form-group full"><label>Cliente *</label><select id="f-con-cli"><option value="">Seleccionar...</option>${clienteOptions(data.clienteId)}</select></div>
       <div class="form-group full"><label>Máquina</label><select id="f-con-maq"><option value="">Sin máquina</option>${maquinaOptions(data.maquinaId)}</select></div>
-      <div class="form-group"><label>Plan</label>
-        <select id="f-con-plan"><option value="basico" ${data.plan==='basico'?'selected':''}>Básico (solo mano de obra)</option><option value="completo" ${data.plan==='completo'?'selected':''}>Completo (con repuestos incluidos)</option></select>
+      <div class="form-group"><label>Plan (duración del ciclo)</label>
+        <select id="f-con-plan" onchange="calcularCotizacionContrato()">
+          <option value="1000" ${(!data.plan||data.plan==='1000')?'selected':''}>1000 hs</option>
+          <option value="2000" ${data.plan==='2000'?'selected':''}>2000 hs</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Tipo de máquina</label>
+        <select id="f-con-tipomaquina" onchange="calcularCotizacionContrato()">
+          <option value="liviana" ${(!data.tipoMaquina||data.tipoMaquina==='liviana')?'selected':''}>Liviana</option>
+          <option value="pesada" ${data.tipoMaquina==='pesada'?'selected':''}>Pesada</option>
+        </select>
       </div>
       <div class="form-group"><label>Estado</label>
         <select id="f-con-estado"><option value="activo" ${(!data.estado||data.estado==='activo')?'selected':''}>Activo</option><option value="pausado" ${data.estado==='pausado'?'selected':''}>Pausado</option><option value="vencido" ${data.estado==='vencido'?'selected':''}>Vencido</option></select>
@@ -5659,24 +5699,31 @@ function openModal(type, data={}) {
         <label style="color:var(--yellow);font-size:11px;letter-spacing:2px">CALCULADORA DE COTIZACIÓN</label>
       </div>
       <div class="form-group">
-        <label>Dólar (USD/ARS)</label>
+        <label>Moneda de carga del valor hora</label>
+        <select id="f-con-moneda" onchange="toggleMonedaContrato()">
+          <option value="ARS" ${(!data._moneda||data._moneda==='ARS')?'selected':''}>$ Pesos argentinos</option>
+          <option value="USD" ${data._moneda==='USD'?'selected':''}>USD Dólares</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Dólar de referencia (Banco Nación)</label>
         <div style="display:flex;gap:6px">
           <input id="f-con-tc" type="number" value="${tcInicial}" oninput="calcularCotizacionContrato()" style="flex:1"/>
           <button type="button" class="btn-secondary" onclick="actualizarTCContrato()" style="white-space:nowrap" title="Fuente: Ámbito Financiero — dólar Banco Nación (venta)">↻ En vivo</button>
         </div>
-        <div id="tcContratoInfo" style="font-size:10px;color:var(--muted);margin-top:4px">Tocá "En vivo" para traer el dólar blue actual</div>
+        <div id="tcContratoInfo" style="font-size:10px;color:var(--muted);margin-top:4px">Tocá "En vivo" para traer el dólar del día</div>
       </div>
-      <div class="form-group"><label>Horas de mano de obra por visita</label><input id="f-con-horas" type="number" value="${data._horas||2}" oninput="calcularCotizacionContrato()"/></div>
-      <div class="form-group"><label>Valor hora ($ ARS)</label><input id="f-con-valorhora" type="number" value="${data._valorhora||15000}" oninput="calcularCotizacionContrato()"/></div>
-      <div class="form-group"><label>Repuestos consumibles por visita (USD)</label><input id="f-con-repuestosusd" type="number" value="${data._repuestosusd||30}" oninput="calcularCotizacionContrato()"/></div>
-      <div class="form-group"><label>Traslado / viáticos por visita ($ ARS)</label><input id="f-con-traslado" type="number" value="${data._traslado||10000}" oninput="calcularCotizacionContrato()"/></div>
-      <div class="form-group"><label>Visitas por año</label><input id="f-con-visitas" type="number" value="${data._visitas||4}" oninput="calcularCotizacionContrato()"/></div>
-      <div class="form-group"><label>Margen de seguridad sobre repuestos (%)</label><input id="f-con-margen" type="number" value="${data._margen||15}" oninput="calcularCotizacionContrato()"/></div>
+      <div class="form-group"><label id="f-con-valorhora-label">Valor hora ($ ARS)</label><input id="f-con-valorhora" type="number" value="${data._valorhora||15000}" oninput="calcularCotizacionContrato()"/></div>
+      <div class="form-group">
+        <label>Costo de repuestos del contrato completo (USD)</label>
+        <input id="f-con-repuestosusd" type="number" value="${data._repuestosusd||0}" oninput="calcularCotizacionContrato()"/>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">Opcional por ahora — dejalo en 0 si todavía no tenés los precios de los repuestos de este plan. Sumalo cuando los tengas.</div>
+      </div>
       <div class="form-group full">
         <div id="con-resultado" class="card" style="padding:12px;background:var(--dark)"></div>
       </div>
-      <div class="form-group"><label>Precio anual ARS (final)</label><input id="f-con-precioars" type="number" value="${data.precioArs||''}"/></div>
-      <div class="form-group"><label>Precio anual USD (final)</label><input id="f-con-preciousd" type="number" value="${data.precioUsd||''}"/></div>
+      <div class="form-group"><label>Precio total del contrato — ARS (final)</label><input id="f-con-precioars" type="number" value="${data.precioArs||''}"/></div>
+      <div class="form-group"><label>Precio total del contrato — USD (final)</label><input id="f-con-preciousd" type="number" value="${data.precioUsd||''}"/></div>
       <div class="form-group full" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
         <label>Plazo de pago del contrato</label>
         <select id="f-con-plazo">
@@ -5696,7 +5743,8 @@ function openModal(type, data={}) {
                            : plazoPagoCon==='90' ? (tfCon?tfCon.recargo90:9) : 0;
       const obj = {
         id:data.id||uid(), clienteId:gv('f-con-cli'), maquinaId:gv('f-con-maq'),
-        plan:gv('f-con-plan'), fechaInicio:gv('f-con-inicio'), fechaVencimiento:gv('f-con-vencimiento'),
+        plan:gv('f-con-plan'), tipoMaquina:gv('f-con-tipomaquina'),
+        fechaInicio:gv('f-con-inicio'), fechaVencimiento:gv('f-con-vencimiento'),
         proximoServiceHs:gv('f-con-proxhs'), ultimoServiceHs:gv('f-con-ultimahs'),
         precioArs:parseFloat(gv('f-con-precioars'))||0, precioUsd:parseFloat(gv('f-con-preciousd'))||0,
         tcAlMomento:parseFloat(gv('f-con-tc'))||0, estado:gv('f-con-estado')||'activo', notas:gv('f-con-notas'),
@@ -5705,7 +5753,7 @@ function openModal(type, data={}) {
       };
       guardar('contratos', obj, 'clienteId');
       writeToSheet({ action:'addContrato', row: {
-        id:obj.id, clienteId:obj.clienteId, maquinaId:obj.maquinaId, plan:obj.plan,
+        id:obj.id, clienteId:obj.clienteId, maquinaId:obj.maquinaId, plan:obj.plan, tipoMaquina:obj.tipoMaquina,
         fechaInicio:obj.fechaInicio, fechaVencimiento:obj.fechaVencimiento,
         proximoServiceHs:obj.proximoServiceHs, ultimoServiceHs:obj.ultimoServiceHs,
         precioArs:obj.precioArs, precioUsd:obj.precioUsd, tcAlMomento:obj.tcAlMomento,
@@ -6514,7 +6562,7 @@ function exportarExcel() {
     // ── CONTRATOS ──
     const hojaContratos = (DB.contratos||[]).map(c => ({
       'Cliente': nombreCliente(c.clienteId)||c.clienteId||'', 'Máquina': nombreMaquina(c.maquinaId)||'',
-      'Plan': c.plan||'', 'Fecha inicio': c.fechaInicio||'', 'Fecha vencimiento': c.fechaVencimiento||'',
+      'Plan': nombrePlanContrato(c), 'Fecha inicio': c.fechaInicio||'', 'Fecha vencimiento': c.fechaVencimiento||'',
       'Precio ARS': Number(c.precioArs)||0, 'Precio USD': Number(c.precioUsd)||0,
       'TC al cotizar': Number(c.tcAlMomento)||0, 'Plazo de pago': c.plazoPago||'contado',
       'Recargo %': Number(c.recargoPct)||0, 'Estado': c.estado||'', 'Estado de cobro': c.estadoCobro||'pendiente',
