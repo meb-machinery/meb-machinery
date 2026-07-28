@@ -870,7 +870,7 @@ select option { background:var(--dark); }
         <button class="btn-primary" style="font-size:11px;padding:6px 14px" onclick="openModal('nuevaCompra')">+ REGISTRAR COMPRA</button>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>FECHA</th><th>PROVEEDOR</th><th>DETALLE</th><th>CATEGORÍA</th><th>MONTO</th><th>USD</th><th>NOTAS</th></tr></thead>
+        <thead><tr><th>FECHA</th><th>PROVEEDOR</th><th>DETALLE</th><th>CATEGORÍA</th><th>MONTO</th><th>USD</th><th>NOTAS</th><th>ACCIONES</th></tr></thead>
         <tbody id="tabla-compras"></tbody>
       </table></div>
     </div>
@@ -1029,7 +1029,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby7axcDGyCBRkJ-tOaQjt7eyV09d-8YzlJdxg7UbyO_ZiVtTVk_JRZV9ZW8hw8aIUPWJg/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxE6JZootp2AVjgSDPJIPn0g_XIhIo--KKMSy4otIU31pt2UgHdwSoT1E7gKQkD2KsJPA/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1492,10 +1492,12 @@ async function syncAll() {
       DB.compras = pv.filter(r=>r.TIPO==='compra').map(r=>({
         id:String(r.ID||uid()).trim(), proveedorId:String(r.PROVEEDOR_ID||'').trim(),
         proveedorNombre:r.PROVEEDOR_NOMBRE||'', detalle:r.DETALLE||'',
-        categoria:(r.CATEGORIA||'otros').toLowerCase(), monto:parseMonto(r.MONTO),
+        categoria:(r.CATEGORIA||'otros').toLowerCase(), cantidad:parseFloat(r.CANTIDAD)||0,
+        monto:parseMonto(r.MONTO),
         moneda:(r.MONEDA||'ARS').toUpperCase(),
         montoUsd:parseFloat(r.MONTO_USD)||0, tcAlMomento:parseFloat(r.TC_AL_MOMENTO)||0,
-        fecha:r.FECHA||'', notas:r.NOTAS||''
+        fecha:r.FECHA||'', notas:r.NOTAS||'',
+        entregasLog: deserializarEntregas(r.ENTREGAS_LOG||'')
       }));
     } else { if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; }
     // Siempre refleja lo que hay en el Sheet (incluso si está vacío) — evita que
@@ -4284,6 +4286,8 @@ function renderProveedores() {
   const comprasOrdenadas = [...DB.compras].sort((a,b)=>b.fecha.localeCompare(a.fecha));
   tcEl.innerHTML = comprasOrdenadas.length ? comprasOrdenadas.map(c=>{
     const catColor = {repuestos:'badge-blue',indumentaria:'badge-orange',herramientas:'badge-yellow',herreria:'badge-green',otros:'badge-gray'}[c.categoria]||'badge-gray';
+    const entregado = (c.entregasLog||[]).reduce((s,e)=>s+Number(e.cantidad||0),0);
+    const entregasTxt = c.cantidad ? `${entregado}/${c.cantidad}` : (entregado>0?`${entregado} entregados`:'—');
     return `<tr>
       <td class="td-muted">${fmtDate(c.fecha)}</td>
       <td class="td-name">${c.proveedorNombre||'—'}</td>
@@ -4292,8 +4296,13 @@ function renderProveedores() {
       <td><span class="monto">${fmtMonto(c.monto)}</span></td>
       <td>${c.montoUsd>0?`<span style="color:var(--blue-light)">USD ${c.montoUsd.toLocaleString('es-AR',{maximumFractionDigits:0})}</span><div style="font-size:9px;color:var(--muted2)">TC $${c.tcAlMomento||'—'}</div>`:'<span style="color:var(--muted)">—</span>'}</td>
       <td class="td-muted">${c.notas||'—'}</td>
+      <td><div class="actions">
+        <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="verEntregasCompra('${c.id}')" title="Ver / registrar entregas">📦 ${entregasTxt}</button>
+        <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="editCompra('${c.id}')" title="Editar">✏️</button>
+        <button class="btn-danger" style="font-size:10px;padding:3px 7px" onclick="eliminar('compras','${c.id}')" title="Eliminar">✕</button>
+      </div></td>
     </tr>`;
-  }).join('') : `<tr><td colspan="7"><div class="empty-state"><div class="icon">📦</div><p>Sin compras registradas</p></div></td></tr>`;
+  }).join('') : `<tr><td colspan="8"><div class="empty-state"><div class="icon">📦</div><p>Sin compras registradas</p></div></td></tr>`;
 
   // Resumen de exposición cambiaria en compras: cada compra dolarizada
   // conserva su propio USD histórico (calculado con el TC del día que se
@@ -4394,46 +4403,49 @@ function guardarProveedor() {
   }});
 }
 
-function showModalCompra() {
-  if(!DB.proveedores || !DB.proveedores.length) {
+function showModalCompra(data={}) {
+  if((!DB.proveedores || !DB.proveedores.length) && !data.id) {
     showToast('Primero agregá un proveedor','error'); return;
   }
-  const opts = DB.proveedores.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+  const opts = DB.proveedores.map(p=>`<option value="${p.id}" ${p.id===data.proveedorId?'selected':''}>${p.nombre}</option>`).join('');
   const today = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}).split('/').reverse().join('-');
+  const catActual = data.categoria||'repuestos';
   const m = document.createElement('div');
   m.className = 'modal-overlay open';
   m.id = 'modal-compra';
   m.innerHTML = `<div class="modal">
-    <div class="modal-header"><span class="modal-title">REGISTRAR COMPRA</span><button class="modal-close" onclick="document.getElementById('modal-compra').remove()">✕</button></div>
+    <div class="modal-header"><span class="modal-title">${data.id?'EDITAR COMPRA':'REGISTRAR COMPRA'}</span><button class="modal-close" onclick="document.getElementById('modal-compra').remove()">✕</button></div>
     <div class="modal-body">
+      <input type="hidden" id="mc-id" value="${data.id||''}"/>
       <div class="form-group"><label>PROVEEDOR *</label><select id="mc-prov">${opts}</select></div>
-      <div class="form-group"><label>DETALLE *</label><input id="mc-det" placeholder="Ej: 10 camisetas Servicio Técnico talle L"></div>
+      <div class="form-group"><label>DETALLE *</label><input id="mc-det" value="${data.detalle||''}" placeholder="Ej: 10 camisetas Servicio Técnico talle L"></div>
       <div class="form-group"><label>CATEGORÍA</label>
         <select id="mc-cat">
-          <option value="repuestos">Repuestos</option>
-          <option value="indumentaria">Indumentaria</option>
-          <option value="herramientas">Herramientas</option>
-          <option value="herreria">Herrería</option>
-          <option value="otros">Otros</option>
+          <option value="repuestos" ${catActual==='repuestos'?'selected':''}>Repuestos</option>
+          <option value="indumentaria" ${catActual==='indumentaria'?'selected':''}>Indumentaria</option>
+          <option value="herramientas" ${catActual==='herramientas'?'selected':''}>Herramientas</option>
+          <option value="herreria" ${catActual==='herreria'?'selected':''}>Herrería</option>
+          <option value="otros" ${catActual==='otros'?'selected':''}>Otros</option>
         </select>
       </div>
+      <div class="form-group"><label>CANTIDAD DE ARTÍCULOS (opcional)</label><input id="mc-cantidad" type="number" value="${data.cantidad||''}" placeholder="Ej: 10"></div>
       <div class="form-group"><label>MONEDA</label>
         <select id="mc-moneda" onchange="toggleMonedaCompra()">
-          <option value="ARS">$ Pesos argentinos</option>
-          <option value="USD">USD Dólares</option>
+          <option value="ARS" ${(!data.moneda||data.moneda==='ARS')?'selected':''}>$ Pesos argentinos</option>
+          <option value="USD" ${data.moneda==='USD'?'selected':''}>USD Dólares</option>
         </select>
       </div>
-      <div class="form-group"><label id="mc-monto-label">MONTO ($)</label><input id="mc-monto" type="number" value="0" oninput="calcularConversionCompra()"></div>
-      <div class="form-group" id="mc-tc-group" style="display:none">
+      <div class="form-group"><label id="mc-monto-label">MONTO ($)</label><input id="mc-monto" type="number" value="${data.moneda==='USD'?(data.montoUsd||0):(data.monto||0)}" oninput="calcularConversionCompra()"></div>
+      <div class="form-group" id="mc-tc-group" style="display:${data.moneda==='USD'?'block':'none'}">
         <label>Dólar (USD/ARS) — tipo de cambio del día de la compra</label>
         <div style="display:flex;gap:6px">
-          <input id="mc-tc" type="number" value="" oninput="calcularConversionCompra()" style="flex:1"/>
+          <input id="mc-tc" type="number" value="${data.tcAlMomento||''}" oninput="calcularConversionCompra()" style="flex:1"/>
           <button type="button" class="btn-secondary" onclick="actualizarTCCompra()" style="white-space:nowrap" title="Fuente: Ámbito Financiero — dólar Banco Nación (venta)">↻ En vivo</button>
         </div>
         <div id="mc-conversion" style="font-size:11px;color:var(--blue-light);margin-top:4px">—</div>
       </div>
-      <div class="form-group"><label>FECHA</label><input id="mc-fecha" type="date" value="${today}"></div>
-      <div class="form-group"><label>NOTAS</label><textarea id="mc-notas" rows="2"></textarea></div>
+      <div class="form-group"><label>FECHA</label><input id="mc-fecha" type="date" value="${data.fecha||today}"></div>
+      <div class="form-group"><label>NOTAS</label><textarea id="mc-notas" rows="2">${data.notas||''}</textarea></div>
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="document.getElementById('modal-compra').remove()">Cancelar</button>
@@ -4441,6 +4453,12 @@ function showModalCompra() {
     </div>
   </div>`;
   document.body.appendChild(m);
+  calcularConversionCompra();
+}
+
+function editCompra(id) {
+  const c = DB.compras.find(x=>x.id===id);
+  if(c) showModalCompra(c);
 }
 
 function toggleMonedaCompra() {
@@ -4477,6 +4495,8 @@ function calcularConversionCompra() {
 }
 
 function guardarCompra() {
+  const idExistente = document.getElementById('mc-id').value;
+  const esNueva = !idExistente;
   const provId = document.getElementById('mc-prov').value;
   const detalle = document.getElementById('mc-det').value.trim();
   if(!detalle) { showToast('Ingresá el detalle de la compra','error'); return; }
@@ -4485,33 +4505,126 @@ function guardarCompra() {
   const moneda = document.getElementById('mc-moneda').value;
   const montoIngresado = Number(document.getElementById('mc-monto').value||0);
   const tc = parseFloat(document.getElementById('mc-tc').value)||0;
+  const cantidad = parseFloat(document.getElementById('mc-cantidad').value)||0;
   // El campo MONTO principal siempre queda en ARS (para no romper Estadísticas,
   // que ya suma DB.compras en pesos). Si la compra fue en USD, se convierte a
   // ARS con el TC del momento — que además queda guardado como histórico y
   // nunca se recalcula con la cotización de otro día.
   const montoArs = moneda==='USD' ? montoIngresado * tc : montoIngresado;
   const montoUsd = moneda==='USD' ? montoIngresado : (tc>0 ? montoIngresado/tc : 0);
+  const idx = esNueva ? -1 : DB.compras.findIndex(x=>x.id===idExistente);
+  const compraPrevia = idx>=0 ? DB.compras[idx] : {};
   const compra = {
-    id: uid(), proveedorId: provId,
+    id: idExistente || uid(), proveedorId: provId,
     proveedorNombre: prov ? prov.nombre : '',
     detalle, categoria: document.getElementById('mc-cat').value,
-    monto: montoArs, moneda, montoUsd, tcAlMomento: tc,
+    cantidad, monto: montoArs, moneda, montoUsd, tcAlMomento: tc,
     fecha: document.getElementById('mc-fecha').value,
     notas: document.getElementById('mc-notas').value.trim(),
-    _local: true
+    entregasLog: compraPrevia.entregasLog || [],
+    _local: esNueva ? true : compraPrevia._local
   };
-  DB.compras.push(compra);
+  if(idx>=0) DB.compras[idx] = compra; else DB.compras.push(compra);
   saveLocal();
   document.getElementById('modal-compra').remove();
   renderProveedores();
-  showToast('Compra registrada ✓','success');
+  showToast(esNueva ? 'Compra registrada ✓' : 'Compra actualizada ✓','success');
   writeToSheet({ action:'addCompra', row: {
     id:compra.id, proveedorId:compra.proveedorId,
     proveedor:compra.proveedorNombre, descripcion:compra.detalle,
-    categoria:compra.categoria, monto:compra.monto,
+    categoria:compra.categoria, cantidad:compra.cantidad, monto:compra.monto,
     moneda:compra.moneda, montoUsd:compra.montoUsd, tcAlMomento:compra.tcAlMomento,
-    fecha:compra.fecha, notas:compra.notas
+    fecha:compra.fecha, notas:compra.notas,
+    entregasLog: serializarEntregas(compra.entregasLog)
   }});
+}
+
+// ── ENTREGAS DE INDUMENTARIA/ARTÍCULOS ──────────────────────────────────
+// Registro simple de a quién y cuándo se le entregó parte de lo comprado —
+// para compras de indumentaria u otros artículos que se reparten entre
+// operarios de a poco, no todos juntos el día de la compra.
+function serializarEntregas(lista) {
+  return (lista||[]).map(e => [e.operario,e.cantidad,e.fecha].join('|')).join(' §§ ');
+}
+function deserializarEntregas(texto) {
+  if(!texto) return [];
+  return String(texto).split(' §§ ').filter(Boolean).map(linea => {
+    const [operario,cantidad,fecha] = linea.split('|');
+    return { operario:operario||'', cantidad:parseFloat(cantidad)||0, fecha:fecha||'' };
+  });
+}
+
+function verEntregasCompra(id) {
+  const c = DB.compras.find(x=>x.id===id);
+  if(!c) return;
+  const entregado = (c.entregasLog||[]).reduce((s,e)=>s+Number(e.cantidad||0),0);
+  const pendiente = (c.cantidad||0) - entregado;
+  const m = document.createElement('div');
+  m.className = 'modal-overlay open';
+  m.id = 'modal-entregas';
+  const filasHTML = (c.entregasLog||[]).length ? (c.entregasLog||[]).map((e,i)=>`
+    <tr>
+      <td>${e.operario||'—'}</td>
+      <td style="text-align:center">${e.cantidad}</td>
+      <td class="td-muted">${fmtDate(e.fecha)}</td>
+      <td style="text-align:right"><button class="btn-danger" style="font-size:10px;padding:2px 6px" onclick="borrarEntregaCompra('${id}',${i})">✕</button></td>
+    </tr>`).join('') : `<tr><td colspan="4" class="td-muted" style="text-align:center;padding:14px">Sin entregas registradas todavía</td></tr>`;
+  m.innerHTML = `<div class="modal">
+    <div class="modal-header"><span class="modal-title">ENTREGAS — ${c.detalle}</span><button class="modal-close" onclick="document.getElementById('modal-entregas').remove()">✕</button></div>
+    <div class="modal-body">
+      <div class="card" style="padding:10px 12px;margin-bottom:12px;display:flex;justify-content:space-around;text-align:center">
+        <div><div style="font-family:'Bebas Neue';font-size:20px">${c.cantidad||'—'}</div><div style="font-size:10px;color:var(--muted)">COMPRADOS</div></div>
+        <div><div style="font-family:'Bebas Neue';font-size:20px;color:var(--green)">${entregado}</div><div style="font-size:10px;color:var(--muted)">ENTREGADOS</div></div>
+        <div><div style="font-family:'Bebas Neue';font-size:20px;color:${pendiente>0?'var(--yellow)':'var(--muted)'}">${c.cantidad?pendiente:'—'}</div><div style="font-size:10px;color:var(--muted)">PENDIENTES</div></div>
+      </div>
+      <table style="width:100%;font-size:12px"><thead><tr><th>Operario</th><th>Cant.</th><th>Fecha</th><th></th></tr></thead><tbody>${filasHTML}</tbody></table>
+      <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">
+        <div class="form-group"><label>Operario</label><input id="ent-operario" placeholder="Ej: Juan Pérez"></div>
+        <div class="form-group"><label>Cantidad entregada</label><input id="ent-cantidad" type="number" value="1"></div>
+        <div class="form-group"><label>Fecha de entrega</label><input id="ent-fecha" type="date" value="${new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}).split('/').reverse().join('-')}"></div>
+        <button class="btn-primary" style="width:100%" onclick="agregarEntregaCompra('${id}')">+ Registrar entrega</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+function agregarEntregaCompra(id) {
+  const c = DB.compras.find(x=>x.id===id);
+  if(!c) return;
+  const operario = document.getElementById('ent-operario').value.trim();
+  const cantidad = parseFloat(document.getElementById('ent-cantidad').value)||0;
+  const fecha = document.getElementById('ent-fecha').value;
+  if(!operario || cantidad<=0) { showToast('Completá operario y cantidad','error'); return; }
+  if(!c.entregasLog) c.entregasLog = [];
+  c.entregasLog.push({ operario, cantidad, fecha });
+  saveLocal();
+  writeToSheet({ action:'addCompra', row: {
+    id:c.id, proveedorId:c.proveedorId, proveedor:c.proveedorNombre, descripcion:c.detalle,
+    categoria:c.categoria, cantidad:c.cantidad, monto:c.monto, moneda:c.moneda,
+    montoUsd:c.montoUsd, tcAlMomento:c.tcAlMomento, fecha:c.fecha, notas:c.notas,
+    entregasLog: serializarEntregas(c.entregasLog)
+  }});
+  document.getElementById('modal-entregas').remove();
+  verEntregasCompra(id);
+  renderProveedores();
+  showToast('Entrega registrada ✓','success');
+}
+
+function borrarEntregaCompra(id, idx) {
+  const c = DB.compras.find(x=>x.id===id);
+  if(!c || !c.entregasLog) return;
+  c.entregasLog.splice(idx,1);
+  saveLocal();
+  writeToSheet({ action:'addCompra', row: {
+    id:c.id, proveedorId:c.proveedorId, proveedor:c.proveedorNombre, descripcion:c.detalle,
+    categoria:c.categoria, cantidad:c.cantidad, monto:c.monto, moneda:c.moneda,
+    montoUsd:c.montoUsd, tcAlMomento:c.tcAlMomento, fecha:c.fecha, notas:c.notas,
+    entregasLog: serializarEntregas(c.entregasLog)
+  }});
+  document.getElementById('modal-entregas').remove();
+  verEntregasCompra(id);
+  renderProveedores();
 }
 
 
