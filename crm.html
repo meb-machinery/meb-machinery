@@ -2632,6 +2632,19 @@ function toggleMonedaContrato() {
   calcularCotizacionContrato();
 }
 
+// Sugiere el total de horas según Plan + Tipo de máquina (tabla real de
+// Emmanuel), pero SOLO como punto de partida — el campo queda editable a
+// mano, porque la última visita de cada plan puede llevar más horas que
+// las demás, y Emmanuel prefiere cargar el total directo sin desglosar
+// visita por visita.
+function sugerirHorasContrato() {
+  const plan = gv('f-con-plan')||'1000';
+  const tipoMaquina = gv('f-con-tipomaquina')||'liviana';
+  const horasInput = document.getElementById('f-con-horastotales');
+  if(horasInput) horasInput.value = (HORAS_CONTRATO[plan]||HORAS_CONTRATO['1000'])[tipoMaquina] || 0;
+  calcularCotizacionContrato();
+}
+
 function calcularCotizacionContrato() {
   const tc = parseFloat(gv('f-con-tc'))||0;
   const plan = gv('f-con-plan')||'1000';
@@ -2640,7 +2653,9 @@ function calcularCotizacionContrato() {
   const valorHoraInput = parseFloat(gv('f-con-valorhora'))||0;
   const repuestosUsd = parseFloat(gv('f-con-repuestosusd'))||0;
 
-  const horasTotales = (HORAS_CONTRATO[plan]||HORAS_CONTRATO['1000'])[tipoMaquina] || 0;
+  // Horas totales: viene del campo editable, no de la tabla directamente —
+  // la tabla solo sugiere un valor de partida (ver sugerirHorasContrato).
+  const horasTotales = parseFloat(gv('f-con-horastotales'))||0;
   const descuentoPct = DESCUENTO_CONTRATO[plan] || 0;
 
   // Convierte el valor hora a ambas monedas, sea cual sea la que se cargó.
@@ -5677,16 +5692,21 @@ function openModal(type, data={}) {
       <div class="form-group full"><label>Cliente *</label><select id="f-con-cli"><option value="">Seleccionar...</option>${clienteOptions(data.clienteId)}</select></div>
       <div class="form-group full"><label>Máquina</label><select id="f-con-maq"><option value="">Sin máquina</option>${maquinaOptions(data.maquinaId)}</select></div>
       <div class="form-group"><label>Plan (duración del ciclo)</label>
-        <select id="f-con-plan" onchange="calcularCotizacionContrato()">
+        <select id="f-con-plan" onchange="sugerirHorasContrato()">
           <option value="1000" ${(!data.plan||data.plan==='1000')?'selected':''}>1000 hs</option>
           <option value="2000" ${data.plan==='2000'?'selected':''}>2000 hs</option>
         </select>
       </div>
       <div class="form-group"><label>Tipo de máquina</label>
-        <select id="f-con-tipomaquina" onchange="calcularCotizacionContrato()">
+        <select id="f-con-tipomaquina" onchange="sugerirHorasContrato()">
           <option value="liviana" ${(!data.tipoMaquina||data.tipoMaquina==='liviana')?'selected':''}>Liviana</option>
           <option value="pesada" ${data.tipoMaquina==='pesada'?'selected':''}>Pesada</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label>Horas totales del plan</label>
+        <input id="f-con-horastotales" type="number" step="0.5" value="${data._horasTotales||11.5}" oninput="calcularCotizacionContrato()"/>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">Se sugiere solo según Plan + Tipo, pero la podés cambiar libremente — por ejemplo si la última visita lleva más horas que las demás.</div>
       </div>
       <div class="form-group"><label>Estado</label>
         <select id="f-con-estado"><option value="activo" ${(!data.estado||data.estado==='activo')?'selected':''}>Activo</option><option value="pausado" ${data.estado==='pausado'?'selected':''}>Pausado</option><option value="vencido" ${data.estado==='vencido'?'selected':''}>Vencido</option></select>
@@ -5744,6 +5764,7 @@ function openModal(type, data={}) {
       const obj = {
         id:data.id||uid(), clienteId:gv('f-con-cli'), maquinaId:gv('f-con-maq'),
         plan:gv('f-con-plan'), tipoMaquina:gv('f-con-tipomaquina'),
+        _horasTotales:parseFloat(gv('f-con-horastotales'))||0,
         fechaInicio:gv('f-con-inicio'), fechaVencimiento:gv('f-con-vencimiento'),
         proximoServiceHs:gv('f-con-proxhs'), ultimoServiceHs:gv('f-con-ultimahs'),
         precioArs:parseFloat(gv('f-con-precioars'))||0, precioUsd:parseFloat(gv('f-con-preciousd'))||0,
