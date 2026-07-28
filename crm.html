@@ -5692,21 +5692,24 @@ function openModal(type, data={}) {
       <div class="form-group full"><label>Cliente *</label><select id="f-con-cli"><option value="">Seleccionar...</option>${clienteOptions(data.clienteId)}</select></div>
       <div class="form-group full"><label>Máquina</label><select id="f-con-maq"><option value="">Sin máquina</option>${maquinaOptions(data.maquinaId)}</select></div>
       <div class="form-group"><label>Plan (duración del ciclo)</label>
-        <select id="f-con-plan" onchange="sugerirHorasContrato()">
+        <select id="f-con-plan" onchange="calcularCotizacionContrato()">
           <option value="1000" ${(!data.plan||data.plan==='1000')?'selected':''}>1000 hs</option>
           <option value="2000" ${data.plan==='2000'?'selected':''}>2000 hs</option>
         </select>
       </div>
       <div class="form-group"><label>Tipo de máquina</label>
-        <select id="f-con-tipomaquina" onchange="sugerirHorasContrato()">
+        <select id="f-con-tipomaquina" onchange="calcularCotizacionContrato()">
           <option value="liviana" ${(!data.tipoMaquina||data.tipoMaquina==='liviana')?'selected':''}>Liviana</option>
           <option value="pesada" ${data.tipoMaquina==='pesada'?'selected':''}>Pesada</option>
         </select>
       </div>
       <div class="form-group">
-        <label>Horas totales del plan</label>
-        <input id="f-con-horastotales" type="number" step="0.5" value="${data._horasTotales||11.5}" oninput="calcularCotizacionContrato()"/>
-        <div style="font-size:10px;color:var(--muted);margin-top:4px">Se sugiere solo según Plan + Tipo, pero la podés cambiar libremente — por ejemplo si la última visita lleva más horas que las demás.</div>
+        <label>Horas totales del plan (opcional)</label>
+        <div style="display:flex;gap:6px">
+          <input id="f-con-horastotales" type="number" step="0.5" value="${data._horasTotales||''}" placeholder="0" oninput="calcularCotizacionContrato()" style="flex:1"/>
+          <button type="button" class="btn-secondary" onclick="sugerirHorasContrato()" style="white-space:nowrap;font-size:11px" title="Completa el campo con el valor de referencia de la tabla — vos podés cambiarlo después">Sugerir</button>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">Si lo dejás en blanco/0, no se cobra mano de obra por horas — solo repuestos, si cargaste. Tocá "Sugerir" si querés partir del valor de referencia (11,5 / 14 / 25 / 31 según Plan y Tipo).</div>
       </div>
       <div class="form-group"><label>Estado</label>
         <select id="f-con-estado"><option value="activo" ${(!data.estado||data.estado==='activo')?'selected':''}>Activo</option><option value="pausado" ${data.estado==='pausado'?'selected':''}>Pausado</option><option value="vencido" ${data.estado==='vencido'?'selected':''}>Vencido</option></select>
