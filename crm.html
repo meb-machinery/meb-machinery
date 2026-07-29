@@ -2707,7 +2707,10 @@ function calcularCotizacionContrato() {
   // (4 en el plan de 1000hs, 8 en el de 2000hs — visitas cada 250hs). No
   // lleva el descuento del contrato, es un costo real de traslado aparte.
   const visitasPlan = plan==='2000' ? 8 : 4;
-  const movilidadUsd = km * valorKmUsd * visitasPlan;
+  // El descuento del contrato ahora también se aplica a la movilidad, no
+  // solo a la mano de obra — a pedido, ya no es "un costo aparte".
+  const movilidadSueltaUsd = km * valorKmUsd * visitasPlan;
+  const movilidadUsd = movilidadSueltaUsd * (1 - descuentoPct);
   const movilidadArs = tc>0 ? movilidadUsd*tc : 0;
 
   const totalUsd = manoObraContratoUsd + movilidadUsd + repuestosUsd;
@@ -2740,7 +2743,7 @@ function calcularCotizacionContrato() {
     <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px"><span>Mano de obra sin descuento</span><span>USD ${manoObraSueltaUsd.toLocaleString('es-AR',{maximumFractionDigits:2})}</span></div>
     <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--green);margin-bottom:4px"><span>Descuento por contrato (${Math.round(descuentoPct*100)}%)</span><span>-USD ${(manoObraSueltaUsd-manoObraContratoUsd).toLocaleString('es-AR',{maximumFractionDigits:2})}</span></div>
     <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--yellow);margin-bottom:8px;border-top:1px solid var(--border2);padding-top:6px"><span>➤ Mano de obra (con descuento)</span><span>USD ${manoObraContratoUsd.toLocaleString('es-AR',{maximumFractionDigits:2})} · ${fmtMonto(manoObraContratoArs)}</span></div>
-    <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--yellow);margin-bottom:8px"><span>➤ Movilidad (${km}km × ${moneda==='USD'?'USD '+valorKmInput:fmtMonto(valorKmInput)} × ${visitasPlan} visitas)</span><span>USD ${movilidadUsd.toLocaleString('es-AR',{maximumFractionDigits:2})} · ${fmtMonto(movilidadArs)}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--yellow);margin-bottom:8px"><span>➤ Movilidad con descuento (${km}km × ${moneda==='USD'?'USD '+valorKmInput:fmtMonto(valorKmInput)} × ${visitasPlan} visitas)</span><span>USD ${movilidadUsd.toLocaleString('es-AR',{maximumFractionDigits:2})} · ${fmtMonto(movilidadArs)}</span></div>
     <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--blue-light);margin-bottom:8px"><span>+ Repuestos${repuestosUsd?'':' (sin cargar todavía)'}</span><span>USD ${repuestosUsd.toLocaleString('es-AR',{maximumFractionDigits:2})}</span></div>
     <div style="display:flex;justify-content:space-between;font-size:16px;border-top:1px solid var(--border);padding-top:8px"><span style="color:var(--yellow)">TOTAL DEL CONTRATO (contado)</span><span class="monto" style="font-family:'Bebas Neue';font-size:18px">USD ${totalUsd.toLocaleString('es-AR',{maximumFractionDigits:0})}</span></div>
     <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:2px;margin-bottom:12px"><span>Equivalente en pesos (TC $${tc||'—'})</span><span>${tc>0?fmtMonto(totalArs):'cargá el dólar para convertir'}</span></div>
@@ -5101,6 +5104,13 @@ function generarContratoPDF(contratoId) {
   const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const montoFinal = c.recargoPct ? Math.round(c.precioArs*(1+c.recargoPct/100)) : (c.precioArs||0);
   const usdFinal = c.tcAlMomento>0 ? Math.round(montoFinal/c.tcAlMomento) : 0;
+  // El % de descuento no queda guardado en el contrato en sí (solo el
+  // precio ya con el descuento adentro) — se toma del Tarifario vigente
+  // para ese plan, mismo criterio que ya usa la calculadora en el modal.
+  const tfPdfCon = tarifarioVigente();
+  const descuentoPdfCon = c.plan==='2000'
+    ? (tfPdfCon && !isNaN(tfPdfCon.descuento2000) ? tfPdfCon.descuento2000 : 20)
+    : (tfPdfCon && !isNaN(tfPdfCon.descuento1000) ? tfPdfCon.descuento1000 : 15);
 
   const htmlContent = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
     <title>Contrato de mantenimiento — ${clienteNombre}</title>
@@ -5138,12 +5148,13 @@ function generarContratoPDF(contratoId) {
     </div>
     <div class="total">
       <div>
-        <div style="font-size:11px;color:#ccc;letter-spacing:1px">MONTO ${c.plazoPago&&c.plazoPago!=='contado'?('· A '+c.plazoPago+' DÍAS (+'+c.recargoPct+'%)'):'· CONTADO'}</div>
+        <div style="font-size:11px;color:#ccc;letter-spacing:1px">MONTO ${c.plazoPago&&c.plazoPago!=='contado'?('· A '+c.plazoPago+' DÍAS (+'+c.recargoPct+'%)'):'· CONTADO'} · ${descuentoPdfCon}% DTO. CONTRATO</div>
         <div style="font-size:11px;color:#7bb3e0">≈ USD ${usdFinal.toLocaleString('es-AR')}</div>
       </div>
       <div class="val">$${montoFinal.toLocaleString('es-AR')}</div>
     </div>
     <div class="nota">
+      Precio con ${descuentoPdfCon}% de descuento por contrato ya aplicado sobre el equivalente de mano de obra y movilidad sueltas.
       El valor en dólares está sujeto al tipo de cambio del día de la fecha (TC $${c.tcAlMomento||'—'}).
       Los pagos a 30/60/90 días se ajustan al tipo de cambio vigente el día efectivo del pago, manteniendo el recargo pactado.
     </div>
