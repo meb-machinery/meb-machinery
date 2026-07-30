@@ -952,19 +952,6 @@ select option { background:var(--dark); }
         <button class="btn-primary" onclick="guardarTarifario()">💾 Guardar tarifario</button>
       </div>
     </div>
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-header"><span class="card-title">Descuento de Contrato de Mantenimiento</span></div>
-      <p style="font-size:12px;color:var(--muted);margin:-6px 0 14px">
-        Se aplica sobre el total de mano de obra suelta de cada plan, antes de convertir a pesos. Editable acá — ya no es un valor fijo en el código.
-      </p>
-      <div class="form-grid">
-        <div class="form-group"><label>Descuento plan 1000hs (%)</label><input type="number" id="tf-descuento-1000" step="0.5" value="15"/></div>
-        <div class="form-group"><label>Descuento plan 2000hs (%)</label><input type="number" id="tf-descuento-2000" step="0.5" value="20"/></div>
-      </div>
-      <div style="display:flex;justify-content:flex-end;margin-top:10px">
-        <button class="btn-primary" onclick="guardarTarifario()">💾 Guardar tarifario</button>
-      </div>
-    </div>
     <div class="card">
       <div class="card-header"><span class="card-title">Historial de cambios</span></div>
       <div class="table-wrap"><table>
@@ -1042,7 +1029,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbymLUKPQni4hkUNg_h4MaPKMH3j_URTzdGxtfJvtoImAW610ezXQGzT8BZxZshxpueVUg/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzSIz89ACacAP_NGYUYO_VblxWJjoe4EZZBnpEECyuvqowJJv1f6sCEqQcOfbvyjUHj/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1247,6 +1234,22 @@ function doLogout() {
 // ============================================================
 const SHEET_CSV_BASE = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=`;
 
+// ── IDs FALTANTES EN EL SHEET (auto-corrección) ─────────────────────────
+// Si una fila del Sheet tiene la columna ID vacía, antes se le inventaba un
+// ID al azar CADA VEZ que sincronizaba — distinto en cada sync. Eso rompía
+// en silencio cualquier Contrato/Presupuesto/Trabajo/Máquina que apuntara
+// a esa fila, porque el ID con el que se guardó la referencia dejaba de
+// existir en la siguiente sincronización. Ahora se genera UNA sola vez y
+// se escribe de vuelta en el Sheet, para que quede estable para siempre.
+let _idsParaCorregir = [];
+function resolverIdEstable(r, sheetName) {
+  const idOriginal = String(r.ID||'').trim();
+  if(idOriginal) return idOriginal;
+  const nuevoId = uid();
+  _idsParaCorregir.push({ sheet: sheetName, rowIndex: r._rowIndex, id: nuevoId });
+  return nuevoId;
+}
+
 async function fetchSheet(sheetName) {
   try {
     const res = await fetch(SHEET_CSV_BASE + encodeURIComponent(sheetName));
@@ -1264,12 +1267,15 @@ function parseCSV(text) {
   if(lines.length < 2) return [];
   // trim cada header individualmente para manejar "ID " con espacio
   const headers = parseCSVLine(lines[0]).map(h=>h.trim().replace(/^"|"$/g,'').trim().toUpperCase().replace(/ /g,'_'));
-  return lines.slice(1).map(line=>{
+  return lines.slice(1).map((line,i)=>{
     const vals = parseCSVLine(line);
     const obj = {};
-    headers.forEach((h,i)=>{ obj[h] = (vals[i]||'').replace(/^"|"$/g,'').trim(); });
+    headers.forEach((h,idx)=>{ obj[h] = (vals[idx]||'').replace(/^"|"$/g,'').trim(); });
+    // Fila real en el Sheet (1=encabezado, 2=primera fila de datos) — se usa
+    // para poder escribir un ID de vuelta si la celda vino vacía.
+    obj._rowIndex = i+2;
     return obj;
-  }).filter(r=>Object.values(r).some(v=>v&&v.trim()));
+  }).filter(r=>Object.keys(r).some(k=>k!=='_rowIndex' && r[k] && String(r[k]).trim()));
 }
 
 function parseCSVLine(line) {
@@ -1291,6 +1297,7 @@ async function syncAll() {
   if(btn){btn.classList.add('syncing'); btn.textContent='↺ SINCRONIZANDO...';}
   if(status){status.textContent='● Sincronizando...'; status.style.color='var(--yellow)';}
   showLoading('SINCRONIZANDO CON GOOGLE SHEETS...');
+  _idsParaCorregir = [];
 
   // Preserve local data that may not be in Sheets yet
   const _localClientes    = DB.clientes.filter(x=>x._local);
@@ -1341,17 +1348,17 @@ async function syncAll() {
     }
 
     if(cl.length) DB.clientes = cl.map(r=>({
-      id:String(r.ID||uid()).trim(), nombre:r.NOMBRE||'', empresa:r.EMPRESA||'',
+      id:resolverIdEstable(r,'CLIENTES'), nombre:r.NOMBRE||'', empresa:r.EMPRESA||'',
       telefono:r.TELEFONO||'', email:r.EMAIL||'', zona:r.ZONA||'',
       estado:(r.ESTADO||'activo').toLowerCase().trim(), ultimoContacto:r.ULTIMO_CONTACTO||r.ULTIMO_CONTACTO_||'',
       notas:r.NOTAS||''
     }));
     if(mq.length) DB.maquinas = mq.map(r=>({
-      id:String(r.ID||uid()).trim(), clienteId:String(r.CLIENTE_ID||'').trim(), marca:r.MARCA||'',
+      id:resolverIdEstable(r,'MAQUINAS'), clienteId:String(r.CLIENTE_ID||'').trim(), marca:r.MARCA||'',
       modelo:r.MODELO||'', serie:r.SERIE||'', tipo:r.TIPO||'', notas:r.NOTAS||''
     })); else if(!DB.maquinas.length) DB.maquinas=[];
     if(tr.length) DB.trabajos = tr.map(r=>({
-      id:String(r.ID||uid()).trim(), clienteId:String(r.CLIENTE_ID||'').trim(), maquinaId:String(r.MAQUINA_ID||'').trim(),
+      id:resolverIdEstable(r,'TRABAJOS'), clienteId:String(r.CLIENTE_ID||'').trim(), maquinaId:String(r.MAQUINA_ID||'').trim(),
       titulo:r.TITULO||r.DESCRIPCION||'', tipo:r.TIPO||'', estado:(r.ESTADO||'pendiente').toLowerCase().trim(),
       estadoMaquina:r.ESTADO_MAQUINA||'', fechaInicio:r.FECHA_INICIO||'',
       fechaFin:r.FECHA_FIN||'', montoCobrado:parseMonto(r.MONTO_COBRADO),
@@ -1490,7 +1497,7 @@ async function syncAll() {
         if(fc) acid = fc.id;
       }
       return {
-        id:String(r.ID||uid()).trim(), titulo:r.TITULO||'', clienteId:acid,
+        id:resolverIdEstable(r,'ALERTAS'), titulo:r.TITULO||'', clienteId:acid,
         fecha:r.FECHA||'', prioridad:(r.PRIORIDAD||'media').toLowerCase(),
         descripcion:r.DESCRIPCION||r.DESCRIPCIÓN||'',
         resuelta:r.RESUELTA==='TRUE'||r.RESUELTA==='true'||r.RESUELTA==='1'||r.RESUELTA==='SI'
@@ -1498,12 +1505,12 @@ async function syncAll() {
     }); else if(!DB.alertas.length) DB.alertas=[];
     if(pv.length) {
       DB.proveedores = pv.filter(r=>r.TIPO==='proveedor'||!r.TIPO||r.NOMBRE).map(r=>({
-        id:String(r.ID||uid()).trim(), nombre:r.NOMBRE||'', categoria:(r.CATEGORIA||'otros').toLowerCase(),
+        id:resolverIdEstable(r,'PROVEEDORES'), nombre:r.NOMBRE||'', categoria:(r.CATEGORIA||'otros').toLowerCase(),
         contacto:r.CONTACTO||'', telefono:r.TELEFONO||'', email:r.EMAIL||'',
         direccion:r.DIRECCION||'', notas:r.NOTAS||'', estado:(r.ESTADO||'activo').toLowerCase()
       }));
       DB.compras = pv.filter(r=>r.TIPO==='compra').map(r=>({
-        id:String(r.ID||uid()).trim(), proveedorId:String(r.PROVEEDOR_ID||'').trim(),
+        id:resolverIdEstable(r,'PROVEEDORES'), proveedorId:String(r.PROVEEDOR_ID||'').trim(),
         proveedorNombre:r.PROVEEDOR_NOMBRE||'', detalle:r.DETALLE||'',
         categoria:(r.CATEGORIA||'otros').toLowerCase(), cantidad:parseFloat(r.CANTIDAD)||0,
         monto:parseMonto(r.MONTO),
@@ -1516,7 +1523,7 @@ async function syncAll() {
     // Siempre refleja lo que hay en el Sheet (incluso si está vacío) — evita que
     // datos viejos de localStorage queden pegados para siempre.
     DB.contratos = (ct.length ? ct.filter(r=>r.CLIENTE_ID!==undefined) : []).map(r=>({
-      id:String(r.ID||uid()).trim(), clienteId:String(r.CLIENTE_ID||'').trim(), maquinaId:String(r.MAQUINA_ID||'').trim(),
+      id:resolverIdEstable(r,'CONTRATOS'), clienteId:String(r.CLIENTE_ID||'').trim(), maquinaId:String(r.MAQUINA_ID||'').trim(),
       plan:(r.PLAN||'1000').toLowerCase(), tipoMaquina:(r.TIPO_MAQUINA||'liviana').toLowerCase(),
       fechaInicio:r.FECHA_INICIO||'', fechaVencimiento:r.FECHA_VENCIMIENTO||'',
       proximoServiceHs:r.PROXIMO_SERVICE_HS||'', ultimoServiceHs:r.ULTIMO_SERVICE_HS||'',
@@ -1541,9 +1548,7 @@ async function syncAll() {
       km:parseFloat(r.KM_USD)||0, contrato1000:parseFloat(r.CONTRATO_1000_USD)||0,
       contrato2000:parseFloat(r.CONTRATO_2000_USD)||0, margenRepuestos:parseFloat(r.MARGEN_REPUESTOS_PCT)||0,
       recargo30:parseFloat(r.RECARGO_30_PCT)||0, recargo60:parseFloat(r.RECARGO_60_PCT)||0,
-      recargo90:parseFloat(r.RECARGO_90_PCT)||0,
-      descuento1000:parseFloat(r.DESCUENTO_1000_PCT), descuento2000:parseFloat(r.DESCUENTO_2000_PCT),
-      actualizadoPor:r.ACTUALIZADO_POR||''
+      recargo90:parseFloat(r.RECARGO_90_PCT)||0, actualizadoPor:r.ACTUALIZADO_POR||''
     }));
 
     // Restore preserved local data + alertasRepuesto
@@ -1604,6 +1609,22 @@ async function syncAll() {
         if(byName) a.clienteId = byName.id;
       }
     });
+
+    // Si encontramos filas sin ID durante este sync, escribimos el ID nuevo
+    // de vuelta en el Sheet YA MISMO — así la próxima sincronización lee un
+    // ID estable en vez de inventar otro distinto, que es lo que rompía en
+    // silencio las referencias de Contratos/Presupuestos/Trabajos/Máquinas.
+    if(_idsParaCorregir.length) {
+      const porHoja = {};
+      _idsParaCorregir.forEach(c => { (porHoja[c.sheet] = porHoja[c.sheet]||[]).push(c); });
+      try {
+        await writeToSheet({ action:'corregirIdsFaltantes', correcciones: _idsParaCorregir });
+        const detalle = Object.entries(porHoja).map(([sheet,arr])=>`${arr.length} en ${sheet}`).join(', ');
+        showToast(`🔧 Se encontraron y corrigieron filas sin ID (${detalle}) — quedaron fijas para siempre`, 'success');
+      } catch(e) {
+        console.warn('No se pudieron corregir IDs faltantes:', e);
+      }
+    }
 
     saveLocal();
     updateBadges();
@@ -2557,16 +2578,12 @@ function renderTarifario() {
     document.getElementById('tf-recargo-30').value = v.recargo30||'';
     document.getElementById('tf-recargo-60').value = v.recargo60||'';
     document.getElementById('tf-recargo-90').value = v.recargo90||'';
-    document.getElementById('tf-descuento-1000').value = !isNaN(v.descuento1000) ? v.descuento1000 : 15;
-    document.getElementById('tf-descuento-2000').value = !isNaN(v.descuento2000) ? v.descuento2000 : 20;
   } else {
     vigEl.textContent = 'Todavía no hay ningún tarifario cargado — completá los valores y guardá';
     // Valores sugeridos de partida para los recargos (referencia REM/BCRA jul-2026, editable)
     document.getElementById('tf-recargo-30').value = 3;
     document.getElementById('tf-recargo-60').value = 6;
     document.getElementById('tf-recargo-90').value = 9;
-    document.getElementById('tf-descuento-1000').value = 15;
-    document.getElementById('tf-descuento-2000').value = 20;
   }
 
   const hist = [...(DB.tarifario||[])].sort((a,b)=> new Date(b.fecha||0) - new Date(a.fecha||0));
@@ -2597,8 +2614,7 @@ function guardarTarifario() {
     diagnostico: gv('tf-diagnostico'), horaNormal: gv('tf-hora-normal'), horaUrgencia: gv('tf-hora-urgencia'),
     km: gv('tf-km'), contrato1000: gv('tf-contrato-1000'), contrato2000: gv('tf-contrato-2000'),
     margenRepuestos: gv('tf-margen-repuestos'), recargo30: gv('tf-recargo-30'),
-    recargo60: gv('tf-recargo-60'), recargo90: gv('tf-recargo-90'),
-    descuento1000: gv('tf-descuento-1000'), descuento2000: gv('tf-descuento-2000'), actualizadoPor:'CRM'
+    recargo60: gv('tf-recargo-60'), recargo90: gv('tf-recargo-90'), actualizadoPor:'CRM'
   };
   DB.tarifario = DB.tarifario || [];
   DB.tarifario.push(nuevo);
@@ -2653,8 +2669,6 @@ function toggleMonedaContrato() {
   const moneda = gv('f-con-moneda');
   const lbl = document.getElementById('f-con-valorhora-label');
   if(lbl) lbl.textContent = moneda==='USD' ? 'Valor hora (USD)' : 'Valor hora ($ ARS)';
-  const lblKm = document.getElementById('f-con-valorkm-label');
-  if(lblKm) lblKm.textContent = moneda==='USD' ? 'Valor por km (USD)' : 'Valor por km ($ ARS)';
   calcularCotizacionContrato();
 }
 
@@ -2679,63 +2693,30 @@ function calcularCotizacionContrato() {
   const valorHoraInput = parseFloat(gv('f-con-valorhora'))||0;
   const repuestosUsd = parseFloat(gv('f-con-repuestosusd'))||0;
   const km = parseFloat(gv('f-con-km'))||0;
-  const valorKmInput = parseFloat(gv('f-con-valorkm'))||0;
+  const valorKm = parseFloat(gv('f-con-valorkm'))||0;
 
   // Horas totales: viene del campo editable, no de la tabla directamente —
   // la tabla solo sugiere un valor de partida (ver sugerirHorasContrato).
   const horasTotales = parseFloat(gv('f-con-horastotales'))||0;
+  const descuentoPct = DESCUENTO_CONTRATO[plan] || 0;
 
-  // FIX: el descuento del contrato ya no es un valor fijo en el código —
-  // se lee del Tarifario (editable ahí), con el 15%/20% como valor de
-  // referencia si todavía no se cargó nada.
-  const tfCon2 = tarifarioVigente();
-  const descuentoPct = plan==='2000'
-    ? (tfCon2 && !isNaN(tfCon2.descuento2000) ? tfCon2.descuento2000/100 : 0.20)
-    : (tfCon2 && !isNaN(tfCon2.descuento1000) ? tfCon2.descuento1000/100 : 0.15);
-
-  // Convierte valor hora Y valor km a ambas monedas, con el mismo toggle de
-  // moneda — antes el km quedaba fijo en pesos sin convertir nunca a dólar,
-  // por eso "no lo tomaba en dólares".
+  // Convierte el valor hora a ambas monedas, sea cual sea la que se cargó.
   const valorHoraUsd = moneda==='USD' ? valorHoraInput : (tc>0 ? valorHoraInput/tc : 0);
-  const valorKmUsd = moneda==='USD' ? valorKmInput : (tc>0 ? valorKmInput/tc : 0);
+  const valorHoraArs = moneda==='ARS' ? valorHoraInput : valorHoraInput*tc;
 
   const manoObraSueltaUsd = horasTotales * valorHoraUsd;
   const manoObraContratoUsd = manoObraSueltaUsd * (1 - descuentoPct);
-  const manoObraContratoArs = tc>0 ? manoObraContratoUsd*tc : 0;
+  const manoObraContratoArs = tc>0 ? manoObraContratoUsd*tc : manoObraContratoUsd*valorHoraArs/(valorHoraUsd||1);
 
   // Movilidad: km por visita × valor por km × cantidad de visitas del plan
   // (4 en el plan de 1000hs, 8 en el de 2000hs — visitas cada 250hs). No
   // lleva el descuento del contrato, es un costo real de traslado aparte.
   const visitasPlan = plan==='2000' ? 8 : 4;
-  // El descuento del contrato ahora también se aplica a la movilidad, no
-  // solo a la mano de obra — a pedido, ya no es "un costo aparte".
-  const movilidadSueltaUsd = km * valorKmUsd * visitasPlan;
-  const movilidadUsd = movilidadSueltaUsd * (1 - descuentoPct);
-  const movilidadArs = tc>0 ? movilidadUsd*tc : 0;
+  const movilidadArs = km * valorKm * visitasPlan;
+  const movilidadUsd = tc>0 ? movilidadArs/tc : 0;
 
   const totalUsd = manoObraContratoUsd + movilidadUsd + repuestosUsd;
-  const totalArs = tc>0 ? totalUsd*tc : 0;
-
-  // Las 4 formas de pago sobre el total YA con el descuento del contrato
-  // aplicado — el ARS sale directo del total en pesos (sin ida y vuelta por
-  // el dólar), mismo criterio que ya usamos en Presupuestos para que nunca
-  // aparezcan centavos raros.
-  const tfPlazos = tarifarioVigente();
-  const tramosCon = [
-    {label:'Contado', pct:0},
-    {label:'30 días', pct:tfPlazos?tfPlazos.recargo30:3},
-    {label:'60 días', pct:tfPlazos?tfPlazos.recargo60:6},
-    {label:'90 días', pct:tfPlazos?tfPlazos.recargo90:9},
-  ];
-  const filasPlazosCon = tramosCon.map(t=>{
-    const ars = Math.round(totalArs*(1+t.pct/100));
-    const usd = tc>0 ? Math.round(ars/tc) : Math.round(totalUsd*(1+t.pct/100));
-    return `<div style="background:var(--panel);border:1px solid var(--border2);border-radius:6px;padding:8px;text-align:center">
-      <div style="font-size:10px;color:var(--muted);letter-spacing:1px">${t.label.toUpperCase()}${t.pct>0?` (+${t.pct}%)`:''}</div>
-      <div style="font-family:'Bebas Neue';font-size:15px;color:var(--yellow);margin-top:2px">${tc>0?fmtMonto(ars):'—'}</div>
-      <div style="font-size:10px;color:var(--blue-light)">USD ${usd.toLocaleString('es-AR')}</div>
-    </div>`;
-  }).join('');
+  const totalArs = tc>0 ? totalUsd*tc : (manoObraContratoArs + movilidadArs);
 
   const out = document.getElementById('con-resultado');
   if(out) out.innerHTML = `
@@ -2743,12 +2724,10 @@ function calcularCotizacionContrato() {
     <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px"><span>Mano de obra sin descuento</span><span>USD ${manoObraSueltaUsd.toLocaleString('es-AR',{maximumFractionDigits:2})}</span></div>
     <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--green);margin-bottom:4px"><span>Descuento por contrato (${Math.round(descuentoPct*100)}%)</span><span>-USD ${(manoObraSueltaUsd-manoObraContratoUsd).toLocaleString('es-AR',{maximumFractionDigits:2})}</span></div>
     <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--yellow);margin-bottom:8px;border-top:1px solid var(--border2);padding-top:6px"><span>➤ Mano de obra (con descuento)</span><span>USD ${manoObraContratoUsd.toLocaleString('es-AR',{maximumFractionDigits:2})} · ${fmtMonto(manoObraContratoArs)}</span></div>
-    <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--yellow);margin-bottom:8px"><span>➤ Movilidad con descuento (${km}km × ${moneda==='USD'?'USD '+valorKmInput:fmtMonto(valorKmInput)} × ${visitasPlan} visitas)</span><span>USD ${movilidadUsd.toLocaleString('es-AR',{maximumFractionDigits:2})} · ${fmtMonto(movilidadArs)}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--yellow);margin-bottom:8px"><span>➤ Movilidad (${km}km × ${fmtMonto(valorKm)} × ${visitasPlan} visitas)</span><span>USD ${movilidadUsd.toLocaleString('es-AR',{maximumFractionDigits:2})} · ${fmtMonto(movilidadArs)}</span></div>
     <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--blue-light);margin-bottom:8px"><span>+ Repuestos${repuestosUsd?'':' (sin cargar todavía)'}</span><span>USD ${repuestosUsd.toLocaleString('es-AR',{maximumFractionDigits:2})}</span></div>
-    <div style="display:flex;justify-content:space-between;font-size:16px;border-top:1px solid var(--border);padding-top:8px"><span style="color:var(--yellow)">TOTAL DEL CONTRATO (contado)</span><span class="monto" style="font-family:'Bebas Neue';font-size:18px">USD ${totalUsd.toLocaleString('es-AR',{maximumFractionDigits:0})}</span></div>
-    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:2px;margin-bottom:12px"><span>Equivalente en pesos (TC $${tc||'—'})</span><span>${tc>0?fmtMonto(totalArs):'cargá el dólar para convertir'}</span></div>
-    <label style="display:block;margin-bottom:6px;font-size:11px;color:var(--muted);letter-spacing:1px">CÓMO QUEDA SEGÚN LA FORMA DE PAGO</label>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${filasPlazosCon}</div>
+    <div style="display:flex;justify-content:space-between;font-size:16px;border-top:1px solid var(--border);padding-top:8px"><span style="color:var(--yellow)">TOTAL DEL CONTRATO</span><span class="monto" style="font-family:'Bebas Neue';font-size:18px">USD ${totalUsd.toLocaleString('es-AR',{maximumFractionDigits:0})}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:2px"><span>Equivalente en pesos (TC $${tc||'—'})</span><span>${tc>0?fmtMonto(totalArs):'cargá el dólar para convertir'}</span></div>
   `;
   const fArs = document.getElementById('f-con-precioars'); if(fArs) fArs.value = tc>0 ? Math.round(totalArs) : '';
   const fUsd = document.getElementById('f-con-preciousd'); if(fUsd) fUsd.value = Math.round(totalUsd);
@@ -5104,13 +5083,6 @@ function generarContratoPDF(contratoId) {
   const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const montoFinal = c.recargoPct ? Math.round(c.precioArs*(1+c.recargoPct/100)) : (c.precioArs||0);
   const usdFinal = c.tcAlMomento>0 ? Math.round(montoFinal/c.tcAlMomento) : 0;
-  // El % de descuento no queda guardado en el contrato en sí (solo el
-  // precio ya con el descuento adentro) — se toma del Tarifario vigente
-  // para ese plan, mismo criterio que ya usa la calculadora en el modal.
-  const tfPdfCon = tarifarioVigente();
-  const descuentoPdfCon = c.plan==='2000'
-    ? (tfPdfCon && !isNaN(tfPdfCon.descuento2000) ? tfPdfCon.descuento2000 : 20)
-    : (tfPdfCon && !isNaN(tfPdfCon.descuento1000) ? tfPdfCon.descuento1000 : 15);
 
   const htmlContent = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
     <title>Contrato de mantenimiento — ${clienteNombre}</title>
@@ -5148,13 +5120,12 @@ function generarContratoPDF(contratoId) {
     </div>
     <div class="total">
       <div>
-        <div style="font-size:11px;color:#ccc;letter-spacing:1px">MONTO ${c.plazoPago&&c.plazoPago!=='contado'?('· A '+c.plazoPago+' DÍAS (+'+c.recargoPct+'%)'):'· CONTADO'} · ${descuentoPdfCon}% DTO. CONTRATO</div>
+        <div style="font-size:11px;color:#ccc;letter-spacing:1px">MONTO ${c.plazoPago&&c.plazoPago!=='contado'?('· A '+c.plazoPago+' DÍAS (+'+c.recargoPct+'%)'):'· CONTADO'}</div>
         <div style="font-size:11px;color:#7bb3e0">≈ USD ${usdFinal.toLocaleString('es-AR')}</div>
       </div>
       <div class="val">$${montoFinal.toLocaleString('es-AR')}</div>
     </div>
     <div class="nota">
-      Precio con ${descuentoPdfCon}% de descuento por contrato ya aplicado sobre el equivalente de mano de obra y movilidad sueltas.
       El valor en dólares está sujeto al tipo de cambio del día de la fecha (TC $${c.tcAlMomento||'—'}).
       Los pagos a 30/60/90 días se ajustan al tipo de cambio vigente el día efectivo del pago, manteniendo el recargo pactado.
     </div>
@@ -5942,7 +5913,7 @@ function openModal(type, data={}) {
       </div>
       <div class="form-group"><label id="f-con-valorhora-label">Valor hora ($ ARS)</label><input id="f-con-valorhora" type="number" value="${data._valorhora||15000}" oninput="calcularCotizacionContrato()"/></div>
       <div class="form-group"><label>Kilómetros por visita</label><input id="f-con-km" type="number" value="${data._km||0}" oninput="calcularCotizacionContrato()" placeholder="Ej: 40"/></div>
-      <div class="form-group"><label id="f-con-valorkm-label">Valor por km ($ ARS)</label><input id="f-con-valorkm" type="number" value="${data._valorkm||0}" oninput="calcularCotizacionContrato()" placeholder="Ej: 500"/></div>
+      <div class="form-group"><label>Valor por km ($ ARS)</label><input id="f-con-valorkm" type="number" value="${data._valorkm||0}" oninput="calcularCotizacionContrato()" placeholder="Ej: 500"/></div>
       <div class="form-group">
         <label>Costo de repuestos del contrato completo (USD)</label>
         <input id="f-con-repuestosusd" type="number" value="${data._repuestosusd||0}" oninput="calcularCotizacionContrato()"/>
