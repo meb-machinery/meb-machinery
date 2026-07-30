@@ -2722,6 +2722,18 @@ function calcularCotizacionContrato() {
   const totalArs = tc>0 ? totalUsd*tc : (manoObraContratoArs + movilidadArs);
 
   const out = document.getElementById('con-resultado');
+  // Blindaje: si no hay horas cargadas (contratos viejos, guardados antes
+  // de que existiera este detalle, o alguien todavía no terminó de cargar
+  // los datos), NO pisamos el precio final ya guardado con $0 — mostramos
+  // un aviso en vez de calcular, y dejamos los campos de precio como están.
+  if(horasTotales<=0) {
+    if(out) out.innerHTML = `
+      <div style="text-align:center;padding:8px;color:var(--orange);font-size:12.5px">
+        ⚠️ No hay "Horas totales" cargadas — no se recalculó nada, así que el precio final que ya estaba guardado sigue intacto.<br/>
+        <span style="color:var(--muted);font-size:11px">Este contrato puede ser de antes de tener este detalle. Cargá las horas (o tocá "Sugerir") si querés recalcularlo.</span>
+      </div>`;
+    return;
+  }
   if(out) out.innerHTML = `
     <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px"><span>Horas totales del plan (${plan}hs · ${tipoMaquina})</span><span>${horasTotales} hs</span></div>
     <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px"><span>Mano de obra sin descuento</span><span>USD ${manoObraSueltaUsd.toLocaleString('es-AR',{maximumFractionDigits:2})}</span></div>
