@@ -1029,7 +1029,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzSIz89ACacAP_NGYUYO_VblxWJjoe4EZZBnpEECyuvqowJJv1f6sCEqQcOfbvyjUHj/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyJIQ3lISCYJc5iNxYmq9Z1D23YtM0c2LDh50XnplKAWzKqA0qK_kqteYA_niVFCd1OkQ/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1530,6 +1530,9 @@ async function syncAll() {
       precioArs:parseMonto(r.PRECIO_ARS), precioUsd:parseMonto(r.PRECIO_USD),
       manoObraArs:parseMonto(r.MANO_OBRA_ARS||'0'), manoObraUsd:parseFloat(r.MANO_OBRA_USD)||0,
       movilidadArs:parseMonto(r.MOVILIDAD_ARS||'0'), movilidadUsd:parseFloat(r.MOVILIDAD_USD)||0,
+      _horasTotales:parseFloat(r.HORAS_TOTALES)||0, _valorhora:parseMonto(r.VALOR_HORA||'0'),
+      _moneda:r.MONEDA_CALC||'ARS', _km:parseFloat(r.KM)||0, _valorkm:parseMonto(r.VALOR_KM||'0'),
+      _repuestosusd:parseFloat(r.REPUESTOS_USD)||0,
       tcAlMomento:parseFloat(r.TC_AL_MOMENTO)||0, estado:(r.ESTADO||'activo').toLowerCase(),
       notas:r.NOTAS||'', fechaCreado:r.FECHA_CREADO||'',
       plazoPago:r.PLAZO_PAGO||'contado', recargoPct:parseFloat(r.RECARGO_PCT)||0,
@@ -5949,12 +5952,14 @@ function openModal(type, data={}) {
         id:data.id||uid(), clienteId:gv('f-con-cli'), maquinaId:gv('f-con-maq'),
         plan:gv('f-con-plan'), tipoMaquina:gv('f-con-tipomaquina'),
         _horasTotales:parseFloat(gv('f-con-horastotales'))||0,
+        _valorhora:parseFloat(gv('f-con-valorhora'))||0, _moneda:gv('f-con-moneda')||'ARS',
         fechaInicio:gv('f-con-inicio'), fechaVencimiento:gv('f-con-vencimiento'),
         proximoServiceHs:gv('f-con-proxhs'), ultimoServiceHs:gv('f-con-ultimahs'),
         precioArs:parseFloat(gv('f-con-precioars'))||0, precioUsd:parseFloat(gv('f-con-preciousd'))||0,
         manoObraArs:parseFloat(gv('f-con-manoobraars'))||0, manoObraUsd:parseFloat(gv('f-con-manoobrausd'))||0,
         movilidadArs:parseFloat(gv('f-con-movilidadars'))||0, movilidadUsd:parseFloat(gv('f-con-movilidadusd'))||0,
         _km:parseFloat(gv('f-con-km'))||0, _valorkm:parseFloat(gv('f-con-valorkm'))||0,
+        _repuestosusd:parseFloat(gv('f-con-repuestosusd'))||0,
         tcAlMomento:parseFloat(gv('f-con-tc'))||0, estado:gv('f-con-estado')||'activo', notas:gv('f-con-notas'),
         plazoPago:plazoPagoCon, recargoPct:recargoPctCon,
         estadoCobro:data.estadoCobro||'pendiente'
@@ -5967,6 +5972,13 @@ function openModal(type, data={}) {
         precioArs:obj.precioArs, precioUsd:obj.precioUsd, tcAlMomento:obj.tcAlMomento,
         manoObraArs:obj.manoObraArs, manoObraUsd:obj.manoObraUsd,
         movilidadArs:obj.movilidadArs, movilidadUsd:obj.movilidadUsd,
+        // v17.13: campos de la calculadora — antes solo se guardaba el
+        // resultado final, y al reabrir un Contrato para editar la
+        // calculadora aparecía en blanco (aunque el precio final sí
+        // estuviera guardado). Ahora se persisten para poder editar de
+        // verdad, no solo ver el número final.
+        horasTotales:obj._horasTotales, valorHora:obj._valorhora, monedaCalc:obj._moneda,
+        km:obj._km, valorKm:obj._valorkm, repuestosUsd:obj._repuestosusd,
         estado:obj.estado, notas:obj.notas||'',
         plazoPago:obj.plazoPago, recargoPct:obj.recargoPct
       }});
@@ -6385,7 +6397,7 @@ function openModal(type, data={}) {
 
   document.getElementById('modalTitle').textContent=title;
   document.getElementById('modalBody').innerHTML=body;
-  if(type==='contrato') setTimeout(calcularCotizacionContrato, 0);
+  if(type==='contrato') setTimeout(toggleMonedaContrato, 0);
   document.getElementById('modalFooter').innerHTML=`
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
     <button class="btn-primary" onclick="window._onSave&&window._onSave()">GUARDAR</button>`;
