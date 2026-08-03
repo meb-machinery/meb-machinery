@@ -552,8 +552,9 @@ select option { background:var(--dark); }
   <div class="page" id="page-informes">
     <div class="page-header" style="display:flex;justify-content:space-between;align-items:center">
       <h2 class="page-title">INFORMES TÉCNICOS</h2>
-      <span style="font-size:12px;color:var(--muted)">Guardados en este dispositivo · con fotos incluidas</span>
+      <span style="font-size:12px;color:var(--muted)">Se sincronizan con el Sheet — accesibles desde cualquier dispositivo</span>
     </div>
+    <div id="informes-resumen" style="margin-bottom:16px"></div>
     <div id="informes-lista" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;padding:4px"></div>
   </div>
 
@@ -756,7 +757,7 @@ select option { background:var(--dark); }
       <div class="chart-card"><div class="chart-title">CLIENTES POR ZONA</div><div class="chart-wrap"><canvas id="chartZonas"></canvas></div></div>
     </div>
     <div class="charts-grid">
-      <div class="chart-card"><div class="chart-title">ALERTAS: RESUELTA vs PENDIENTE</div><div class="chart-wrap"><canvas id="chartAlertas"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">ALERTAS MANUALES: RESUELTA vs PENDIENTE</div><p style="font-size:10.5px;color:var(--muted);margin:-4px 0 6px">Solo las que cargaste a mano en "Alertas" — no incluye las de mantenimiento (repuestos), que se ven aparte más abajo.</p><div class="chart-wrap"><canvas id="chartAlertas"></canvas></div></div>
       <div class="chart-card"><div class="chart-title">PRESUPUESTOS: CONVERSIÓN</div><div class="chart-wrap"><canvas id="chartPresupConv"></canvas></div></div>
     </div>
     <div class="card">
@@ -1029,7 +1030,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyJIQ3lISCYJc5iNxYmq9Z1D23YtM0c2LDh50XnplKAWzKqA0qK_kqteYA_niVFCd1OkQ/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxnamwE0PDk7t0_BJixmYtnfFQC4k35uHSMH4xEo8MOHcqLE-JPJE_tKa5a-JOHmAxg8g/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1176,7 +1177,7 @@ function undoLastChange() {
 let charts = {};
 
 function saveLocal() { try { localStorage.setItem('meb_crm_v2', JSON.stringify(DB)); } catch(e){} }
-function loadLocal() { try { const d=localStorage.getItem('meb_crm_v2'); if(d) DB=JSON.parse(d); if(!DB.presupCounter) DB.presupCounter=1; if(!DB.calendarioEventos) DB.calendarioEventos=[]; if(!DB.alertasRepuesto||Array.isArray(DB.alertasRepuesto)) DB.alertasRepuesto={}; if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; if(!DB.alertas) DB.alertas=[]; if(!DB.tarifario) DB.tarifario=[]; DB.trabajos.forEach(t=>{ if(!t.estadoCobro) t.estadoCobro='pendiente'; }); } catch(e){} }
+function loadLocal() { try { const d=localStorage.getItem('meb_crm_v2'); if(d) DB=JSON.parse(d); if(!DB.presupCounter) DB.presupCounter=1; if(!DB.calendarioEventos) DB.calendarioEventos=[]; if(!DB.alertasRepuesto||Array.isArray(DB.alertasRepuesto)) DB.alertasRepuesto={}; if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; if(!DB.alertas) DB.alertas=[]; if(!DB.tarifario) DB.tarifario=[]; if(!DB.informes) DB.informes=[]; DB.trabajos.forEach(t=>{ if(!t.estadoCobro) t.estadoCobro='pendiente'; }); } catch(e){} }
 
 // ============================================================
 // LOGIN
@@ -1317,10 +1318,11 @@ async function syncAll() {
   const _calendarioEventos = DB.calendarioEventos || [];
 
   try {
-    const [cl,mq,tr,pr,al,pv,ct,tf] = await Promise.all([
+    const [cl,mq,tr,pr,al,pv,ct,tf,inf] = await Promise.all([
       fetchSheet('CLIENTES'), fetchSheet('MAQUINAS'),
       fetchSheet('TRABAJOS'), fetchSheet('PRESUPUESTOS'), fetchSheet('ALERTAS'),
-      fetchSheet('PROVEEDORES'), fetchSheet('CONTRATOS'), fetchSheet('TARIFARIO')
+      fetchSheet('PROVEEDORES'), fetchSheet('CONTRATOS'), fetchSheet('TARIFARIO'),
+      fetchSheet('INFORMES')
     ]);
 
     // ── Salvavidas: detectar encabezados rotos ──────────────────────────────
@@ -1552,6 +1554,24 @@ async function syncAll() {
       contrato2000:parseFloat(r.CONTRATO_2000_USD)||0, margenRepuestos:parseFloat(r.MARGEN_REPUESTOS_PCT)||0,
       recargo30:parseFloat(r.RECARGO_30_PCT)||0, recargo60:parseFloat(r.RECARGO_60_PCT)||0,
       recargo90:parseFloat(r.RECARGO_90_PCT)||0, actualizadoPor:r.ACTUALIZADO_POR||''
+    }));
+
+    // v17.14 FIX: la pestaña Informes leía SOLO de una lista local en el
+    // navegador (DB.informes) que nunca se llenaba desde el Sheet — por eso
+    // aparecía vacía apenas se recargaba la página o se sincronizaba desde
+    // otro dispositivo, aunque los informes sí se hubieran guardado. Ahora
+    // se sincroniza igual que el resto de las hojas.
+    DB.informes = (inf.length ? inf : []).map(r => ({
+      id: r.ID || uid(),
+      num: r['N°_INFORME'] || r.N_INFORME || r['Nº_INFORME'] || '',
+      fecha: r.FECHA || '',
+      cliente: r.CLIENTE || '',
+      queja: r.QUEJA || '', sintoma: r.SINTOMA || '', causa: r.CAUSA || '',
+      solucion: r.SOLUCION || '', trabajo: r.TRABAJO || '', repuestos: r.REPUESTOS || '',
+      observaciones: r.OBSERVACIONES || '',
+      fotosCount: (r.FOTOS||'').split(',').map(s=>s.trim()).filter(Boolean).length,
+      driveUrl: r.LINK_DRIVE || '',
+      guardadoPor: r.GUARDADO_POR || '', fechaGuardado: r.FECHA_GUARDADO || ''
     }));
 
     // Restore preserved local data + alertasRepuesto
@@ -5698,6 +5718,28 @@ function renderInformes() {
   const informes = [...DB.informes].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
   const badge = document.getElementById('badge-informes');
   if(badge) { badge.textContent = informes.length; badge.style.display = informes.length ? 'inline-flex' : 'none'; }
+
+  // Resumen: total, cuántos con link a Drive, cuántos este mes — para tener
+  // de un vistazo cuántos informes se hicieron (Emmanuel los genera seguido).
+  const resumenEl = document.getElementById('informes-resumen');
+  if(resumenEl) {
+    const conDrive = informes.filter(i=>i.driveUrl).length;
+    const ahora = new Date();
+    const esteMes = informes.filter(i=>{
+      if(!i.fecha) return false;
+      const parts = i.fecha.includes('/') ? i.fecha.split('/').reverse() : i.fecha.split('-');
+      if(parts.length<3) return false;
+      const y = parts[0].length===4 ? parts[0] : '20'+parts[0];
+      const d = new Date(y, (parseInt(parts[1])||1)-1, parts[2]||1);
+      return !isNaN(d.getTime()) && d.getMonth()===ahora.getMonth() && d.getFullYear()===ahora.getFullYear();
+    }).length;
+    resumenEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      <div class="stat-card"><div class="stat-val">${informes.length}</div><div class="stat-label">TOTAL DE INFORMES</div></div>
+      <div class="stat-card green"><div class="stat-val">${conDrive}</div><div class="stat-label">GUARDADOS EN DRIVE</div></div>
+      <div class="stat-card yellow"><div class="stat-val">${esteMes}</div><div class="stat-label">ESTE MES</div></div>
+    </div>`;
+  }
+
   if(!informes.length) {
     cont.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>No hay informes guardados</p><p style="font-size:12px;color:var(--muted);margin-top:8px">Generá un informe desde Presupuestos → 🔧 Informe y presioná 💾 Guardar</p></div>';
     return;
