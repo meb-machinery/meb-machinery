@@ -1263,31 +1263,54 @@ async function fetchSheet(sheetName) {
   }
 }
 
+// v17.16 FIX DE FONDO: el parser anterior hacía `text.split('\n')` ANTES de
+// mirar las comillas — así que cualquier celda con un salto de línea adentro
+// (Alt+Enter dentro de una celda, algo carne y hueso en textos largos como
+// Informes, Notas, Observaciones) partía esa UNA celda en varias "filas"
+// falsas. Eso explica el "137 informes" fantasma y las tarjetas con texto
+// mezclado: eran fragmentos de una sola fila larga, no filas reales. Ahora
+// se recorre el texto entero carácter por carácter, respetando qué está
+// "adentro" de comillas (donde un salto de línea es parte del dato, no un
+// separador de fila) — es como debe leerse un CSV de verdad.
 function parseCSV(text) {
-  const lines = text.split('\n').filter(l=>l.trim());
-  if(lines.length < 2) return [];
-  // trim cada header individualmente para manejar "ID " con espacio
-  const headers = parseCSVLine(lines[0]).map(h=>h.trim().replace(/^"|"$/g,'').trim().toUpperCase().replace(/ /g,'_'));
-  return lines.slice(1).map((line,i)=>{
-    const vals = parseCSVLine(line);
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i+1] === '"') { field += '"'; i++; }
+        else { inQuotes = false; }
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      row.push(field); field = '';
+    } else if (c === '\r') {
+      // se ignora — el fin de línea real lo marca el \n que sigue
+    } else if (c === '\n') {
+      row.push(field); field = '';
+      rows.push(row); row = [];
+    } else {
+      field += c;
+    }
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  if (rows.length < 2) return [];
+
+  const headers = rows[0].map(h => String(h).trim().toUpperCase().replace(/ /g,'_'));
+  return rows.slice(1).map((vals,i) => {
     const obj = {};
-    headers.forEach((h,idx)=>{ obj[h] = (vals[idx]||'').replace(/^"|"$/g,'').trim(); });
+    headers.forEach((h,idx) => { obj[h] = (vals[idx]||'').trim(); });
     // Fila real en el Sheet (1=encabezado, 2=primera fila de datos) — se usa
     // para poder escribir un ID de vuelta si la celda vino vacía.
     obj._rowIndex = i+2;
     return obj;
   }).filter(r=>Object.keys(r).some(k=>k!=='_rowIndex' && r[k] && String(r[k]).trim()));
-}
-
-function parseCSVLine(line) {
-  const result=[]; let cur=''; let inQ=false;
-  for(let i=0;i<line.length;i++){
-    const c=line[i];
-    if(c==='"'){ inQ=!inQ; }
-    else if(c===','&&!inQ){ result.push(cur); cur=''; }
-    else { cur+=c; }
-  }
-  result.push(cur); return result;
 }
 
 // Escribir a Google Sheets via Apps Script (requiere deploy)
@@ -5756,7 +5779,8 @@ function renderInformes() {
           <div style="font-size:11px;color:var(--muted)">${inf.fecha||''}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-          ${inf.driveUrl ? `<a href="${inf.driveUrl}" target="_blank" class="btn-primary" style="font-size:11px;padding:5px 12px;text-decoration:none">👁 Ver en Drive</a>` : ''}
+          <button class="btn-primary" style="font-size:11px;padding:5px 12px" onclick="verInformeDetalle('${inf.id}')">👁 Ver detalle</button>
+          ${inf.driveUrl ? `<a href="${inf.driveUrl}" target="_blank" class="btn-secondary" style="font-size:11px;padding:5px 12px;text-decoration:none">📄 Abrir en Drive</a>` : ''}
           <button class="btn-secondary" style="font-size:11px;padding:5px 10px;background:rgba(231,76,60,0.1);border-color:#e74c3c;color:#e74c3c" onclick="eliminarInformeLocal('${inf.id}')">🗑 Quitar</button>
         </div>
       </div>
@@ -5765,6 +5789,34 @@ function renderInformes() {
       ${inf.fotosCount ? `<div style="font-size:10px;color:#6fa8dc;margin-top:6px">📷 ${inf.fotosCount} foto(s)</div>` : ''}
     </div>`
   ).join('');
+}
+
+function verInformeDetalle(id) {
+  const inf = (DB.informes||[]).find(x=>x.id===id);
+  if(!inf) return;
+  const m = document.createElement('div');
+  m.className = 'modal-overlay open';
+  m.id = 'modal-informe-detalle';
+  const campo = (label,val) => val ? `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">${label}</div><div style="font-size:13px;color:var(--text);white-space:pre-wrap">${val}</div></div>` : '';
+  m.innerHTML = `<div class="modal">
+    <div class="modal-header"><span class="modal-title">INFORME N° ${inf.num||'—'}</span><button class="modal-close" onclick="document.getElementById('modal-informe-detalle').remove()">✕</button></div>
+    <div class="modal-body">
+      <div style="display:flex;justify-content:space-between;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+        <div><div style="font-size:15px;font-weight:600">${inf.cliente||'—'}</div><div style="font-size:11px;color:var(--muted)">${inf.fecha||''}</div></div>
+        ${inf.driveUrl ? `<a href="${inf.driveUrl}" target="_blank" class="btn-secondary" style="font-size:11px;padding:5px 12px;text-decoration:none;align-self:flex-start">📄 Abrir en Drive</a>` : ''}
+      </div>
+      ${campo('Queja', inf.queja)}
+      ${campo('Síntoma', inf.sintoma)}
+      ${campo('Causa', inf.causa)}
+      ${campo('Solución', inf.solucion)}
+      ${campo('Trabajo realizado', inf.trabajo)}
+      ${campo('Repuestos', inf.repuestos)}
+      ${campo('Observaciones', inf.observaciones)}
+      ${inf.fotosCount ? `<div style="font-size:11px;color:#6fa8dc">📷 ${inf.fotosCount} foto(s) referenciadas</div>` : ''}
+      ${!inf.driveUrl ? `<div class="nota" style="margin-top:14px">Este informe no tiene un link a Drive guardado (probablemente porque es de antes de que empezáramos a guardar ese link) — el detalle de arriba viene directo del Sheet.</div>` : ''}
+    </div>
+  </div>`;
+  document.body.appendChild(m);
 }
 
 function eliminarInformeLocal(id) {
