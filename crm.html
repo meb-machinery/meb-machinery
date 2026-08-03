@@ -552,7 +552,10 @@ select option { background:var(--dark); }
   <div class="page" id="page-informes">
     <div class="page-header" style="display:flex;justify-content:space-between;align-items:center">
       <h2 class="page-title">INFORMES TÉCNICOS</h2>
-      <span style="font-size:12px;color:var(--muted)">Se sincronizan con el Sheet — accesibles desde cualquier dispositivo</span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:12px;color:var(--muted)">Se sincronizan con el Sheet — accesibles desde cualquier dispositivo</span>
+        <button class="btn-secondary" style="font-size:11px;padding:6px 12px" onclick="vincularInformesConDrive()" title="Busca en la carpeta de Drive los archivos que correspondan a informes sin link guardado">🔗 Vincular con Drive</button>
+      </div>
     </div>
     <div id="informes-resumen" style="margin-bottom:16px"></div>
     <div id="informes-lista" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;padding:4px"></div>
@@ -1030,7 +1033,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyo0gh6kqGALLTDHskZWdAlTLWb4-LAZNtq58wp9uM7EC33SthdROkKLhPpdBhMIGGM/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbySwcB0QtAcXJu0CeWU4QBH_GTfwdzuIl2JfU66tNuGAPrVx-lpb9Q82h7nfQuTM5Y96Q/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -5789,6 +5792,27 @@ function renderInformes() {
       ${inf.fotosCount ? `<div style="font-size:10px;color:#6fa8dc;margin-top:6px">📷 ${inf.fotosCount} foto(s)</div>` : ''}
     </div>`
   ).join('');
+}
+
+async function vincularInformesConDrive() {
+  showLoading('BUSCANDO ARCHIVOS EN DRIVE...');
+  try {
+    const resp = await writeToSheet({ action:'vincularInformesConDrive' });
+    hideLoading();
+    if(!resp || !resp.ok) {
+      showToast('No se pudo completar: ' + (resp&&resp.error||'error desconocido'), 'error');
+      return;
+    }
+    const partes = [];
+    if(resp.vinculados) partes.push(`${resp.vinculados} vinculados`);
+    if(resp.sinCoincidencia) partes.push(`${resp.sinCoincidencia} sin archivo encontrado`);
+    if(resp.ambiguos) partes.push(`${resp.ambiguos} con más de un archivo candidato (no se tocaron)`);
+    showToast(resp.vinculados ? `🔗 ${partes.join(' · ')} — sincronizando...` : `No había nada para vincular (${partes.join(' · ')||'todo al día'})`, resp.vinculados?'success':'');
+    if(resp.vinculados) await syncAll();
+  } catch(e) {
+    hideLoading();
+    showToast('Error al vincular con Drive: ' + e.message, 'error');
+  }
 }
 
 function verInformeDetalle(id) {
