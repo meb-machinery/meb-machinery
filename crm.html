@@ -5740,11 +5740,19 @@ function _registrarInformeCRM(inf) {
   showToast('Informe guardado en Drive ✔', 'success');
 }
 
+let _informesRenderizados = [];
 function renderInformes() {
   const cont = document.getElementById('informes-lista');
   if(!cont) return;
   if(!DB.informes) DB.informes = [];
   const informes = [...DB.informes].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+  // v17.18 FIX: antes se referenciaba cada tarjeta por inf.id — pero un
+  // informe sin link de Drive todavía no tiene un ID estable (se genera de
+  // nuevo, al azar, en cada sincronización), así que el botón "Ver detalle"
+  // buscaba un ID que ya no existía más. Ahora se referencia por posición
+  // en esta misma lista ya renderizada, que sí es estable dentro de la
+  // misma pantalla.
+  _informesRenderizados = informes;
   const badge = document.getElementById('badge-informes');
   if(badge) { badge.textContent = informes.length; badge.style.display = informes.length ? 'inline-flex' : 'none'; }
 
@@ -5773,7 +5781,7 @@ function renderInformes() {
     cont.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>No hay informes guardados</p><p style="font-size:12px;color:var(--muted);margin-top:8px">Generá un informe desde Presupuestos → 🔧 Informe y presioná 💾 Guardar</p></div>';
     return;
   }
-  cont.innerHTML = informes.map(inf =>
+  cont.innerHTML = informes.map((inf, idx) =>
     `<div class="stat-card" style="padding:16px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
         <div>
@@ -5782,9 +5790,9 @@ function renderInformes() {
           <div style="font-size:11px;color:var(--muted)">${inf.fecha||''}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-          <button class="btn-primary" style="font-size:11px;padding:5px 12px" onclick="verInformeDetalle('${inf.id}')">👁 Ver detalle</button>
+          <button class="btn-primary" style="font-size:11px;padding:5px 12px" onclick="verInformeDetalle(${idx})">👁 Ver detalle</button>
           ${inf.driveUrl ? `<a href="${inf.driveUrl}" target="_blank" class="btn-secondary" style="font-size:11px;padding:5px 12px;text-decoration:none">📄 Abrir en Drive</a>` : ''}
-          <button class="btn-secondary" style="font-size:11px;padding:5px 10px;background:rgba(231,76,60,0.1);border-color:#e74c3c;color:#e74c3c" onclick="eliminarInformeLocal('${inf.id}')">🗑 Quitar</button>
+          <button class="btn-secondary" style="font-size:11px;padding:5px 10px;background:rgba(231,76,60,0.1);border-color:#e74c3c;color:#e74c3c" onclick="eliminarInformeLocal(${idx})">🗑 Quitar</button>
         </div>
       </div>
       ${inf.queja ? `<div style="font-size:11px;color:var(--muted);margin-bottom:4px"><strong style="color:var(--text)">Queja:</strong> ${inf.queja.substring(0,100)}${inf.queja.length>100?'...':''}</div>` : ''}
@@ -5815,8 +5823,8 @@ async function vincularInformesConDrive() {
   }
 }
 
-function verInformeDetalle(id) {
-  const inf = (DB.informes||[]).find(x=>x.id===id);
+function verInformeDetalle(idx) {
+  const inf = _informesRenderizados[idx];
   if(!inf) return;
   const m = document.createElement('div');
   m.className = 'modal-overlay open';
@@ -5843,12 +5851,14 @@ function verInformeDetalle(id) {
   document.body.appendChild(m);
 }
 
-function eliminarInformeLocal(id) {
+function eliminarInformeLocal(idx) {
+  const inf = _informesRenderizados[idx];
+  if(!inf) return;
   if(!confirm('¿Quitar este informe de la lista? El archivo en Drive no se elimina.')) return;
-  DB.informes = (DB.informes||[]).filter(x=>x.id!==id);
+  DB.informes = (DB.informes||[]).filter(x=>x!==inf);
   saveLocal();
   renderInformes();
-  showToast('Informe quitado de la lista','success');
+  showToast('Informe quitado de la lista — ojo, si sincronizás puede volver a aparecer (viene del Sheet)','success');
 }
 
 function abrirInforme(id) {
