@@ -1030,7 +1030,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxnamwE0PDk7t0_BJixmYtnfFQC4k35uHSMH4xEo8MOHcqLE-JPJE_tKa5a-JOHmAxg8g/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyo0gh6kqGALLTDHskZWdAlTLWb4-LAZNtq58wp9uM7EC33SthdROkKLhPpdBhMIGGM/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1562,16 +1562,19 @@ async function syncAll() {
     // otro dispositivo, aunque los informes sí se hubieran guardado. Ahora
     // se sincroniza igual que el resto de las hojas.
     DB.informes = (inf.length ? inf : []).map(r => ({
-      id: r.ID || uid(),
+      id: r.ID_DRIVE || r.ID || uid(),
       num: r['N°_INFORME'] || r.N_INFORME || r['Nº_INFORME'] || '',
       fecha: r.FECHA || '',
       cliente: r.CLIENTE || '',
       queja: r.QUEJA || '', sintoma: r.SINTOMA || '', causa: r.CAUSA || '',
-      solucion: r.SOLUCION || '', trabajo: r.TRABAJO || '', repuestos: r.REPUESTOS || '',
-      observaciones: r.OBSERVACIONES || '',
+      solucion: r.SOLUCION || '',
+      trabajo: r.TRABAJO_REALIZADO || r.TRABAJO || '',
+      repuestos: r.REPUESTOS || '',
+      observaciones: r.OBSERVACION || r.OBSERVACIONES || '',
       fotosCount: (r.FOTOS||'').split(',').map(s=>s.trim()).filter(Boolean).length,
       driveUrl: r.LINK_DRIVE || '',
-      guardadoPor: r.GUARDADO_POR || '', fechaGuardado: r.FECHA_GUARDADO || ''
+      guardadoPor: r.GUARDADO_POR || '',
+      fechaGuardado: r.GUARDADO || r.FECHA_GUARDADO || ''
     }));
 
     // Restore preserved local data + alertasRepuesto
