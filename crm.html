@@ -358,7 +358,7 @@ select option { background:var(--dark); }
     <div class="nav-item" onclick="showPage('pipeline',this)"><span class="nav-icon">🎯</span> Pipeline</div>
     <div class="nav-item" onclick="showPage('informes',this)"><span class="nav-icon">📋</span> Informes <span class="badge" id="badge-informes" style="background:#003B70;display:none">0</span></div>
     <div class="nav-item" onclick="showPage('alertas',this)"><span class="nav-icon">🔔</span> Alertas <span class="nav-badge red" id="badge-alertas">0</span></div>
-    <div class="nav-item" onclick="showPage('reconectar',this)"><span class="nav-icon">🔄</span> Para reconectar <span class="nav-badge red" id="badge-reconectar">0</span></div>
+    <div class="nav-item" onclick="showPage('reconectar',this)"><span class="nav-icon">🔄</span> Oportunidades de Contrato <span class="nav-badge red" id="badge-reconectar">0</span></div>
     <div class="nav-item" onclick="showPage('estadisticas',this)"><span class="nav-icon">📈</span> Estadísticas</div>
     <div class="nav-item" onclick="showPage('repuestos',this)"><span class="nav-icon">🔩</span> Repuestos</div>
     <div class="nav-item" onclick="showPage('proveedores',this)"><span class="nav-icon">🏭</span> Proveedores <span class="nav-badge" id="badge-proveedores">0</span></div>
@@ -526,7 +526,7 @@ select option { background:var(--dark); }
     </div>
     <div class="search-bar"><span>🔍</span><input type="text" placeholder="Buscar número, cliente, descripción..." id="searchPresupuestos" oninput="renderPresupuestos()"></div>
     <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>#</th><th>Cliente</th><th>Descripción</th><th>Monto</th><th>Estado</th><th>Fecha</th><th style="color:#9b59b6">Informe</th><th>Acciones</th></tr></thead>
+      <thead><tr><th>#</th><th>Cliente</th><th>Descripción</th><th>Monto</th><th>Estado</th><th>Fecha</th><th>Estado documento</th><th style="color:#9b59b6">Informe</th><th>Acciones</th></tr></thead>
       <tbody id="tabla-presupuestos"></tbody>
     </table></div></div>
   </div>
@@ -629,14 +629,23 @@ select option { background:var(--dark); }
     </div>
   </div>
 
-  <!-- PARA RECONECTAR -->
+  <!-- OPORTUNIDADES DE CONTRATO (Reconectar + Prospección) -->
   <div class="page" id="page-reconectar">
-    <div class="page-header"><div class="page-title">PARA <span>RECONECTAR</span></div></div>
-    <p style="font-size:12px;color:var(--muted);margin-top:-10px;margin-bottom:14px">
-      Clientes con máquinas sin contrato de mantenimiento vigente — porque nunca se les ofreció uno, o porque el que tenían ya venció. Cruza Trabajos + Máquinas + Contratos.
+    <div class="page-header">
+      <div class="page-title">OPORTUNIDADES <span>DE CONTRATO</span></div>
+      <button class="btn-primary" onclick="openModal('cliente',{estado:'prospecto'})">+ NUEVO PROSPECTO</button>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-top:-10px;margin-bottom:18px">
+      Todo lo que puede terminar en un contrato de mantenimiento: clientes reales sin contrato vigente (reconexión) y negocios que todavía no son clientes de MEB (prospección en frío).
     </p>
+
+    <div style="font-family:'Bebas Neue';font-size:16px;color:var(--yellow);letter-spacing:2px;margin-bottom:8px">🔄 RECONECTAR <span style="color:var(--muted);font-size:11px;letter-spacing:0;font-family:'Barlow'">— clientes reales, máquina sin contrato vigente</span></div>
     <div id="reconectar-resumen" style="margin-bottom:14px"></div>
-    <div class="card"><div id="reconectar-lista"></div></div>
+    <div class="card" style="margin-bottom:28px"><div id="reconectar-lista"></div></div>
+
+    <div style="font-family:'Bebas Neue';font-size:16px;color:var(--blue-light);letter-spacing:2px;margin-bottom:8px">🎯 PROSPECCIÓN <span style="color:var(--muted);font-size:11px;letter-spacing:0;font-family:'Barlow'">— todavía no son clientes de MEB</span></div>
+    <div id="reconectar-prospeccion-resumen" style="margin-bottom:14px"></div>
+    <div class="card"><div id="reconectar-prospeccion-lista"></div></div>
   </div>
 
   <!-- ESTADÍSTICAS -->
@@ -1045,7 +1054,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzO-XB_CCB6eVcjn5c2pZhq4qNK1PLPQOax0-eFigsL8zXSHjRBZTDQt5sKZ62taJJuJA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby7W4Z_ys0X2VMotqVwOuFS7hrRMLqbtSjlEXQMLmQDHZBpokU4y7KcUq6v1fG8zS4xtA/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1356,11 +1365,11 @@ async function syncAll() {
   const _calendarioEventos = DB.calendarioEventos || [];
 
   try {
-    const [cl,mq,tr,pr,al,pv,ct,tf,inf] = await Promise.all([
+    const [cl,mq,tr,pr,al,pv,ct,tf,inf,opl] = await Promise.all([
       fetchSheet('CLIENTES'), fetchSheet('MAQUINAS'),
       fetchSheet('TRABAJOS'), fetchSheet('PRESUPUESTOS'), fetchSheet('ALERTAS'),
       fetchSheet('PROVEEDORES'), fetchSheet('CONTRATOS'), fetchSheet('TARIFARIO'),
-      fetchSheet('INFORMES')
+      fetchSheet('INFORMES'), fetchSheet('OPORTUNIDADES_LOG')
     ]);
 
     // ── Salvavidas: detectar encabezados rotos ──────────────────────────────
@@ -1501,6 +1510,7 @@ async function syncAll() {
             estado:_estadoFinal,
             fecha:r.FECHA||'', notas:r.NOTAS||'',
             serieMaquina:r.SERIE_MAQUINA||'', modeloMaquina:r.MODELO_MAQUINA||'', horometro:r.HOROMETRO||'',
+            fechaDescarga:r.FECHA_DESCARGA||'', fechaEnviado:r.FECHA_ENVIADO||'',
             informeGenerado:r.INFORME_GENERADO||r.INFORME||'',
             informeGuardado:r.INFORME_GUARDADO||'',
             informeDriveUrl:r.INFORME_DRIVE_URL||r.LINK_DRIVE||r.INFORME_DRIVE_URL_||''
@@ -1615,6 +1625,17 @@ async function syncAll() {
       driveUrl: r.LINK_DRIVE || '',
       guardadoPor: r.GUARDADO_POR || '',
       fechaGuardado: r.GUARDADO || r.FECHA_GUARDADO || ''
+    }));
+
+    DB.oportunidadesLog = (opl.length ? opl : []).map(r => ({
+      id: r.ID || uid(),
+      fecha: r.FECHA || '', hora: r.HORA || '',
+      origen: r.ORIGEN || '',
+      clienteId: String(r.CLIENTE_ID||'').trim(), cliente: r.CLIENTE || '',
+      maquinaId: String(r.MAQUINA_ID||'').trim(), maquina: r.MAQUINA || '',
+      motivo: r.MOTIVO || '',
+      tipoAccion: r.TIPO_ACCION || '', detalle: r.DETALLE || '',
+      usuario: r.USUARIO || '', notas: r.NOTAS || ''
     }));
 
     // Restore preserved local data + alertasRepuesto
@@ -1810,7 +1831,8 @@ function updateBadges() {
   const vencidosPlazoCon = DB.contratos.filter(c=>diasPlazoVencidoContrato(c)).length;
   const al=DB.alertas.filter(a=>!a.resuelta).length + (typeof calcularAlertasRepuesto==="function" ? calcularAlertasRepuesto().length : 0) + vencidosPlazo + vencidosPlazoCon;
   document.getElementById('badge-alertas').textContent=al;
-  const reconectarCount = (typeof calcularParaReconectar==="function" ? calcularParaReconectar().length : 0);
+  const reconectarCount = (typeof calcularParaReconectar==="function" ? calcularParaReconectar().length : 0)
+                         + (typeof calcularProspectosContrato==="function" ? calcularProspectosContrato().length : 0);
   const brc = document.getElementById('badge-reconectar'); if(brc) brc.textContent = reconectarCount;
   document.getElementById('s-clientes').textContent=DB.clientes.length;
   document.getElementById('s-presup').textContent=DB.presupuestos.length;
@@ -2484,7 +2506,7 @@ function renderPresupuestos() {
     });
   }
   const tbody=document.getElementById('tabla-presupuestos');
-  if(!data.length){tbody.innerHTML=`<tr><td colspan="10"><div class="empty-state"><div class="icon">📋</div><p>Sin presupuestos</p></div></td></tr>`;return;}
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="icon">📋</div><p>Sin presupuestos</p></div></td></tr>`;return;}
   tbody.innerHTML=data.map(p=>{
     const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId))||DB.clientes.find(c=>c.nombre.toUpperCase()===(p.clienteNombreSheet||p.clienteId||'').toUpperCase());
     const descCorta=(p.descripcion||'—').split('\n')[0].split('|')[0];
@@ -2495,8 +2517,7 @@ function renderPresupuestos() {
       <td><span class="monto">${fmtMonto((()=>{const a=p.recargoPct?p.monto*(1+p.recargoPct/100):p.monto;return Math.round(a);})())}</span>${p.montoUsd&&p.tcAlMomento?`<div style="font-size:10px;color:var(--blue-light)" title="El valor en dólares está sujeto al tipo de cambio del día de la fecha">USD ${Math.round((p.recargoPct?Math.round(p.monto*(1+p.recargoPct/100)):p.monto)/p.tcAlMomento).toLocaleString('es-AR')}</div>`:''}${p.plazoPago&&p.plazoPago!=='contado'?`<div style="font-size:9px;color:var(--orange)">A ${p.plazoPago} días (+${p.recargoPct}%)</div>`:''}</td>
       <td>${badgeEstado(p.estado)}${diasPlazoVencido(p)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${p.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencido(p)}d</div><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="reclamarPresupuestoWhatsApp('${p.id}')" title="Mandar recordatorio por WhatsApp">📲 Reclamar</button>`:''}</td>
       <td class="td-muted">${fmtDate(p.fecha)}</td>
-      <td style="font-size:10px;color:${p.fechaDescarga?'#25d366':'var(--muted2)'};text-align:center;white-space:nowrap">${p.fechaDescarga?'✔ '+p.fechaDescarga:'—'}</td>
-      <td style="font-size:10px;color:${p.fechaEnviado?'#6fa8dc':'var(--muted2)'};text-align:center;white-space:nowrap">${p.fechaEnviado?'✔ '+p.fechaEnviado:'—'}</td>
+      <td style="font-size:10px;text-align:center;white-space:nowrap">${p.fechaEnviado?`<div style="color:var(--blue-light)">📤 ENVIADO</div><div style="font-size:9px;color:var(--muted2)">${p.fechaEnviado}</div>`:p.fechaDescarga?`<div style="color:#25d366">📄 DESCARGADO</div><div style="font-size:9px;color:var(--muted2)">${p.fechaDescarga}</div>`:`<div style="color:var(--muted)">📝 FORMULADO</div><div style="font-size:9px;color:var(--muted2)">${fmtDate(p.fecha)}</div>`}</td>
       <td style="font-size:9px;text-align:center;white-space:nowrap">${p.informeGuardado?`<a href="${p.informeDriveUrl||'#'}" target="_blank" style="color:#25d366;text-decoration:none" title="Guardado en Drive">✔ Drive<br><span style='color:var(--muted);font-size:8px'>${p.informeGuardado}</span></a>`:p.informeGenerado?`<span style='color:#9b59b6'>📋 ${p.informeGenerado}</span>`:'—'}</td>
       <td><div class="actions">
         <button class="btn-secondary" title="Editar" onclick="generarPresupuestoPDF('${p.id}')">✏️</button>
@@ -3140,6 +3161,15 @@ function eliminarCommMant(keyEncoded, idx) {
 }
 
 // Recibe cambios editados desde la ventana PDF del presupuesto
+function _marcarPresupuestoEnviado(presupId) {
+  const p = DB.presupuestos.find(x=>x.id===presupId);
+  if (!p || p.fechaEnviado) return; // ya estaba marcado — no pisar la fecha real de envío
+  p.fechaEnviado = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  saveLocal();
+  try { renderPresupuestos(); } catch(e) {}
+  writeToSheet({action:'marcarAccionPresupuesto', id:p.id, campo:'enviado', fecha:p.fechaEnviado});
+}
+
 function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail) {
   let p = DB.presupuestos.find(x=>x.id===presupId);
   const esNuevoPresup = !p;
@@ -5614,6 +5644,7 @@ function generarPresupuestoPDF(presupId) {
     '    + "\\n\\uD83D\\uDCE7 mebmachinerysolutions@gmail.com"',
     '    + "\\n\\n\\u00A1Quedamos a disposici\\u00F3n!";',
     '  window.open("https://wa.me/"+CLIENTE_TEL+"?text="+encodeURIComponent(msg),"_blank");',
+    '  if(window.opener && window.opener._marcarPresupuestoEnviado) window.opener._marcarPresupuestoEnviado(PRESUP_ID);',
     '}',
     'function envMail() {',
     '  var destino = CLIENTE_EMAIL || "";',
@@ -5630,6 +5661,7 @@ function generarPresupuestoPDF(presupId) {
     '    + "&su=" + encodeURIComponent(asunto)',
     '    + "&body=" + encodeURIComponent(cuerpo);',
     '  window.open(url, "_blank");',
+    '  if(window.opener && window.opener._marcarPresupuestoEnviado) window.opener._marcarPresupuestoEnviado(PRESUP_ID);',
     '}',
     'function guardarCambios() {',
     '  var rows = document.querySelectorAll("#tbodyItems tr");',
@@ -5869,7 +5901,7 @@ function generarPresupuestoPDF(presupId) {
   if(w) {
     setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
     const _pd=DB.presupuestos.find(x=>x.id===presupId);
-    if(_pd&&!_pd.fechaDescarga){_pd.fechaDescarga=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});saveLocal();try{renderPresupuestos();}catch(e){}}
+    if(_pd&&!_pd.fechaDescarga){_pd.fechaDescarga=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});saveLocal();try{renderPresupuestos();}catch(e){} writeToSheet({action:'marcarAccionPresupuesto', id:_pd.id, campo:'descargado', fecha:_pd.fechaDescarga});}
   } else { alert('Bloqueador de popups activo. Permit\u00ED los popups para este sitio.'); URL.revokeObjectURL(url); }
 }
 
@@ -7393,77 +7425,209 @@ function calcularParaReconectar() {
 
 function renderReconectar() {
   const lista = calcularParaReconectar();
-  const badge = document.getElementById('badge-reconectar'); if (badge) badge.textContent = lista.length;
   const resumenEl = document.getElementById('reconectar-resumen');
   const cont = document.getElementById('reconectar-lista');
+  if (cont) {
+    if (!lista.length) {
+      if (resumenEl) resumenEl.innerHTML = '';
+      cont.innerHTML = `<div class="empty-state"><div class="icon">✅</div><p>Sin nada pendiente — todas las máquinas activas están bajo contrato vigente</p></div>`;
+    } else {
+      const vencidos = lista.filter(x=>x.motivo==='contrato_vencido').length;
+      const nuncaOfr = lista.filter(x=>x.motivo==='nunca_ofrecido').length;
+      const contactados = lista.filter(x=>ultimaAccionOportunidad(x.clienteId,x.maquinaId,'Contacto')).length;
+      const pct = Math.round(contactados/lista.length*100);
+
+      if (resumenEl) resumenEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+        <div class="stat-card"><div class="stat-val">${lista.length}</div><div class="stat-label">TOTAL</div></div>
+        <div class="stat-card red"><div class="stat-val">${vencidos}</div><div class="stat-label">CONTRATO VENCIDO</div></div>
+        <div class="stat-card orange"><div class="stat-val">${nuncaOfr}</div><div class="stat-label">NUNCA OFRECIDO</div></div>
+        <div class="stat-card green"><div class="stat-val">${pct}%</div><div class="stat-label">${contactados}/${lista.length} CONTACTADOS</div></div>
+      </div>`;
+
+      cont.innerHTML = lista.map(x => {
+        const col = x.motivo==='contrato_vencido' ? 'var(--red)' : 'var(--orange)';
+        const label = x.motivo==='contrato_vencido' ? 'CONTRATO VENCIDO' : 'NUNCA OFRECIDO';
+        const motivoLabel = x.motivo==='contrato_vencido' ? 'Contrato vencido' : 'Nunca ofrecido';
+        const ultimoContacto = ultimaAccionOportunidad(x.clienteId, x.maquinaId, 'Contacto');
+        const ultimaOferta = ultimaAccionOportunidad(x.clienteId, x.maquinaId, 'Oferta de contrato');
+        const tieneWA = !!x.telefono;
+        const nombreEsc = x.clienteNombre.replace(/'/g,"\\'");
+        const maqEsc = (x.maquinaDesc||'').replace(/'/g,"\\'");
+        return `<div style="padding:10px 14px;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="badge" style="background:${col}22;color:${col}">${label}</span>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:600;color:var(--text)">${x.clienteNombre} · ${x.maquinaDesc}</div>
+              <div style="font-size:11px;color:var(--muted)">${x.detalle}${x.ultimoTrabajoFecha?' · Último trabajo: '+fmtDate(x.ultimoTrabajoFecha):''}</div>
+              ${ultimoContacto ? `<div style="font-size:10px;color:#25d366;margin-top:2px">✔ Último contacto: ${ultimoContacto.detalle} — ${ultimoContacto.fecha}</div>` : `<div style="font-size:10px;color:var(--muted2);margin-top:2px">Sin contacto registrado</div>`}
+              ${ultimaOferta ? `<div style="font-size:10px;color:var(--yellow);margin-top:1px">🛠️ Contrato ofrecido: ${ultimaOferta.detalle} — ${ultimaOferta.fecha}</div>` : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">
+            <button class="btn-secondary" style="font-size:10px;padding:2px 8px" onclick="contactarOportunidad('Reconectar','${x.clienteId}','${nombreEsc}','${x.maquinaId}','${maqEsc}','${motivoLabel}','Personal')">👥 Personal</button>
+            <button class="btn-secondary" style="font-size:10px;padding:2px 8px" onclick="contactarOportunidad('Reconectar','${x.clienteId}','${nombreEsc}','${x.maquinaId}','${maqEsc}','${motivoLabel}','Telefónica')">📞 Telefónica</button>
+            ${tieneWA?`<button class="btn-secondary" style="font-size:10px;padding:2px 8px;background:rgba(37,211,102,0.12);border-color:#25d366;color:#25d366" onclick="contactarOportunidad('Reconectar','${x.clienteId}','${nombreEsc}','${x.maquinaId}','${maqEsc}','${motivoLabel}','WA');abrirWAReconectar('${x.telefono}','${nombreEsc}')">📲 WA</button>`:''}
+            <button class="btn-secondary" style="font-size:10px;padding:2px 8px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="abrirOfrecerContratoModal('Reconectar','${x.clienteId}','${nombreEsc}','${x.maquinaId}','${maqEsc}','${motivoLabel}')">🛠️ Ofrecer contrato</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  renderProspeccionContrato();
+  const badge = document.getElementById('badge-reconectar');
+  if (badge) badge.textContent = lista.length + calcularProspectosContrato().length;
+}
+
+function calcularProspectosContrato() {
+  // Negocios/personas que todavía NO son clientes de MEB — reutiliza el
+  // estado "Prospecto" que ya existe en Clientes, para no crear una tabla
+  // nueva. Cuando Emmanuel les cierra un contrato, alcanza con pasar su
+  // estado a "Activo" — el mismo registro madura, no hay que migrar nada.
+  return DB.clientes.filter(c => c.estado === 'prospecto')
+    .map(c => ({ id:c.id, nombre:c.nombre, empresa:c.empresa||'', zona:c.zona||'', telefono:c.telefono||'', notas:c.notas||'' }))
+    .sort((a,b) => a.nombre.localeCompare(b.nombre));
+}
+
+function renderProspeccionContrato() {
+  const lista = calcularProspectosContrato();
+  const resumenEl = document.getElementById('reconectar-prospeccion-resumen');
+  const cont = document.getElementById('reconectar-prospeccion-lista');
   if (!cont) return;
   if (!lista.length) {
     if (resumenEl) resumenEl.innerHTML = '';
-    cont.innerHTML = `<div class="empty-state"><div class="icon">✅</div><p>Sin nada pendiente — todas las máquinas activas están bajo contrato vigente</p></div>`;
+    cont.innerHTML = `<div class="empty-state"><div class="icon">🎯</div><p>Sin prospectos cargados todavía</p><p style="font-size:11px;color:var(--muted2);margin-top:6px">Sumá uno con el botón "+ Nuevo prospecto" de arriba</p></div>`;
     return;
   }
-  const vencidos = lista.filter(x=>x.motivo==='contrato_vencido').length;
-  const nuncaOfr = lista.filter(x=>x.motivo==='nunca_ofrecido').length;
-  const contactados = lista.filter(x=>tieneComunicacionRegistrada(x.clienteNombre+'|'+x.maquinaDesc+'|'+(x.motivo==='contrato_vencido'?'Contrato vencido':'Nunca ofrecido'))).length;
+  const contactados = lista.filter(x=>ultimaAccionOportunidad(x.id,'','Contacto')).length;
   const pct = Math.round(contactados/lista.length*100);
 
-  if (resumenEl) resumenEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
-    <div class="stat-card"><div class="stat-val">${lista.length}</div><div class="stat-label">TOTAL</div></div>
-    <div class="stat-card red"><div class="stat-val">${vencidos}</div><div class="stat-label">CONTRATO VENCIDO</div></div>
-    <div class="stat-card orange"><div class="stat-val">${nuncaOfr}</div><div class="stat-label">NUNCA OFRECIDO</div></div>
+  if (resumenEl) resumenEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
+    <div class="stat-card"><div class="stat-val">${lista.length}</div><div class="stat-label">PROSPECTOS CARGADOS</div></div>
     <div class="stat-card green"><div class="stat-val">${pct}%</div><div class="stat-label">${contactados}/${lista.length} CONTACTADOS</div></div>
   </div>`;
 
   cont.innerHTML = lista.map(x => {
-    const col = x.motivo==='contrato_vencido' ? 'var(--red)' : 'var(--orange)';
-    const label = x.motivo==='contrato_vencido' ? 'CONTRATO VENCIDO' : 'NUNCA OFRECIDO';
-    const motivoLabel = x.motivo==='contrato_vencido' ? 'Contrato vencido' : 'Nunca ofrecido';
-    const rawKey = x.clienteNombre+'|'+x.maquinaDesc+'|'+motivoLabel;
-    const key = encodeURIComponent(rawKey);
-    const historial = (DB.alertasRepuesto && DB.alertasRepuesto[rawKey]) || [];
-    const ultima = historial.length ? historial[historial.length-1] : null;
+    const ultimoContacto = ultimaAccionOportunidad(x.id, '', 'Contacto');
+    const ultimaOferta = ultimaAccionOportunidad(x.id, '', 'Oferta de contrato');
     const tieneWA = !!x.telefono;
+    const nombreEsc = x.nombre.replace(/'/g,"\\'");
     return `<div style="padding:10px 14px;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
-        <span class="badge" style="background:${col}22;color:${col}">${label}</span>
+        <span class="badge" style="background:rgba(123,179,224,0.15);color:var(--blue-light)">PROSPECTO</span>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;color:var(--text)">${x.clienteNombre} · ${x.maquinaDesc}</div>
-          <div style="font-size:11px;color:var(--muted)">${x.detalle}${x.ultimoTrabajoFecha?' · Último trabajo: '+fmtDate(x.ultimoTrabajoFecha):''}</div>
-          ${ultima ? `<div style="font-size:10px;color:#25d366;margin-top:2px">✔ ${ultima.tipo} — ${ultima.fecha}</div>` : `<div style="font-size:10px;color:var(--muted2);margin-top:2px">Sin comunicación registrada</div>`}
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${x.nombre}${x.empresa && x.empresa!==x.nombre ? ' · '+x.empresa : ''}</div>
+          <div style="font-size:11px;color:var(--muted)">${x.zona||'Sin zona'}${x.notas?' · '+x.notas:''}</div>
+          ${ultimoContacto ? `<div style="font-size:10px;color:#25d366;margin-top:2px">✔ Último contacto: ${ultimoContacto.detalle} — ${ultimoContacto.fecha}</div>` : `<div style="font-size:10px;color:var(--muted2);margin-top:2px">Sin contacto registrado</div>`}
+          ${ultimaOferta ? `<div style="font-size:10px;color:var(--yellow);margin-top:1px">🛠️ Contrato ofrecido: ${ultimaOferta.detalle} — ${ultimaOferta.fecha}</div>` : ''}
         </div>
       </div>
       <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">
-        <button class="btn-secondary" style="font-size:10px;padding:2px 8px" onclick="regCommReconectar('${key}','Personal')">👥 Personal</button>
-        <button class="btn-secondary" style="font-size:10px;padding:2px 8px" onclick="regCommReconectar('${key}','Telefónica')">📞 Telefónica</button>
-        ${tieneWA?`<button class="btn-secondary" style="font-size:10px;padding:2px 8px;background:rgba(37,211,102,0.12);border-color:#25d366;color:#25d366" onclick="regCommReconectar('${key}','WA');abrirWAReconectar('${x.telefono}','${x.clienteNombre.replace(/'/g,"\\'")}')">📲 WA</button>`:''}
-        <button class="btn-secondary" style="font-size:10px;padding:2px 8px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('contrato',{clienteId:'${x.clienteId}',maquinaId:'${x.maquinaId}'})">🛠️ Ofrecer contrato</button>
+        <button class="btn-secondary" style="font-size:10px;padding:2px 8px" onclick="contactarOportunidad('Prospección','${x.id}','${nombreEsc}','','','Prospecto','Personal')">👥 Personal</button>
+        <button class="btn-secondary" style="font-size:10px;padding:2px 8px" onclick="contactarOportunidad('Prospección','${x.id}','${nombreEsc}','','','Prospecto','Telefónica')">📞 Telefónica</button>
+        ${tieneWA?`<button class="btn-secondary" style="font-size:10px;padding:2px 8px;background:rgba(37,211,102,0.12);border-color:#25d366;color:#25d366" onclick="contactarOportunidad('Prospección','${x.id}','${nombreEsc}','','','Prospecto','WA');abrirWAProspecto('${x.telefono}','${nombreEsc}')">📲 WA</button>`:''}
+        <button class="btn-secondary" style="font-size:10px;padding:2px 8px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="abrirOfrecerContratoModal('Prospección','${x.id}','${nombreEsc}','','','Prospecto')">🛠️ Ofrecer contrato</button>
+        <button class="btn-secondary" style="font-size:10px;padding:2px 8px" onclick="editCliente('${x.id}')">✏️ Editar</button>
       </div>
     </div>`;
   }).join('');
 }
 
-function regCommReconectar(keyEncoded, tipo) {
-  const key = decodeURIComponent(keyEncoded);
-  if (!DB.alertasRepuesto) DB.alertasRepuesto = {};
-  if (!DB.alertasRepuesto[key]) DB.alertasRepuesto[key] = [];
+// ── Registro estructurado de acciones (contacto / oferta de contrato) ──────
+// Reemplaza el mecanismo viejo que escribía esto disfrazado de "alerta" en
+// la hoja ALERTAS (imposible de consultar bien después). Ahora vive en su
+// propia hoja, OPORTUNIDADES_LOG, con columnas reales para cada dato.
+function registrarAccionOportunidad(origen, clienteId, clienteNombre, maquinaId, maquinaDesc, motivo, tipoAccion, detalle, notas) {
+  if (!DB.oportunidadesLog) DB.oportunidadesLog = [];
   const fecha = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const hora = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
-  DB.alertasRepuesto[key].push({tipo, fecha, hora});
-  saveLocal(); renderReconectar();
-  const partes = key.split('|'); // cliente|maquina|motivo
-  writeToSheet({action:'addAlerta', row:{
-    id:'reconectar_'+Date.now(),
-    titulo:'RECONECTAR — '+(partes[2]||'')+' — '+(partes[1]||''),
-    cliente:partes[0]||'', fecha, prioridad:'media',
-    descripcion:'Comunicación '+tipo+' registrada a las '+hora, resuelta:true
+  const entry = {
+    id:'op_'+Date.now(), fecha, hora, origen,
+    clienteId, cliente:clienteNombre, maquinaId:maquinaId||'', maquina:maquinaDesc||'',
+    motivo:motivo||'', tipoAccion, detalle, usuario:currentUser||'', notas:notas||''
+  };
+  DB.oportunidadesLog.push(entry);
+  saveLocal();
+  writeToSheet({action:'addOportunidadLog', row:{
+    id:entry.id, fecha, hora, origen,
+    cliente_id:clienteId, cliente:clienteNombre, maquina_id:maquinaId||'', maquina:maquinaDesc||'',
+    motivo:motivo||'', tipo_accion:tipoAccion, detalle, usuario:currentUser||'', notas:notas||''
   }});
-  showToast('Comunicación '+tipo+' registrada ✔','success');
+  return entry;
+}
+
+function accionesOportunidad(clienteId, maquinaId) {
+  return (DB.oportunidadesLog||[])
+    .filter(x => x.clienteId === clienteId && (x.maquinaId||'') === (maquinaId||''))
+    .sort((a,b) => {
+      const da = a.fecha.split('/').reverse().join('-')+'T'+(a.hora||'00:00');
+      const db = b.fecha.split('/').reverse().join('-')+'T'+(b.hora||'00:00');
+      return new Date(db) - new Date(da);
+    });
+}
+
+function ultimaAccionOportunidad(clienteId, maquinaId, tipoAccion) {
+  const acciones = accionesOportunidad(clienteId, maquinaId).filter(x => x.tipoAccion === tipoAccion);
+  return acciones.length ? acciones[0] : null;
+}
+
+function contactarOportunidad(origen, clienteId, clienteNombre, maquinaId, maquinaDesc, motivo, tipoContacto) {
+  registrarAccionOportunidad(origen, clienteId, clienteNombre, maquinaId, maquinaDesc, motivo, 'Contacto', tipoContacto);
+  renderReconectar();
+  showToast('Comunicación '+tipoContacto+' registrada ✔','success');
+}
+
+function abrirOfrecerContratoModal(origen, clienteId, clienteNombre, maquinaId, maquinaDesc, motivo) {
+  const m = document.createElement('div');
+  m.className = 'modal-overlay open';
+  m.id = 'modal-ofrecer-contrato';
+  m.innerHTML = `<div class="modal" style="max-width:420px">
+    <div class="modal-header"><span class="modal-title">OFRECER CONTRATO — ${clienteNombre}</span><button class="modal-close" onclick="document.getElementById('modal-ofrecer-contrato').remove()">✕</button></div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--muted);margin-top:0">Elegí qué plan le vas a ofrecer — queda registrado, y al confirmar abrimos el contrato ya con esta selección cargada.</p>
+      <div class="form-group"><label>Plan a ofrecer</label>
+        <select id="of-con-plan">
+          <option value="1000hs Liviana">1000hs · Liviana</option>
+          <option value="1000hs Pesada">1000hs · Pesada</option>
+          <option value="2000hs Liviana">2000hs · Liviana</option>
+          <option value="2000hs Pesada">2000hs · Pesada</option>
+          <option value="Sin definir todavía">Todavía sin definir</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Notas (opcional)</label><textarea id="of-con-notas" rows="2" placeholder="Ej: pidió cotización por escrito"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="document.getElementById('modal-ofrecer-contrato').remove()">Cancelar</button>
+      <button class="btn-primary" onclick="confirmarOfertaContrato('${origen}','${clienteId}','${clienteNombre.replace(/'/g,"\\'")}','${maquinaId||''}','${(maquinaDesc||'').replace(/'/g,"\\'")}','${motivo||''}')">REGISTRAR Y CONTINUAR</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+function confirmarOfertaContrato(origen, clienteId, clienteNombre, maquinaId, maquinaDesc, motivo) {
+  const planTexto = gv('of-con-plan');
+  const notas = gv('of-con-notas');
+  registrarAccionOportunidad(origen, clienteId, clienteNombre, maquinaId, maquinaDesc, motivo, 'Oferta de contrato', planTexto, notas);
+  document.getElementById('modal-ofrecer-contrato').remove();
+  renderReconectar();
+  showToast('Oferta registrada ✔ — abriendo el contrato...','success');
+  let planCod = '1000', tipoMaqCod = 'liviana';
+  if (planTexto.indexOf('2000')===0) planCod = '2000';
+  if (planTexto.indexOf('Pesada')>=0) tipoMaqCod = 'pesada';
+  setTimeout(()=>openModal('contrato', {clienteId, maquinaId: maquinaId||'', plan:planCod, tipoMaquina:tipoMaqCod}), 300);
 }
 
 function abrirWAReconectar(telefono, clienteNombre) {
   const tel = (telefono||'').replace(/\D/g,'');
   if (!tel) return;
   const msg = `Hola ${clienteNombre}! Te escribimos de MEB Machinery Solutions — hace un tiempo que no coordinamos el mantenimiento de tu máquina. ¿Te gustaría que te pasemos un presupuesto para retomarlo?`;
+  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`,'_blank');
+}
+
+function abrirWAProspecto(telefono, nombre) {
+  const tel = (telefono||'').replace(/\D/g,'');
+  if (!tel) return;
+  const msg = `Hola ${nombre}! Te escribimos de MEB Machinery Solutions — servicio técnico móvil especializado en maquinaria pesada. Nos gustaría contarte sobre nuestros planes de mantenimiento preventivo. ¿Tenés unos minutos para charlar?`;
   window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`,'_blank');
 }
 
