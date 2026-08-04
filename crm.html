@@ -1034,7 +1034,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwBC7UspVdxXPLxjh_9B1F00MpJ7XiOLpJ-1G6yWpWzGPGFhRx9qUaYCNbERE2kbaRFAw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbydCQj45zBfOogbWBNMq27i30ugUhlYUj3tkaqB-yfE9UPDn7QDz73X1JnLPcQUXT1PqQ/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1489,6 +1489,7 @@ async function syncAll() {
             diferenciaPct:parseFloat(r.DIFERENCIA_PCT)||0,
             estado:_estadoFinal,
             fecha:r.FECHA||'', notas:r.NOTAS||'',
+            serieMaquina:r.SERIE_MAQUINA||'', modeloMaquina:r.MODELO_MAQUINA||'', horometro:r.HOROMETRO||'',
             informeGenerado:r.INFORME_GENERADO||r.INFORME||'',
             informeGuardado:r.INFORME_GUARDADO||'',
             informeDriveUrl:r.INFORME_DRIVE_URL||r.LINK_DRIVE||r.INFORME_DRIVE_URL_||''
@@ -6285,6 +6286,12 @@ function openModal(type, data={}) {
           <div><label style="font-size:10px;color:var(--muted)">Teléfono (opcional)</label><input id="f-pcli-nuevo-tel" placeholder="+54 9 11..." style="width:100%;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:6px;border-radius:4px;font-family:Barlow;font-size:12px;margin-top:3px"/></div>
         </div>
       </div>
+      <div class="form-group full" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+        <label style="color:var(--yellow);font-size:11px;letter-spacing:2px">DATOS DE LA MÁQUINA</label>
+      </div>
+      <div class="form-group"><label>N° de serie</label><input id="f-pserie" value="${data.serieMaquina||''}" placeholder="Ej: PY0320D123456"/></div>
+      <div class="form-group"><label>Modelo de la máquina</label><input id="f-pmodelo" value="${data.modeloMaquina||''}" placeholder="Ej: Excavadora CAT 320"/></div>
+      <div class="form-group"><label>Horómetro (hs)</label><input id="f-phorometro" value="${data.horometro||''}" placeholder="Ej: 3250"/></div>
       <div class="form-group"><label>Fecha</label><input id="f-pfecha" type="date" value="${data.fecha||today()}"/></div>
       <div class="form-group"><label>Moneda</label>
         <select id="f-pmoneda" style="background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:8px;border-radius:6px;font-family:Barlow;font-size:13px;width:100%">
@@ -6418,6 +6425,9 @@ function openModal(type, data={}) {
         estado:gv('f-pestado'),
         fecha:gv('f-pfecha'),
         notas:gv('f-pnotas'),
+        serieMaquina:gv('f-pserie'),
+        modeloMaquina:gv('f-pmodelo'),
+        horometro:gv('f-phorometro'),
         fechaDescarga:data.fechaDescarga||'',
         fechaEnviado:fEnviadoFmt,
         informeGenerado:data.informeGenerado||'',
@@ -6929,6 +6939,7 @@ function guardar(tipo, obj, campoRequerido) {
         monto_total: monedaSym + (obj.monto||0).toLocaleString('es-AR'),
         precio_usd: obj.montoUsd||0, tc_al_momento: obj.tcAlMomento||0,
         plazo_pago: obj.plazoPago||'contado', recargo_pct: obj.recargoPct||0,
+        serie_maquina:obj.serieMaquina||'', modelo_maquina:obj.modeloMaquina||'', horometro:obj.horometro||'',
         estado:obj.estado, fecha:obj.fecha, notas:obj.notas||''
       }});
     } else {
@@ -6937,6 +6948,7 @@ function guardar(tipo, obj, campoRequerido) {
         monto:obj.monto,
         precio_usd:obj.montoUsd||0, tc_al_momento:obj.tcAlMomento||0,
         plazo_pago:obj.plazoPago||'contado', recargo_pct:obj.recargoPct||0,
+        serie_maquina:obj.serieMaquina||'', modelo_maquina:obj.modeloMaquina||'', horometro:obj.horometro||'',
         estado:obj.estado, notas:obj.notas||''
       }});
     }
