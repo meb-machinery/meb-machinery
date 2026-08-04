@@ -358,6 +358,7 @@ select option { background:var(--dark); }
     <div class="nav-item" onclick="showPage('pipeline',this)"><span class="nav-icon">🎯</span> Pipeline</div>
     <div class="nav-item" onclick="showPage('informes',this)"><span class="nav-icon">📋</span> Informes <span class="badge" id="badge-informes" style="background:#003B70;display:none">0</span></div>
     <div class="nav-item" onclick="showPage('alertas',this)"><span class="nav-icon">🔔</span> Alertas <span class="nav-badge red" id="badge-alertas">0</span></div>
+    <div class="nav-item" onclick="showPage('reconectar',this)"><span class="nav-icon">🔄</span> Para reconectar <span class="nav-badge red" id="badge-reconectar">0</span></div>
     <div class="nav-item" onclick="showPage('estadisticas',this)"><span class="nav-icon">📈</span> Estadísticas</div>
     <div class="nav-item" onclick="showPage('repuestos',this)"><span class="nav-icon">🔩</span> Repuestos</div>
     <div class="nav-item" onclick="showPage('proveedores',this)"><span class="nav-icon">🏭</span> Proveedores <span class="nav-badge" id="badge-proveedores">0</span></div>
@@ -626,6 +627,16 @@ select option { background:var(--dark); }
         <tbody id="mapa-tabla"></tbody>
       </table></div>
     </div>
+  </div>
+
+  <!-- PARA RECONECTAR -->
+  <div class="page" id="page-reconectar">
+    <div class="page-header"><div class="page-title">PARA <span>RECONECTAR</span></div></div>
+    <p style="font-size:12px;color:var(--muted);margin-top:-10px;margin-bottom:14px">
+      Clientes con máquinas sin contrato de mantenimiento vigente — porque nunca se les ofreció uno, o porque el que tenían ya venció. Cruza Trabajos + Máquinas + Contratos.
+    </p>
+    <div id="reconectar-resumen" style="margin-bottom:14px"></div>
+    <div class="card"><div id="reconectar-lista"></div></div>
   </div>
 
   <!-- ESTADÍSTICAS -->
@@ -1034,7 +1045,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbydCQj45zBfOogbWBNMq27i30ugUhlYUj3tkaqB-yfE9UPDn7QDz73X1JnLPcQUXT1PqQ/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzO-XB_CCB6eVcjn5c2pZhq4qNK1PLPQOax0-eFigsL8zXSHjRBZTDQt5sKZ62taJJuJA/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1599,6 +1610,7 @@ async function syncAll() {
       trabajo: r.TRABAJO_REALIZADO || r.TRABAJO || '',
       repuestos: r.REPUESTOS || '',
       observaciones: r.OBSERVACION || r.OBSERVACIONES || '',
+      horas: r.HORAS_MAQUINA || '',
       fotosCount: (r.FOTOS||'').split(',').map(s=>s.trim()).filter(Boolean).length,
       driveUrl: r.LINK_DRIVE || '',
       guardadoPor: r.GUARDADO_POR || '',
@@ -1798,6 +1810,8 @@ function updateBadges() {
   const vencidosPlazoCon = DB.contratos.filter(c=>diasPlazoVencidoContrato(c)).length;
   const al=DB.alertas.filter(a=>!a.resuelta).length + (typeof calcularAlertasRepuesto==="function" ? calcularAlertasRepuesto().length : 0) + vencidosPlazo + vencidosPlazoCon;
   document.getElementById('badge-alertas').textContent=al;
+  const reconectarCount = (typeof calcularParaReconectar==="function" ? calcularParaReconectar().length : 0);
+  const brc = document.getElementById('badge-reconectar'); if(brc) brc.textContent = reconectarCount;
   document.getElementById('s-clientes').textContent=DB.clientes.length;
   document.getElementById('s-presup').textContent=DB.presupuestos.length;
   document.getElementById('s-trabajos').textContent=enCurso;
@@ -1843,7 +1857,7 @@ function showPage(name, el) {
   const renders={
     dashboard:renderDashboard, clientes:renderClientes, maquinas:renderMaquinas,
     trabajos:renderTrabajos, presupuestos:renderPresupuestos, contratos:renderContratos,
-    pipeline:renderPipeline, alertas:renderAlertas, estadisticas:renderEstadisticas,
+    pipeline:renderPipeline, alertas:renderAlertas, reconectar:renderReconectar, estadisticas:renderEstadisticas,
     repuestos:renderRepuestos, proveedores:renderProveedores, mapa:renderMapa, calendario:renderCalendario,
     informes:renderInformes, actividad:renderActividad
   };
@@ -1888,7 +1902,7 @@ function refreshCurrentPage() {
   const renders={
     dashboard:renderDashboard, clientes:renderClientes, maquinas:renderMaquinas,
     trabajos:renderTrabajos, presupuestos:renderPresupuestos, contratos:renderContratos,
-    pipeline:renderPipeline, alertas:renderAlertas, estadisticas:renderEstadisticas,
+    pipeline:renderPipeline, alertas:renderAlertas, reconectar:renderReconectar, estadisticas:renderEstadisticas,
     repuestos:renderRepuestos, proveedores:renderProveedores, mapa:renderMapa, calendario:renderCalendario,
     actividad:renderActividad
   };
@@ -3442,6 +3456,7 @@ function generarInformeTecnico(presupId) {
     '      trabajo: trabajoRealizado,',
     '      repuestos: repuestosUsados,',
     '      observaciones: observaciones,',
+    '      horasMaquina: horasMaquina,',
     '      fotos: fotos.join(" | "),',
     '      fotosCount: fotosCount,',
     '      videos: videos.join(" | "),',
@@ -5774,7 +5789,6 @@ function generarPresupuestoPDF(presupId) {
     + '<div class="campo"><label>N\u00BA Presupuesto</label><span contenteditable="true">' + numPresup + '</span></div>'
     + '<div class="campo"><label>Fecha</label><span contenteditable="true">' + (p.fecha||fechaHoy) + '</span></div>'
     + '<div class="campo"><label>Estado</label><span contenteditable="true">' + estadoPresup + '</span></div>'
-    + '<div class="campo"><label>M\u00E1quina</label><span contenteditable="true">' + maqDesc + '</span></div>'
     + '<div class="campo"><label>Tipo</label><span contenteditable="true">' + maqTipo + '</span></div>'
     + '<div class="campo"><label>N\u00BA de serie</label><span id="pdf-serie" contenteditable="true">' + ph(p.serieMaquina) + '</span></div>'
     + '<div class="campo"><label>Modelo de la m\u00E1quina</label><span id="pdf-modelo" contenteditable="true">' + ph(p.modeloMaquina) + '</span></div>'
@@ -6057,6 +6071,7 @@ function verInformeDetalle(idx) {
         ${inf.driveUrl ? `<a href="${inf.driveUrl}" target="_blank" class="btn-secondary" style="font-size:11px;padding:5px 12px;text-decoration:none;align-self:flex-start">📄 Abrir en Drive</a>` : ''}
       </div>
       ${campo('Queja', inf.queja)}
+      ${campo('Horas de la máquina', inf.horas)}
       ${campo('Síntoma', inf.sintoma)}
       ${campo('Causa', inf.causa)}
       ${campo('Solución', inf.solucion)}
@@ -7329,6 +7344,127 @@ function calcularAlertasRepuesto() {
     }
   });
   return alertas.sort((a,b)=>a.diasRestantes-b.diasRestantes);
+}
+
+// ============================================================
+// PARA RECONECTAR — máquinas sin contrato de mantenimiento vigente
+// ============================================================
+function calcularParaReconectar() {
+  const resultado = [];
+  const alertaPorMaquina = {};
+  calcularAlertasRepuesto().forEach(a => {
+    const key = a.clienteNombre + '|' + a.maquinaDesc;
+    if (!alertaPorMaquina[key] || a.diasRestantes < alertaPorMaquina[key].diasRestantes) alertaPorMaquina[key] = a;
+  });
+
+  DB.maquinas.forEach(m => {
+    const cl = DB.clientes.find(c => String(c.id) === String(m.clienteId));
+    if (!cl) return;
+    const maquinaDesc = `${m.marca||''} ${m.modelo||''}`.trim() || '—';
+    const alertaFecha = alertaPorMaquina[cl.nombre + '|' + maquinaDesc];
+    const contratosMaquina = DB.contratos.filter(c => c.maquinaId === m.id);
+    const contratoReciente = [...contratosMaquina].sort((a,b) =>
+      (parseFechaAny(b.fechaInicio)||0) - (parseFechaAny(a.fechaInicio)||0))[0];
+
+    let motivo = null, detalle = '';
+    if (!contratosMaquina.length) {
+      if (alertaFecha) { motivo = 'nunca_ofrecido'; detalle = `${alertaFecha.label} · estimado desde el último trabajo`; }
+    } else if (contratoReciente) {
+      const venc = parseFechaAny(contratoReciente.fechaVencimiento);
+      if (contratoReciente.estado === 'vencido' || (venc && venc < new Date())) {
+        motivo = 'contrato_vencido';
+        detalle = `Venció el ${fmtDate(contratoReciente.fechaVencimiento)}`;
+      }
+    }
+    if (!motivo) return;
+
+    const ultimoTrabajo = DB.trabajos.filter(t => t.maquinaId === m.id && t.fechaInicio)
+      .sort((a,b) => (parseFechaAny(b.fechaInicio)||0) - (parseFechaAny(a.fechaInicio)||0))[0];
+
+    resultado.push({
+      clienteId: cl.id, clienteNombre: cl.nombre, telefono: cl.telefono||'',
+      maquinaId: m.id, maquinaDesc, motivo, detalle,
+      ultimoTrabajoFecha: ultimoTrabajo ? ultimoTrabajo.fechaInicio : '',
+      diasVencido: alertaFecha ? alertaFecha.diasRestantes : null
+    });
+  });
+  return resultado.sort((a,b) => (a.diasVencido??999) - (b.diasVencido??999));
+}
+
+function renderReconectar() {
+  const lista = calcularParaReconectar();
+  const badge = document.getElementById('badge-reconectar'); if (badge) badge.textContent = lista.length;
+  const resumenEl = document.getElementById('reconectar-resumen');
+  const cont = document.getElementById('reconectar-lista');
+  if (!cont) return;
+  if (!lista.length) {
+    if (resumenEl) resumenEl.innerHTML = '';
+    cont.innerHTML = `<div class="empty-state"><div class="icon">✅</div><p>Sin nada pendiente — todas las máquinas activas están bajo contrato vigente</p></div>`;
+    return;
+  }
+  const vencidos = lista.filter(x=>x.motivo==='contrato_vencido').length;
+  const nuncaOfr = lista.filter(x=>x.motivo==='nunca_ofrecido').length;
+  const contactados = lista.filter(x=>tieneComunicacionRegistrada(x.clienteNombre+'|'+x.maquinaDesc+'|'+(x.motivo==='contrato_vencido'?'Contrato vencido':'Nunca ofrecido'))).length;
+  const pct = Math.round(contactados/lista.length*100);
+
+  if (resumenEl) resumenEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+    <div class="stat-card"><div class="stat-val">${lista.length}</div><div class="stat-label">TOTAL</div></div>
+    <div class="stat-card red"><div class="stat-val">${vencidos}</div><div class="stat-label">CONTRATO VENCIDO</div></div>
+    <div class="stat-card orange"><div class="stat-val">${nuncaOfr}</div><div class="stat-label">NUNCA OFRECIDO</div></div>
+    <div class="stat-card green"><div class="stat-val">${pct}%</div><div class="stat-label">${contactados}/${lista.length} CONTACTADOS</div></div>
+  </div>`;
+
+  cont.innerHTML = lista.map(x => {
+    const col = x.motivo==='contrato_vencido' ? 'var(--red)' : 'var(--orange)';
+    const label = x.motivo==='contrato_vencido' ? 'CONTRATO VENCIDO' : 'NUNCA OFRECIDO';
+    const motivoLabel = x.motivo==='contrato_vencido' ? 'Contrato vencido' : 'Nunca ofrecido';
+    const rawKey = x.clienteNombre+'|'+x.maquinaDesc+'|'+motivoLabel;
+    const key = encodeURIComponent(rawKey);
+    const historial = (DB.alertasRepuesto && DB.alertasRepuesto[rawKey]) || [];
+    const ultima = historial.length ? historial[historial.length-1] : null;
+    const tieneWA = !!x.telefono;
+    return `<div style="padding:10px 14px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="badge" style="background:${col}22;color:${col}">${label}</span>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${x.clienteNombre} · ${x.maquinaDesc}</div>
+          <div style="font-size:11px;color:var(--muted)">${x.detalle}${x.ultimoTrabajoFecha?' · Último trabajo: '+fmtDate(x.ultimoTrabajoFecha):''}</div>
+          ${ultima ? `<div style="font-size:10px;color:#25d366;margin-top:2px">✔ ${ultima.tipo} — ${ultima.fecha}</div>` : `<div style="font-size:10px;color:var(--muted2);margin-top:2px">Sin comunicación registrada</div>`}
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">
+        <button class="btn-secondary" style="font-size:10px;padding:2px 8px" onclick="regCommReconectar('${key}','Personal')">👥 Personal</button>
+        <button class="btn-secondary" style="font-size:10px;padding:2px 8px" onclick="regCommReconectar('${key}','Telefónica')">📞 Telefónica</button>
+        ${tieneWA?`<button class="btn-secondary" style="font-size:10px;padding:2px 8px;background:rgba(37,211,102,0.12);border-color:#25d366;color:#25d366" onclick="regCommReconectar('${key}','WA');abrirWAReconectar('${x.telefono}','${x.clienteNombre.replace(/'/g,"\\'")}')">📲 WA</button>`:''}
+        <button class="btn-secondary" style="font-size:10px;padding:2px 8px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('contrato',{clienteId:'${x.clienteId}',maquinaId:'${x.maquinaId}'})">🛠️ Ofrecer contrato</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function regCommReconectar(keyEncoded, tipo) {
+  const key = decodeURIComponent(keyEncoded);
+  if (!DB.alertasRepuesto) DB.alertasRepuesto = {};
+  if (!DB.alertasRepuesto[key]) DB.alertasRepuesto[key] = [];
+  const fecha = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const hora = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  DB.alertasRepuesto[key].push({tipo, fecha, hora});
+  saveLocal(); renderReconectar();
+  const partes = key.split('|'); // cliente|maquina|motivo
+  writeToSheet({action:'addAlerta', row:{
+    id:'reconectar_'+Date.now(),
+    titulo:'RECONECTAR — '+(partes[2]||'')+' — '+(partes[1]||''),
+    cliente:partes[0]||'', fecha, prioridad:'media',
+    descripcion:'Comunicación '+tipo+' registrada a las '+hora, resuelta:true
+  }});
+  showToast('Comunicación '+tipo+' registrada ✔','success');
+}
+
+function abrirWAReconectar(telefono, clienteNombre) {
+  const tel = (telefono||'').replace(/\D/g,'');
+  if (!tel) return;
+  const msg = `Hola ${clienteNombre}! Te escribimos de MEB Machinery Solutions — hace un tiempo que no coordinamos el mantenimiento de tu máquina. ¿Te gustaría que te pasemos un presupuesto para retomarlo?`;
+  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`,'_blank');
 }
 
 function renderAlertasRepuesto() {
