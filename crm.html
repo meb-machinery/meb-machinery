@@ -3126,12 +3126,15 @@ function eliminarCommMant(keyEncoded, idx) {
 }
 
 // Recibe cambios editados desde la ventana PDF del presupuesto
-function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas) {
+function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro) {
   const p = DB.presupuestos.find(x=>x.id===presupId);
   if(!p) return;
   p.descripcion = descripcion;
   if(monto > 0) p.monto = monto;
   if(notas) p.notas = notas;
+  if(serie !== undefined) p.serieMaquina = serie;
+  if(modeloMaquina !== undefined) p.modeloMaquina = modeloMaquina;
+  if(horometro !== undefined) p.horometro = horometro;
   saveLocal();
   renderPresupuestos();
   showToast('Presupuesto actualizado y guardado ✔','success');
@@ -3148,6 +3151,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas) {
     monto: monto||p.monto||0,
     precio_usd:p.montoUsd||0, tc_al_momento:p.tcAlMomento||0,
     plazo_pago:p.plazoPago||'contado', recargo_pct:p.recargoPct||0,
+    serie_maquina:p.serieMaquina||'', modelo_maquina:p.modeloMaquina||'', horometro:p.horometro||'',
     estado:p.estado, notas:notas||p.notas||''
   }});
 }
@@ -5541,8 +5545,14 @@ function generarPresupuestoPDF(presupId) {
     '  var monto = parse(document.getElementById("tTotal").innerText) || 0;',
     '  var notasEl = document.getElementById("notasBox");',
     '  var notas = notasEl ? (notasEl.innerText||"").replace("Agregar notas, condiciones especiales o aclaraciones...","").trim() : "";',
+    '  var serieEl = document.getElementById("pdf-serie");',
+    '  var modeloEl = document.getElementById("pdf-modelo");',
+    '  var horometroEl = document.getElementById("pdf-horometro");',
+    '  var serie = serieEl ? (serieEl.innerText||"").replace("—","").trim() : "";',
+    '  var modeloMaq = modeloEl ? (modeloEl.innerText||"").trim() : "";',
+    '  var horometro = horometroEl ? (horometroEl.innerText||"").replace("—","").trim() : "";',
     '  if(window.opener && window.opener._recibirCambiosPresupuesto) {',
-    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas);',
+    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro);',
     '    var sb = document.querySelector(".btn-save");',
     '    if(sb){sb.style.background="#25d366";sb.style.color="#fff";sb.textContent="\\u2714 Guardado";}',
     '    setTimeout(function(){if(sb){sb.style.background="#1A1A1A";sb.style.color="#F4B400";sb.textContent="\\uD83D\\uDCBE GUARDAR";}},2500);',
@@ -5660,8 +5670,9 @@ function generarPresupuestoPDF(presupId) {
     + '<div class="campo"><label>N\u00BA Presupuesto</label><span contenteditable="true">' + numPresup + '</span></div>'
     + '<div class="campo"><label>Fecha</label><span contenteditable="true">' + (p.fecha||fechaHoy) + '</span></div>'
     + '<div class="campo"><label>Estado</label><span contenteditable="true">' + estadoPresup + '</span></div>'
-    + '<div class="campo"><label>M\u00E1quina</label><span contenteditable="true">' + maqDesc + '</span></div>'
-    + '<div class="campo"><label>Tipo</label><span contenteditable="true">' + maqTipo + '</span></div>'
+    + '<div class="campo"><label>N\u00BA de serie</label><span id="pdf-serie" contenteditable="true">' + (p.serieMaquina||'&mdash;') + '</span></div>'
+    + '<div class="campo"><label>Modelo de la m\u00E1quina</label><span id="pdf-modelo" contenteditable="true">' + (p.modeloMaquina||maqDesc) + '</span></div>'
+    + '<div class="campo"><label>Hor\u00F3metro (hs)</label><span id="pdf-horometro" contenteditable="true">' + (p.horometro||'&mdash;') + '</span></div>'
     + '</div></div>'
     + '</div>'
 
