@@ -732,6 +732,7 @@ select option { background:var(--dark); }
         <div class="stat-card red"><div class="stat-val" id="proy-gastos-mes">$0</div><div class="stat-label">📤 Gastos ya cargados este mes</div></div>
         <div class="stat-card orange"><div class="stat-val" id="proy-resultado">$0</div><div class="stat-label">📊 Resultado si cobro todo</div><div class="stat-sub" id="proy-resultado-actual">Hoy: $0</div></div>
       </div>
+      <div id="proy-gastos-desglose" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
       <div id="proy-usd-nota" style="font-size:11px;color:var(--blue-light);margin-top:10px"></div>
       <div class="table-wrap" style="margin-top:12px"><table>
         <thead><tr><th>ORIGEN</th><th>CLIENTE</th><th>CONCEPTO</th><th style="text-align:right">MONTO ARS</th><th>PLAZO / VENCIMIENTO</th></tr></thead>
@@ -2882,6 +2883,25 @@ function renderPipeline() {
 // ============================================================
 // ALERTAS
 // ============================================================
+// v17.18 FIX: "¿tiene comunicación registrada?" antes solo miraba
+// DB.alertasRepuesto — un objeto que vive SOLO en este navegador (nunca se
+// sincroniza con el Sheet). Si registrabas la comunicación en un
+// dispositivo y después mirabas desde otro (o limpiabas el navegador),
+// aparecía como "sin comunicación" aunque sí la hubo — porque regCommMant
+// SÍ la guarda en el Sheet (como una fila en ALERTAS), pero este chequeo
+// nunca la buscaba ahí. Ahora mira las dos fuentes.
+function tieneComunicacionRegistrada(key) {
+  if(DB.alertasRepuesto && DB.alertasRepuesto[key] && DB.alertasRepuesto[key].length>0) return true;
+  const parts = String(key).split('|');
+  const maquinaDesc = (parts[1]||'').trim();
+  const label = (parts[2]||'').trim();
+  if(!maquinaDesc && !label) return false;
+  return (DB.alertas||[]).some(a =>
+    a.titulo && (!maquinaDesc || a.titulo.indexOf(maquinaDesc)>=0) && (!label || a.titulo.indexOf(label)>=0) &&
+    a.descripcion && a.descripcion.indexOf('Comunicación')>=0
+  );
+}
+
 function renderAlertas() {
   // Panel de mantenimiento
   const mantPanel = document.getElementById('alertas-mantenimiento-panel');
@@ -2891,7 +2911,7 @@ function renderAlertas() {
       // Calcular estadísticas de comunicaciones
       const conComm = alMant.filter(a=>{
         const key = a.clienteNombre+'|'+a.maquinaDesc+'|'+a.label;
-        return DB.alertasRepuesto && DB.alertasRepuesto[key] && DB.alertasRepuesto[key].length>0;
+        return tieneComunicacionRegistrada(key);
       }).length;
       const pctComm = Math.round(conComm/alMant.length*100);
       const colPct = pctComm>=80?'#25d366':pctComm>=50?'var(--yellow)':'var(--red)';
@@ -4052,7 +4072,7 @@ function renderEstadisticas() {
     if(!DB.alertasRepuesto) DB.alertasRepuesto={};
     const conComm = al.filter(a=>{
       const key=a.clienteNombre+'|'+a.maquinaDesc+'|'+a.label;
-      return DB.alertasRepuesto[key]&&DB.alertasRepuesto[key].length>0;
+      return tieneComunicacionRegistrada(key);
     }).length;
     const sinComm = al.length - conComm;
     // Contar por tipo
@@ -4241,9 +4261,29 @@ function renderProyeccionMes() {
   set('proy-cobrado-mes', fmtMonto(cobradoMes));
   set('proy-pendiente', fmtMonto(totalPendiente));
   set('proy-pendiente-n', nPendiente + (nPendiente===1?' ítem':' ítems'));
-  set('proy-gastos-mes', fmtMonto(gastosMes));
+  set('proy-gastos-mes', (gastosMes>0?'−':'')+fmtMonto(gastosMes));
   set('proy-resultado', fmtMonto(resultadoProyectado));
   set('proy-resultado-actual', 'Hoy (solo lo ya cobrado): ' + fmtMonto(resultadoActual));
+
+  // Desglose de gastos por categoría — para ver de un vistazo cuánto de lo
+  // que salió este mes fue en repuestos, indumentaria, herramientas, etc.,
+  // no solo el total.
+  const desgloseEl = document.getElementById('proy-gastos-desglose');
+  if(desgloseEl) {
+    if(!comprasMes.length) {
+      desgloseEl.textContent = '';
+    } else {
+      const porCategoria = {};
+      comprasMes.forEach(c => {
+        const cat = (c.categoria||'otros');
+        porCategoria[cat] = (porCategoria[cat]||0) + Number(c.monto||0);
+      });
+      const partes = Object.entries(porCategoria)
+        .sort((a,b)=>b[1]-a[1])
+        .map(([cat,monto]) => `${cat.toUpperCase()}: −${fmtMonto(monto)}`);
+      desgloseEl.innerHTML = `📤 Gastos del mes por categoría: ${partes.join(' · ')}`;
+    }
+  }
   const resEl = document.getElementById('proy-resultado');
   if(resEl) resEl.style.color = resultadoProyectado>=0 ? 'var(--green)' : 'var(--red)';
 
@@ -4414,8 +4454,8 @@ function renderProveedores() {
       <td class="td-name">${c.proveedorNombre||'—'}</td>
       <td>${c.detalle||'—'}</td>
       <td><span class="badge ${catColor}">${c.categoria.toUpperCase()}</span></td>
-      <td><span class="monto">${fmtMonto(c.monto)}</span></td>
-      <td>${c.montoUsd>0?`<span style="color:var(--blue-light)">USD ${c.montoUsd.toLocaleString('es-AR',{maximumFractionDigits:0})}</span><div style="font-size:9px;color:var(--muted2)">TC $${c.tcAlMomento||'—'}</div>`:'<span style="color:var(--muted)">—</span>'}</td>
+      <td><span class="monto" style="color:var(--red)">−${fmtMonto(c.monto)}</span></td>
+      <td>${c.montoUsd>0?`<span style="color:var(--blue-light)">−USD ${c.montoUsd.toLocaleString('es-AR',{maximumFractionDigits:0})}</span><div style="font-size:9px;color:var(--muted2)">TC $${c.tcAlMomento||'—'}</div>`:'<span style="color:var(--muted)">—</span>'}</td>
       <td class="td-muted">${c.notas||'—'}</td>
       <td><div class="actions">
         <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="verEntregasCompra('${c.id}')" title="Ver / registrar entregas">📦 ${entregasTxt}</button>
