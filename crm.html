@@ -3654,6 +3654,36 @@ function enviarWAAlerta() {
 // ============================================================
 // ESTADÍSTICAS
 // ============================================================
+// v17.18: mismo criterio que tieneComunicacionRegistrada — el conteo por
+// tipo (Personal/Telefónica/WA) antes solo miraba DB.alertasRepuesto
+// (local), mostrando "0 contactos totales" aunque el chip de arriba ya
+// mostrara "con comunicación" (que sí mira el Sheet). Ahora, si no hay
+// historial local para una alerta, busca el tipo en el registro sincronizado.
+function contarTipoComunicacion(alMant) {
+  let cPersonal=0, cTel=0, cWA=0;
+  (alMant||[]).forEach(a => {
+    const key = a.clienteNombre+'|'+a.maquinaDesc+'|'+a.label;
+    const local = (DB.alertasRepuesto && DB.alertasRepuesto[key]) || [];
+    if(local.length) {
+      local.forEach(h=>{ if(h.tipo==='Personal')cPersonal++; else if(h.tipo==='Telefónica')cTel++; else if(h.tipo==='WA')cWA++; });
+    } else {
+      const maquinaDesc = (a.maquinaDesc||'').trim(), label = (a.label||'').trim();
+      const match = (DB.alertas||[]).find(al =>
+        al.titulo && (!maquinaDesc || al.titulo.indexOf(maquinaDesc)>=0) && (!label || al.titulo.indexOf(label)>=0) &&
+        al.descripcion && al.descripcion.indexOf('Comunicación')>=0
+      );
+      if(match) {
+        const m = /Comunicaci[oó]n\s+(\S+)/.exec(match.descripcion||'');
+        const tipo = m ? m[1] : '';
+        if(tipo==='Personal') cPersonal++;
+        else if(tipo.indexOf('Tel')===0) cTel++;
+        else if(tipo==='WA') cWA++;
+      }
+    }
+  });
+  return {cPersonal, cTel, cWA};
+}
+
 function renderEstadisticas() {
   // ── Monto cobrado REAL desde trabajos (columna MONTO_COBRADO del Sheet)
   const totalCobradoReal = DB.trabajos.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
@@ -3924,7 +3954,7 @@ function renderEstadisticas() {
       <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
         <div><div style="font-size:12px;color:var(--text)">${c.proveedorNombre||'—'} · ${c.detalle}</div>
         <div class="td-sub">${fmtDate(c.fecha)} · ${c.categoria}</div></div>
-        <span class="monto" style="font-size:13px">${fmtMonto(c.monto)}</span>
+        <span class="monto" style="font-size:13px;color:var(--red)">−${fmtMonto(c.monto)}</span>
       </div>`).join(''):`<div class="empty-state"><div class="icon">📦</div><p>Sin compras registradas</p></div>`;
   }
 
@@ -4076,10 +4106,7 @@ function renderEstadisticas() {
     }).length;
     const sinComm = al.length - conComm;
     // Contar por tipo
-    let cPersonal=0,cTel=0,cWA=0;
-    Object.values(DB.alertasRepuesto).forEach(hist=>{
-      hist.forEach(h=>{ if(h.tipo==='Personal')cPersonal++; else if(h.tipo==='Telefónica')cTel++; else if(h.tipo==='WA')cWA++; });
-    });
+    let {cPersonal, cTel, cWA} = contarTipoComunicacion(al);
     const totalComms = cPersonal+cTel+cWA;
     const statsHTML = al.length>0 ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
       <div style="background:var(--dark);border-radius:6px;padding:12px;text-align:center;border:1px solid var(--border2)">
