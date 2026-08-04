@@ -514,7 +514,7 @@ select option { background:var(--dark); }
   <div class="page" id="page-presupuestos">
     <div class="page-header">
       <div class="page-title">PRESUPUESTOS</div>
-      <button class="btn-primary" onclick="openModal('presupuesto')">+ NUEVO PRESUPUESTO</button>
+      <button class="btn-primary" onclick="abrirNuevoPresupuestoFicha()">+ NUEVO PRESUPUESTO</button>
     </div>
     <div class="filter-tabs">
       <button class="filter-tab active" onclick="setFilter('presup','todos',this)">Todos</button>
@@ -2485,7 +2485,7 @@ function renderPresupuestos() {
       <td style="font-size:10px;color:${p.fechaEnviado?'#6fa8dc':'var(--muted2)'};text-align:center;white-space:nowrap">${p.fechaEnviado?'✔ '+p.fechaEnviado:'—'}</td>
       <td style="font-size:9px;text-align:center;white-space:nowrap">${p.informeGuardado?`<a href="${p.informeDriveUrl||'#'}" target="_blank" style="color:#25d366;text-decoration:none" title="Guardado en Drive">✔ Drive<br><span style='color:var(--muted);font-size:8px'>${p.informeGuardado}</span></a>`:p.informeGenerado?`<span style='color:#9b59b6'>📋 ${p.informeGenerado}</span>`:'—'}</td>
       <td><div class="actions">
-        <button class="btn-secondary" title="Editar" onclick="openModal('presupuesto',DB.presupuestos.find(x=>x.id==='${p.id}'))">✏️</button>
+        <button class="btn-secondary" title="Editar" onclick="generarPresupuestoPDF('${p.id}')">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','rechazado'])">Estado</button>
         ${p.estado==='aprobado'&&p.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Registrar cobro real">💰 Cobro</button>`:''}
         ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroPresupuesto('${p.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`:''}
@@ -3126,18 +3126,58 @@ function eliminarCommMant(keyEncoded, idx) {
 }
 
 // Recibe cambios editados desde la ventana PDF del presupuesto
-function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro) {
-  const p = DB.presupuestos.find(x=>x.id===presupId);
-  if(!p) return;
-  p.descripcion = descripcion;
-  if(monto > 0) p.monto = monto;
-  if(notas) p.notas = notas;
-  if(serie !== undefined) p.serieMaquina = serie;
-  if(modeloMaquina !== undefined) p.modeloMaquina = modeloMaquina;
-  if(horometro !== undefined) p.horometro = horometro;
+function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail) {
+  let p = DB.presupuestos.find(x=>x.id===presupId);
+  const esNuevoPresup = !p;
+
+  // Resolver el cliente: si se eligió uno del desplegable, usar ese ID
+  // directo. Si no, buscar por nombre exacto (para no duplicar si solo se
+  // retocó el texto de un cliente ya existente) o crear uno nuevo con los
+  // datos escritos a mano en la ficha.
+  let clienteIdFinal = clienteIdSel || '';
+  if (!clienteIdFinal) {
+    const nombreLimpio = (cliNombre||'').trim();
+    if (nombreLimpio) {
+      const existente = DB.clientes.find(c => c.nombre.trim().toUpperCase() === nombreLimpio.toUpperCase());
+      if (existente) {
+        clienteIdFinal = existente.id;
+      } else {
+        const nuevoCliente = {
+          id: uid(), nombre: nombreLimpio,
+          empresa: (cliEmpresa||'').trim() || nombreLimpio,
+          zona: (cliZona||'').trim(), telefono: (cliTelefono||'').trim(),
+          email: (cliEmail||'').trim(), estado:'activo', notas:'', _local:true
+        };
+        DB.clientes.push(nuevoCliente);
+        writeToSheet({ action:'addCliente', row: nuevoCliente });
+        clienteIdFinal = nuevoCliente.id;
+      }
+    }
+  }
+
+  if (esNuevoPresup) {
+    if (!clienteIdFinal) { showToast('No se pudo guardar: falta el cliente','error'); return; }
+    p = {
+      id: presupId, num: DB.presupCounter++, clienteId: clienteIdFinal,
+      descripcion: descripcion||'', monto: monto||0, montoUsd:0, tcAlMomento:0,
+      plazoPago:'contado', recargoPct:0, moneda:'ARS', monedaSym:'$',
+      estado:'pendiente', estadoCobro:'pendiente', fecha: today(),
+      notas: notas||'', serieMaquina: serie||'', modeloMaquina: modeloMaquina||'', horometro: horometro||'',
+      _local:true
+    };
+    DB.presupuestos.push(p);
+  } else {
+    p.descripcion = descripcion;
+    if(monto > 0) p.monto = monto;
+    if(notas) p.notas = notas;
+    if(serie !== undefined) p.serieMaquina = serie;
+    if(modeloMaquina !== undefined) p.modeloMaquina = modeloMaquina;
+    if(horometro !== undefined) p.horometro = horometro;
+    if(clienteIdFinal && clienteIdFinal !== p.clienteId) p.clienteId = clienteIdFinal;
+  }
   saveLocal();
   renderPresupuestos();
-  showToast('Presupuesto actualizado y guardado ✔','success');
+  showToast(esNuevoPresup ? ('Presupuesto #'+String(p.num).padStart(4,'0')+' creado ✔') : 'Presupuesto actualizado y guardado ✔','success');
   const clObj2 = DB.clientes.find(x=>x.id===p.clienteId);
   const clNom2 = clObj2 ? clObj2.nombre : '';
   // FIX: esta función tenía el MISMO bug que ya arreglamos en el alta/edición
@@ -3146,14 +3186,23 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
   // PDF y guardar hacía que, al volver a abrirlo, no quedara como se editó.
   // Ahora se manda todo en un único envío, con el separador seguro.
   const descripcionCompleta2 = (descripcion||'').split('\n').join(ITEM_SEP);
-  writeToSheet({ action:'updatePresupuesto', id:p.id, row:{
-    cliente_id:p.clienteId, cliente:clNom2, descripcion:descripcionCompleta2,
-    monto: monto||p.monto||0,
-    precio_usd:p.montoUsd||0, tc_al_momento:p.tcAlMomento||0,
-    plazo_pago:p.plazoPago||'contado', recargo_pct:p.recargoPct||0,
-    serie_maquina:p.serieMaquina||'', modelo_maquina:p.modeloMaquina||'', horometro:p.horometro||'',
-    estado:p.estado, notas:notas||p.notas||''
-  }});
+  if (esNuevoPresup) {
+    writeToSheet({ action:'addPresupuesto', row:{
+      id:p.id, num:p.num, cliente_id:p.clienteId, cliente:clNom2, descripcion:descripcionCompleta2,
+      monto: monto||0, precio_usd:0, tc_al_momento:0, plazo_pago:'contado', recargo_pct:0,
+      serie_maquina:p.serieMaquina||'', modelo_maquina:p.modeloMaquina||'', horometro:p.horometro||'',
+      estado:p.estado, fecha:p.fecha, notas:p.notas||''
+    }});
+  } else {
+    writeToSheet({ action:'updatePresupuesto', id:p.id, row:{
+      cliente_id:p.clienteId, cliente:clNom2, descripcion:descripcionCompleta2,
+      monto: monto||p.monto||0,
+      precio_usd:p.montoUsd||0, tc_al_momento:p.tcAlMomento||0,
+      plazo_pago:p.plazoPago||'contado', recargo_pct:p.recargoPct||0,
+      serie_maquina:p.serieMaquina||'', modelo_maquina:p.modeloMaquina||'', horometro:p.horometro||'',
+      estado:p.estado, notas:notas||p.notas||''
+    }});
+  }
 }
 
 // Genera el Informe Técnico en ventana nueva
@@ -5348,9 +5397,21 @@ function reclamarPresupuestoWhatsApp(presupId) {
   window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
+function abrirNuevoPresupuestoFicha() {
+  generarPresupuestoPDF(uid());
+}
+
 function generarPresupuestoPDF(presupId) {
-  const p = DB.presupuestos.find(x => x.id === presupId);
-  if (!p) return;
+  let p = DB.presupuestos.find(x => x.id === presupId);
+  const esNuevo = !p;
+  if (esNuevo) {
+    // Ficha en blanco — el N° es solo una previsualización: el número real
+    // se reserva recién al GUARDAR, para no dejar huecos si se cierra sin guardar.
+    p = { id: presupId, num: DB.presupCounter, clienteId:'', descripcion:'', monto:0,
+      moneda:'ARS', estado:'pendiente', fecha: today(), notas:'',
+      serieMaquina:'', modeloMaquina:'', horometro:'' };
+  }
+  const ph = (v) => (v || (esNuevo ? '' : '&mdash;'));
   // Buscar cliente por ID exacto, luego por nombre (por si el Sheet guardó el nombre como clienteId)
   const cl = DB.clientes.find(c => String(c.id) === String(p.clienteId))
           || DB.clientes.find(c => c.nombre.toUpperCase() === String(p.clienteNombreSheet||'').toUpperCase())
@@ -5401,6 +5462,17 @@ function generarPresupuestoPDF(presupId) {
   const maqDesc = maqRel ? maqRel.marca+' '+maqRel.modelo+' — '+(maqRel.serie||'S/N') : '—';
   const maqTipo = maqRel ? maqRel.tipo||'—' : '—';
 
+  // Selector de cliente dentro de la ficha — permite elegir uno existente
+  // (autocompleta los datos) o dejarlo en "Cliente nuevo" y escribir los
+  // datos a mano abajo, para presupuestos que arrancan desde cero.
+  const clienteOptionsHtml = DB.clientes.map(c =>
+    '<option value="'+c.id+'"'+(c.id===p.clienteId?' selected':'')+'>'+(c.nombre||'')+'</option>'
+  ).join('');
+  const clientesParaEmbeber = DB.clientes.map(c => ({
+    id:c.id, nombre:c.nombre||'', empresa:c.empresa||'', zona:c.zona||'',
+    telefono:c.telefono||'', email:c.email||''
+  }));
+
   // Build rows HTML - no JS needed for initial render
   const monSym = (p.monedaSym||'$');
   let rowsHTML = '';
@@ -5423,10 +5495,26 @@ function generarPresupuestoPDF(presupId) {
   // Inline JS - written as a regular string, NO template substitution inside
   const jsCode = [
     'var PRESUP_ID=' + JSON.stringify(p.id) + ';',
+    'var ES_NUEVO=' + JSON.stringify(esNuevo) + ';',
+    'var CLIENTES_DATA=' + JSON.stringify(clientesParaEmbeber) + ';',
     'var CLIENTE_TEL=' + JSON.stringify(clienteTel) + ';',
     'var CLIENTE_EMAIL=' + JSON.stringify(clienteEmail) + ';',
     'var CLIENTE_NOMBRE=' + JSON.stringify(clienteNombre) + ';',
     'var NUM_PRESUP=' + JSON.stringify(numPresup) + ';',
+    '',
+    'function onClienteSelectChange() {',
+    '  var sel = document.getElementById("pdf-cli-select");',
+    '  var id = sel ? sel.value : "";',
+    '  if (!id) return;',
+    '  var c = null;',
+    '  for (var i=0;i<CLIENTES_DATA.length;i++) { if (CLIENTES_DATA[i].id === id) { c = CLIENTES_DATA[i]; break; } }',
+    '  if (!c) return;',
+    '  document.getElementById("pdf-cli-nombre").innerText = c.nombre || "";',
+    '  document.getElementById("pdf-cli-empresa").innerText = c.empresa || c.nombre || "";',
+    '  document.getElementById("pdf-cli-zona").innerText = c.zona || "";',
+    '  document.getElementById("pdf-cli-telefono").innerText = c.telefono || "";',
+    '  document.getElementById("pdf-cli-email").innerText = c.email || "";',
+    '}',
     '',
     'var MONEDA_SYM=' + JSON.stringify((p.monedaSym||'$')) + ';',
     'function fmt(n) {',
@@ -5551,8 +5639,20 @@ function generarPresupuestoPDF(presupId) {
     '  var serie = serieEl ? (serieEl.innerText||"").replace("—","").trim() : "";',
     '  var modeloMaq = modeloEl ? (modeloEl.innerText||"").trim() : "";',
     '  var horometro = horometroEl ? (horometroEl.innerText||"").replace("—","").trim() : "";',
+    '  var cliSelEl = document.getElementById("pdf-cli-select");',
+    '  var clienteIdSel = cliSelEl ? cliSelEl.value : "";',
+    '  var cliNombre = (document.getElementById("pdf-cli-nombre")||{}).innerText || "";',
+    '  var cliEmpresa = (document.getElementById("pdf-cli-empresa")||{}).innerText || "";',
+    '  var cliZona = (document.getElementById("pdf-cli-zona")||{}).innerText || "";',
+    '  var cliTelefono = (document.getElementById("pdf-cli-telefono")||{}).innerText || "";',
+    '  var cliEmail = (document.getElementById("pdf-cli-email")||{}).innerText || "";',
+    '  cliNombre = cliNombre.replace("—","").trim();',
+    '  if (!clienteIdSel && !cliNombre) {',
+    '    alert("Eleg\\u00ed un cliente existente o escrib\\u00ed el nombre de uno nuevo antes de guardar.");',
+    '    return;',
+    '  }',
     '  if(window.opener && window.opener._recibirCambiosPresupuesto) {',
-    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro);',
+    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro, clienteIdSel, cliNombre, cliEmpresa.replace("—","").trim(), cliZona.replace("—","").trim(), cliTelefono.replace("—","").trim(), cliEmail.replace("—","").trim());',
     '    var sb = document.querySelector(".btn-save");',
     '    if(sb){sb.style.background="#25d366";sb.style.color="#fff";sb.textContent="\\u2714 Guardado";}',
     '    setTimeout(function(){if(sb){sb.style.background="#1A1A1A";sb.style.color="#F4B400";sb.textContent="\\uD83D\\uDCBE GUARDAR";}},2500);',
@@ -5660,19 +5760,25 @@ function generarPresupuestoPDF(presupId) {
 
     + '<div class="grid-2">'
     + '<div class="seccion"><div class="seccion-titulo">Datos del cliente</div><div class="seccion-body">'
-    + '<div class="campo"><label>Empresa / Nombre</label><span contenteditable="true">' + (cl?cl.nombre:'&mdash;') + '</span></div>'
-    + '<div class="campo"><label>Raz\u00F3n social</label><span contenteditable="true">' + (cl?cl.empresa||cl.nombre:'&mdash;') + '</span></div>'
-    + '<div class="campo"><label>Zona</label><span contenteditable="true">' + (cl?cl.zona||'&mdash;':'&mdash;') + '</span></div>'
-    + '<div class="campo"><label>Tel\u00E9fono</label><span contenteditable="true">' + (cl?cl.telefono||'&mdash;':'&mdash;') + '</span></div>'
-    + '<div class="campo"><label>Email</label><span contenteditable="true">' + (cl?cl.email||'&mdash;':'&mdash;') + '</span></div>'
+    + '<div class="campo"><label>Cliente existente</label><select id="pdf-cli-select" onchange="onClienteSelectChange()" style="width:100%;padding:5px;font-size:12px;border:1px solid #ccc;border-radius:4px;background:#fff;color:#1A1A1A">'
+    + '<option value="">' + (esNuevo?'-- Cliente nuevo, complet\u00E1 abajo --':'-- Cambiar de cliente --') + '</option>'
+    + clienteOptionsHtml
+    + '</select></div>'
+    + '<div class="campo"><label>Empresa / Nombre</label><span id="pdf-cli-nombre" contenteditable="true">' + ph(cl?cl.nombre:'') + '</span></div>'
+    + '<div class="campo"><label>Raz\u00F3n social</label><span id="pdf-cli-empresa" contenteditable="true">' + ph(cl?(cl.empresa||cl.nombre):'') + '</span></div>'
+    + '<div class="campo"><label>Zona</label><span id="pdf-cli-zona" contenteditable="true">' + ph(cl?cl.zona:'') + '</span></div>'
+    + '<div class="campo"><label>Tel\u00E9fono</label><span id="pdf-cli-telefono" contenteditable="true">' + ph(cl?cl.telefono:'') + '</span></div>'
+    + '<div class="campo"><label>Email</label><span id="pdf-cli-email" contenteditable="true">' + ph(cl?cl.email:'') + '</span></div>'
     + '</div></div>'
     + '<div class="seccion"><div class="seccion-titulo">Datos del presupuesto</div><div class="seccion-body">'
     + '<div class="campo"><label>N\u00BA Presupuesto</label><span contenteditable="true">' + numPresup + '</span></div>'
     + '<div class="campo"><label>Fecha</label><span contenteditable="true">' + (p.fecha||fechaHoy) + '</span></div>'
     + '<div class="campo"><label>Estado</label><span contenteditable="true">' + estadoPresup + '</span></div>'
-    + '<div class="campo"><label>N\u00BA de serie</label><span id="pdf-serie" contenteditable="true">' + (p.serieMaquina||'&mdash;') + '</span></div>'
-    + '<div class="campo"><label>Modelo de la m\u00E1quina</label><span id="pdf-modelo" contenteditable="true">' + (p.modeloMaquina||maqDesc) + '</span></div>'
-    + '<div class="campo"><label>Hor\u00F3metro (hs)</label><span id="pdf-horometro" contenteditable="true">' + (p.horometro||'&mdash;') + '</span></div>'
+    + '<div class="campo"><label>M\u00E1quina</label><span contenteditable="true">' + maqDesc + '</span></div>'
+    + '<div class="campo"><label>Tipo</label><span contenteditable="true">' + maqTipo + '</span></div>'
+    + '<div class="campo"><label>N\u00BA de serie</label><span id="pdf-serie" contenteditable="true">' + ph(p.serieMaquina) + '</span></div>'
+    + '<div class="campo"><label>Modelo de la m\u00E1quina</label><span id="pdf-modelo" contenteditable="true">' + ph(p.modeloMaquina) + '</span></div>'
+    + '<div class="campo"><label>Hor\u00F3metro (hs)</label><span id="pdf-horometro" contenteditable="true">' + ph(p.horometro) + '</span></div>'
     + '</div></div>'
     + '</div>'
 
