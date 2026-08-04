@@ -1821,7 +1821,16 @@ function closeSidebarMobile() {
   document.getElementById('sidebarBackdrop').classList.remove('open');
 }
 
+// Recuerda en qué parte de cada pantalla te quedaste — así si entrás a
+// Estadísticas, bajás hasta Alertas, te vas a otro panel y volvés, aparece
+// justo donde lo dejaste (no arriba de todo de nuevo).
+let _scrollPorPagina = {};
 function showPage(name, el) {
+  const paginaActual = document.querySelector('.page.active');
+  if(paginaActual) {
+    const idActual = paginaActual.id.replace('page-','');
+    _scrollPorPagina[idActual] = window.scrollY;
+  }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
@@ -1838,6 +1847,11 @@ function showPage(name, el) {
     informes:renderInformes, actividad:renderActividad
   };
   if(renders[name]) renders[name]();
+  // Restaurar el scroll donde estaba — con una pequeña espera para dar
+  // tiempo a que el contenido (sobre todo el de renders async) ya esté
+  // dibujado antes de mover la pantalla, si no el scroll "no alcanza".
+  const scrollGuardado = _scrollPorPagina[name] || 0;
+  setTimeout(()=>window.scrollTo({top:scrollGuardado, behavior:'instant'}), 60);
 }
 
 // Navega a un cliente específico desde el buscador global
