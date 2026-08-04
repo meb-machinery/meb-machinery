@@ -775,7 +775,7 @@ select option { background:var(--dark); }
     <!-- BLOQUE FINANCIERO MENSUAL -->
     <div style="margin-top:16px">
       <div class="page-title" style="font-size:18px;margin-bottom:12px">EVOLUCIÓN <span>MENSUAL</span></div>
-      <div class="chart-card"><div class="chart-title">COBRADO POR MES</div><div class="chart-wrap chart-wrap-tall"><canvas id="chartMensual"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">COBRADO vs GASTOS POR MES</div><p style="font-size:10.5px;color:var(--muted);margin:-4px 0 6px">Cada compra cuenta en el mes de su propia fecha, no en el mes de hoy — así un gasto de julio siempre se ve en julio.</p><div class="chart-wrap chart-wrap-tall"><canvas id="chartMensual"></canvas></div></div>
     </div>
 
     <!-- IMPACTO CAMBIARIO MES A MES (Presupuestos + Contratos + Trabajos) -->
@@ -4006,7 +4006,13 @@ function renderEstadisticas() {
     });
   }
 
-  // ── FINANCIERO MENSUAL ──
+  // ── FINANCIERO MENSUAL (Cobrado vs Gastos, por el mes REAL de cada uno) ──
+  // Antes solo mostraba lo cobrado, sin los gastos — y la Proyección de
+  // arriba solo mira "el mes de hoy", así que un gasto real (como una
+  // compra de indumentaria) podía no aparecer en ningún lado si se lo
+  // miraba en un mes distinto al que se hizo. Acá cada compra se cuenta en
+  // el mes de SU propia fecha, no en el mes actual — así julio siempre
+  // muestra julio, sin importar qué día sea hoy.
   destroyChart('mensual');
   const porMes = {};
   DB.trabajos.forEach(t=>{
@@ -4014,24 +4020,38 @@ function renderEstadisticas() {
     const d = t.fechaInicio.split('/');
     if(d.length<3) return;
     const key = `${d[2]?.length===4?d[2]:'20'+d[2]}-${(d[1]||d[0]).padStart(2,'0')}`;
-    porMes[key] = (porMes[key]||0) + Number(t.montoCobrado);
+    if(!porMes[key]) porMes[key] = {cobrado:0, gastos:0};
+    porMes[key].cobrado += Number(t.montoCobrado);
+  });
+  (DB.compras||[]).forEach(c=>{
+    if(!c.monto || !c.fecha) return;
+    const d = String(c.fecha).includes('/') ? c.fecha.split('/').reverse() : c.fecha.split('-');
+    if(d.length<3) return;
+    const y = d[0].length===4 ? d[0] : '20'+d[0];
+    const key = `${y}-${String(parseInt(d[1])||1).padStart(2,'0')}`;
+    if(!porMes[key]) porMes[key] = {cobrado:0, gastos:0};
+    porMes[key].gastos += Number(c.monto);
   });
   const mesesOrdenados = Object.keys(porMes).sort();
   if(document.getElementById('chartMensual') && mesesOrdenados.length) {
+    const netoPorMes = mesesOrdenados.map(k => porMes[k].cobrado - porMes[k].gastos);
     charts.mensual = new Chart(document.getElementById('chartMensual'),{
-      type:'bar',
       data:{
         labels: mesesOrdenados.map(k=>{ const [y,m]=k.split('-'); return `${m}/${y.slice(2)}`; }),
-        datasets:[{
-          label:'Cobrado',
-          data: mesesOrdenados.map(k=>porMes[k]),
-          backgroundColor:'rgba(244,180,0,0.7)',
-          borderColor:'#F4B400',
-          borderWidth:1, borderRadius:4,
-          type:'bar'
-        }]
+        datasets:[
+          { type:'bar', label:'Cobrado', data: mesesOrdenados.map(k=>Math.round(porMes[k].cobrado)), backgroundColor:'rgba(244,180,0,0.75)', borderColor:'#F4B400', borderWidth:1, borderRadius:4 },
+          { type:'bar', label:'Gastos (compras)', data: mesesOrdenados.map(k=>-Math.round(porMes[k].gastos)), backgroundColor:'rgba(231,76,60,0.7)', borderColor:'#e74c3c', borderWidth:1, borderRadius:4 },
+          { type:'line', label:'Neto del mes', data: netoPorMes.map(v=>Math.round(v)), borderColor:'#fff', backgroundColor:'#fff', borderWidth:2, pointRadius:3, tension:0.2 }
+        ]
       },
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+fmtMonto(ctx.raw)}}},scales:{y:{beginAtZero:true}}}
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{
+          legend:{display:true, labels:{color:'#ccc', font:{size:10}}},
+          tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+': '+fmtMonto(Math.abs(ctx.raw))}}
+        },
+        scales:{ y:{ beginAtZero:false, ticks:{color:'#999', callback:v=>fmtMonto(v)} }, x:{ ticks:{color:'#999'} } }
+      }
     });
   }
 
