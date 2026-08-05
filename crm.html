@@ -676,6 +676,12 @@ select option { background:var(--dark); }
       <div class="stat-card blue"><div class="stat-val" id="e-conversion">0%</div><div class="stat-label">Tasa de conversión</div><div class="stat-icon">🎯</div></div>
       <div class="stat-card blue"><div class="stat-val" id="e-ticket">$0</div><div class="stat-label">Ticket promedio</div><div class="stat-icon">📊</div></div>
     </div>
+    <!-- Embudo de conversión de presupuestos: Formulado → Enviado → Aprobado -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header"><span class="card-title">🎯 EMBUDO DE CONVERSIÓN DE PRESUPUESTOS</span></div>
+      <p style="font-size:11px;color:var(--muted);margin:0 12px 10px">De lo que se formuló, cuánto efectivamente se mandó al cliente, y de eso, cuánto se aprobó — la pregunta real no es "cuántos aprobé de todos", es "cuántos aprobé de los que el cliente realmente vio".</p>
+      <div id="embudo-conversion-lista" style="padding:0 12px 14px"></div>
+    </div>
     <!-- Fila 3: Estado de cobro -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px">
       <div class="stat-card green"><div class="stat-val" id="e-cobro-cobrado">$0</div><div class="stat-label">✅ Ya cobrado</div><div class="stat-sub" id="e-cobro-cobrado-n">0 trabajos</div></div>
@@ -4045,7 +4051,52 @@ function contarTipoComunicacion(alMant) {
   return {cPersonal, cTel, cWA};
 }
 
+// ── Embudo de conversión de presupuestos ────────────────────────────────────
+// Formulado (creado) → Enviado (mandado al cliente por WA/Mail) → Aprobado.
+// La tasa de conversión simple (aprobados/total) ya existía, pero mezclaba
+// presupuestos que ni siquiera se llegaron a mandar con los que el cliente
+// realmente vio y rechazó — dos cosas muy distintas para decidir qué hacer.
+function renderEmbudoConversion() {
+  const cont = document.getElementById('embudo-conversion-lista');
+  if (!cont) return;
+  const todos = DB.presupuestos;
+  const formulados = todos.length;
+  const enviados = todos.filter(p => p.fechaEnviado).length;
+  const aprobadosDeEnviados = todos.filter(p => p.fechaEnviado && p.estado === 'aprobado').length;
+  const noAprobados = todos.filter(p => p.estado === 'no aprobado').length;
+  const pendientes = todos.filter(p => p.estado === 'pendiente').length;
+
+  function barra(label, valor, total, color, sub) {
+    const pct = total ? Math.round(valor/total*100) : 0;
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+        <span style="color:var(--text);font-weight:600">${label}</span>
+        <span style="color:${color}">${valor}${total?` (${pct}%)`:''}</span>
+      </div>
+      <div style="background:var(--border);border-radius:3px;height:8px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width .4s"></div>
+      </div>
+      ${sub?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${sub}</div>`:''}
+    </div>`;
+  }
+
+  if (!formulados) {
+    cont.innerHTML = `<p style="font-size:12px;color:var(--muted)">Sin presupuestos cargados todavía.</p>`;
+    return;
+  }
+
+  cont.innerHTML =
+    barra('📝 Formulados', formulados, formulados, 'var(--yellow)', 'Todos los presupuestos creados') +
+    barra('📤 Enviados al cliente', enviados, formulados, '#6fa8dc', enviados ? `${Math.round(enviados/formulados*100)}% de los formulados llegó a mandarse` : 'Todavía no se mandó ninguno por WA o Mail desde la ficha') +
+    barra('✅ Aprobados (de los que se mandaron)', aprobadosDeEnviados, enviados, '#25d366', enviados ? `${Math.round(aprobadosDeEnviados/enviados*100)}% de los que el cliente vio, dijo que sí` : 'Todavía no hay base para calcular esto') +
+    `<div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--muted)">
+      <span>❌ No aprobados: <strong style="color:var(--red)">${noAprobados}</strong></span>
+      <span>⏳ Pendientes: <strong style="color:var(--yellow)">${pendientes}</strong></span>
+    </div>`;
+}
+
 function renderEstadisticas() {
+  renderEmbudoConversion();
   // ── Monto cobrado REAL desde trabajos (columna MONTO_COBRADO del Sheet)
   const totalCobradoReal = DB.trabajos.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
 
