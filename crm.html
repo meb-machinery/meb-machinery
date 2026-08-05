@@ -382,6 +382,7 @@ select option { background:var(--dark); }
       <div class="page-title">PANEL <span>PRINCIPAL</span></div>
       <button class="btn-primary" onclick="syncAll()">↺ ACTUALIZAR DATOS</button>
     </div>
+    <div id="recordatorios-hoy-card" style="display:none;margin-bottom:16px"></div>
     <div class="stats-grid" style="grid-template-columns:repeat(5,1fr)">
       <div class="stat-card yellow"><div class="stat-val" id="s-clientes">0</div><div class="stat-label">Clientes</div><div class="stat-icon">👥</div><div class="stat-sub" id="s-clientes-sub">—</div></div>
       <div class="stat-card blue"><div class="stat-val" id="s-presup">0</div><div class="stat-label">Presupuestos</div><div class="stat-icon">📋</div><div class="stat-sub" id="s-presup-sub">—</div></div>
@@ -2058,6 +2059,7 @@ function renderDashboard() {
     }).join('')}</tbody></table></div>`:`<div class="empty-state"><div class="icon">📋</div><p>Sin presupuestos</p></div>`;
 
   renderResumenCambiarioDashboard();
+  renderRecordatoriosHoy();
 }
 
 // ── FUENTE DEL DÓLAR DE REFERENCIA ──────────────────────────────────────
@@ -7450,6 +7452,68 @@ function estimarProximoCambio(fechaStr, tipoStr) {
   const proximaFecha = new Date(fecha.getTime() + diasTotales * 24*60*60*1000);
   return { label, hs, diasTotales, proximaFecha, fechaBase: fecha };
 }
+
+// ============================================================
+// RECORDATORIOS DE HOY — widget del Dashboard, para que el recordatorio de
+// service no dependa de que alguien se acuerde de abrir Alertas. Reusa el
+// mismo motor de detección (calcularAlertasRepuesto) y el mismo flujo de
+// WhatsApp ya probado (regCommMantWA → previewMsgAlerta → enviarWAAlerta).
+// ============================================================
+function diasDesdeUltimoContactoMant(key) {
+  const historial = (DB.alertasRepuesto && DB.alertasRepuesto[key]) || [];
+  if (!historial.length) return Infinity;
+  const ultima = historial[historial.length-1];
+  const partes = (ultima.fecha||'').split('/');
+  if (partes.length !== 3) return Infinity;
+  const fechaContacto = new Date(partes[2], partes[1]-1, partes[0]);
+  return Math.floor((new Date() - fechaContacto) / (24*60*60*1000));
+}
+
+function calcularRecordatoriosHoy() {
+  const RECORDAR_CADA_DIAS = 14; // si ya se contactó hace menos de esto, no insistir
+  return calcularAlertasRepuesto()
+    .filter(a => a.urgencia === 'vencido')
+    .filter(a => {
+      const key = a.clienteNombre+'|'+a.maquinaDesc+'|'+a.label;
+      return diasDesdeUltimoContactoMant(key) >= RECORDAR_CADA_DIAS;
+    });
+}
+
+function renderRecordatoriosHoy() {
+  const cont = document.getElementById('recordatorios-hoy-card');
+  if (!cont) return;
+  const lista = calcularRecordatoriosHoy();
+  if (!lista.length) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
+  cont.style.display = 'block';
+  cont.innerHTML = `<div class="card" style="border-left:3px solid var(--yellow);background:rgba(244,180,0,0.04)">
+    <div class="card-header">
+      <span class="card-title">🔔 RECORDATORIOS DE SERVICE PARA HOY (${lista.length})</span>
+      <span style="font-size:11px;color:var(--muted)">Mantenimiento vencido — prevenir es más barato que reparar</span>
+    </div>
+    <div style="padding:4px 12px 10px">${lista.map(a => {
+      const cl = DB.clientes.find(c => c.nombre === a.clienteNombre);
+      const tieneWA = cl && cl.telefono;
+      const key = encodeURIComponent(a.clienteNombre+'|'+a.maquinaDesc+'|'+a.label);
+      const aJson = encodeURIComponent(JSON.stringify({
+        clienteNombre:a.clienteNombre, maquinaDesc:a.maquinaDesc,
+        label:a.label, hs:a.hs, fechaBase:a.fechaBase,
+        urgencia:a.urgencia, diasRestantes:a.diasRestantes,
+        telefono:cl?(cl.telefono||''):''
+      }));
+      return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600;color:var(--text)">${a.clienteNombre} · ${a.maquinaDesc}</div>
+          <div style="font-size:11px;color:var(--muted)">${a.label} · vencido hace ${Math.abs(a.diasRestantes)} días</div>
+        </div>
+        ${tieneWA
+          ? `<button class="btn-secondary" style="font-size:11px;padding:4px 10px;background:rgba(37,211,102,0.12);border-color:#25d366;color:#25d366" onclick="regCommMantWA('${key}','${aJson}')">📲 Mandar recordatorio</button>`
+          : `<span style="font-size:10px;color:var(--muted2)">Sin WhatsApp cargado</span>`}
+      </div>`;
+    }).join('')}
+    </div>
+  </div>`;
+}
+
 
 function calcularAlertasRepuesto() {
   const alertas = [];
