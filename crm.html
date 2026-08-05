@@ -382,7 +382,6 @@ select option { background:var(--dark); }
       <div class="page-title">PANEL <span>PRINCIPAL</span></div>
       <button class="btn-primary" onclick="syncAll()">↺ ACTUALIZAR DATOS</button>
     </div>
-    <div id="recordatorios-hoy-card" style="display:none;margin-bottom:16px"></div>
     <div class="stats-grid" style="grid-template-columns:repeat(5,1fr)">
       <div class="stat-card yellow"><div class="stat-val" id="s-clientes">0</div><div class="stat-label">Clientes</div><div class="stat-icon">👥</div><div class="stat-sub" id="s-clientes-sub">—</div></div>
       <div class="stat-card blue"><div class="stat-val" id="s-presup">0</div><div class="stat-label">Presupuestos</div><div class="stat-icon">📋</div><div class="stat-sub" id="s-presup-sub">—</div></div>
@@ -2059,7 +2058,6 @@ function renderDashboard() {
     }).join('')}</tbody></table></div>`:`<div class="empty-state"><div class="icon">📋</div><p>Sin presupuestos</p></div>`;
 
   renderResumenCambiarioDashboard();
-  renderRecordatoriosHoy();
 }
 
 // ── FUENTE DEL DÓLAR DE REFERENCIA ──────────────────────────────────────
@@ -2219,6 +2217,85 @@ function verCliente(id) {
 // ============================================================
 // MAQUINAS
 // ============================================================
+function verMaquina(id) {
+  const m = DB.maquinas.find(x=>x.id===id);
+  if (!m) return;
+  const cl = DB.clientes.find(c=>String(c.id)===String(m.clienteId));
+  const trabajos = DB.trabajos.filter(t=>t.maquinaId===m.id)
+    .sort((a,b)=>(parseFechaAny(b.fechaInicio)||0)-(parseFechaAny(a.fechaInicio)||0));
+  const presupuestos = DB.presupuestos.filter(p=>p.maquinaId===m.id)
+    .sort((a,b)=>(parseFechaAny(b.fecha)||0)-(parseFechaAny(a.fecha)||0));
+  const contratos = DB.contratos.filter(c=>c.maquinaId===m.id)
+    .sort((a,b)=>(parseFechaAny(b.fechaInicio)||0)-(parseFechaAny(a.fechaInicio)||0));
+  const contratoActivo = contratos.find(c=>c.estado==='activo');
+
+  // Horómetro: lecturas conocidas desde los presupuestos vinculados a esta
+  // máquina (es el único lugar con serie+horómetro+fecha bien atados).
+  const lecturasHorometro = presupuestos
+    .filter(p=>p.horometro)
+    .map(p=>({horas:p.horometro, fecha:p.fecha}))
+    .sort((a,b)=>(parseFechaAny(b.fecha)||0)-(parseFechaAny(a.fecha)||0));
+
+  // Próximo mantenimiento estimado — misma lógica que Alertas, pero acotada
+  // al trabajo más reciente de ESTA máquina puntual.
+  const ultimoTrabajoConTitulo = trabajos.find(t=>t.fechaInicio && t.titulo);
+  const estimacion = ultimoTrabajoConTitulo ? estimarProximoCambio(ultimoTrabajoConTitulo.fechaInicio, ultimoTrabajoConTitulo.titulo) : null;
+
+  document.getElementById('detailContent').innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-family:'Bebas Neue';font-size:22px;color:var(--text);letter-spacing:2px">${m.marca||''} ${m.modelo||''}</div>
+      <div style="font-size:12px;color:var(--yellow);letter-spacing:1px;margin-top:2px">${m.tipo||'—'} · Serie: ${m.serie||'—'}</div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">CLIENTE</div>
+      <div class="detail-row"><span class="detail-key">Dueño</span><span class="detail-val" style="color:var(--yellow);cursor:pointer" onclick="verCliente('${cl?cl.id:''}')">${cl?cl.nombre:'—'}</span></div>
+      ${cl&&cl.telefono?`<div class="detail-row"><span class="detail-key">Teléfono</span><span class="detail-val">${cl.telefono}</span></div>`:''}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">HORÓMETRO</div>
+      ${lecturasHorometro.length ? `
+        <div class="detail-row"><span class="detail-key">Última lectura conocida</span><span class="detail-val" style="color:var(--yellow);font-family:'Bebas Neue';font-size:15px">${lecturasHorometro[0].horas} hs</span></div>
+        <div class="detail-row"><span class="detail-key">Fecha de esa lectura</span><span class="detail-val">${fmtDate(lecturasHorometro[0].fecha)}</span></div>
+        ${lecturasHorometro.length>1?`<div style="margin-top:6px;font-size:11px;color:var(--muted)">Historial: ${lecturasHorometro.map(l=>`${l.horas}hs (${fmtDate(l.fecha)})`).join(' · ')}</div>`:''}
+      ` : `<p style="font-size:12px;color:var(--muted)">Todavía no se cargó ninguna lectura de horómetro para esta máquina — se completa desde el campo "Horómetro" al hacer un presupuesto.</p>`}
+      ${estimacion?`<div class="detail-row" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><span class="detail-key">Próximo estimado</span><span class="detail-val">${estimacion.label} · ${fmtDate(estimacion.proximaFecha.toLocaleDateString('es-AR'))}</span></div>`:''}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">CONTRATO DE MANTENIMIENTO</div>
+      ${contratoActivo ? `
+        <div class="detail-row"><span class="detail-key">Plan</span><span class="detail-val" style="color:#25d366">${contratoActivo.plan||''}hs — Vigente</span></div>
+        <div class="detail-row"><span class="detail-key">Vence</span><span class="detail-val">${fmtDate(contratoActivo.fechaVencimiento)}</span></div>
+      ` : `
+        <p style="font-size:12px;color:var(--muted)">Sin contrato vigente para esta máquina.</p>
+        <button class="btn-secondary" style="font-size:11px;margin-top:4px" onclick="closeDetail();openModal('contrato',{clienteId:'${m.clienteId}',maquinaId:'${m.id}'})">🛠️ Ofrecer contrato</button>
+      `}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">TRABAJOS (${trabajos.length})</div>
+      ${trabajos.length ? trabajos.slice(0,8).map(t=>`<div class="maquina-card" style="cursor:pointer" onclick="verTrabajo('${t.id}')"><div class="maquina-info"><div class="mq-name">${t.titulo||'—'}</div><div class="mq-sub">${fmtDate(t.fechaInicio)} · ${t.estado||''}</div></div></div>`).join('') : '<p style="font-size:12px;color:var(--muted)">Sin trabajos registrados</p>'}
+      ${trabajos.length>8?`<div style="font-size:11px;color:var(--muted);margin-top:4px">+${trabajos.length-8} más</div>`:''}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">PRESUPUESTOS (${presupuestos.length})</div>
+      ${presupuestos.length ? presupuestos.slice(0,8).map(p=>`<div class="maquina-card" style="cursor:pointer" onclick="generarPresupuestoPDF('${p.id}')"><div class="maquina-info"><div class="mq-name">#${String(p.num||'').padStart(4,'0')} · ${fmtMonto(p.monto)}</div><div class="mq-sub">${fmtDate(p.fecha)} · ${p.estado||''}</div></div></div>`).join('') : '<p style="font-size:12px;color:var(--muted)">Sin presupuestos vinculados</p>'}
+      ${presupuestos.length>8?`<div style="font-size:11px;color:var(--muted);margin-top:4px">+${presupuestos.length-8} más</div>`:''}
+    </div>
+
+    ${m.notas?`<div class="detail-section"><div class="detail-section-title">Notas</div><p style="font-size:12px;color:var(--text);line-height:1.6">${m.notas}</p></div>`:''}
+
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn-primary" style="flex:1" onclick="editMaquina('${m.id}')">EDITAR</button>
+      <button class="btn-danger" onclick="eliminar('maquinas','${m.id}');closeDetail()">ELIMINAR</button>
+    </div>`;
+  document.getElementById('detailPanel').classList.add('open');
+  document.getElementById('mainContent').style.marginRight='370px';
+}
+
 function renderMaquinas() {
   const tbody=document.getElementById('tabla-maquinas');
   if(!DB.maquinas.length){tbody.innerHTML=`<tr><td colspan="6"><div class="empty-state"><div class="icon">⚙️</div><p>Sin máquinas</p></div></td></tr>`;return;}
@@ -2232,6 +2309,7 @@ function renderMaquinas() {
       <td class="td-muted">${m.serie||'—'}</td>
       <td><span class="badge badge-yellow">${trs} trabajos</span></td>
       <td><div class="actions">
+        <button class="btn-secondary" onclick="verMaquina('${m.id}')">Ver</button>
         <button class="btn-secondary" onclick="editMaquina('${m.id}')">Editar</button>
         <button class="btn-danger" onclick="eliminar('maquinas','${m.id}')">✕</button>
       </div></td>
@@ -7452,68 +7530,6 @@ function estimarProximoCambio(fechaStr, tipoStr) {
   const proximaFecha = new Date(fecha.getTime() + diasTotales * 24*60*60*1000);
   return { label, hs, diasTotales, proximaFecha, fechaBase: fecha };
 }
-
-// ============================================================
-// RECORDATORIOS DE HOY — widget del Dashboard, para que el recordatorio de
-// service no dependa de que alguien se acuerde de abrir Alertas. Reusa el
-// mismo motor de detección (calcularAlertasRepuesto) y el mismo flujo de
-// WhatsApp ya probado (regCommMantWA → previewMsgAlerta → enviarWAAlerta).
-// ============================================================
-function diasDesdeUltimoContactoMant(key) {
-  const historial = (DB.alertasRepuesto && DB.alertasRepuesto[key]) || [];
-  if (!historial.length) return Infinity;
-  const ultima = historial[historial.length-1];
-  const partes = (ultima.fecha||'').split('/');
-  if (partes.length !== 3) return Infinity;
-  const fechaContacto = new Date(partes[2], partes[1]-1, partes[0]);
-  return Math.floor((new Date() - fechaContacto) / (24*60*60*1000));
-}
-
-function calcularRecordatoriosHoy() {
-  const RECORDAR_CADA_DIAS = 14; // si ya se contactó hace menos de esto, no insistir
-  return calcularAlertasRepuesto()
-    .filter(a => a.urgencia === 'vencido')
-    .filter(a => {
-      const key = a.clienteNombre+'|'+a.maquinaDesc+'|'+a.label;
-      return diasDesdeUltimoContactoMant(key) >= RECORDAR_CADA_DIAS;
-    });
-}
-
-function renderRecordatoriosHoy() {
-  const cont = document.getElementById('recordatorios-hoy-card');
-  if (!cont) return;
-  const lista = calcularRecordatoriosHoy();
-  if (!lista.length) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
-  cont.style.display = 'block';
-  cont.innerHTML = `<div class="card" style="border-left:3px solid var(--yellow);background:rgba(244,180,0,0.04)">
-    <div class="card-header">
-      <span class="card-title">🔔 RECORDATORIOS DE SERVICE PARA HOY (${lista.length})</span>
-      <span style="font-size:11px;color:var(--muted)">Mantenimiento vencido — prevenir es más barato que reparar</span>
-    </div>
-    <div style="padding:4px 12px 10px">${lista.map(a => {
-      const cl = DB.clientes.find(c => c.nombre === a.clienteNombre);
-      const tieneWA = cl && cl.telefono;
-      const key = encodeURIComponent(a.clienteNombre+'|'+a.maquinaDesc+'|'+a.label);
-      const aJson = encodeURIComponent(JSON.stringify({
-        clienteNombre:a.clienteNombre, maquinaDesc:a.maquinaDesc,
-        label:a.label, hs:a.hs, fechaBase:a.fechaBase,
-        urgencia:a.urgencia, diasRestantes:a.diasRestantes,
-        telefono:cl?(cl.telefono||''):''
-      }));
-      return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
-        <div style="flex:1">
-          <div style="font-size:12px;font-weight:600;color:var(--text)">${a.clienteNombre} · ${a.maquinaDesc}</div>
-          <div style="font-size:11px;color:var(--muted)">${a.label} · vencido hace ${Math.abs(a.diasRestantes)} días</div>
-        </div>
-        ${tieneWA
-          ? `<button class="btn-secondary" style="font-size:11px;padding:4px 10px;background:rgba(37,211,102,0.12);border-color:#25d366;color:#25d366" onclick="regCommMantWA('${key}','${aJson}')">📲 Mandar recordatorio</button>`
-          : `<span style="font-size:10px;color:var(--muted2)">Sin WhatsApp cargado</span>`}
-      </div>`;
-    }).join('')}
-    </div>
-  </div>`;
-}
-
 
 function calcularAlertasRepuesto() {
   const alertas = [];
