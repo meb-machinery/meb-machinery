@@ -3270,6 +3270,30 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
     }
   }
 
+  // FIX: si se eligió un cliente YA EXISTENTE del desplegable, los cambios
+  // hechos a mano en Empresa/Zona/Teléfono/Email dentro de la ficha se
+  // descartaban en silencio — solo se guardaban al crear un cliente nuevo.
+  // Ahora, si algo cambió, se actualiza el cliente real.
+  if (clienteIdFinal) {
+    const clExistente = DB.clientes.find(c => c.id === clienteIdFinal);
+    if (clExistente) {
+      const nombreLimpio2 = (cliNombre||'').trim();
+      const empresaLimpia = (cliEmpresa||'').trim();
+      const zonaLimpia = (cliZona||'').trim();
+      const telLimpio = (cliTelefono||'').trim();
+      const emailLimpio = (cliEmail||'').trim();
+      let cambioCliente = false;
+      if (nombreLimpio2 && clExistente.nombre !== nombreLimpio2) { clExistente.nombre = nombreLimpio2; cambioCliente = true; }
+      if (clExistente.empresa !== empresaLimpia) { clExistente.empresa = empresaLimpia; cambioCliente = true; }
+      if (clExistente.zona !== zonaLimpia) { clExistente.zona = zonaLimpia; cambioCliente = true; }
+      if (clExistente.telefono !== telLimpio) { clExistente.telefono = telLimpio; cambioCliente = true; }
+      if (clExistente.email !== emailLimpio) { clExistente.email = emailLimpio; cambioCliente = true; }
+      if (cambioCliente) {
+        writeToSheet({ action:'addCliente', row: clExistente });
+      }
+    }
+  }
+
   if (esNuevoPresup) {
     if (!clienteIdFinal) { showToast('No se pudo guardar: falta el cliente','error'); return; }
     p = {
