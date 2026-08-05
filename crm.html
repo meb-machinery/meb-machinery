@@ -1055,7 +1055,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyhD0YRazEclaZFGoZ1B80zFSFWCbZUHOpyXG6U8tVTi17qMCI5yEK7SkadlSFl3eDgnA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwk4-kj3TKGLoH47EmTrpN45OFg7fAHSN4b_A_HjbFKAvS4h76wV9ikAfVOII8BWgBYSw/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1405,7 +1405,8 @@ async function syncAll() {
     }));
     if(mq.length) DB.maquinas = mq.map(r=>({
       id:resolverIdEstable(r,'MAQUINAS'), clienteId:String(r.CLIENTE_ID||'').trim(), marca:r.MARCA||'',
-      modelo:r.MODELO||'', serie:r.SERIE||'', tipo:r.TIPO||'', notas:r.NOTAS||''
+      modelo:r.MODELO||'', serie:r.SERIE||'', tipo:r.TIPO||'',
+      horometro:r.HOROMETRO||'', horometroFecha:r.HOROMETRO_FECHA||'', notas:r.NOTAS||''
     })); else if(!DB.maquinas.length) DB.maquinas=[];
     if(tr.length) DB.trabajos = tr.map(r=>({
       id:resolverIdEstable(r,'TRABAJOS'), clienteId:String(r.CLIENTE_ID||'').trim(), maquinaId:String(r.MAQUINA_ID||'').trim(),
@@ -2203,7 +2204,7 @@ function verCliente(id) {
     </div>
     <div class="detail-section">
       <div class="detail-section-title">Máquinas (${mqs.length})</div>
-      ${mqs.length?mqs.map(m=>`<div class="maquina-card"><div class="maquina-info"><div class="mq-name">${m.marca} ${m.modelo}</div><div class="mq-sub">${m.tipo||''} · Serie: ${m.serie||'—'}</div></div><span class="badge badge-blue">Máquina</span></div>`).join(''):'<p style="font-size:12px;color:var(--muted)">Sin máquinas registradas</p>'}
+      ${mqs.length?mqs.map(m=>`<div class="maquina-card" style="cursor:pointer" onclick="verMaquina('${m.id}')"><div class="maquina-info"><div class="mq-name">${m.marca} ${m.modelo}</div><div class="mq-sub">${m.tipo||''} · Serie: ${m.serie||'—'}</div></div><span class="badge badge-blue">Ver →</span></div>`).join(''):'<p style="font-size:12px;color:var(--muted)">Sin máquinas registradas</p>'}
     </div>
     ${c.notas?`<div class="detail-section"><div class="detail-section-title">Notas</div><p style="font-size:12px;color:var(--text);line-height:1.6">${c.notas}</p></div>`:''}
     <div style="display:flex;gap:8px;margin-top:16px">
@@ -2255,11 +2256,11 @@ function verMaquina(id) {
 
     <div class="detail-section">
       <div class="detail-section-title">HORÓMETRO</div>
-      ${lecturasHorometro.length ? `
-        <div class="detail-row"><span class="detail-key">Última lectura conocida</span><span class="detail-val" style="color:var(--yellow);font-family:'Bebas Neue';font-size:15px">${lecturasHorometro[0].horas} hs</span></div>
-        <div class="detail-row"><span class="detail-key">Fecha de esa lectura</span><span class="detail-val">${fmtDate(lecturasHorometro[0].fecha)}</span></div>
-        ${lecturasHorometro.length>1?`<div style="margin-top:6px;font-size:11px;color:var(--muted)">Historial: ${lecturasHorometro.map(l=>`${l.horas}hs (${fmtDate(l.fecha)})`).join(' · ')}</div>`:''}
-      ` : `<p style="font-size:12px;color:var(--muted)">Todavía no se cargó ninguna lectura de horómetro para esta máquina — se completa desde el campo "Horómetro" al hacer un presupuesto.</p>`}
+      ${m.horometro ? `
+        <div class="detail-row"><span class="detail-key">Última lectura conocida</span><span class="detail-val" style="color:var(--yellow);font-family:'Bebas Neue';font-size:15px">${m.horometro} hs</span></div>
+        <div class="detail-row"><span class="detail-key">Fecha de esa lectura</span><span class="detail-val">${fmtDate(m.horometroFecha)}</span></div>
+        ${lecturasHorometro.length>1?`<div style="margin-top:6px;font-size:11px;color:var(--muted)">Historial de presupuestos: ${lecturasHorometro.map(l=>`${l.horas}hs (${fmtDate(l.fecha)})`).join(' · ')}</div>`:''}
+      ` : `<p style="font-size:12px;color:var(--muted)">Todavía no se cargó ninguna lectura de horómetro para esta máquina — se completa acá mismo con "Editar", o solo con cargar el campo "Horómetro" en un presupuesto.</p>`}
       ${estimacion?`<div class="detail-row" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><span class="detail-key">Próximo estimado</span><span class="detail-val">${estimacion.label} · ${fmtDate(estimacion.proximaFecha.toLocaleDateString('es-AR'))}</span></div>`:''}
     </div>
 
@@ -3276,11 +3277,33 @@ function marcarPresupuestoEnviadoManual(presupId) {
 // hay serie) y la vincula — o la crea de cero si es la primera vez que
 // aparece. Si el presupuesto ya estaba vinculado a una máquina de una
 // edición anterior, actualiza esa misma en vez de crear una duplicada.
-function resolverOAutoCrearMaquina(clienteId, serie, modelo, tipo, maquinaIdPrevia) {
+function resolverOAutoCrearMaquina(clienteId, serie, modelo, tipo, maquinaIdPrevia, horometro, fechaPresupuesto) {
   const serieLimpia = (serie||'').trim();
   const modeloLimpio = (modelo||'').trim();
   const tipoLimpio = (tipo||'').trim();
-  if (!serieLimpia && !modeloLimpio) return maquinaIdPrevia || '';
+  const horometroLimpio = (horometro||'').trim();
+  if (!serieLimpia && !modeloLimpio && !horometroLimpio) return maquinaIdPrevia || '';
+
+  // Actualiza el horómetro de la máquina SOLO si esta lectura es más nueva
+  // (o igual) que la que ya tenía guardada — para que una edición vieja no
+  // pise una lectura más reciente cargada después.
+  function actualizarHorometro(m) {
+    if (!horometroLimpio) return false;
+    const fechaNueva = parseFechaAny(fechaPresupuesto);
+    const fechaActual = parseFechaAny(m.horometroFecha);
+    if (fechaActual && fechaNueva && fechaNueva < fechaActual) return false;
+    if (m.horometro === horometroLimpio && m.horometroFecha === (fechaPresupuesto||m.horometroFecha||'')) return false;
+    m.horometro = horometroLimpio;
+    m.horometroFecha = fechaPresupuesto || m.horometroFecha || '';
+    return true;
+  }
+
+  function sincronizar(m) {
+    writeToSheet({ action:'addMaquina', row: {
+      id:m.id, clienteId:m.clienteId, marca:m.marca||'', modelo:m.modelo||'',
+      serie:m.serie||'', tipo:m.tipo||'', horometro:m.horometro||'', horometroFecha:m.horometroFecha||'', notas:m.notas||''
+    }});
+  }
 
   if (maquinaIdPrevia) {
     const existente = DB.maquinas.find(m => m.id === maquinaIdPrevia);
@@ -3289,35 +3312,33 @@ function resolverOAutoCrearMaquina(clienteId, serie, modelo, tipo, maquinaIdPrev
       if (serieLimpia && existente.serie !== serieLimpia) { existente.serie = serieLimpia; cambio = true; }
       if (modeloLimpio && existente.modelo !== modeloLimpio) { existente.modelo = modeloLimpio; cambio = true; }
       if (tipoLimpio && existente.tipo !== tipoLimpio) { existente.tipo = tipoLimpio; cambio = true; }
-      if (cambio) {
-        saveLocal();
-        writeToSheet({ action:'addMaquina', row: {
-          id:existente.id, clienteId:existente.clienteId, marca:existente.marca||'',
-          modelo:existente.modelo||'', serie:existente.serie||'', tipo:existente.tipo||'', notas:existente.notas||''
-        }});
-      }
+      if (actualizarHorometro(existente)) cambio = true;
+      if (cambio) { saveLocal(); sincronizar(existente); }
       return existente.id;
     }
   }
 
+  let encontrada = null;
   if (serieLimpia) {
-    const porSerie = DB.maquinas.find(m => String(m.clienteId)===String(clienteId) && (m.serie||'').trim().toUpperCase() === serieLimpia.toUpperCase());
-    if (porSerie) return porSerie.id;
+    encontrada = DB.maquinas.find(m => String(m.clienteId)===String(clienteId) && (m.serie||'').trim().toUpperCase() === serieLimpia.toUpperCase());
   } else if (modeloLimpio) {
-    const porModelo = DB.maquinas.find(m => String(m.clienteId)===String(clienteId) && (m.modelo||'').trim().toUpperCase() === modeloLimpio.toUpperCase());
-    if (porModelo) return porModelo.id;
+    encontrada = DB.maquinas.find(m => String(m.clienteId)===String(clienteId) && (m.modelo||'').trim().toUpperCase() === modeloLimpio.toUpperCase());
   }
+  if (encontrada) {
+    if (actualizarHorometro(encontrada)) { saveLocal(); sincronizar(encontrada); }
+    return encontrada.id;
+  }
+
+  if (!serieLimpia && !modeloLimpio) return ''; // solo había horómetro suelto y no hay dónde vincularlo
 
   const nueva = {
     id: uid(), clienteId, marca:'', modelo: modeloLimpio, serie: serieLimpia,
-    tipo: tipoLimpio, notas:'Creada automáticamente desde un presupuesto', _local:true
+    tipo: tipoLimpio, horometro: horometroLimpio, horometroFecha: horometroLimpio?(fechaPresupuesto||''):'',
+    notas:'Creada automáticamente desde un presupuesto', _local:true
   };
   DB.maquinas.push(nueva);
   saveLocal();
-  writeToSheet({ action:'addMaquina', row: {
-    id:nueva.id, clienteId:nueva.clienteId, marca:'', modelo:nueva.modelo,
-    serie:nueva.serie, tipo:nueva.tipo, notas:nueva.notas
-  }});
+  sincronizar(nueva);
   return nueva.id;
 }
 
@@ -3399,7 +3420,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
   // Auto-registrar/vincular la máquina — el pedido de Emmanuel: con solo
   // cargar serie+modelo (y tipo) en el presupuesto, la máquina queda de alta
   // sola en el sector Máquinas, sin tener que ir a cargarla ahí a mano.
-  p.maquinaId = resolverOAutoCrearMaquina(clienteIdFinal, serie, modeloMaquina, tipoMaquina, p.maquinaId);
+  p.maquinaId = resolverOAutoCrearMaquina(clienteIdFinal, serie, modeloMaquina, tipoMaquina, p.maquinaId, horometro, p.fecha);
 
   saveLocal();
   renderPresupuestos();
@@ -6385,9 +6406,14 @@ function openModal(type, data={}) {
       <div class="form-group"><label>Modelo</label><input id="f-modelo" value="${data.modelo||''}"/></div>
       <div class="form-group"><label>Número de serie</label><input id="f-serie" value="${data.serie||''}"/></div>
       <div class="form-group"><label>Tipo de máquina</label><input id="f-tipo" value="${data.tipo||''}" placeholder="Compresor, torno, bomba..."/></div>
+      <div class="form-group"><label>Horómetro (hs)</label><input id="f-mhorometro" value="${data.horometro||''}" placeholder="Ej: 3250"/></div>
       <div class="form-group full"><label>Notas</label><textarea id="f-mnotas">${data.notas||''}</textarea></div>
     </div>`;
-    onSave=()=>guardar('maquinas',{id:data.id||uid(),clienteId:gv('f-mcli'),marca:gv('f-marca'),modelo:gv('f-modelo'),serie:gv('f-serie'),tipo:gv('f-tipo'),notas:gv('f-mnotas')},'marca');
+    onSave=()=>{
+      const horometroNuevo = gv('f-mhorometro');
+      const horometroFecha = (horometroNuevo && horometroNuevo !== (data.horometro||'')) ? today() : (data.horometroFecha||'');
+      guardar('maquinas',{id:data.id||uid(),clienteId:gv('f-mcli'),marca:gv('f-marca'),modelo:gv('f-modelo'),serie:gv('f-serie'),tipo:gv('f-tipo'),horometro:horometroNuevo,horometroFecha,notas:gv('f-mnotas')},'marca');
+    };
   }
 
   else if(type==='trabajo') {
@@ -7248,7 +7274,8 @@ function guardar(tipo, obj, campoRequerido) {
   if(tipo==='maquinas') {
     writeToSheet({ action:'addMaquina', row: {
       id:obj.id, clienteId:obj.clienteId, marca:obj.marca||'',
-      modelo:obj.modelo||'', serie:obj.serie||'', tipo:obj.tipo||'', notas:obj.notas||''
+      modelo:obj.modelo||'', serie:obj.serie||'', tipo:obj.tipo||'',
+      horometro:obj.horometro||'', horometroFecha:obj.horometroFecha||'', notas:obj.notas||''
     }});
   }
 
