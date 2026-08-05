@@ -525,6 +525,7 @@ select option { background:var(--dark); }
       <button class="filter-tab" onclick="setFilter('presup','no aprobado',this)">No aprobados</button>
     </div>
     <div class="search-bar"><span>🔍</span><input type="text" placeholder="Buscar número, cliente, descripción..." id="searchPresupuestos" oninput="renderPresupuestos()"></div>
+    <div id="presup-resumen-estados" style="margin-bottom:12px"></div>
     <div class="card"><div class="table-wrap"><table>
       <thead><tr><th>#</th><th>Cliente</th><th>Descripción</th><th>Monto</th><th>Estado</th><th>Fecha</th><th>Estado documento</th><th style="color:#9b59b6">Informe</th><th>Acciones</th></tr></thead>
       <tbody id="tabla-presupuestos"></tbody>
@@ -1054,7 +1055,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby7W4Z_ys0X2VMotqVwOuFS7hrRMLqbtSjlEXQMLmQDHZBpokU4y7KcUq6v1fG8zS4xtA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxAAS8SP3iWMmQttMK9iVUkdStYVvi9LtmkMVU8kkx0__BTTrnXhqtVDlgmWW8EkJDh/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1511,6 +1512,7 @@ async function syncAll() {
             fecha:r.FECHA||'', notas:r.NOTAS||'',
             serieMaquina:r.SERIE_MAQUINA||'', modeloMaquina:r.MODELO_MAQUINA||'', horometro:r.HOROMETRO||'',
             fechaDescarga:r.FECHA_DESCARGA||'', fechaEnviado:r.FECHA_ENVIADO||'',
+            maquinaId:r.MAQUINA_ID||'',
             informeGenerado:r.INFORME_GENERADO||r.INFORME||'',
             informeGuardado:r.INFORME_GUARDADO||'',
             informeDriveUrl:r.INFORME_DRIVE_URL||r.LINK_DRIVE||r.INFORME_DRIVE_URL_||''
@@ -2489,6 +2491,20 @@ function renderTrabajos() {
 // PRESUPUESTOS
 // ============================================================
 function renderPresupuestos() {
+  // Resumen siempre visible (no depende del filtro activo ni del buscador) —
+  // responde de un vistazo "cuántos no aprobados hay y cuánta plata es".
+  const resumenEl = document.getElementById('presup-resumen-estados');
+  if (resumenEl) {
+    const noAprob = DB.presupuestos.filter(p=>p.estado==='no aprobado');
+    const aprob = DB.presupuestos.filter(p=>p.estado==='aprobado');
+    const pend = DB.presupuestos.filter(p=>p.estado==='pendiente');
+    const sum = (arr) => arr.reduce((a,p)=>a+(parseFloat(p.monto)||0),0);
+    resumenEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+      <div class="stat-card orange"><div class="stat-val">${pend.length}</div><div class="stat-label">PENDIENTES · ${fmtMonto(sum(pend))}</div></div>
+      <div class="stat-card green"><div class="stat-val">${aprob.length}</div><div class="stat-label">APROBADOS · ${fmtMonto(sum(aprob))}</div></div>
+      <div class="stat-card red"><div class="stat-val">${noAprob.length}</div><div class="stat-label">NO APROBADOS · ${fmtMonto(sum(noAprob))}</div></div>
+    </div>`;
+  }
   let data=DB.presupuestos;
   if(filters.presup!=='todos') data=data.filter(p=>p.estado===filters.presup);
   // Orden por N° — antes se mostraban en el orden en que venían del Sheet
@@ -3176,7 +3192,56 @@ function marcarPresupuestoEnviadoManual(presupId) {
   showToast('Marcado como Enviado ✔','success');
 }
 
-function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail) {
+// Busca si el cliente ya tiene una máquina con esa serie (o ese modelo, si no
+// hay serie) y la vincula — o la crea de cero si es la primera vez que
+// aparece. Si el presupuesto ya estaba vinculado a una máquina de una
+// edición anterior, actualiza esa misma en vez de crear una duplicada.
+function resolverOAutoCrearMaquina(clienteId, serie, modelo, tipo, maquinaIdPrevia) {
+  const serieLimpia = (serie||'').trim();
+  const modeloLimpio = (modelo||'').trim();
+  const tipoLimpio = (tipo||'').trim();
+  if (!serieLimpia && !modeloLimpio) return maquinaIdPrevia || '';
+
+  if (maquinaIdPrevia) {
+    const existente = DB.maquinas.find(m => m.id === maquinaIdPrevia);
+    if (existente) {
+      let cambio = false;
+      if (serieLimpia && existente.serie !== serieLimpia) { existente.serie = serieLimpia; cambio = true; }
+      if (modeloLimpio && existente.modelo !== modeloLimpio) { existente.modelo = modeloLimpio; cambio = true; }
+      if (tipoLimpio && existente.tipo !== tipoLimpio) { existente.tipo = tipoLimpio; cambio = true; }
+      if (cambio) {
+        saveLocal();
+        writeToSheet({ action:'addMaquina', row: {
+          id:existente.id, clienteId:existente.clienteId, marca:existente.marca||'',
+          modelo:existente.modelo||'', serie:existente.serie||'', tipo:existente.tipo||'', notas:existente.notas||''
+        }});
+      }
+      return existente.id;
+    }
+  }
+
+  if (serieLimpia) {
+    const porSerie = DB.maquinas.find(m => String(m.clienteId)===String(clienteId) && (m.serie||'').trim().toUpperCase() === serieLimpia.toUpperCase());
+    if (porSerie) return porSerie.id;
+  } else if (modeloLimpio) {
+    const porModelo = DB.maquinas.find(m => String(m.clienteId)===String(clienteId) && (m.modelo||'').trim().toUpperCase() === modeloLimpio.toUpperCase());
+    if (porModelo) return porModelo.id;
+  }
+
+  const nueva = {
+    id: uid(), clienteId, marca:'', modelo: modeloLimpio, serie: serieLimpia,
+    tipo: tipoLimpio, notas:'Creada automáticamente desde un presupuesto', _local:true
+  };
+  DB.maquinas.push(nueva);
+  saveLocal();
+  writeToSheet({ action:'addMaquina', row: {
+    id:nueva.id, clienteId:nueva.clienteId, marca:'', modelo:nueva.modelo,
+    serie:nueva.serie, tipo:nueva.tipo, notas:nueva.notas
+  }});
+  return nueva.id;
+}
+
+function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail, tipoMaquina) {
   let p = DB.presupuestos.find(x=>x.id===presupId);
   const esNuevoPresup = !p;
 
@@ -3213,7 +3278,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
       plazoPago:'contado', recargoPct:0, moneda:'ARS', monedaSym:'$',
       estado:'pendiente', estadoCobro:'pendiente', fecha: today(),
       notas: notas||'', serieMaquina: serie||'', modeloMaquina: modeloMaquina||'', horometro: horometro||'',
-      _local:true
+      maquinaId:'', _local:true
     };
     DB.presupuestos.push(p);
   } else {
@@ -3225,6 +3290,12 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
     if(horometro !== undefined) p.horometro = horometro;
     if(clienteIdFinal && clienteIdFinal !== p.clienteId) p.clienteId = clienteIdFinal;
   }
+
+  // Auto-registrar/vincular la máquina — el pedido de Emmanuel: con solo
+  // cargar serie+modelo (y tipo) en el presupuesto, la máquina queda de alta
+  // sola en el sector Máquinas, sin tener que ir a cargarla ahí a mano.
+  p.maquinaId = resolverOAutoCrearMaquina(clienteIdFinal, serie, modeloMaquina, tipoMaquina, p.maquinaId);
+
   saveLocal();
   renderPresupuestos();
   showToast(esNuevoPresup ? ('Presupuesto #'+String(p.num).padStart(4,'0')+' creado ✔') : 'Presupuesto actualizado y guardado ✔','success');
@@ -3241,6 +3312,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
       id:p.id, num:p.num, cliente_id:p.clienteId, cliente:clNom2, descripcion:descripcionCompleta2,
       monto: monto||0, precio_usd:0, tc_al_momento:0, plazo_pago:'contado', recargo_pct:0,
       serie_maquina:p.serieMaquina||'', modelo_maquina:p.modeloMaquina||'', horometro:p.horometro||'',
+      maquina_id:p.maquinaId||'',
       estado:p.estado, fecha:p.fecha, notas:p.notas||''
     }});
   } else {
@@ -3250,6 +3322,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
       precio_usd:p.montoUsd||0, tc_al_momento:p.tcAlMomento||0,
       plazo_pago:p.plazoPago||'contado', recargo_pct:p.recargoPct||0,
       serie_maquina:p.serieMaquina||'', modelo_maquina:p.modeloMaquina||'', horometro:p.horometro||'',
+      maquina_id:p.maquinaId||'',
       estado:p.estado, notas:notas||p.notas||''
     }});
   }
@@ -5475,7 +5548,7 @@ function generarPresupuestoPDF(presupId) {
       const fb=b.fechaInicio?new Date(b.fechaInicio.split('/').reverse().join('-')):new Date(0);
       return fb-fa;
     })[0] || null;
-  const maqRel = tRel ? DB.maquinas.find(m=>m.id===tRel.maquinaId) : null;
+  const maqRel = (p.maquinaId && DB.maquinas.find(m=>m.id===p.maquinaId)) || (tRel ? DB.maquinas.find(m=>m.id===tRel.maquinaId) : null);
 
   const numPresup = String(p.num||p.id).padStart(4,'0');
   const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
@@ -5689,9 +5762,11 @@ function generarPresupuestoPDF(presupId) {
     '  var serieEl = document.getElementById("pdf-serie");',
     '  var modeloEl = document.getElementById("pdf-modelo");',
     '  var horometroEl = document.getElementById("pdf-horometro");',
+    '  var tipoEl = document.getElementById("pdf-tipo");',
     '  var serie = serieEl ? (serieEl.innerText||"").replace("—","").trim() : "";',
     '  var modeloMaq = modeloEl ? (modeloEl.innerText||"").trim() : "";',
     '  var horometro = horometroEl ? (horometroEl.innerText||"").replace("—","").trim() : "";',
+    '  var tipoMaq = tipoEl ? (tipoEl.innerText||"").replace("—","").trim() : "";',
     '  var cliSelEl = document.getElementById("pdf-cli-select");',
     '  var clienteIdSel = cliSelEl ? cliSelEl.value : "";',
     '  var cliNombre = (document.getElementById("pdf-cli-nombre")||{}).innerText || "";',
@@ -5705,7 +5780,7 @@ function generarPresupuestoPDF(presupId) {
     '    return;',
     '  }',
     '  if(window.opener && window.opener._recibirCambiosPresupuesto) {',
-    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro, clienteIdSel, cliNombre, cliEmpresa.replace("—","").trim(), cliZona.replace("—","").trim(), cliTelefono.replace("—","").trim(), cliEmail.replace("—","").trim());',
+    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro, clienteIdSel, cliNombre, cliEmpresa.replace("—","").trim(), cliZona.replace("—","").trim(), cliTelefono.replace("—","").trim(), cliEmail.replace("—","").trim(), tipoMaq);',
     '    var sb = document.querySelector(".btn-save");',
     '    if(sb){sb.style.background="#25d366";sb.style.color="#fff";sb.textContent="\\u2714 Guardado";}',
     '    setTimeout(function(){if(sb){sb.style.background="#1A1A1A";sb.style.color="#F4B400";sb.textContent="\\uD83D\\uDCBE GUARDAR";}},2500);',
@@ -5827,7 +5902,7 @@ function generarPresupuestoPDF(presupId) {
     + '<div class="campo"><label>N\u00BA Presupuesto</label><span contenteditable="true">' + numPresup + '</span></div>'
     + '<div class="campo"><label>Fecha</label><span contenteditable="true">' + (p.fecha||fechaHoy) + '</span></div>'
     + '<div class="campo"><label>Estado</label><span contenteditable="true">' + estadoPresup + '</span></div>'
-    + '<div class="campo"><label>Tipo</label><span contenteditable="true">' + maqTipo + '</span></div>'
+    + '<div class="campo"><label>Tipo</label><span id="pdf-tipo" contenteditable="true">' + maqTipo + '</span></div>'
     + '<div class="campo"><label>N\u00BA de serie</label><span id="pdf-serie" contenteditable="true">' + ph(p.serieMaquina) + '</span></div>'
     + '<div class="campo"><label>Modelo de la m\u00E1quina</label><span id="pdf-modelo" contenteditable="true">' + ph(p.modeloMaquina) + '</span></div>'
     + '<div class="campo"><label>Hor\u00F3metro (hs)</label><span id="pdf-horometro" contenteditable="true">' + ph(p.horometro) + '</span></div>'
