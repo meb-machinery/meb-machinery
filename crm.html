@@ -1055,7 +1055,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwk4-kj3TKGLoH47EmTrpN45OFg7fAHSN4b_A_HjbFKAvS4h76wV9ikAfVOII8BWgBYSw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz1rg-uRxoqI_7jf4oGABSKWlQnx43jULft73qggDQGgMn9ArD-yX-LUxkYrmfx4yH46w/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1401,7 +1401,7 @@ async function syncAll() {
       id:resolverIdEstable(r,'CLIENTES'), nombre:r.NOMBRE||'', empresa:r.EMPRESA||'',
       telefono:r.TELEFONO||'', email:r.EMAIL||'', zona:r.ZONA||'',
       estado:(r.ESTADO||'activo').toLowerCase().trim(), ultimoContacto:r.ULTIMO_CONTACTO||r.ULTIMO_CONTACTO_||'',
-      notas:r.NOTAS||''
+      notas:r.NOTAS||'', tokenPortal:r.TOKEN_PORTAL||''
     }));
     if(mq.length) DB.maquinas = mq.map(r=>({
       id:resolverIdEstable(r,'MAQUINAS'), clienteId:String(r.CLIENTE_ID||'').trim(), marca:r.MARCA||'',
@@ -1737,6 +1737,16 @@ async function syncAll() {
 // UTILS
 // ============================================================
 function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+
+// Token para el portal público del cliente ("Mi flota"). A diferencia de
+// uid() (que combina timestamp + Math.random, adivinable si alguien insiste),
+// usa crypto.getRandomValues — generador criptográficamente seguro disponible
+// en cualquier navegador — para que sea imposible de adivinar por fuerza bruta.
+function generarTokenPortal() {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join('');
+}
 // Los ítems de un presupuesto se guardan internamente separados por '\n', pero
 // un salto de línea real dentro de una celda del Sheet rompe el parser CSV
 // (que separa filas por '\n'). Por eso, al escribir al Sheet se reemplaza por
@@ -2176,6 +2186,26 @@ function renderClientes() {
   }).join('');
 }
 
+function generarYMostrarTokenCliente(id) {
+  const c = DB.clientes.find(x=>x.id===id);
+  if (!c || c.tokenPortal) return; // ya tiene uno — nunca se pisa un token existente
+  c.tokenPortal = generarTokenPortal();
+  saveLocal();
+  writeToSheet({ action:'addCliente', row: c }); // objeto completo — addCliente sobrescribe la fila entera
+  showToast('Enlace generado ✔','success');
+  verCliente(id); // re-renderiza la ficha para mostrar el link nuevo
+}
+
+function copiarLinkPortal(id) {
+  const input = document.getElementById('portal-link-'+id);
+  if (!input) return;
+  input.select();
+  navigator.clipboard && navigator.clipboard.writeText(input.value).then(
+    ()=>showToast('Link copiado ✔','success'),
+    ()=>document.execCommand('copy')
+  );
+}
+
 function verCliente(id) {
   const c=DB.clientes.find(x=>x.id===id); if(!c) return;
   const mqs=DB.maquinas.filter(m=>m.clienteId===id);
@@ -2205,6 +2235,19 @@ function verCliente(id) {
     <div class="detail-section">
       <div class="detail-section-title">Máquinas (${mqs.length})</div>
       ${mqs.length?mqs.map(m=>`<div class="maquina-card" style="cursor:pointer" onclick="verMaquina('${m.id}')"><div class="maquina-info"><div class="mq-name">${m.marca} ${m.modelo}</div><div class="mq-sub">${m.tipo||''} · Serie: ${m.serie||'—'}</div></div><span class="badge badge-blue">Ver →</span></div>`).join(''):'<p style="font-size:12px;color:var(--muted)">Sin máquinas registradas</p>'}
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Portal del cliente — "Mi flota"</div>
+      ${c.tokenPortal ? `
+        <p style="font-size:11px;color:var(--muted);margin-top:0">El cliente ve ahí, en cualquier momento, todas sus máquinas y su historial de trabajos — se actualiza solo, no hace falta reenviarlo.</p>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+          <input id="portal-link-${c.id}" readonly value="https://mebmachinerysolutions.ar/mi-flota.html?t=${c.tokenPortal}" style="flex:1;font-size:11px;padding:6px 8px;background:var(--darker);border:1px solid var(--border);border-radius:4px;color:var(--text)"/>
+          <button class="btn-secondary" style="font-size:11px;padding:6px 10px" onclick="copiarLinkPortal('${c.id}')">📋 Copiar</button>
+        </div>
+      ` : `
+        <p style="font-size:11px;color:var(--muted);margin-top:0">Todavía no tiene enlace generado. Se crea una sola vez y queda fijo para siempre.</p>
+        <button class="btn-secondary" style="font-size:11px;margin-top:4px" onclick="generarYMostrarTokenCliente('${c.id}')">🔗 Generar enlace</button>
+      `}
     </div>
     ${c.notas?`<div class="detail-section"><div class="detail-section-title">Notas</div><p style="font-size:12px;color:var(--text);line-height:1.6">${c.notas}</p></div>`:''}
     <div style="display:flex;gap:8px;margin-top:16px">
