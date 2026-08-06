@@ -55,7 +55,9 @@ body { background:var(--black); color:var(--text); font-family:'Barlow',sans-ser
 .logout-btn:hover { border-color:var(--red); color:var(--red); }
 
 /* SIDEBAR */
-.sidebar { position:fixed; top:54px; left:0; bottom:0; width:196px; background:var(--dark); border-right:1px solid var(--border); display:flex; flex-direction:column; z-index:90; }
+.sidebar { position:fixed; top:54px; left:0; bottom:0; width:196px; background:var(--dark); border-right:1px solid var(--border); display:flex; flex-direction:column; z-index:90; overflow-y:auto; overflow-x:hidden; scrollbar-width:thin; scrollbar-color:var(--border2) var(--dark); }
+.sidebar::-webkit-scrollbar { width:6px; }
+.sidebar::-webkit-scrollbar-thumb { background:var(--border2); border-radius:3px; }
 .nav-section { padding:14px 10px 6px; }
 .nav-label { font-size:9px; color:var(--muted2); letter-spacing:2px; text-transform:uppercase; margin-bottom:6px; padding-left:8px; }
 .nav-item { display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:4px; cursor:pointer; margin-bottom:2px; font-size:13px; color:var(--muted); letter-spacing:0.5px; transition:all 0.15s; border-left:2px solid transparent; }
