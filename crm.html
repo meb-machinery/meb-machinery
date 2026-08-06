@@ -365,6 +365,7 @@ select option { background:var(--dark); }
     <div class="nav-item" onclick="showPage('mapa',this)"><span class="nav-icon">🗺️</span> Mapa clientes</div>
     <div class="nav-item" onclick="showPage('calendario',this)"><span class="nav-icon">📅</span> Calendario</div>
     <div class="nav-item" onclick="showPage('tarifario',this)"><span class="nav-icon">💲</span> Tarifario</div>
+    <div class="nav-item" onclick="showPage('movilidad',this)"><span class="nav-icon">🚗</span> Movilidad</div>
     <div class="nav-item" onclick="showPage('actividad',this)"><span class="nav-icon">🕒</span> Actividad</div>
   </div>
   <div class="sidebar-footer">
@@ -993,6 +994,68 @@ select option { background:var(--dark); }
     </div>
   </div>
 
+  <!-- TARIFARIO DE MOVILIDAD -->
+  <div class="page" id="page-movilidad">
+    <div class="page-header">
+      <div class="page-title">TARIFARIO <span>DE MOVILIDAD</span></div>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-top:-8px">
+      Cargá los km reales (medidos en Google Maps) y el peaje del trayecto — el sistema
+      calcula el total en pesos y en dólares. El valor por km está fijo en USD 0,5.
+    </p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="card">
+        <div class="card-header"><span class="card-title">CALCULADORA</span></div>
+        <div style="padding:14px">
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Cliente (opcional — solo de referencia)</label>
+              <select id="mov-cliente"><option value="">Sin cliente</option></select>
+            </div>
+            <div class="form-group">
+              <label>KM recorridos (ida) *</label>
+              <input id="mov-km" type="number" step="0.1" oninput="calcularMovilidadUI()" placeholder="Ej: 45"/>
+            </div>
+            <div class="form-group">
+              <label>Ida y vuelta</label>
+              <select id="mov-idayvuelta" onchange="calcularMovilidadUI()">
+                <option value="1">Sí (duplica los km)</option>
+                <option value="0">No, solo ida</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Dólar de referencia (Banco Nación)</label>
+              <div style="display:flex;gap:6px">
+                <input id="mov-tc" type="number" oninput="calcularMovilidadUI()" style="flex:1"/>
+                <button type="button" class="btn-secondary" onclick="actualizarTCMovilidad()" style="white-space:nowrap" title="Fuente: Ámbito Financiero — dólar Banco Nación (venta)">↻ En vivo</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Peaje total del trayecto ($ ARS)</label>
+              <input id="mov-peaje" type="number" oninput="calcularMovilidadUI()" placeholder="Sumá abajo desde la tabla de referencia"/>
+            </div>
+          </div>
+          <div id="mov-resultado" class="card" style="padding:12px;background:var(--dark);margin-top:12px"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">TABLA DE REFERENCIA — PEAJES</span>
+          <button class="btn-secondary" style="font-size:11px" onclick="openModal('peaje')">+ AGREGAR</button>
+        </div>
+        <p style="font-size:11px;color:var(--muted);padding:0 14px;margin:6px 0">
+          Cargá acá los corredores que uses seguido (Panamericana, Acceso Oeste, etc.) —
+          revisalos cada tanto, los peajes suben con frecuencia.
+        </p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Corredor</th><th>Con TelePASE</th><th>Sin TelePASE</th><th></th></tr></thead>
+          <tbody id="tabla-peajes"></tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ACTIVIDAD -->
   <div class="page" id="page-actividad">
     <div class="page-header">
@@ -1061,7 +1124,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz1rg-uRxoqI_7jf4oGABSKWlQnx43jULft73qggDQGgMn9ArD-yX-LUxkYrmfx4yH46w/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxnx8at0eM05ZQGco97Yco4WlNnNR73bHqw0sbYCY4oKmHi_oDolZBSG0ujaeQJ6IlNxA/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1208,7 +1271,7 @@ function undoLastChange() {
 let charts = {};
 
 function saveLocal() { try { localStorage.setItem('meb_crm_v2', JSON.stringify(DB)); } catch(e){} }
-function loadLocal() { try { const d=localStorage.getItem('meb_crm_v2'); if(d) DB=JSON.parse(d); if(!DB.presupCounter) DB.presupCounter=1; if(!DB.calendarioEventos) DB.calendarioEventos=[]; if(!DB.alertasRepuesto||Array.isArray(DB.alertasRepuesto)) DB.alertasRepuesto={}; if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; if(!DB.alertas) DB.alertas=[]; if(!DB.tarifario) DB.tarifario=[]; if(!DB.informes) DB.informes=[]; DB.trabajos.forEach(t=>{ if(!t.estadoCobro) t.estadoCobro='pendiente'; }); } catch(e){} }
+function loadLocal() { try { const d=localStorage.getItem('meb_crm_v2'); if(d) DB=JSON.parse(d); if(!DB.presupCounter) DB.presupCounter=1; if(!DB.calendarioEventos) DB.calendarioEventos=[]; if(!DB.alertasRepuesto||Array.isArray(DB.alertasRepuesto)) DB.alertasRepuesto={}; if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; if(!DB.alertas) DB.alertas=[]; if(!DB.tarifario) DB.tarifario=[]; if(!DB.informes) DB.informes=[]; if(!DB.peajes) DB.peajes=[]; DB.trabajos.forEach(t=>{ if(!t.estadoCobro) t.estadoCobro='pendiente'; }); } catch(e){} }
 
 // ============================================================
 // LOGIN
@@ -1367,16 +1430,17 @@ async function syncAll() {
   const _localTrabajos    = (DB.trabajos||[]).filter(x=>x._local);
   const _localProveedores = (DB.proveedores||[]).filter(x=>x._local);
   const _localCompras     = (DB.compras||[]).filter(x=>x._local);
+  const _localPeajes      = (DB.peajes||[]).filter(x=>x._local);
   const _alertasRepuesto  = DB.alertasRepuesto || {};
   const _presupCounter    = DB.presupCounter || 1;
   const _calendarioEventos = DB.calendarioEventos || [];
 
   try {
-    const [cl,mq,tr,pr,al,pv,ct,tf,inf,opl] = await Promise.all([
+    const [cl,mq,tr,pr,al,pv,ct,tf,inf,opl,pj] = await Promise.all([
       fetchSheet('CLIENTES'), fetchSheet('MAQUINAS'),
       fetchSheet('TRABAJOS'), fetchSheet('PRESUPUESTOS'), fetchSheet('ALERTAS'),
       fetchSheet('PROVEEDORES'), fetchSheet('CONTRATOS'), fetchSheet('TARIFARIO'),
-      fetchSheet('INFORMES'), fetchSheet('OPORTUNIDADES_LOG')
+      fetchSheet('INFORMES'), fetchSheet('OPORTUNIDADES_LOG'), fetchSheet('PEAJES')
     ]);
 
     // ── Salvavidas: detectar encabezados rotos ──────────────────────────────
@@ -1647,6 +1711,13 @@ async function syncAll() {
       usuario: r.USUARIO || '', notas: r.NOTAS || ''
     }));
 
+    DB.peajes = (pj.length ? pj : []).map(r => ({
+      id: resolverIdEstable(r,'PEAJES'),
+      corredor: r.CORREDOR || '',
+      conTelepase: parseFloat(r.CON_TELEPASE)||0,
+      sinTelepase: parseFloat(r.SIN_TELEPASE)||0
+    }));
+
     // Restore preserved local data + alertasRepuesto
     DB.alertasRepuesto = _alertasRepuesto;
     // (el contador de presupuestos ya se recalculó correctamente más arriba,
@@ -1673,6 +1744,7 @@ async function syncAll() {
     _localTrabajos.forEach(lt => { if(!DB.trabajos.find(x=>x.id===lt.id)) DB.trabajos.push(lt); });
     _localProveedores.forEach(lp => { if(!DB.proveedores.find(x=>x.id===lp.id)) DB.proveedores.push(lp); });
     _localCompras.forEach(lc => { if(!DB.compras.find(x=>x.id===lc.id)) DB.compras.push(lc); });
+    _localPeajes.forEach(lp => { if(!DB.peajes.find(x=>x.id===lp.id)) DB.peajes.push(lp); });
 
     // Filtra cualquier borrado reciente que el Sheet todavía no reflejó
     // (gviz puede tardar en actualizar su caché tras un delete).
@@ -1684,6 +1756,7 @@ async function syncAll() {
     DB.proveedores = filtrarRecienEliminados('proveedores', DB.proveedores);
     DB.contratos   = filtrarRecienEliminados('contratos', DB.contratos);
     DB.compras     = filtrarRecienEliminados('compras', DB.compras);
+    DB.peajes      = filtrarRecienEliminados('peajes', DB.peajes);
 
     // ── Reparar clienteId corruptos o vacíos ──────────────────────────────────
     DB.presupuestos.forEach(p => {
@@ -1900,7 +1973,7 @@ function showPage(name, el) {
     trabajos:renderTrabajos, presupuestos:renderPresupuestos, contratos:renderContratos,
     pipeline:renderPipeline, alertas:renderAlertas, reconectar:renderReconectar, estadisticas:renderEstadisticas,
     repuestos:renderRepuestos, proveedores:renderProveedores, mapa:renderMapa, calendario:renderCalendario,
-    informes:renderInformes, actividad:renderActividad
+    informes:renderInformes, actividad:renderActividad, movilidad:renderMovilidad
   };
   if(renders[name]) renders[name]();
   // Restaurar el scroll donde estaba — con una pequeña espera para dar
@@ -1945,7 +2018,7 @@ function refreshCurrentPage() {
     trabajos:renderTrabajos, presupuestos:renderPresupuestos, contratos:renderContratos,
     pipeline:renderPipeline, alertas:renderAlertas, reconectar:renderReconectar, estadisticas:renderEstadisticas,
     repuestos:renderRepuestos, proveedores:renderProveedores, mapa:renderMapa, calendario:renderCalendario,
-    actividad:renderActividad
+    actividad:renderActividad, movilidad:renderMovilidad
   };
   if(renders[name]) renders[name]();
 }
@@ -2096,6 +2169,94 @@ async function obtenerDolarReferencia() {
   const data = await res.json();
   if(!data.ok || !data.valor) throw new Error('El Apps Script no devolvió un valor válido');
   return Math.round(Number(data.valor));
+}
+
+// ============================================================
+// TARIFARIO DE MOVILIDAD — 0.5 USD/km + tabla de referencia de peajes
+// ============================================================
+const USD_POR_KM_MOVILIDAD = 0.5;
+let _tcMovilidadActual = 0;
+
+function calcularMovilidad({ km, usdPorKm = USD_POR_KM_MOVILIDAD, tc, peajeArs = 0 }) {
+  const kmN = Number(km) || 0;
+  const tcN = Number(tc) || 0;
+  const peajeN = Number(peajeArs) || 0;
+  const totalUsd = kmN * usdPorKm;
+  const totalArs = tcN > 0 ? Math.round(totalUsd * tcN) + peajeN : null;
+  return { totalUsd: Math.round(totalUsd * 100) / 100, totalArs, kmN, peajeN };
+}
+
+function calcularMovilidadUI() {
+  const kmBase = parseFloat(gv('mov-km')) || 0;
+  const idaYVuelta = gv('mov-idayvuelta') !== '0';
+  const km = idaYVuelta ? kmBase * 2 : kmBase;
+  const tc = parseFloat(gv('mov-tc')) || 0;
+  const peaje = parseFloat(gv('mov-peaje')) || 0;
+  const r = calcularMovilidad({ km, tc, peajeArs: peaje });
+  const el = document.getElementById('mov-resultado');
+  if (!el) return;
+  if (kmBase <= 0) {
+    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:12px">Cargá los km para ver el total</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px">
+      <span>Km a cobrar (${idaYVuelta?'ida y vuelta':'solo ida'})</span><span>${km} km</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--blue-light);margin-bottom:6px">
+      <span>Movilidad (${km} km × USD ${USD_POR_KM_MOVILIDAD})</span><span>USD ${r.totalUsd}</span>
+    </div>
+    ${peaje>0?`<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px"><span>+ Peaje</span><span>${fmtMonto(peaje)}</span></div>`:''}
+    <div style="display:flex;justify-content:space-between;font-size:18px;border-top:1px solid var(--border);padding-top:8px">
+      <span style="color:var(--yellow)">TOTAL MOVILIDAD</span>
+      <span class="monto" style="font-family:'Bebas Neue';font-size:20px">${r.totalArs!==null?fmtMonto(r.totalArs):'—'}</span>
+    </div>
+    ${tc<=0?`<div style="font-size:10px;color:var(--orange);margin-top:6px">⚠️ Cargá el dólar del día para ver el total en pesos</div>`:''}
+  `;
+}
+
+async function actualizarTCMovilidad() {
+  const tcInput = document.getElementById('mov-tc');
+  try {
+    const valor = await obtenerDolarReferencia();
+    _tcMovilidadActual = valor;
+    if (tcInput) tcInput.value = valor;
+    calcularMovilidadUI();
+  } catch (e) {
+    showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
+  }
+}
+
+// Tabla de referencia de peajes — se guarda local + Sheet (hoja PEAJES)
+function renderTablaPeajes() {
+  if (!DB.peajes) DB.peajes = [];
+  const tbody = document.getElementById('tabla-peajes');
+  if (!tbody) return;
+  tbody.innerHTML = DB.peajes.length ? DB.peajes.map(p => `
+    <tr>
+      <td>${p.corredor}</td>
+      <td>${fmtMonto(p.conTelepase)}</td>
+      <td>${fmtMonto(p.sinTelepase)}</td>
+      <td><div class="actions">
+        <button class="btn-secondary" style="font-size:10px;padding:2px 6px" onclick="usarPeajeEnCalculadora(${p.conTelepase})">Usar</button>
+        <button class="btn-danger" style="font-size:10px;padding:2px 6px" onclick="eliminar('peajes','${p.id}')">✕</button>
+      </div></td>
+    </tr>`).join('') : `<tr><td colspan="4"><div class="empty-state"><div class="icon">🛣️</div><p>Sin peajes cargados — sumá el primero</p></div></td></tr>`;
+}
+
+function usarPeajeEnCalculadora(monto) {
+  const actual = parseFloat(gv('mov-peaje')) || 0;
+  document.getElementById('mov-peaje').value = actual + monto;
+  calcularMovilidadUI();
+  showToast('Peaje sumado ✓','success');
+}
+
+function renderMovilidad() {
+  const sel = document.getElementById('mov-cliente');
+  if (sel) sel.innerHTML = '<option value="">Sin cliente</option>' + clienteOptions();
+  renderTablaPeajes();
+  calcularMovilidadUI();
+  if (!_tcMovilidadActual) actualizarTCMovilidad();
 }
 
 // Resumen de dólar en el Dashboard — la pantalla que Emmanuel ve primero al
@@ -6942,6 +7103,24 @@ function openModal(type, data={}) {
       const rowA={id:aObj.id,titulo:aObj.titulo,cliente:clNomAlerta,fecha:aObj.fecha,prioridad:aObj.prioridad,descripcion:aObj.descripcion,resuelta:aObj.resuelta};
       if(esNuevaAlerta) writeToSheet({action:'addAlerta', row:rowA});
       else writeToSheet({action:'addAlerta', id:aObj.id, row:rowA});
+    };
+  }
+  else if(type==='peaje') {
+    title = 'AGREGAR PEAJE DE REFERENCIA';
+    body=`<div class="form-grid">
+      <div class="form-group full"><label>Corredor *</label><input id="f-pjcorredor" placeholder="Ej: Panamericana / Acceso Norte"/></div>
+      <div class="form-group"><label>Con TelePASE ($ ARS)</label><input id="f-pjtelepase" type="number"/></div>
+      <div class="form-group"><label>Sin TelePASE ($ ARS)</label><input id="f-pjmanual" type="number"/></div>
+    </div>`;
+    onSave=()=>{
+      const obj = { id:uid(), corredor:gv('f-pjcorredor'), conTelepase:parseFloat(gv('f-pjtelepase'))||0, sinTelepase:parseFloat(gv('f-pjmanual'))||0 };
+      if(!obj.corredor){ showToast('Completá el nombre del corredor','error'); return; }
+      obj._local = true;
+      if(!DB.peajes) DB.peajes=[];
+      DB.peajes.push(obj);
+      saveLocal(); closeModal(); renderTablaPeajes();
+      writeToSheet({ action:'addPeaje', row: obj });
+      showToast('Peaje guardado ✔','success');
     };
   }
   else if(type==='calEvento') {
