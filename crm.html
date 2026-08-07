@@ -1019,6 +1019,10 @@ select option { background:var(--dark); }
               <input id="mov-km" type="number" step="0.1" oninput="calcularMovilidadUI()" placeholder="Ej: 45"/>
             </div>
             <div class="form-group">
+              <label>Valor por km (USD) *</label>
+              <input id="mov-valorkm" type="number" step="0.01" value="0.5" oninput="calcularMovilidadUI()"/>
+            </div>
+            <div class="form-group">
               <label>Ida y vuelta</label>
               <select id="mov-idayvuelta" onchange="calcularMovilidadUI()">
                 <option value="1">Sí (duplica los km)</option>
@@ -2176,14 +2180,17 @@ async function obtenerDolarReferencia() {
 // ============================================================
 // TARIFARIO DE MOVILIDAD — 0.5 USD/km + tabla de referencia de peajes
 // ============================================================
-const USD_POR_KM_MOVILIDAD = 0.5;
+// El valor USD/km se carga en el campo "mov-valorkm" del formulario (0.5 por
+// defecto, editable) — ya no es una constante fija, para que Emmanuel pueda
+// ajustarlo sin tocar código.
 let _tcMovilidadActual = 0;
 
-function calcularMovilidad({ km, usdPorKm = USD_POR_KM_MOVILIDAD, tc, peajeArs = 0 }) {
+function calcularMovilidad({ km, usdPorKm, tc, peajeArs = 0 }) {
   const kmN = Number(km) || 0;
+  const usdPorKmN = Number(usdPorKm) || 0;
   const tcN = Number(tc) || 0;
   const peajeN = Number(peajeArs) || 0;
-  const totalUsd = kmN * usdPorKm;
+  const totalUsd = kmN * usdPorKmN;
   const totalArs = tcN > 0 ? Math.round(totalUsd * tcN) + peajeN : null;
   return { totalUsd: Math.round(totalUsd * 100) / 100, totalArs, kmN, peajeN };
 }
@@ -2192,9 +2199,10 @@ function calcularMovilidadUI() {
   const kmBase = parseFloat(gv('mov-km')) || 0;
   const idaYVuelta = gv('mov-idayvuelta') !== '0';
   const km = idaYVuelta ? kmBase * 2 : kmBase;
+  const usdPorKm = parseFloat(gv('mov-valorkm')) || 0;
   const tc = parseFloat(gv('mov-tc')) || 0;
   const peaje = parseFloat(gv('mov-peaje')) || 0;
-  const r = calcularMovilidad({ km, tc, peajeArs: peaje });
+  const r = calcularMovilidad({ km, usdPorKm, tc, peajeArs: peaje });
   const el = document.getElementById('mov-resultado');
   if (!el) return;
   if (kmBase <= 0) {
@@ -2206,7 +2214,7 @@ function calcularMovilidadUI() {
       <span>Km a cobrar (${idaYVuelta?'ida y vuelta':'solo ida'})</span><span>${km} km</span>
     </div>
     <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--blue-light);margin-bottom:6px">
-      <span>Movilidad (${km} km × USD ${USD_POR_KM_MOVILIDAD})</span><span>USD ${r.totalUsd}</span>
+      <span>Movilidad (${km} km × USD ${usdPorKm})</span><span>USD ${r.totalUsd}</span>
     </div>
     ${peaje>0?`<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px"><span>+ Peaje</span><span>${fmtMonto(peaje)}</span></div>`:''}
     <div style="display:flex;justify-content:space-between;font-size:18px;border-top:1px solid var(--border);padding-top:8px">
