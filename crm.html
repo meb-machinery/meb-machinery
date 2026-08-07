@@ -3904,10 +3904,10 @@ function generarInformeTecnico(presupId) {
     '  var div=document.createElement("div");',
     '  div.className="foto-item";',
     '  div.innerHTML="<img src=\\""+src+"\\" onerror=\\"this.parentNode.remove()\\">"',
-    '    +"<div class=\\"foto-caption\\"><span class=\\"foto-caption-label\\">\ud83d\udcdd Pie de foto (opcional)</span><input type=\\"text\\" placeholder=\\"Ej: Cambio de reten trasero del diferencial...\\"></div>"',
+    '    +"<div class=\\"foto-caption\\"><span class=\\"foto-caption-label\\">\ud83d\udcdd Pie de foto (opcional)</span><textarea rows=\\"2\\" placeholder=\\"Ej: Cambio de reten trasero del diferencial...\\" oninput=\\"this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'\\"></textarea></div>"',
     '    +"<button onclick=\\"this.parentNode.remove()\\" style=\\"position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px;line-height:1\\">\u00D7</button>";',
     '  cont.appendChild(div);',
-    '  var nuevoInput=div.querySelector(".foto-caption input");',
+    '  var nuevoInput=div.querySelector(".foto-caption textarea");',
     '  if(nuevoInput) nuevoInput.focus();',
     '}',
     '',
@@ -3990,7 +3990,7 @@ function generarInformeTecnico(presupId) {
     '  var fotos=[];',
     '  var fotosCount=0;',
     '  document.querySelectorAll("#fotosContainer .foto-item").forEach(function(item){',
-    '    var inp=item.querySelector("input");',
+    '    var inp=item.querySelector(".foto-caption textarea");',
     '    fotos.push(inp?inp.value:"foto");',
     '    fotosCount++;',
     '  });',
@@ -4128,9 +4128,9 @@ function generarInformeTecnico(presupId) {
     + '.foto-item img{width:100%;max-height:180px;object-fit:cover;display:block}'
     + '.foto-caption{padding:8px}'
     + '.foto-caption-label{font-size:9px;color:#999;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;display:block}'
-    + '.foto-caption input{width:100%;border:1px solid #ddd;border-radius:4px;outline:none;font-size:12px;color:#1A1A1A;background:#fdfdfd;padding:6px 8px}'
-    + '.foto-caption input:focus{border-color:#F4B400;background:#fffdf0}'
-    + '.foto-caption input::placeholder{color:#aaa;font-style:italic}'
+    + '.foto-caption textarea{width:100%;border:1px solid #ddd;border-radius:4px;outline:none;font-size:12px;color:#1A1A1A;background:#fdfdfd;padding:6px 8px;font-family:Arial,sans-serif;resize:vertical;min-height:36px;line-height:1.4}'
+    + '.foto-caption textarea:focus{border-color:#F4B400;background:#fffdf0}'
+    + '.foto-caption textarea::placeholder{color:#aaa;font-style:italic}'
     + '.foto-drop{border:2px dashed #F4B400;border-radius:6px;padding:20px;text-align:center;cursor:pointer;color:#888;font-size:12px;background:#fffdf0}'
     + '.diagnostico-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:14px}'
     + '.diag-cell{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden}'
