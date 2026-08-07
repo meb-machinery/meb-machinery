@@ -1537,15 +1537,11 @@ async function syncAll() {
           // Try every possible column name for cliente
           const _cid = String(r.CLIENTE_ID||r.CLIENTE_ID_||r['CLIENTE ID']||r.CLIENTEID||'').trim();
           const _cnm = String(r.CLIENTE||r.CLIENTE_NOMBRE||r.NOMBRE_CLIENTE||r['CLIENTE_NOMBRE']||'').trim();
-          // If both empty, try to find client value in any column that looks like a name
-          let _clienteResolved = _cid || _cnm;
-          if(!_clienteResolved) {
-            // Scan all keys for the first one that could be a client name/id
-            const skip = new Set(['ID','NUMERO','N°','N°_','DESCRIPCION','DESCRIPCIÓN','MONTO','ESTADO','FECHA','NOTAS','TIPO','CANTIDAD','PRECIO_UNIT.','SUBTOTAL','TOTAL_PRESUP.']);
-            for(const k of Object.keys(r)) {
-              if(!skip.has(k) && typeof r[k]==='string' && r[k].trim()) { _clienteResolved = r[k].trim(); break; }
-            }
-          }
+          // NOTA: antes acá había un escaneo que tomaba el primer valor de texto
+          // de CUALQUIER columna como si fuera el nombre del cliente — eso podía
+          // asignar mal el cliente (agarraba cualquier texto suelto de la fila,
+          // sin verificar nada). Se sacó a propósito: es mejor que quede en
+          // blanco y visible para revisar a mano, que adivinar mal en silencio.
           const _num = r.NUMERO||r['N°']||r['N°']||r.NUM||'';
           const _desc = (r.DESCRIPCION||r['DESCRIPCIÓN']||r.DECSRIPCION||r.TITULO||'').split(ITEM_SEP).join('\n');
           const _monto = parseMonto(r.TOTAL_PRESUP_||r['TOTAL_PRESUP.']||r.MONTO_TOTAL||r.SUBTOTAL||r.MONTO||'0');
@@ -1573,7 +1569,7 @@ async function syncAll() {
             id:pid,
             num:_num||i+1,
             clienteId:_cidFinal,
-            clienteNombreSheet:_cnm||_clienteResolved,
+            clienteNombreSheet:_cnm,
             descripcion:_desc,
             monto:_montoFinal,
             // Dólar: solo existe en presupuestos hechos a partir de ahora (columnas nuevas).
@@ -5694,12 +5690,16 @@ function renderMapa() {
     Object.values(porZona).forEach(({coords,zona,clientes})=>{
       const sz=Math.min(18+clientes.length*4,38);
       const col=clientes.length>2?'#F4B400':(colorEstado[clientes[0]?.estado]||'#7bb3e0');
-      const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${sz+16}" height="${sz+22}">
+      const clientesConCaja = clientes.filter(c => (DB.cajasHerramientas||[]).some(cj=>cj.clienteId===c.id));
+      const tieneCaja = clientesConCaja.length>0;
+      const badgeCaja = tieneCaja ? `<circle cx="${sz+11}" cy="7" r="8" fill="#F5F2EC" stroke="#1A1A1A" stroke-width="1.5"/><text x="${sz+11}" y="10.5" font-size="10" text-anchor="middle">🧰</text>` : '';
+      const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${sz+24}" height="${sz+22}">
         <circle cx="${(sz+16)/2}" cy="${(sz+16)/2}" r="${sz/2}" fill="${col}" stroke="#111" stroke-width="2.5"/>
         <text x="${(sz+16)/2}" y="${(sz+16)/2+4}" font-family="Arial" font-size="${Math.max(9,sz/2.5)}" fill="#111" text-anchor="middle" font-weight="900">${clientes.length}</text>
         <polygon points="${(sz+16)/2-5},${sz+13} ${(sz+16)/2+5},${sz+13} ${(sz+16)/2},${sz+22}" fill="${col}"/>
+        ${badgeCaja}
       </svg>`;
-      const icon=L.divIcon({html:svg,className:'',iconSize:[sz+16,sz+22],iconAnchor:[(sz+16)/2,sz+22],popupAnchor:[0,-(sz+18)]});
+      const icon=L.divIcon({html:svg,className:'',iconSize:[sz+24,sz+22],iconAnchor:[(sz+16)/2,sz+22],popupAnchor:[0,-(sz+18)]});
       const lat=coords[0]+(Math.random()-0.5)*0.02;
       const lng=coords[1]+(Math.random()-0.5)*0.02;
       const popup=`<div style="font-family:sans-serif;min-width:190px">
@@ -5709,9 +5709,14 @@ function renderMapa() {
         ${clientes.map(c=>{
           const trs=DB.trabajos.filter(t=>t.clienteId===c.id);
           const tot=trs.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
+          const cajasCliente=(DB.cajasHerramientas||[]).filter(cj=>cj.clienteId===c.id);
           return `<div style="padding:5px 0;border-bottom:1px solid #eee">
             <div style="font-size:12px;font-weight:600;color:#111">${c.nombre}</div>
             <div style="font-size:11px;color:#666">${trs.length} trabajo${trs.length!==1?'s':''} · ${tot>0?'$'+tot.toLocaleString('es-AR'):'Sin facturar'}</div>
+            ${cajasCliente.map(cj=>{
+              const t=tiempoDesdeEntrega(cj.fechaEntrega);
+              return `<div style="font-size:10px;color:#B8860B;margin-top:2px">🧰 ${cj.descripcion||'Caja de herramientas'}${t?` · hace ${t}`:''}</div>`;
+            }).join('')}
           </div>`;
         }).join('')}
       </div>`;
