@@ -6801,7 +6801,19 @@ function openModal(type, data={}) {
       <div class="form-group"><label>Último contacto</label><input id="f-contacto" type="date" value="${data.ultimoContacto||today()}"/></div>
       <div class="form-group full"><label>Notas</label><textarea id="f-notas" placeholder="Contexto libre: qué máquinas tiene, cómo lo conociste, etc. — el registro de qué contrato se le ofreció y cuándo se hace desde el botón 🛠️ Ofrecer contrato de Oportunidades de Contrato, no acá.">${data.notas||''}</textarea></div>
     </div>`;
-    onSave=()=>guardar('clientes',{id:data.id||uid(),nombre:gv('f-nombre'),empresa:gv('f-empresa'),telefono:gv('f-telefono'),email:gv('f-email'),zona:gv('f-zona'),estado:gv('f-estado'),ultimoContacto:gv('f-contacto'),notas:gv('f-notas')},'nombre');
+    onSave=()=>{
+      const nombreForm = gv('f-nombre');
+      // Solo chequeamos duplicados al CREAR (data.id vacío) — si es una edición
+      // normal, data.id ya identifica la fila correcta, no hace falta.
+      if (!data.id) {
+        const yaExiste = DB.clientes.find(c => c.nombre.trim().toUpperCase() === nombreForm.trim().toUpperCase());
+        if (yaExiste) {
+          showToast('Ya existe un cliente "'+nombreForm+'" — abrilo con Editar en vez de crear uno nuevo','error');
+          return;
+        }
+      }
+      guardar('clientes',{id:data.id||uid(),nombre:nombreForm,empresa:gv('f-empresa'),telefono:gv('f-telefono'),email:gv('f-email'),zona:gv('f-zona'),estado:gv('f-estado'),ultimoContacto:gv('f-contacto'),notas:gv('f-notas')},'nombre');
+    };
   }
 
   else if(type==='maquina') {
@@ -7170,12 +7182,20 @@ function openModal(type, data={}) {
         const nomNuevo = (document.getElementById('f-pcli-nuevo-nombre')||{}).value||'';
         const telNuevo = (document.getElementById('f-pcli-nuevo-tel')||{}).value||'';
         if(!nomNuevo.trim()){showToast('Ingresá el nombre del cliente','error');return;}
-        const nuevoCliente = {id:uid(),nombre:nomNuevo.trim().toUpperCase(),empresa:nomNuevo.trim(),telefono:telNuevo.trim(),email:'',zona:'',estado:'activo',notas:'',_local:true};
-        DB.clientes.push(nuevoCliente);
-        saveLocal();
-        writeToSheet({action:'addCliente',row:nuevoCliente});
-        clienteIdFinal = nuevoCliente.id;
-        showToast('Cliente '+nomNuevo+' creado ✔','success');
+        // Antes de crear, buscar si ya existe un cliente con ese nombre exacto
+        // — evita duplicados como el que generó el bug de "Belen" x2.
+        const yaExiste = DB.clientes.find(c => c.nombre.trim().toUpperCase() === nomNuevo.trim().toUpperCase());
+        if (yaExiste) {
+          clienteIdFinal = yaExiste.id;
+          showToast('Ya existía "'+nomNuevo+'" — usando ese cliente, no se creó uno nuevo','success');
+        } else {
+          const nuevoCliente = {id:uid(),nombre:nomNuevo.trim().toUpperCase(),empresa:nomNuevo.trim(),telefono:telNuevo.trim(),email:'',zona:'',estado:'activo',notas:'',_local:true};
+          DB.clientes.push(nuevoCliente);
+          saveLocal();
+          writeToSheet({action:'addCliente',row:nuevoCliente});
+          clienteIdFinal = nuevoCliente.id;
+          showToast('Cliente '+nomNuevo+' creado ✔','success');
+        }
       }
       const fEnviadoRaw = gv('f-penviado')||'';
       const fEnviPts = fEnviadoRaw.split('-'); const fEnviadoFmt = fEnviadoRaw ? (fEnviPts.length===3?fEnviPts[2]+'/'+fEnviPts[1]+'/'+fEnviPts[0]:fEnviadoRaw) : (data.fechaEnviado||'');
