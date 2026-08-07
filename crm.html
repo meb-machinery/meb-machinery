@@ -1055,7 +1055,7 @@ select option { background:var(--dark); }
           revisalos cada tanto, los peajes suben con frecuencia.
         </p>
         <div class="table-wrap"><table>
-          <thead><tr><th>Corredor</th><th>Con TelePASE</th><th>Sin TelePASE</th><th></th></tr></thead>
+          <thead><tr><th>Corredor</th><th>Cant.</th><th>Con TelePASE</th><th>Sin TelePASE</th><th></th></tr></thead>
           <tbody id="tabla-peajes"></tbody>
         </table></div>
       </div>
@@ -1130,7 +1130,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxnx8at0eM05ZQGco97Yco4WlNnNR73bHqw0sbYCY4oKmHi_oDolZBSG0ujaeQJ6IlNxA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbya4qYfA6TSJiHLZMa6HrUcfGwON-8rfbwt9xEIFopIoya03OVBY3psJCDvzca-KVjdEQ/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1721,7 +1721,10 @@ async function syncAll() {
       id: resolverIdEstable(r,'PEAJES'),
       corredor: r.CORREDOR || '',
       conTelepase: parseFloat(r.CON_TELEPASE)||0,
-      sinTelepase: parseFloat(r.SIN_TELEPASE)||0
+      sinTelepase: parseFloat(r.SIN_TELEPASE)||0,
+      cantidad: parseInt(r.CANTIDAD_PEAJES)||0,
+      detalle: r.DETALLE || '',
+      fotoUrl: r.FOTO_RUTA_URL || ''
     }));
 
     // Restore preserved local data + alertasRepuesto
@@ -2244,14 +2247,16 @@ function renderTablaPeajes() {
   if (!tbody) return;
   tbody.innerHTML = DB.peajes.length ? DB.peajes.map(p => `
     <tr>
-      <td>${p.corredor}</td>
+      <td>${p.corredor}${p.detalle?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${p.detalle}</div>`:''}</td>
+      <td style="text-align:center">${p.cantidad>0?p.cantidad:'<span style="color:var(--muted2)">?</span>'}${p.fotoUrl?` <a href="${p.fotoUrl}" target="_blank" title="Ver ruta en Drive">📷</a>`:''}</td>
       <td>${fmtMonto(p.conTelepase)}</td>
       <td>${fmtMonto(p.sinTelepase)}</td>
       <td><div class="actions">
         <button class="btn-secondary" style="font-size:10px;padding:2px 6px" onclick="usarPeajeEnCalculadora(${p.conTelepase})">Usar</button>
+        <button class="btn-secondary" style="font-size:10px;padding:2px 6px" onclick="openModal('peaje', DB.peajes.find(x=>x.id==='${p.id}'))" title="Editar">✏️</button>
         <button class="btn-danger" style="font-size:10px;padding:2px 6px" onclick="eliminar('peajes','${p.id}')">✕</button>
       </div></td>
-    </tr>`).join('') : `<tr><td colspan="4"><div class="empty-state"><div class="icon">🛣️</div><p>Sin peajes cargados — sumá el primero</p></div></td></tr>`;
+    </tr>`).join('') : `<tr><td colspan="5"><div class="empty-state"><div class="icon">🛣️</div><p>Sin peajes cargados — sumá el primero</p></div></td></tr>`;
 }
 
 function usarPeajeEnCalculadora(monto) {
@@ -7116,21 +7121,48 @@ function openModal(type, data={}) {
     };
   }
   else if(type==='peaje') {
-    title = 'AGREGAR PEAJE DE REFERENCIA';
+    title = data.id ? 'EDITAR PEAJE DE REFERENCIA' : 'AGREGAR PEAJE DE REFERENCIA';
     body=`<div class="form-grid">
-      <div class="form-group full"><label>Corredor *</label><input id="f-pjcorredor" placeholder="Ej: Panamericana / Acceso Norte"/></div>
-      <div class="form-group"><label>Con TelePASE ($ ARS)</label><input id="f-pjtelepase" type="number"/></div>
-      <div class="form-group"><label>Sin TelePASE ($ ARS)</label><input id="f-pjmanual" type="number"/></div>
+      <div class="form-group full">
+        <label>Corredor / Ruta *</label>
+        <input id="f-pjcorredor" value="${data.corredor||''}" placeholder="Ej: La Plata ida y vuelta (AUBASA)"/>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">
+          Si la ruta cruza varias cabinas de peaje (ej: Dock Sud + Hudson en el regreso de La Plata),
+          sumalas todas y cargá acá el <b>total del trayecto completo</b> — no una cabina por fila.
+          Si el precio cambia según el horario, cargá dos filas separadas
+          (ej: "La Plata i/v — fuera de pico" y "La Plata i/v — con pico").
+        </div>
+      </div>
+      <div class="form-group"><label>Con TelePASE ($ ARS) — total del trayecto</label><input id="f-pjtelepase" type="number" value="${data.conTelepase||''}"/></div>
+      <div class="form-group"><label>Sin TelePASE ($ ARS) — total del trayecto</label><input id="f-pjmanual" type="number" value="${data.sinTelepase||''}"/></div>
+      <div class="form-group"><label>Cantidad de cabinas de peaje</label><input id="f-pjcantidad" type="number" min="0" value="${data.cantidad||''}" placeholder="Ej: 2"/></div>
+      <div class="form-group full"><label>Detalle (opcional)</label><input id="f-pjdetalle" value="${data.detalle||''}" placeholder="Ej: Hudson (ida) + Dock Sud (vuelta)"/></div>
+      <div class="form-group full"><label>Foto de la ruta — link de Drive (opcional)</label><input id="f-pjfoto" value="${data.fotoUrl||''}" placeholder="https://drive.google.com/..."/></div>
     </div>`;
     onSave=()=>{
-      const obj = { id:uid(), corredor:gv('f-pjcorredor'), conTelepase:parseFloat(gv('f-pjtelepase'))||0, sinTelepase:parseFloat(gv('f-pjmanual'))||0 };
-      if(!obj.corredor){ showToast('Completá el nombre del corredor','error'); return; }
-      obj._local = true;
+      const corredor = gv('f-pjcorredor');
+      const conTelepase = parseFloat(gv('f-pjtelepase'))||0;
+      const sinTelepase = parseFloat(gv('f-pjmanual'))||0;
+      const cantidad = parseInt(gv('f-pjcantidad'))||0;
+      const detalle = gv('f-pjdetalle');
+      const fotoUrl = gv('f-pjfoto');
+      if(!corredor){ showToast('Completá el nombre del corredor','error'); return; }
       if(!DB.peajes) DB.peajes=[];
-      DB.peajes.push(obj);
-      saveLocal(); closeModal(); renderTablaPeajes();
-      writeToSheet({ action:'addPeaje', row: obj });
-      showToast('Peaje guardado ✔','success');
+      if(data.id) {
+        // Editar: actualizar la fila existente en vez de crear una nueva
+        const idx = DB.peajes.findIndex(p=>p.id===data.id);
+        const obj = { ...(idx>=0?DB.peajes[idx]:{}), id:data.id, corredor, conTelepase, sinTelepase, cantidad, detalle, fotoUrl };
+        if(idx>=0) DB.peajes[idx] = obj; else DB.peajes.push(obj);
+        saveLocal(); closeModal(); renderTablaPeajes();
+        writeToSheet({ action:'addPeaje', row: obj });
+        showToast('Peaje actualizado ✔','success');
+      } else {
+        const obj = { id:uid(), corredor, conTelepase, sinTelepase, cantidad, detalle, fotoUrl, _local:true };
+        DB.peajes.push(obj);
+        saveLocal(); closeModal(); renderTablaPeajes();
+        writeToSheet({ action:'addPeaje', row: obj });
+        showToast('Peaje guardado ✔','success');
+      }
     };
   }
   else if(type==='calEvento') {
