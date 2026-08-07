@@ -1011,8 +1011,9 @@ select option { background:var(--dark); }
         <div style="padding:14px">
           <div class="form-grid">
             <div class="form-group full">
-              <label>Cliente (opcional — solo de referencia)</label>
-              <select id="mov-cliente"><option value="">Sin cliente</option></select>
+              <label>Cliente — autocompleta km y peaje sugerido</label>
+              <select id="mov-cliente" onchange="precargarDesdeCliente()"><option value="">Sin cliente (cargar todo a mano)</option></select>
+              <div id="mov-hint" style="font-size:11px;margin-top:6px"></div>
             </div>
             <div class="form-group">
               <label>KM recorridos (ida) *</label>
@@ -2268,10 +2269,82 @@ function usarPeajeEnCalculadora(monto) {
 
 function renderMovilidad() {
   const sel = document.getElementById('mov-cliente');
-  if (sel) sel.innerHTML = '<option value="">Sin cliente</option>' + clienteOptions();
+  if (sel) sel.innerHTML = '<option value="">Sin cliente (cargar todo a mano)</option>' + clienteOptions();
   renderTablaPeajes();
   calcularMovilidadUI();
   if (!_tcMovilidadActual) actualizarTCMovilidad();
+}
+
+// ── Autocompletar km + peaje según la zona del cliente elegido ─────────────
+// Km: distancia en línea recta (Pilar → zona del cliente, con las mismas
+// coordenadas que ya usa el Mapa de Clientes) × 1.3 como factor de ruta real
+// aproximado. Es una ESTIMACIÓN — queda editable, se corrige con el km real
+// de Google Maps la primera vez que se hace el viaje.
+const FACTOR_RUTA_ESTIMADA = 1.3;
+const ZONA_BASE_MEB = 'PILAR'; // Derqui está dentro del partido de Pilar
+
+function haversineKm(a, b) {
+  const R = 6371;
+  const dLat = (b[0]-a[0]) * Math.PI/180;
+  const dLon = (b[1]-a[1]) * Math.PI/180;
+  const lat1 = a[0]*Math.PI/180, lat2 = b[0]*Math.PI/180;
+  const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.asin(Math.sqrt(h));
+}
+
+function kmEstimadoDesdeBase(zona) {
+  const origen = getCoords(ZONA_BASE_MEB);
+  const destino = getCoords(zona);
+  if (!origen || !destino) return null;
+  return Math.round(haversineKm(origen, destino) * FACTOR_RUTA_ESTIMADA);
+}
+
+// Zona del cliente -> palabra clave a buscar dentro del nombre del corredor
+// ya cargado en la Tabla de Referencia de Peajes.
+const ZONA_PEAJE_MAP = {
+  'PILAR':'pilar/escobar/campana', 'ESCOBAR':'pilar/escobar/campana', 'CAMPANA':'pilar/escobar/campana',
+  'CORRALON MUNICIPAL':'pilar/escobar/campana', 'VILLA ROSA':'pilar/escobar/campana', 'VILLA LA ÑATA':'pilar/escobar/campana',
+  'DON TORCUATO NORTE':'pilar/escobar/campana',
+  'SAN ISIDRO':'san isidro/avellaneda', 'AVELLANEDA':'san isidro/avellaneda', 'LOMA DE ZAMORA':'san isidro/avellaneda',
+  'LUJAN':'luján', 'LA PLATA':'la plata i/v — fuera de pico',
+  'TANDIL':'vasconia', 'PERGAMINO':'pergamino', 'SAN JUSTO':'san justo',
+  'CAÑUELAS':'cañuelas', 'TRENQUE LAUQUEN':'trenque lauquen',
+};
+
+function corredorParaZona(zona) {
+  const z = (zona||'').toUpperCase().trim();
+  const keyword = ZONA_PEAJE_MAP[z];
+  if (!keyword || !DB.peajes) return null;
+  return DB.peajes.find(p => (p.corredor||'').toLowerCase().includes(keyword)) || null;
+}
+
+function precargarDesdeCliente() {
+  const clienteId = gv('mov-cliente');
+  const hintEl = document.getElementById('mov-hint');
+  if (!clienteId) { if(hintEl) hintEl.innerHTML = ''; return; }
+  const cliente = (DB.clientes||[]).find(c => c.id === clienteId);
+  if (!cliente || !cliente.zona) {
+    if(hintEl) hintEl.innerHTML = '<span style="color:var(--orange)">⚠️ Este cliente no tiene zona cargada — no puedo estimar km ni peaje, cargalos a mano.</span>';
+    return;
+  }
+  const km = kmEstimadoDesdeBase(cliente.zona);
+  const peaje = corredorParaZona(cliente.zona);
+  let partes = [];
+  if (km) {
+    document.getElementById('mov-km').value = km;
+    partes.push(`Km estimado a ${cliente.zona}: <b>${km} km</b> (línea recta × 1.3 — editalo si medís el real en Maps)`);
+  } else {
+    partes.push(`No tengo coordenadas para "${cliente.zona}" — cargá los km a mano.`);
+  }
+  if (peaje) {
+    document.getElementById('mov-peaje').value = peaje.conTelepase;
+    partes.push(`Peaje sugerido: "${peaje.corredor}" (${fmtMonto(peaje.conTelepase)}) — sumá otro con "Usar" en la tabla si falta alguna cabina.`);
+  } else {
+    document.getElementById('mov-peaje').value = 0;
+    partes.push(`No tengo un corredor cargado para esta zona todavía — buscalo en la tabla o dejalo en $0.`);
+  }
+  if (hintEl) hintEl.innerHTML = `<span style="color:var(--blue-light)">${partes.join('<br>')}</span>`;
+  calcularMovilidadUI();
 }
 
 // Resumen de dólar en el Dashboard — la pantalla que Emmanuel ve primero al
