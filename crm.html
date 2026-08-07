@@ -1131,7 +1131,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbya4qYfA6TSJiHLZMa6HrUcfGwON-8rfbwt9xEIFopIoya03OVBY3psJCDvzca-KVjdEQ/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzX54PhQX7SiAjLXib4h7ZtFoD4wpaDuBEKbRmn7Daf6Qy6wIn_CHMWNz-Y3kkGjAAD9g/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1278,7 +1278,7 @@ function undoLastChange() {
 let charts = {};
 
 function saveLocal() { try { localStorage.setItem('meb_crm_v2', JSON.stringify(DB)); } catch(e){} }
-function loadLocal() { try { const d=localStorage.getItem('meb_crm_v2'); if(d) DB=JSON.parse(d); if(!DB.presupCounter) DB.presupCounter=1; if(!DB.calendarioEventos) DB.calendarioEventos=[]; if(!DB.alertasRepuesto||Array.isArray(DB.alertasRepuesto)) DB.alertasRepuesto={}; if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; if(!DB.alertas) DB.alertas=[]; if(!DB.tarifario) DB.tarifario=[]; if(!DB.informes) DB.informes=[]; if(!DB.peajes) DB.peajes=[]; DB.trabajos.forEach(t=>{ if(!t.estadoCobro) t.estadoCobro='pendiente'; }); } catch(e){} }
+function loadLocal() { try { const d=localStorage.getItem('meb_crm_v2'); if(d) DB=JSON.parse(d); if(!DB.presupCounter) DB.presupCounter=1; if(!DB.calendarioEventos) DB.calendarioEventos=[]; if(!DB.alertasRepuesto||Array.isArray(DB.alertasRepuesto)) DB.alertasRepuesto={}; if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; if(!DB.alertas) DB.alertas=[]; if(!DB.tarifario) DB.tarifario=[]; if(!DB.informes) DB.informes=[]; if(!DB.peajes) DB.peajes=[]; if(!DB.cajasHerramientas) DB.cajasHerramientas=[]; DB.trabajos.forEach(t=>{ if(!t.estadoCobro) t.estadoCobro='pendiente'; }); } catch(e){} }
 
 // ============================================================
 // LOGIN
@@ -1438,16 +1438,18 @@ async function syncAll() {
   const _localProveedores = (DB.proveedores||[]).filter(x=>x._local);
   const _localCompras     = (DB.compras||[]).filter(x=>x._local);
   const _localPeajes      = (DB.peajes||[]).filter(x=>x._local);
+  const _localCajas       = (DB.cajasHerramientas||[]).filter(x=>x._local);
   const _alertasRepuesto  = DB.alertasRepuesto || {};
   const _presupCounter    = DB.presupCounter || 1;
   const _calendarioEventos = DB.calendarioEventos || [];
 
   try {
-    const [cl,mq,tr,pr,al,pv,ct,tf,inf,opl,pj] = await Promise.all([
+    const [cl,mq,tr,pr,al,pv,ct,tf,inf,opl,pj,ch] = await Promise.all([
       fetchSheet('CLIENTES'), fetchSheet('MAQUINAS'),
       fetchSheet('TRABAJOS'), fetchSheet('PRESUPUESTOS'), fetchSheet('ALERTAS'),
       fetchSheet('PROVEEDORES'), fetchSheet('CONTRATOS'), fetchSheet('TARIFARIO'),
-      fetchSheet('INFORMES'), fetchSheet('OPORTUNIDADES_LOG'), fetchSheet('PEAJES')
+      fetchSheet('INFORMES'), fetchSheet('OPORTUNIDADES_LOG'), fetchSheet('PEAJES'),
+      fetchSheet('CAJAS_HERRAMIENTAS')
     ]);
 
     // ── Salvavidas: detectar encabezados rotos ──────────────────────────────
@@ -1728,6 +1730,14 @@ async function syncAll() {
       fotoUrl: r.FOTO_RUTA_URL || ''
     }));
 
+    DB.cajasHerramientas = (ch.length ? ch : []).map(r => ({
+      id: resolverIdEstable(r,'CAJAS_HERRAMIENTAS'),
+      clienteId: String(r.CLIENTE_ID||'').trim(),
+      descripcion: r.DESCRIPCION || '',
+      fechaEntrega: r.FECHA_ENTREGA || '',
+      notas: r.NOTAS || ''
+    }));
+
     // Restore preserved local data + alertasRepuesto
     DB.alertasRepuesto = _alertasRepuesto;
     // (el contador de presupuestos ya se recalculó correctamente más arriba,
@@ -1755,6 +1765,7 @@ async function syncAll() {
     _localProveedores.forEach(lp => { if(!DB.proveedores.find(x=>x.id===lp.id)) DB.proveedores.push(lp); });
     _localCompras.forEach(lc => { if(!DB.compras.find(x=>x.id===lc.id)) DB.compras.push(lc); });
     _localPeajes.forEach(lp => { if(!DB.peajes.find(x=>x.id===lp.id)) DB.peajes.push(lp); });
+    _localCajas.forEach(lc => { if(!DB.cajasHerramientas.find(x=>x.id===lc.id)) DB.cajasHerramientas.push(lc); });
 
     // Filtra cualquier borrado reciente que el Sheet todavía no reflejó
     // (gviz puede tardar en actualizar su caché tras un delete).
@@ -1767,6 +1778,7 @@ async function syncAll() {
     DB.contratos   = filtrarRecienEliminados('contratos', DB.contratos);
     DB.compras     = filtrarRecienEliminados('compras', DB.compras);
     DB.peajes      = filtrarRecienEliminados('peajes', DB.peajes);
+    DB.cajasHerramientas = filtrarRecienEliminados('cajasHerramientas', DB.cajasHerramientas);
 
     // ── Reparar clienteId corruptos o vacíos ──────────────────────────────────
     DB.presupuestos.forEach(p => {
@@ -1850,6 +1862,27 @@ function fmtDate(d) {
   const p=d.split('-');
   if(p.length===3) return `${p[2]}/${p[1]}/${p[0]}`;
   return d;
+}
+// Tiempo transcurrido desde una fecha de entrega — usado para mostrar en la
+// ficha del cliente y en el portal "Mi Flota" cuánto hace que tiene una caja
+// de herramientas u otro producto (el argumento de durabilidad).
+function tiempoDesdeEntrega(fechaEntrega, hoy) {
+  if (!fechaEntrega) return null;
+  hoy = hoy || new Date();
+  let f;
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(fechaEntrega)) f = new Date(fechaEntrega+'T00:00:00');
+  else {
+    const m = fechaEntrega.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) f = new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}T00:00:00`);
+  }
+  if (!f || isNaN(f.getTime())) return null;
+  const dias = Math.floor((hoy - f) / 86400000);
+  if (dias < 0) return null;
+  if (dias < 30) return `${dias} día${dias===1?'':'s'}`;
+  if (dias < 365) { const meses = Math.floor(dias/30); return `${meses} mes${meses===1?'':'es'}`; }
+  const anios = Math.floor(dias/365);
+  const mesesResto = Math.floor((dias%365)/30);
+  return mesesResto>0 ? `${anios} año${anios===1?'':'s'} y ${mesesResto} mes${mesesResto===1?'':'es'}` : `${anios} año${anios===1?'':'s'}`;
 }
 // Convierte fecha en cualquier formato del sistema (DD/MM/YYYY o YYYY-MM-DD) a Date
 function parseFechaAny(d) {
@@ -2464,6 +2497,7 @@ function copiarLinkPortal(id) {
 function verCliente(id) {
   const c=DB.clientes.find(x=>x.id===id); if(!c) return;
   const mqs=DB.maquinas.filter(m=>m.clienteId===id);
+  const cjs=(DB.cajasHerramientas||[]).filter(cj=>cj.clienteId===id);
   const prs=DB.presupuestos.filter(p=>String(p.clienteId)===String(id)||String(p.clienteNombreSheet||'')===String(DB.clientes.find(x=>x.id===id)?.nombre||''));
   const trs=DB.trabajos.filter(t=>t.clienteId===id);
   const totalCobrado=trs.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
@@ -2490,6 +2524,26 @@ function verCliente(id) {
     <div class="detail-section">
       <div class="detail-section-title">Máquinas (${mqs.length})</div>
       ${mqs.length?mqs.map(m=>`<div class="maquina-card" style="cursor:pointer" onclick="verMaquina('${m.id}')"><div class="maquina-info"><div class="mq-name">${m.marca} ${m.modelo}</div><div class="mq-sub">${m.tipo||''} · Serie: ${m.serie||'—'}</div></div><span class="badge badge-blue">Ver →</span></div>`).join(''):'<p style="font-size:12px;color:var(--muted)">Sin máquinas registradas</p>'}
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Cajas de herramientas entregadas (${cjs.length})</span>
+        <button class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="openModal('cajaHerramienta',{clienteId:'${c.id}'})">+ Registrar</button>
+      </div>
+      ${cjs.length?cjs.map(cj=>{
+        const tiempo = tiempoDesdeEntrega(cj.fechaEntrega);
+        return `<div class="maquina-card">
+          <div class="maquina-info">
+            <div class="mq-name">🧰 ${cj.descripcion||'Caja de herramientas'}</div>
+            <div class="mq-sub">Entregada: ${fmtDate(cj.fechaEntrega)}${tiempo?` · hace ${tiempo}`:''}</div>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button class="btn-secondary" style="font-size:10px;padding:2px 6px" onclick="openModal('cajaHerramienta',DB.cajasHerramientas.find(x=>x.id==='${cj.id}'))">✏️</button>
+            <button class="btn-danger" style="font-size:10px;padding:2px 6px" onclick="eliminar('cajasHerramientas','${cj.id}');verCliente('${c.id}')">✕</button>
+          </div>
+        </div>`;
+      }).join(''):'<p style="font-size:12px;color:var(--muted)">Sin cajas registradas todavía</p>'}
+      <p style="font-size:10px;color:var(--muted2);margin-top:6px">El cliente ve esto en su portal "Mi Flota" con el tiempo de uso — es tu argumento de durabilidad, mostrado solo.</p>
     </div>
     <div class="detail-section">
       <div class="detail-section-title">Portal del cliente — "Mi flota"</div>
@@ -3849,11 +3903,12 @@ function generarInformeTecnico(presupId) {
     '  if(drop) drop.style.display="none";',
     '  var div=document.createElement("div");',
     '  div.className="foto-item";',
-    '  var cap=caption||"";',
     '  div.innerHTML="<img src=\\""+src+"\\" onerror=\\"this.parentNode.remove()\\">"',
-    '    +"<div class=\\"foto-caption\\"><input type=\\"text\\" placeholder=\\"Descripci\\u00F3n de la foto...\\" value=\\""+cap.replace(/\\"/g,"&quot;")+"\\" style=\\"width:100%;border:none;outline:none;font-size:11px;color:#555\\"></div>"',
+    '    +"<div class=\\"foto-caption\\"><span class=\\"foto-caption-label\\">\ud83d\udcdd Pie de foto (opcional)</span><input type=\\"text\\" placeholder=\\"Ej: Cambio de reten trasero del diferencial...\\"></div>"',
     '    +"<button onclick=\\"this.parentNode.remove()\\" style=\\"position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px;line-height:1\\">\u00D7</button>";',
     '  cont.appendChild(div);',
+    '  var nuevoInput=div.querySelector(".foto-caption input");',
+    '  if(nuevoInput) nuevoInput.focus();',
     '}',
     '',
     'function agregarVideo(){',
@@ -4068,11 +4123,14 @@ function generarInformeTecnico(presupId) {
     + '.bloque-body{padding:14px;min-height:80px}'
     + '.texto-libre{width:100%;min-height:80px;border:none;outline:none;font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;resize:vertical;background:transparent}'
     + '.editable-bloque{width:100%;min-height:80px;outline:none;font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A}'
-    + '.fotos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:8px}'
+    + '.fotos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:8px}'
     + '.foto-item{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;position:relative}'
     + '.foto-item img{width:100%;max-height:180px;object-fit:cover;display:block}'
-    + '.foto-caption{padding:6px 8px}'
-    + '.foto-caption input{width:100%;border:none;outline:none;font-size:11px;color:#555;background:transparent}'
+    + '.foto-caption{padding:8px}'
+    + '.foto-caption-label{font-size:9px;color:#999;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;display:block}'
+    + '.foto-caption input{width:100%;border:1px solid #ddd;border-radius:4px;outline:none;font-size:12px;color:#1A1A1A;background:#fdfdfd;padding:6px 8px}'
+    + '.foto-caption input:focus{border-color:#F4B400;background:#fffdf0}'
+    + '.foto-caption input::placeholder{color:#aaa;font-style:italic}'
     + '.foto-drop{border:2px dashed #F4B400;border-radius:6px;padding:20px;text-align:center;cursor:pointer;color:#888;font-size:12px;background:#fffdf0}'
     + '.diagnostico-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:14px}'
     + '.diag-cell{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden}'
@@ -7236,6 +7294,42 @@ function openModal(type, data={}) {
         writeToSheet({ action:'addPeaje', row: obj });
         showToast('Peaje guardado ✔','success');
       }
+    };
+  }
+  else if(type==='cajaHerramienta') {
+    title = data.id ? 'EDITAR ENTREGA' : 'REGISTRAR ENTREGA DE CAJA DE HERRAMIENTAS';
+    const clOpts = clienteOptions(data.clienteId||'');
+    body=`<div class="form-grid">
+      <div class="form-group full"><label>Cliente *</label><select id="f-cjcliente"><option value="">Seleccionar...</option>${clOpts}</select></div>
+      <div class="form-group full"><label>Descripción *</label><input id="f-cjdesc" value="${data.descripcion||''}" placeholder="Ej: Caja de herramientas profesional 8 cajones"/></div>
+      <div class="form-group"><label>Fecha de entrega *</label><input id="f-cjfecha" type="date" value="${data.fechaEntrega?(data.fechaEntrega.split('/').length===3?(data.fechaEntrega.split('/')[2]+'-'+data.fechaEntrega.split('/')[1]+'-'+data.fechaEntrega.split('/')[0]):data.fechaEntrega):today()}"/></div>
+      <div class="form-group full"><label>Notas (opcional)</label><textarea id="f-cjnotas" rows="2">${data.notas||''}</textarea></div>
+    </div>`;
+    onSave=()=>{
+      const clienteId = gv('f-cjcliente');
+      const descripcion = gv('f-cjdesc');
+      const fechaRaw = gv('f-cjfecha');
+      const fechaPts = fechaRaw.split('-');
+      const fechaEntrega = fechaPts.length===3 ? `${fechaPts[2]}/${fechaPts[1]}/${fechaPts[0]}` : fechaRaw;
+      const notas = gv('f-cjnotas');
+      if(!clienteId){ showToast('Elegí el cliente','error'); return; }
+      if(!descripcion){ showToast('Completá la descripción','error'); return; }
+      if(!DB.cajasHerramientas) DB.cajasHerramientas=[];
+      if(data.id) {
+        const idx = DB.cajasHerramientas.findIndex(x=>x.id===data.id);
+        const obj = { id:data.id, clienteId, descripcion, fechaEntrega, notas };
+        if(idx>=0) DB.cajasHerramientas[idx]=obj; else DB.cajasHerramientas.push(obj);
+        saveLocal(); closeModal();
+        writeToSheet({ action:'addCajaHerramienta', row: obj });
+        showToast('Entrega actualizada ✔','success');
+      } else {
+        const obj = { id:uid(), clienteId, descripcion, fechaEntrega, notas, _local:true };
+        DB.cajasHerramientas.push(obj);
+        saveLocal(); closeModal();
+        writeToSheet({ action:'addCajaHerramienta', row: obj });
+        showToast('Entrega registrada ✔','success');
+      }
+      if(document.getElementById('detailPanel').classList.contains('open')) verCliente(clienteId);
     };
   }
   else if(type==='calEvento') {
