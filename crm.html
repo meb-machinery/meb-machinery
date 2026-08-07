@@ -1543,7 +1543,7 @@ async function syncAll() {
             // Scan all keys for the first one that could be a client name/id
             const skip = new Set(['ID','NUMERO','N°','N°_','DESCRIPCION','DESCRIPCIÓN','MONTO','ESTADO','FECHA','NOTAS','TIPO','CANTIDAD','PRECIO_UNIT.','SUBTOTAL','TOTAL_PRESUP.']);
             for(const k of Object.keys(r)) {
-              if(!skip.has(k) && r[k] && r[k].trim()) { _clienteResolved = r[k].trim(); break; }
+              if(!skip.has(k) && typeof r[k]==='string' && r[k].trim()) { _clienteResolved = r[k].trim(); break; }
             }
           }
           const _num = r.NUMERO||r['N°']||r['N°']||r.NUM||'';
@@ -1564,7 +1564,7 @@ async function syncAll() {
           let _cidFinal = _cid;
           if(!_cidFinal) {
             Object.values(r).forEach(v => {
-              if(_cidFinal || !v || v.length < 3) return;
+              if(_cidFinal || typeof v !== 'string' || v.length < 3) return;
               const found = DB.clientes.find(c => c.nombre.toUpperCase() === v.toUpperCase().trim());
               if(found) _cidFinal = found.id;
             });
