@@ -36,6 +36,13 @@
   .fila .k{color:var(--muted);}
   .fila .v{color:var(--text); font-weight:600;}
   .trabajos-titulo{font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:12px 0 6px;}
+  .caja-card{background:var(--card); border:1px solid var(--border); border-left:3px solid var(--steel); border-radius:6px; padding:16px 18px; margin-bottom:14px; display:flex; align-items:center; gap:14px;}
+  .caja-card .icono{font-size:26px; line-height:1;}
+  .caja-card .info{flex:1;}
+  .caja-card .titulo{font-family:'Bebas Neue'; font-size:17px; letter-spacing:1px; color:var(--text);}
+  .caja-card .fecha{font-size:11px; color:var(--muted); margin-top:2px;}
+  .caja-card .tiempo{display:inline-block; margin-top:6px; background:rgba(244,180,0,0.12); border:1px solid rgba(244,180,0,0.35); color:var(--yellow); font-size:11px; font-weight:600; padding:3px 10px; border-radius:20px;}
+  .cajas-titulo{font-family:'Bebas Neue'; font-size:16px; letter-spacing:1px; color:var(--text); margin:28px 0 12px;}
   .trabajo-item{font-size:12px; padding:6px 0; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; gap:10px;}
   .trabajo-item:last-child{border-bottom:none;}
   .trabajo-item .t{color:var(--text);}
@@ -93,7 +100,7 @@
 </div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz1rg-uRxoqI_7jf4oGABSKWlQnx43jULft73qggDQGgMn9ArD-yX-LUxkYrmfx4yH46w/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbypZOK3b0C74gjctPygfe2MJRpCriH_yEg7yu1YM9VoApE7dxCE-4UUvULAXSOlEWa8Yw/exec';
 
 function fmtDate(d) {
   if (!d) return '—';
@@ -104,6 +111,27 @@ function escHtml(s) {
   return String(s||'').replace(/[&<>"']/g, function(c){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
   });
+}
+
+// Misma lógica ya probada en el CRM — tiempo transcurrido desde la entrega,
+// el argumento de durabilidad mostrado directo al cliente.
+function tiempoDesdeEntrega(fechaEntrega) {
+  if (!fechaEntrega) return null;
+  const hoy = new Date();
+  let f;
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(fechaEntrega)) f = new Date(fechaEntrega+'T00:00:00');
+  else {
+    const m = fechaEntrega.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) f = new Date(m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0')+'T00:00:00');
+  }
+  if (!f || isNaN(f.getTime())) return null;
+  const dias = Math.floor((hoy - f) / 86400000);
+  if (dias < 0) return null;
+  if (dias < 30) return dias + (dias===1?' día':' días');
+  if (dias < 365) { const meses = Math.floor(dias/30); return meses + (meses===1?' mes':' meses'); }
+  const anios = Math.floor(dias/365);
+  const mesesResto = Math.floor((dias%365)/30);
+  return mesesResto>0 ? (anios+(anios===1?' año y ':' años y ')+mesesResto+(mesesResto===1?' mes':' meses')) : (anios+(anios===1?' año':' años'));
 }
 
 function renderError(msg) {
@@ -126,6 +154,20 @@ function renderFlota(data) {
     + '<p>Con un Contrato de Mantenimiento Preventivo, el descuento no es de palabra: queda por escrito en el presupuesto, cada vez. Menos paradas imprevistas, service planificado, precio cerrado. Vale la pena leerlo dos minutos.</p>'
     + '<a href="https://mebmachinerysolutions.ar/contratos-mantenimiento.html" target="_blank">Ver planes de mantenimiento →</a>'
     + '</div>';
+
+  if (data.cajas && data.cajas.length) {
+    html += '<div class="cajas-titulo">🧰 Herramientas MEB en tu poder</div>';
+    data.cajas.forEach(function(cj) {
+      const t = tiempoDesdeEntrega(cj.fechaEntrega);
+      html += '<div class="caja-card">'
+        + '<div class="icono">🧰</div>'
+        + '<div class="info">'
+        + '<div class="titulo">' + escHtml(cj.descripcion||'Caja de herramientas') + '</div>'
+        + '<div class="fecha">Entregada el ' + fmtDate(cj.fechaEntrega) + '</div>'
+        + (t ? '<span class="tiempo">En uso hace ' + t + '</span>' : '')
+        + '</div></div>';
+    });
+  }
 
   if (!data.maquinas.length) {
     html += '<div class="estado">Todavía no tenés máquinas registradas en nuestro sistema.</div>';
