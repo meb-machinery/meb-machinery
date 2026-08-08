@@ -5692,14 +5692,15 @@ function renderMapa() {
       const col=clientes.length>2?'#F4B400':(colorEstado[clientes[0]?.estado]||'#7bb3e0');
       const clientesConCaja = clientes.filter(c => (DB.cajasHerramientas||[]).some(cj=>String(cj.clienteId)===String(c.id)));
       const tieneCaja = clientesConCaja.length>0;
-      const badgeCaja = tieneCaja ? `<circle cx="${sz+11}" cy="7" r="8" fill="#F5F2EC" stroke="#1A1A1A" stroke-width="1.5"/><text x="${sz+11}" y="10.5" font-size="10" text-anchor="middle">🧰</text>` : '';
-      const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${sz+24}" height="${sz+22}">
-        <circle cx="${(sz+16)/2}" cy="${(sz+16)/2}" r="${sz/2}" fill="${col}" stroke="#111" stroke-width="2.5"/>
-        <text x="${(sz+16)/2}" y="${(sz+16)/2+4}" font-family="Arial" font-size="${Math.max(9,sz/2.5)}" fill="#111" text-anchor="middle" font-weight="900">${clientes.length}</text>
-        <polygon points="${(sz+16)/2-5},${sz+13} ${(sz+16)/2+5},${sz+13} ${(sz+16)/2},${sz+22}" fill="${col}"/>
+      const topMargin = 10; // margen extra arriba, así el badge nunca queda al ras del borde del SVG
+      const badgeCaja = tieneCaja ? `<circle cx="${sz+11}" cy="${7+topMargin}" r="8" fill="#F5F2EC" stroke="#1A1A1A" stroke-width="1.5"/><text x="${sz+11}" y="${10.5+topMargin}" font-size="10" text-anchor="middle">🧰</text>` : '';
+      const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${sz+24}" height="${sz+22+topMargin}">
+        <circle cx="${(sz+16)/2}" cy="${(sz+16)/2+topMargin}" r="${sz/2}" fill="${col}" stroke="#111" stroke-width="2.5"/>
+        <text x="${(sz+16)/2}" y="${(sz+16)/2+4+topMargin}" font-family="Arial" font-size="${Math.max(9,sz/2.5)}" fill="#111" text-anchor="middle" font-weight="900">${clientes.length}</text>
+        <polygon points="${(sz+16)/2-5},${sz+13+topMargin} ${(sz+16)/2+5},${sz+13+topMargin} ${(sz+16)/2},${sz+22+topMargin}" fill="${col}"/>
         ${badgeCaja}
       </svg>`;
-      const icon=L.divIcon({html:svg,className:'',iconSize:[sz+24,sz+22],iconAnchor:[(sz+16)/2,sz+22],popupAnchor:[0,-(sz+18)]});
+      const icon=L.divIcon({html:svg,className:'',iconSize:[sz+24,sz+22+topMargin],iconAnchor:[(sz+16)/2,sz+22+topMargin],popupAnchor:[0,-(sz+18+topMargin)]});
       const lat=coords[0]+(Math.random()-0.5)*0.02;
       const lng=coords[1]+(Math.random()-0.5)*0.02;
       const popup=`<div style="font-family:sans-serif;min-width:190px">
