@@ -2493,7 +2493,7 @@ function copiarLinkPortal(id) {
 function verCliente(id) {
   const c=DB.clientes.find(x=>x.id===id); if(!c) return;
   const mqs=DB.maquinas.filter(m=>m.clienteId===id);
-  const cjs=(DB.cajasHerramientas||[]).filter(cj=>cj.clienteId===id);
+  const cjs=(DB.cajasHerramientas||[]).filter(cj=>String(cj.clienteId)===String(id));
   const prs=DB.presupuestos.filter(p=>String(p.clienteId)===String(id)||String(p.clienteNombreSheet||'')===String(DB.clientes.find(x=>x.id===id)?.nombre||''));
   const trs=DB.trabajos.filter(t=>t.clienteId===id);
   const totalCobrado=trs.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
@@ -5690,7 +5690,7 @@ function renderMapa() {
     Object.values(porZona).forEach(({coords,zona,clientes})=>{
       const sz=Math.min(18+clientes.length*4,38);
       const col=clientes.length>2?'#F4B400':(colorEstado[clientes[0]?.estado]||'#7bb3e0');
-      const clientesConCaja = clientes.filter(c => (DB.cajasHerramientas||[]).some(cj=>cj.clienteId===c.id));
+      const clientesConCaja = clientes.filter(c => (DB.cajasHerramientas||[]).some(cj=>String(cj.clienteId)===String(c.id)));
       const tieneCaja = clientesConCaja.length>0;
       const badgeCaja = tieneCaja ? `<circle cx="${sz+11}" cy="7" r="8" fill="#F5F2EC" stroke="#1A1A1A" stroke-width="1.5"/><text x="${sz+11}" y="10.5" font-size="10" text-anchor="middle">🧰</text>` : '';
       const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${sz+24}" height="${sz+22}">
@@ -5709,7 +5709,7 @@ function renderMapa() {
         ${clientes.map(c=>{
           const trs=DB.trabajos.filter(t=>t.clienteId===c.id);
           const tot=trs.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
-          const cajasCliente=(DB.cajasHerramientas||[]).filter(cj=>cj.clienteId===c.id);
+          const cajasCliente=(DB.cajasHerramientas||[]).filter(cj=>String(cj.clienteId)===String(c.id));
           return `<div style="padding:5px 0;border-bottom:1px solid #eee">
             <div style="font-size:12px;font-weight:600;color:#111">${c.nombre}</div>
             <div style="font-size:11px;color:#666">${trs.length} trabajo${trs.length!==1?'s':''} · ${tot>0?'$'+tot.toLocaleString('es-AR'):'Sin facturar'}</div>
