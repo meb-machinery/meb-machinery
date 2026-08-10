@@ -1,1 +1,0 @@
-Imagenes modulo 0
