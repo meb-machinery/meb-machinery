@@ -167,7 +167,7 @@
 </div>
 
 <script>
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzVEnjQOnq9wDtymxOYudVCue1PUTD9uHXQiGEla9BAMat_Z0h_8ByqyAHKCX1OHpRN/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyTW2JA9jPaCbwcBqhsgV5bs5jPiTpu3p6zVJGQW5bRgFzlWxoIE3fgKyMrc3eXWL96/exec';
 
 const MANUAL_HTML_URL = 'manual-modulo1.html';
 const MANUAL_PDF_URL = 'manual-modulo1.pdf';
@@ -180,18 +180,19 @@ const ESQUEMA_MOTOR_SVG = `
   <text x="340" y="42" text-anchor="middle" fill="#F5F2EC" font-size="16" font-family="Barlow" font-weight="600">Bloque de motor — esquema genérico (vista superior)</text>
   <rect x="295" y="90" width="90" height="50" rx="8" fill="#3a2f0d" stroke="#F4B400" stroke-width="1"/>
   <text x="340" y="119" text-anchor="middle" fill="#F4B400" font-size="12" font-family="Barlow">Filtro de aire</text>
-  <rect x="360" y="160" width="90" height="50" rx="8" fill="#2a2318" stroke="#c98a3a" stroke-width="1"/>
-  <text x="405" y="182" text-anchor="middle" fill="#e0a45a" font-size="11" font-family="Barlow">Filtro de</text>
-  <text x="405" y="196" text-anchor="middle" fill="#e0a45a" font-size="11" font-family="Barlow">combustible</text>
-  <rect x="360" y="230" width="90" height="50" rx="8" fill="#182530" stroke="#4E9BE0" stroke-width="1"/>
-  <text x="405" y="259" text-anchor="middle" fill="#8fc2ee" font-size="12" font-family="Barlow">Filtro de aceite</text>
-  <rect x="260" y="295" width="140" height="35" rx="6" fill="#182b1e" stroke="#5CB85C" stroke-width="1"/>
-  <text x="330" y="317" text-anchor="middle" fill="#8fd68f" font-size="12" font-family="Barlow">Tapón de drenaje</text>
+  <rect x="235" y="170" width="85" height="50" rx="8" fill="#182530" stroke="#4E9BE0" stroke-width="1"/>
+  <text x="277" y="199" text-anchor="middle" fill="#8fc2ee" font-size="12" font-family="Barlow">Filtro de aceite</text>
+  <rect x="360" y="170" width="90" height="50" rx="8" fill="#2a2318" stroke="#c98a3a" stroke-width="1"/>
+  <text x="405" y="192" text-anchor="middle" fill="#e0a45a" font-size="11" font-family="Barlow">Filtro de</text>
+  <text x="405" y="206" text-anchor="middle" fill="#e0a45a" font-size="11" font-family="Barlow">combustible</text>
+  <rect x="260" y="250" width="140" height="35" rx="6" fill="#182b1e" stroke="#5CB85C" stroke-width="1"/>
+  <text x="330" y="272" text-anchor="middle" fill="#8fd68f" font-size="12" font-family="Barlow">Tapón de drenaje</text>
   <text x="340" y="360" text-anchor="middle" fill="#9B9990" font-size="11" font-family="Barlow">Esquema genérico e ilustrativo — no representa un modelo real.</text>
   <text x="340" y="374" text-anchor="middle" fill="#9B9990" font-size="11" font-family="Barlow">La ubicación exacta varía según marca y modelo — seguí siempre lo que indique Emmanuel.</text>
 </svg>`;
 
 const MODULOS = [
+  { id: 'modulo0', numero: 0, titulo: 'Señalización y simbología', resumen: 'Símbolos de tablero, advertencias en la máquina y colores de seguridad — en preparación', disponible: false, secciones: [], quiz: [], ordenExercise: null },
   {
     id: 'modulo1',
     numero: 1,
@@ -299,6 +300,10 @@ function shuffle(arr) {
   return a;
 }
 
+function esAdmin() {
+  return !!(session && session.rol && String(session.rol).trim().toLowerCase().startsWith('admin'));
+}
+
 async function apiCall(params) {
   const url = APPS_SCRIPT_URL + '?' + new URLSearchParams(params).toString();
   const res = await fetch(url);
@@ -392,7 +397,7 @@ function renderDashboard() {
   });
   html += '</div>';
 
-  if (session.rol === 'Admin') {
+  if (esAdmin()) {
     html += `
       <div class="admin-panel" id="adminPanel">
         <h3><span class="live-dot"></span>Panel de seguimiento</h3>
@@ -401,7 +406,7 @@ function renderDashboard() {
   }
 
   document.getElementById('mainContent').innerHTML = html;
-  if (session.rol === 'Admin') {
+  if (esAdmin()) {
     loadAdminPanel();
     adminRefreshTimer = setInterval(loadAdminPanel, 20000);
   }
@@ -479,7 +484,7 @@ function renderSeccion(mod) {
 
   if (sec.miniquiz) {
     const q = sec.miniquiz;
-    const adminSkip = session.rol === 'Admin'
+    const adminSkip = esAdmin()
       ? `<button style="background:none;border:1px dashed var(--gray);color:var(--gray);margin-left:8px;padding:9px 14px;border-radius:6px;font-size:11px;cursor:pointer;" onclick="siguienteSeccion()">⏭ Saltar (solo admin)</button>`
       : '';
     html += `
@@ -549,7 +554,7 @@ function renderOrdenExercise(mod) {
       <button onclick="verificarOrden()" id="ordenVerifyBtn" style="display:none;">Verificar orden</button>
       <button onclick="renderOrdenExercise(moduloActivo)" id="ordenRetryBtn" style="display:none;">Reintentar</button>
       <button class="primary" onclick="renderQuizFinal(moduloActivo)" id="ordenNextBtn" style="display:none;margin-left:8px;">Ir a la evaluación final →</button>
-      ${session.rol === 'Admin' ? `<button style="background:none;border:1px dashed var(--gray);color:var(--gray);margin-left:8px;padding:9px 14px;border-radius:6px;font-size:11px;cursor:pointer;" onclick="renderQuizFinal(moduloActivo)">⏭ Saltar (solo admin)</button>` : ''}
+      ${esAdmin() ? `<button style="background:none;border:1px dashed var(--gray);color:var(--gray);margin-left:8px;padding:9px 14px;border-radius:6px;font-size:11px;cursor:pointer;" onclick="renderQuizFinal(moduloActivo)">⏭ Saltar (solo admin)</button>` : ''}
     </div>`;
 }
 
@@ -607,7 +612,7 @@ function renderQuizFinal(mod) {
     html += '</div>';
   });
   html += '</div><button class="primary" onclick="submitQuiz(\'' + mod.id + '\')">Entregar</button>';
-  if (session.rol === 'Admin') {
+  if (esAdmin()) {
     html += `<button style="background:none;border:1px dashed var(--gray);color:var(--gray);margin-left:8px;padding:12px 16px;border-radius:6px;font-size:11px;cursor:pointer;" onclick="skipModuleAdmin('${mod.id}')">⏭ Marcar como visto, sin evaluar (solo admin)</button>`;
   }
   html += '<div id="quizResult"></div>';
