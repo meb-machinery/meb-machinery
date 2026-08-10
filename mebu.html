@@ -167,7 +167,7 @@
 </div>
 
 <script>
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby0CV3dwzo_zxfUnYyiGL1P42GRU85Pn6T7vvoJJtLT6bJ2CjG2I2zgJuHoMfZZl72Y/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzVEnjQOnq9wDtymxOYudVCue1PUTD9uHXQiGEla9BAMat_Z0h_8ByqyAHKCX1OHpRN/exec';
 
 const MANUAL_HTML_URL = 'manual-modulo1.html';
 const MANUAL_PDF_URL = 'manual-modulo1.pdf';
@@ -177,14 +177,14 @@ const VIDEO_BIENVENIDA_ID = '';
 const ESQUEMA_MOTOR_SVG = `
 <svg viewBox="0 0 680 380" xmlns="http://www.w3.org/2000/svg">
   <rect x="220" y="60" width="240" height="260" rx="14" fill="none" stroke="#6E6E6E" stroke-width="1.5"/>
-  <text x="340" y="42" text-anchor="middle" fill="#F5F2EC" font-size="16" font-family="Barlow" font-weight="600">Bloque de motor — esquema genérico</text>
-  <rect x="250" y="95" width="90" height="50" rx="8" fill="#3a2f0d" stroke="#F4B400" stroke-width="1"/>
-  <text x="295" y="124" text-anchor="middle" fill="#F4B400" font-size="12" font-family="Barlow">Filtro de aire</text>
+  <text x="340" y="42" text-anchor="middle" fill="#F5F2EC" font-size="16" font-family="Barlow" font-weight="600">Bloque de motor — esquema genérico (vista superior)</text>
+  <rect x="295" y="90" width="90" height="50" rx="8" fill="#3a2f0d" stroke="#F4B400" stroke-width="1"/>
+  <text x="340" y="119" text-anchor="middle" fill="#F4B400" font-size="12" font-family="Barlow">Filtro de aire</text>
   <rect x="360" y="160" width="90" height="50" rx="8" fill="#2a2318" stroke="#c98a3a" stroke-width="1"/>
   <text x="405" y="182" text-anchor="middle" fill="#e0a45a" font-size="11" font-family="Barlow">Filtro de</text>
   <text x="405" y="196" text-anchor="middle" fill="#e0a45a" font-size="11" font-family="Barlow">combustible</text>
-  <rect x="240" y="235" width="90" height="50" rx="8" fill="#182530" stroke="#4E9BE0" stroke-width="1"/>
-  <text x="285" y="264" text-anchor="middle" fill="#8fc2ee" font-size="12" font-family="Barlow">Filtro de aceite</text>
+  <rect x="360" y="230" width="90" height="50" rx="8" fill="#182530" stroke="#4E9BE0" stroke-width="1"/>
+  <text x="405" y="259" text-anchor="middle" fill="#8fc2ee" font-size="12" font-family="Barlow">Filtro de aceite</text>
   <rect x="260" y="295" width="140" height="35" rx="6" fill="#182b1e" stroke="#5CB85C" stroke-width="1"/>
   <text x="330" y="317" text-anchor="middle" fill="#8fd68f" font-size="12" font-family="Barlow">Tapón de drenaje</text>
   <text x="340" y="360" text-anchor="middle" fill="#9B9990" font-size="11" font-family="Barlow">Esquema genérico e ilustrativo — no representa un modelo real.</text>
@@ -226,14 +226,17 @@ const MODULOS = [
       {
         bloques: [
           { tipo: 'texto', html: '<h3>3. Cambio de aceite de motor</h3>' },
-          { tipo: 'placeholder', texto: '📷 FOTO — Ubicación real del tapón de drenaje (a insertar, por marca/modelo, cuando Emmanuel la saque en la próxima práctica)' },
+          { tipo: 'imagen', url: 'img/mebu/modulo1/tapon-drenaje.jpg', caption: 'Foto real de MEB — punto de drenaje (foto tomada sin el tapón colocado, para mostrar el orificio con claridad).' },
+          { tipo: 'imagen', url: 'img/mebu/modulo1/drenaje-aceite.jpg', caption: 'Foto real de MEB — drenaje del aceite hacia un recipiente homologado.' },
           { tipo: 'texto', html: '<ol><li>Ubicar bandeja bajo el tapón de drenaje.</li><li>Aflojar y retirar el tapón — el aceite sale caliente.</li><li>Dejar drenar 10-15 minutos.</li><li>Revisar tapón y junta; reemplazar junta si está dañada.</li><li>Colocar tapón con el torque indicado por el fabricante.</li><li>Llenar con el aceite especificado en la orden de trabajo.</li><li>Verificar nivel con varilla, arrancar, chequear fugas.</li></ol>' },
         ],
       },
       {
         bloques: [
           { tipo: 'texto', html: '<h3>4. Filtro de aceite</h3>' },
-          { tipo: 'placeholder', texto: '📷 FOTO — Filtro de aceite antes/después del cambio (a insertar)' },
+          { tipo: 'imagen', url: 'img/mebu/modulo1/filtro-instalado.jpg', caption: 'Foto real de MEB — filtro en su ubicación, antes de retirarlo.' },
+          { tipo: 'imagen', url: 'img/mebu/modulo1/filtro-viejo.jpg', caption: 'Foto real de MEB — filtro viejo ya retirado.' },
+          { tipo: 'imagen', url: 'img/mebu/modulo1/filtro-nuevo.jpg', caption: 'Foto real de MEB — filtro nuevo colocado.' },
           { tipo: 'texto', html: '<ol><li>Aflojar en sentido antihorario, con bandeja debajo.</li><li>Verificar que el o-ring viejo salió completo.</li><li>Lubricar o-ring del filtro nuevo con aceite limpio.</li><li>Enroscar a mano hasta contacto + 3/4 de vuelta. No usar llave salvo indicación del fabricante.</li></ol>' },
         ],
         miniquiz: {
@@ -245,6 +248,7 @@ const MODULOS = [
       {
         bloques: [
           { tipo: 'texto', html: '<h3>5. Filtro de combustible</h3><p>Sistema sensible al ingreso de aire y suciedad — extremar la limpieza del entorno antes de abrir el circuito. Purgar el sistema si el modelo tiene cebador manual.</p><h3>6. Filtro de aire</h3><p>Inspeccionar roturas o desgaste. No lavar elementos de papel. El elemento de seguridad (si tiene doble filtro) nunca se limpia, solo se reemplaza.</p>' },
+          { tipo: 'imagen', url: 'img/mebu/modulo1/filtros-comparacion.jpg', caption: 'Foto real de MEB — comparación entre filtros dañados/usados y nuevos. Así se ve la diferencia a simple vista antes de decidir el reemplazo.' },
         ],
       },
       {
@@ -284,6 +288,7 @@ let progreso = {};
 let seccionActual = 0;
 let moduloActivo = null;
 let adminRefreshTimer = null;
+let heartbeatTimer = null;
 
 function shuffle(arr) {
   const a = arr.slice();
@@ -325,6 +330,7 @@ async function doLogin() {
 function logout() {
   localStorage.removeItem('mebu_session');
   if (adminRefreshTimer) clearInterval(adminRefreshTimer);
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
   session = null;
   location.reload();
 }
@@ -334,6 +340,9 @@ function showApp() {
   document.getElementById('app').style.display = 'block';
   document.getElementById('userLabel').textContent = session.nombre + ' · ' + session.rol;
   renderDashboard();
+  if (!heartbeatTimer) {
+    heartbeatTimer = setInterval(() => apiCall({ action: 'heartbeat', pin: session.pin }), 45000);
+  }
 }
 
 function isUnlocked(mod, index) {
@@ -403,13 +412,18 @@ async function loadAdminPanel() {
   const wrap = document.getElementById('adminTableWrap');
   if (!wrap) return;
   if (!data.ok) { wrap.textContent = 'No autorizado.'; return; }
-  let table = '<table><tr><th>Operario</th><th>Última actividad</th>' + MODULOS.map(m => `<th>${m.titulo.split(' —')[0].substring(0,16)}</th>`).join('') + '<th></th></tr>';
+  let table = '<table><tr><th>Operario</th><th>Estado</th>' + MODULOS.map(m => `<th>${m.titulo.split(' —')[0].substring(0,16)}</th>`).join('') + '<th>Manual (html)</th><th>Manual (pdf)</th><th></th></tr>';
   data.usuarios.forEach(u => {
-    table += `<tr><td>${u.nombre}</td><td>${u.ultimaActividad}</td>`;
+    const estado = u.isOnline
+      ? '<span class="live-dot"></span>En línea ahora'
+      : u.ultimaActividad;
+    table += `<tr><td>${u.nombre}</td><td>${estado}</td>`;
     MODULOS.forEach(m => {
       const reg = u.modulos.find(x => x.Modulo === m.id);
       table += `<td>${reg && reg.Estado === 'Completado' ? '✅ ' + reg.FechaCompletado : '—'}</td>`;
     });
+    table += `<td>${u.manualHtmlVisto ? '✅ ' + u.manualHtmlVisto : '—'}</td>`;
+    table += `<td>${u.manualPdfVisto ? '✅ ' + u.manualPdfVisto : '—'}</td>`;
     table += `<td><button class="reset-btn" onclick="doReset('${u.pin}','${u.nombre}')">Reiniciar</button></td></tr>`;
   });
   table += '</table>';
@@ -438,8 +452,8 @@ function renderModuleShell(mod) {
         <strong>Cómo se aprueba este módulo:</strong> avanzás sección por sección. Algunas tienen una pregunta corta que hay que responder bien antes de seguir (reintentos ilimitados, sin penalidad). Antes de la evaluación final hay un ejercicio de ordenar pasos. La evaluación final tiene 8 preguntas en orden aleatorio — se necesita <strong>80% o más</strong> para aprobar y desbloquear el siguiente módulo, con reintentos ilimitados.
       </div>
       <div class="resources">
-        <a href="${MANUAL_HTML_URL}" target="_blank">📖 Ver manual completo</a>
-        <a href="${MANUAL_PDF_URL}" target="_blank">⬇ Descargar PDF</a>
+        <a href="${MANUAL_HTML_URL}" target="_blank" onclick="apiCall({action:'logResource',pin:session.pin,recurso:'manualHtml'})">📖 Ver manual completo</a>
+        <a href="${MANUAL_PDF_URL}" target="_blank" onclick="apiCall({action:'logResource',pin:session.pin,recurso:'manualPdf'})">⬇ Descargar PDF</a>
       </div>
       <div id="seccionWrap"></div>
     </div>`;
