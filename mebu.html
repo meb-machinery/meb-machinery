@@ -465,6 +465,9 @@ function renderSeccion(mod) {
 
   if (sec.miniquiz) {
     const q = sec.miniquiz;
+    const adminSkip = session.rol === 'Admin'
+      ? `<button style="background:none;border:1px dashed var(--gray);color:var(--gray);margin-left:8px;padding:9px 14px;border-radius:6px;font-size:11px;cursor:pointer;" onclick="siguienteSeccion()">⏭ Saltar (solo admin)</button>`
+      : '';
     html += `
       <div class="mini-check" id="miniCheck">
         <p class="q">${q.pregunta}</p>
@@ -472,6 +475,7 @@ function renderSeccion(mod) {
         <div class="feedback" id="miniFeedback"></div>
         <button onclick="checkMini(${idx})">Comprobar</button>
         <button class="next-btn primary" id="miniNextBtn" onclick="siguienteSeccion()">Siguiente sección →</button>
+        ${adminSkip}
       </div>`;
   } else {
     const esUltima = idx === mod.secciones.length - 1;
@@ -531,6 +535,7 @@ function renderOrdenExercise(mod) {
       <button onclick="verificarOrden()" id="ordenVerifyBtn" style="display:none;">Verificar orden</button>
       <button onclick="renderOrdenExercise(moduloActivo)" id="ordenRetryBtn" style="display:none;">Reintentar</button>
       <button class="primary" onclick="renderQuizFinal(moduloActivo)" id="ordenNextBtn" style="display:none;margin-left:8px;">Ir a la evaluación final →</button>
+      ${session.rol === 'Admin' ? `<button style="background:none;border:1px dashed var(--gray);color:var(--gray);margin-left:8px;padding:9px 14px;border-radius:6px;font-size:11px;cursor:pointer;" onclick="renderQuizFinal(moduloActivo)">⏭ Saltar (solo admin)</button>` : ''}
     </div>`;
 }
 
@@ -587,8 +592,19 @@ function renderQuizFinal(mod) {
     q.opciones.forEach((op, oi) => { html += `<label><input type="radio" name="q${qi}" value="${oi}"> ${op}</label>`; });
     html += '</div>';
   });
-  html += '</div><button class="primary" onclick="submitQuiz(\'' + mod.id + '\')">Entregar</button><div id="quizResult"></div>';
+  html += '</div><button class="primary" onclick="submitQuiz(\'' + mod.id + '\')">Entregar</button>';
+  if (session.rol === 'Admin') {
+    html += `<button style="background:none;border:1px dashed var(--gray);color:var(--gray);margin-left:8px;padding:12px 16px;border-radius:6px;font-size:11px;cursor:pointer;" onclick="skipModuleAdmin('${mod.id}')">⏭ Marcar como visto, sin evaluar (solo admin)</button>`;
+  }
+  html += '<div id="quizResult"></div>';
   document.getElementById('seccionWrap').innerHTML = html;
+}
+
+async function skipModuleAdmin(modId) {
+  await apiCall({ action: 'completeModule', pin: session.pin, modulo: modId, puntaje: 'admin-skip' });
+  const data = await apiCall({ action: 'getProgress', pin: session.pin });
+  progreso = data.progreso || {};
+  renderDashboard();
 }
 
 async function submitQuiz(modId) {
