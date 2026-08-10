@@ -169,9 +169,6 @@
 <script>
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyTW2JA9jPaCbwcBqhsgV5bs5jPiTpu3p6zVJGQW5bRgFzlWxoIE3fgKyMrc3eXWL96/exec';
 
-const MANUAL_HTML_URL = 'manual-modulo1.html';
-const MANUAL_PDF_URL = 'manual-modulo1.pdf';
-
 const VIDEO_BIENVENIDA_ID = '';
 
 const ESQUEMA_MOTOR_SVG = `
@@ -198,6 +195,8 @@ const MODULOS = [
     titulo: 'Señalización y simbología',
     resumen: 'Símbolos de tablero y advertencias de la máquina',
     disponible: true,
+    manualHtml: 'manual-modulo0.html',
+    manualPdf: 'manual-modulo0.pdf',
     secciones: [
       {
         bloques: [
@@ -259,6 +258,8 @@ const MODULOS = [
     titulo: 'Cambio de aceite y filtros + Inspección visual',
     resumen: 'Procedimiento completo de mantenimiento base (hito 250hs)',
     disponible: true,
+    manualHtml: 'manual-modulo1.html',
+    manualPdf: 'manual-modulo1.pdf',
     secciones: [
       {
         bloques: [
@@ -517,8 +518,8 @@ function renderModuleShell(mod) {
         <strong>Cómo se aprueba este módulo:</strong> avanzás sección por sección. Algunas tienen una pregunta corta que hay que responder bien antes de seguir (reintentos ilimitados, sin penalidad). Antes de la evaluación final hay un ejercicio de ordenar pasos. La evaluación final tiene 8 preguntas en orden aleatorio — se necesita <strong>80% o más</strong> para aprobar y desbloquear el siguiente módulo, con reintentos ilimitados.
       </div>
       <div class="resources">
-        <a href="${MANUAL_HTML_URL}" target="_blank" onclick="apiCall({action:'logResource',pin:session.pin,recurso:'manualHtml'})">📖 Ver manual completo</a>
-        <a href="${MANUAL_PDF_URL}" target="_blank" onclick="apiCall({action:'logResource',pin:session.pin,recurso:'manualPdf'})">⬇ Descargar PDF</a>
+        ${mod.manualHtml ? `<a href="${mod.manualHtml}" target="_blank" onclick="apiCall({action:'logResource',pin:session.pin,recurso:'manualHtml'})">📖 Ver manual completo</a>` : ''}
+        ${mod.manualPdf ? `<a href="${mod.manualPdf}" target="_blank" onclick="apiCall({action:'logResource',pin:session.pin,recurso:'manualPdf'})">⬇ Descargar PDF</a>` : ''}
       </div>
       <div id="seccionWrap"></div>
     </div>`;
