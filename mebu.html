@@ -213,6 +213,7 @@ const MODULOS = [
           pregunta: '¿Qué se hace si se enciende una luz roja crítica en el tablero (presión de aceite, temperatura, batería)?',
           opciones: ['Se sigue trabajando hasta terminar la tarea', 'Se detiene la máquina y se avisa a Emmanuel', 'Se ignora si la máquina "suena bien"'],
           correcta: 1,
+          explicacion: 'Una alarma roja no es una sugerencia — es información sobre algo que ya se está dañando mientras seguís operando. Repasá el primer párrafo de esta sección.',
         },
       },
       {
@@ -242,17 +243,18 @@ const MODULOS = [
           pregunta: '¿Qué indica el símbolo de freno de estacionamiento activado?',
           opciones: ['Que la máquina está lista para desplazarse', 'Que no se puede desplazar la máquina hasta liberarlo', 'Que hay una falla eléctrica'],
           correcta: 1,
+          explicacion: 'Es la misma lógica que el freno de mano de un auto: hasta que no lo soltás, mover el vehículo no tiene sentido.',
         },
       },
     ],
     ordenExercise: null,
     quiz: [
-      { pregunta: '¿Qué color de alarma en el tablero implica generalmente detener la máquina?', opciones: ['Verde', 'Amarillo', 'Rojo', 'Azul'], correcta: 2 },
-      { pregunta: '¿Qué indica el símbolo de presión de aceite de motor encendido?', opciones: ['Nivel de combustible bajo', 'Caída de presión en el circuito de lubricación', 'Freno de estacionamiento activado', 'Exceso de velocidad'], correcta: 1 },
-      { pregunta: '¿Qué se debe hacer ante una luz de temperatura de refrigerante encendida?', opciones: ['Acelerar para enfriar más rápido', 'Detener la máquina y avisar', 'Apagar el tablero', 'Seguir normalmente'], correcta: 1 },
-      { pregunta: '¿El símbolo de bloqueo de diferencial es una alarma crítica o un indicador de estado?', opciones: ['Alarma crítica', 'Indicador de estado', 'No existe ese símbolo', 'Depende del color del cielo'], correcta: 1 },
-      { pregunta: '¿Por qué se usan símbolos ISO 7000 en los tableros en vez de texto?', opciones: ['Porque quedan más lindos', 'Porque no dependen del idioma del operador', 'Porque son obligatorios solo en Europa', 'No tienen ninguna ventaja'], correcta: 1 },
-      { pregunta: '¿La ubicación y color exacto de cada símbolo es igual en todas las marcas?', opciones: ['Sí, siempre idéntico', 'No, varía según marca y modelo — hay que confirmar con el manual o Emmanuel', 'Solo varía en tractores', 'Solo varía de noche'], correcta: 1 },
+      { pregunta: '¿Qué color de alarma en el tablero implica generalmente detener la máquina?', opciones: ['Verde', 'Amarillo', 'Rojo', 'Azul'], correcta: 2, explicacion: 'El código de colores universal reserva ese color para lo que no admite espera.' },
+      { pregunta: '¿Qué indica el símbolo de presión de aceite de motor encendido?', opciones: ['Nivel de combustible bajo', 'Caída de presión en el circuito de lubricación', 'Freno de estacionamiento activado', 'Exceso de velocidad'], correcta: 1, explicacion: 'Sin ese fluido circulando a presión, las piezas metálicas del motor empiezan a rozar entre sí sin protección.' },
+      { pregunta: '¿Qué se debe hacer ante una luz de temperatura de refrigerante encendida?', opciones: ['Acelerar para enfriar más rápido', 'Detener la máquina y avisar', 'Apagar el tablero', 'Seguir normalmente'], correcta: 1, explicacion: 'El motor sigue generando calor aunque el indicador ya avisó que no puede disiparlo más.' },
+      { pregunta: '¿El símbolo de bloqueo de diferencial es una alarma crítica o un indicador de estado?', opciones: ['Alarma crítica', 'Indicador de estado', 'No existe ese símbolo', 'Depende del color del cielo'], correcta: 1, explicacion: 'No es una falla — es una función que el operador activa a propósito. Por eso no comparte color con las alarmas.' },
+      { pregunta: '¿Por qué se usan símbolos ISO 7000 en los tableros en vez de texto?', opciones: ['Porque quedan más lindos', 'Porque no dependen del idioma del operador', 'Porque son obligatorios solo en Europa', 'No tienen ninguna ventaja'], correcta: 1, explicacion: 'Un símbolo se entiende igual sin importar qué idioma hable quien esté operando ese día.' },
+      { pregunta: '¿La ubicación y color exacto de cada símbolo es igual en todas las marcas?', opciones: ['Sí, siempre idéntico', 'No, varía según marca y modelo — hay que confirmar con el manual o Emmanuel', 'Solo varía en tractores', 'Solo varía de noche'], correcta: 1, explicacion: 'Cada fabricante diseña su propio tablero — el símbolo es universal, el lugar donde aparece no.' },
     ],
   },
   {
@@ -278,6 +280,7 @@ const MODULOS = [
           pregunta: '¿En qué momento debe estar el motor para drenar el aceite?',
           opciones: ['Frío, recién arrancado', 'Tibio, no caliente', 'Caliente, recién apagado'],
           correcta: 1,
+          explicacion: 'Pensalo como con cualquier líquido espeso: frío no fluye bien, hirviendo te quema. Ahí está el punto medio que buscamos.',
         },
       },
       {
@@ -308,6 +311,7 @@ const MODULOS = [
           pregunta: '¿Qué se hace si el o-ring del filtro viejo queda pegado al motor?',
           opciones: ['Se deja, no afecta', 'Se retira manualmente antes de colocar el nuevo filtro', 'Se coloca el nuevo filtro encima'],
           correcta: 1,
+          explicacion: 'Ese sello es invisible a simple vista una vez tapado por el filtro nuevo — el problema aparece recién cuando ya es tarde.',
         },
       },
       {
@@ -334,14 +338,14 @@ const MODULOS = [
       ],
     },
     quiz: [
-      { pregunta: '¿En qué momento se debe estar el motor para drenar el aceite?', opciones: ['Frío, recién arrancado', 'Tibio, no caliente', 'Caliente, recién apagado', 'No importa la temperatura'], correcta: 1 },
-      { pregunta: '¿Qué se hace si el o-ring del filtro viejo queda pegado al motor?', opciones: ['Se deja, no afecta', 'Se retira manualmente antes de colocar el nuevo filtro', 'Se coloca el nuevo filtro encima', 'Se reemplaza todo el motor'], correcta: 1 },
-      { pregunta: '¿Con qué se ajusta el filtro de aceite nuevo, salvo indicación contraria del fabricante?', opciones: ['Con llave de filtro, fuerte', 'A mano, hasta contacto + 3/4 de vuelta', 'Con pinza', 'No se ajusta'], correcta: 1 },
-      { pregunta: '¿Qué se hace con un elemento de filtro de aire de papel roto?', opciones: ['Se lava con agua', 'Se sopla con aire comprimido a alta presión', 'Se reemplaza', 'Se sigue usando si filtra la mayoría'], correcta: 2 },
-      { pregunta: '¿Dónde se registran las anomalías detectadas en la inspección visual previa?', opciones: ['No se registran si no son del tema del día', 'En el Informe Técnico, antes de intervenir', 'Solo se comentan de palabra', 'Se anotan al final del día'], correcta: 1 },
-      { pregunta: '¿Qué se revisa primero, antes de tocar cualquier componente de la máquina?', opciones: ['El precio de los repuestos', 'La inspección visual previa', 'El clima del día', 'El historial de facturación del cliente'], correcta: 1 },
-      { pregunta: '¿Por qué el sistema de combustible common rail es especialmente delicado?', opciones: ['Porque es más barato de reparar', 'Porque es muy sensible al ingreso de aire y suciedad', 'Porque no tiene filtro', 'Porque no afecta si entra aire'], correcta: 1 },
-      { pregunta: '¿Qué pasa con el elemento de seguridad de un filtro de aire doble?', opciones: ['Se limpia junto con el primario', 'Nunca se limpia, solo se reemplaza (con menor frecuencia)', 'No existe en maquinaria pesada', 'Se reemplaza cada vez que se lava el primario'], correcta: 1 },
+      { pregunta: '¿En qué momento se debe estar el motor para drenar el aceite?', opciones: ['Frío, recién arrancado', 'Tibio, no caliente', 'Caliente, recién apagado', 'No importa la temperatura'], correcta: 1, explicacion: 'El punto justo es el mismo que buscás con cualquier líquido espeso: que fluya bien sin arriesgarte a una quemadura.' },
+      { pregunta: '¿Qué se hace si el o-ring del filtro viejo queda pegado al motor?', opciones: ['Se deja, no afecta', 'Se retira manualmente antes de colocar el nuevo filtro', 'Se coloca el nuevo filtro encima', 'Se reemplaza todo el motor'], correcta: 1, explicacion: 'Un sello duplicado no cierra bien — el problema queda escondido hasta que ya generó una fuga.' },
+      { pregunta: '¿Con qué se ajusta el filtro de aceite nuevo, salvo indicación contraria del fabricante?', opciones: ['Con llave de filtro, fuerte', 'A mano, hasta contacto + 3/4 de vuelta', 'Con pinza', 'No se ajusta'], correcta: 1, explicacion: 'Forzar de más un sello nuevo suele arruinarlo antes incluso de arrancar el motor.' },
+      { pregunta: '¿Qué se hace con un elemento de filtro de aire de papel roto?', opciones: ['Se lava con agua', 'Se sopla con aire comprimido a alta presión', 'Se reemplaza', 'Se sigue usando si filtra la mayoría'], correcta: 2, explicacion: 'Un filtro dañado ya perdió la función para la que está — repararlo no alcanza.' },
+      { pregunta: '¿Dónde se registran las anomalías detectadas en la inspección visual previa?', opciones: ['No se registran si no son del tema del día', 'En el Informe Técnico, antes de intervenir', 'Solo se comentan de palabra', 'Se anotan al final del día'], correcta: 1, explicacion: 'Ese registro es lo único que después explica un reclamo o una falla que no tiene nada que ver con la tarea del día.' },
+      { pregunta: '¿Qué se revisa primero, antes de tocar cualquier componente de la máquina?', opciones: ['El precio de los repuestos', 'La inspección visual previa', 'El clima del día', 'El historial de facturación del cliente'], correcta: 1, explicacion: 'Es el paso que evita confundir un problema que ya existía con uno nuevo que generaste vos mismo.' },
+      { pregunta: '¿Por qué el sistema de combustible common rail es especialmente delicado?', opciones: ['Porque es más barato de reparar', 'Porque es muy sensible al ingreso de aire y suciedad', 'Porque no tiene filtro', 'Porque no afecta si entra aire'], correcta: 1, explicacion: 'La presión con la que trabaja ese sistema no perdona ni una partícula de más.' },
+      { pregunta: '¿Qué pasa con el elemento de seguridad de un filtro de aire doble?', opciones: ['Se limpia junto con el primario', 'Nunca se limpia, solo se reemplaza (con menor frecuencia)', 'No existe en maquinaria pesada', 'Se reemplaza cada vez que se lava el primario'], correcta: 1, explicacion: 'Es el respaldo del respaldo — se lo toca lo menos posible, y solo cuando realmente hace falta.' },
     ],
   },
   { id: 'modulo2', numero: 2, titulo: 'Próximamente', resumen: 'Sistema hidráulico — en preparación', disponible: false, secciones: [], quiz: [], ordenExercise: null },
@@ -594,12 +598,13 @@ function checkMini(idx) {
   const feedback = document.getElementById('miniFeedback');
   const nextBtn = document.getElementById('miniNextBtn');
   if (!sel) { feedback.textContent = 'Elegí una opción.'; feedback.className = 'feedback err'; return; }
+  const exp = sec.miniquiz.explicacion ? `<div style="font-weight:400;font-style:italic;margin-top:6px;color:#c9c7bd;">${sec.miniquiz.explicacion}</div>` : '';
   if (parseInt(sel.value) === sec.miniquiz.correcta) {
-    feedback.textContent = '✓ Correcto.';
+    feedback.innerHTML = '✓ Correcto.' + exp;
     feedback.className = 'feedback ok';
     nextBtn.style.display = 'inline-block';
   } else {
-    feedback.textContent = '✗ No es esa. Probá de nuevo.';
+    feedback.innerHTML = '✗ No es esa. Pensalo de nuevo:' + exp;
     feedback.className = 'feedback err';
     nextBtn.style.display = 'none';
   }
@@ -713,14 +718,30 @@ async function submitQuiz(modId) {
   let correctas = 0;
   quizActivo.forEach((q, qi) => {
     const sel = document.querySelector(`input[name="q${qi}"]:checked`);
-    if (sel && parseInt(sel.value) === q.correcta) correctas++;
+    const esCorrecta = sel && parseInt(sel.value) === q.correcta;
+    if (esCorrecta) correctas++;
+    const qDiv = document.querySelectorAll('.quiz-q')[qi];
+    qDiv.querySelectorAll('input').forEach(inp => inp.disabled = true);
+    if (q.explicacion) {
+      const expDiv = document.createElement('div');
+      expDiv.style.cssText = 'margin-top:8px;font-size:12.5px;font-style:italic;color:' + (esCorrecta ? '#8fd68f' : '#e79a9a') + ';';
+      expDiv.innerHTML = (esCorrecta ? '✓ ' : '✗ ') + q.explicacion;
+      qDiv.appendChild(expDiv);
+    }
   });
   const puntaje = Math.round((correctas / quizActivo.length) * 100);
   const resultEl = document.getElementById('quizResult');
+  document.querySelector('#seccionWrap button.primary')?.remove();
 
   if (puntaje < 80) {
     resultEl.style.color = 'var(--red)';
-    resultEl.textContent = `Puntaje: ${puntaje}%. Necesitás al menos 80% para aprobar — repasá y volvé a intentar (sin límite de intentos, preguntas y opciones se reordenan cada vez).`;
+    resultEl.textContent = `Puntaje: ${puntaje}%. Necesitás al menos 80% para aprobar — repasá las que marcó en rojo y volvé a intentar (sin límite de intentos, preguntas y opciones se reordenan cada vez).`;
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'primary';
+    retryBtn.style.marginTop = '14px';
+    retryBtn.textContent = 'Reintentar';
+    retryBtn.onclick = () => renderQuizFinal(moduloActivo);
+    resultEl.after(retryBtn);
     return;
   }
 
@@ -735,7 +756,7 @@ async function submitQuiz(modId) {
   await apiCall({ action: 'completeModule', pin: session.pin, modulo: modId, puntaje });
   const data = await apiCall({ action: 'getProgress', pin: session.pin });
   progreso = data.progreso || {};
-  setTimeout(renderDashboard, 2600);
+  setTimeout(renderDashboard, 3200);
 }
 
 if (session) { apiCall({ action: 'getProgress', pin: session.pin }).then(d => { progreso = d.progreso || {}; showApp(); }); }
