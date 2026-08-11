@@ -179,7 +179,7 @@
 </div>
 
 <script>
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyTW2JA9jPaCbwcBqhsgV5bs5jPiTpu3p6zVJGQW5bRgFzlWxoIE3fgKyMrc3eXWL96/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxGIOkdxsXRXkFTjcBaE97pyjfkMFQX5ZGv5Bpp6SD7hW_z76Fteq7odNvc9TcZ0zloSg/exec';
 
 
 
@@ -492,6 +492,10 @@ function renderDashboard() {
       <div class="admin-panel" id="adminPanel">
         <h3><span class="live-dot"></span>Panel de seguimiento</h3>
         <div id="adminTableWrap">Cargando...</div>
+        <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px;">
+          <a class="back-link" onclick="toggleHistorial()" id="historialToggle">📜 Ver historial completo de intentos</a>
+          <div id="historialWrap" style="display:none;margin-top:12px;"></div>
+        </div>
       </div>`;
   }
 
@@ -523,6 +527,31 @@ async function loadAdminPanel() {
   });
   table += '</table>';
   wrap.innerHTML = table;
+}
+
+let historialCargado = false;
+let historialVisible = false;
+
+async function toggleHistorial() {
+  historialVisible = !historialVisible;
+  const wrap = document.getElementById('historialWrap');
+  const toggle = document.getElementById('historialToggle');
+  if (!wrap) return;
+  wrap.style.display = historialVisible ? 'block' : 'none';
+  toggle.textContent = historialVisible ? '📜 Ocultar historial' : '📜 Ver historial completo de intentos';
+  if (historialVisible && !historialCargado) {
+    wrap.innerHTML = 'Cargando...';
+    const data = await apiCall({ action: 'getHistorial', pin: session.pin });
+    if (!data.ok) { wrap.textContent = 'No autorizado.'; return; }
+    if (!data.eventos.length) { wrap.textContent = 'Todavía no hay eventos registrados.'; return; }
+    let table = '<table><tr><th>Operario</th><th>Módulo</th><th>Fecha</th><th>Puntaje</th><th></th></tr>';
+    data.eventos.forEach(e => {
+      table += `<tr><td>${e.nombre}</td><td>${e.modulo}</td><td>${e.fecha}</td><td>${e.puntaje}%</td><td>${e.rehecho ? '<span style="color:var(--yellow);font-weight:700;">↺ rehecho</span>' : ''}</td></tr>`;
+    });
+    table += '</table>';
+    wrap.innerHTML = table;
+    historialCargado = true;
+  }
 }
 
 async function doReset(targetPin, nombre) {
