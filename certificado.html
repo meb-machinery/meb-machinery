@@ -28,11 +28,28 @@
   .cert-meta{font-size:12px;color:var(--gray);margin-top:18px;}
   .cert-footer{display:flex;justify-content:center;gap:70px;margin-top:44px;width:100%;}
   .sig-block{text-align:center;}
-  .sig-block img.firma{height:46px;object-fit:contain;margin-bottom:2px;}
+  .sig-block img.firma{height:110px;object-fit:contain;margin-bottom:2px;}
   .sig-placeholder{height:46px;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:11px;border-bottom:1px dashed #ccc;width:170px;}
   .sig-line{border-top:1px solid #999;width:190px;padding-top:6px;font-size:12px;color:#555;}
   .sig-line strong{display:block;color:var(--black);font-size:13px;}
   .seal{position:absolute;bottom:26px;right:40px;width:46px;height:46px;border-radius:10px;opacity:.85;}
+  @media (max-width: 640px){
+    body{padding:14px 10px;}
+    .toolbar{max-width:100%;flex-wrap:wrap;justify-content:center;}
+    .toolbar button{flex:1;min-width:140px;padding:12px 10px;font-size:12px;}
+    .page{padding:14px;min-height:auto;}
+    .cert-border{padding:26px 18px;border-width:5px;border-radius:16px;}
+    .cert-border img.logo{height:32px;margin-bottom:10px;}
+    .cert-title{font-size:22px;letter-spacing:1px;}
+    .cert-sub{font-size:10px;margin-bottom:18px;}
+    .cert-body{font-size:13.5px;max-width:100%;}
+    .cert-name{font-size:22px;margin:10px 0;}
+    .cert-meta{font-size:11px;}
+    .cert-footer{margin-top:26px;gap:0;}
+    .sig-block img.firma{height:80px;}
+    .sig-line{width:170px;font-size:11px;}
+    .seal{width:32px;height:32px;bottom:14px;right:16px;}
+  }
   @media print{
     body{background:#fff;padding:0;}
     .toolbar{display:none;}
@@ -54,9 +71,11 @@
     <div class="cert-title">CERTIFICADO DE CAPACITACIÓN</div>
     <div class="cert-sub">MEB-U — Plataforma de capacitación de MEB Machinery Solutions</div>
     <div class="cert-body">
-      Certifico que
+      Por medio del presente se certifica que
       <span class="cert-name" id="nombreOperario">—</span>
-      finalizó la capacitación de <span class="cert-module" id="moduloTitulo">—</span> con éxito.
+      completó satisfactoriamente la capacitación correspondiente a
+      <span class="cert-module" id="moduloTitulo">—</span>,
+      con una carga horaria de <span id="horasInfo">—</span>.
       <div class="cert-meta" id="metaInfo"></div>
     </div>
     <div class="cert-footer">
@@ -84,7 +103,13 @@ function capitalizarNombre(str) {
 }
 
 document.getElementById('nombreOperario').textContent = qp('nombre') ? capitalizarNombre(qp('nombre')) : 'Nombre del operario';
-document.getElementById('moduloTitulo').textContent = qp('modulo') || 'Módulo';
+
+const numero = qp('numero');
+const moduloBase = qp('modulo') || 'Módulo';
+document.getElementById('moduloTitulo').textContent = (numero !== '' ? `Módulo ${numero} — ${moduloBase}` : moduloBase);
+
+const horas = qp('horas');
+document.getElementById('horasInfo').textContent = horas ? `${horas} ${horas == 1 ? 'hora' : 'horas'}` : 'a definir';
 
 const fecha = qp('fecha');
 const puntaje = qp('puntaje');
