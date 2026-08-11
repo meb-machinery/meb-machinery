@@ -32,13 +32,13 @@
   @keyframes fillBar{from{width:0;}}
   @keyframes pulseDot{0%,100%{opacity:1;}50%{opacity:.3;}}
 
-  #loginScreen{max-width:360px;margin:70px auto;background:var(--card);padding:36px 28px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.5);text-align:center;animation:fadeInUp .4s ease;border:1px solid var(--border);}
+  #loginScreen,.login-card{max-width:360px;margin:70px auto;background:var(--card);padding:36px 28px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.5);text-align:center;animation:fadeInUp .4s ease;border:1px solid var(--border);}
   #loginScreen img.logo{width:64px;height:64px;border-radius:14px;margin-bottom:14px;}
-  #loginScreen p{color:var(--gray);font-size:13px;margin-bottom:22px;}
+  #loginScreen p,.login-card p{color:var(--gray);font-size:13px;margin-bottom:22px;}
   #loginScreen input{width:100%;padding:14px;font-size:22px;text-align:center;letter-spacing:6px;border:2px solid var(--border);border-radius:6px;margin-bottom:16px;background:#1d1c1b;color:var(--bone);transition:border-color .2s;}
   #loginScreen input:focus{outline:none;border-color:var(--yellow);}
-  #loginScreen button{width:100%;padding:14px;background:var(--yellow);border:none;border-radius:6px;font-weight:700;font-size:15px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;color:#1a1a1a;transition:transform .15s;}
-  #loginScreen button:hover{transform:translateY(-1px);}
+  #loginScreen button,.login-card button{width:100%;padding:14px;background:var(--yellow);border:none;border-radius:6px;font-weight:700;font-size:15px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;color:#1a1a1a;transition:transform .15s;}
+  #loginScreen button:hover,.login-card button:hover{transform:translateY(-1px);}
   #loginError{color:var(--red);font-size:13px;margin-top:10px;min-height:16px;}
   #loginScreen .hint{font-size:11px;color:var(--gray);margin-top:18px;border-top:1px solid var(--border);padding-top:14px;}
   .shake{animation:shake .3s;}
@@ -172,7 +172,7 @@
 <script>
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyTW2JA9jPaCbwcBqhsgV5bs5jPiTpu3p6zVJGQW5bRgFzlWxoIE3fgKyMrc3eXWL96/exec';
 
-const VIDEO_BIENVENIDA_ID = '';
+
 
 const ESQUEMA_MOTOR_SVG = `
 <svg viewBox="0 0 680 380" xmlns="http://www.w3.org/2000/svg">
@@ -206,8 +206,8 @@ const MODULOS = [
           { tipo: 'texto', html: '<h3>Cómo usar este módulo</h3><p>Antes de tocar cualquier máquina, hay que poder leer su tablero. Estos símbolos son estándar internacional (ISO 7000) — se repiten, con variaciones menores, en todas las marcas que atiende MEB.</p>' },
           { tipo: 'texto', html: '<h3>1. Alarmas críticas (luz roja)</h3><p>Si se encienden fijas o titilando, la indicación general es <strong>detener la máquina</strong> y avisar a Emmanuel — no seguir trabajando "para terminar la tarea".</p>' },
           { tipo: 'simbolo', url: 'img/mebu/modulo0/presion-aceite-motor.svg', caption: 'Presión de aceite de motor — indica caída de presión en el circuito de lubricación.' },
-          { tipo: 'simbolo', url: 'img/mebu/modulo0/temperatura-refrigerante.svg', caption: 'Temperatura del refrigerante del motor — sobrecalentamiento.' },
-          { tipo: 'simbolo', url: 'img/mebu/modulo0/carga-bateria.svg', caption: 'Carga de batería / alternador — el sistema eléctrico no está cargando correctamente.' },
+          { tipo: 'simbolo', url: 'img/mebu/modulo0/temperatura-refrigerante.png', caption: 'Temperatura del refrigerante del motor — sobrecalentamiento.' },
+          { tipo: 'simbolo', url: 'img/mebu/modulo0/carga-bateria.png', caption: 'Carga de batería / alternador — el sistema eléctrico no está cargando correctamente.' },
         ],
         miniquiz: {
           pregunta: '¿Qué se hace si se enciende una luz roja crítica en el tablero (presión de aceite, temperatura, batería)?',
@@ -226,17 +226,17 @@ const MODULOS = [
       {
         bloques: [
           { tipo: 'texto', html: '<h3>2. Indicadores de estado (amarillo/verde)</h3><p>Informan una condición del equipo — no siempre implican detenerse, pero sí requieren atención.</p>' },
-          { tipo: 'simbolo', url: 'img/mebu/modulo0/filtro-hidraulico.svg', caption: 'Filtro hidráulico — indicador de obstrucción, señal de que se acerca su reemplazo.' },
+          { tipo: 'simbolo', url: 'img/mebu/modulo0/filtro-hidraulico.png', caption: 'Filtro hidráulico — indicador de obstrucción, señal de que se acerca su reemplazo.' },
           { tipo: 'simbolo', url: 'img/mebu/modulo0/nivel-combustible.svg', caption: 'Nivel de combustible bajo.' },
           { tipo: 'simbolo', url: 'img/mebu/modulo0/freno-estacionamiento.svg', caption: 'Freno de estacionamiento activado — no se puede desplazar la máquina hasta liberarlo.' },
         ],
       },
       {
         bloques: [
-          { tipo: 'simbolo', url: 'img/mebu/modulo0/bloqueo-diferencial.svg', caption: 'Bloqueo de diferencial activado.' },
-          { tipo: 'simbolo', url: 'img/mebu/modulo0/luces-trabajo.svg', caption: 'Luces de trabajo encendidas.' },
-          { tipo: 'placeholder', texto: '📷 Precalentamiento / bujías incandescentes — pendiente, se suma con foto real del tablero de MEB' },
-          { tipo: 'placeholder', texto: '📷 Filtro de aire obstruido — pendiente, se suma con foto real del tablero de MEB' },
+          { tipo: 'simbolo', url: 'img/mebu/modulo0/bloqueo-diferencial.png', caption: 'Bloqueo de diferencial activado.' },
+          { tipo: 'simbolo', url: 'img/mebu/modulo0/luces-trabajo.png', caption: 'Luces de trabajo encendidas.' },
+          { tipo: 'simbolo', url: 'img/mebu/modulo0/bujias-incandescentes.png', caption: 'Precalentamiento / bujías incandescentes — esperar a que se apague antes de arrancar (motor diésel).' },
+          { tipo: 'simbolo', url: 'img/mebu/modulo0/filtro-de-aire-obstruido.png', caption: 'Filtro de aire obstruido — se acerca su reemplazo.' },
         ],
         miniquiz: {
           pregunta: '¿Qué indica el símbolo de freno de estacionamiento activado?',
@@ -408,9 +408,14 @@ function showApp() {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   document.getElementById('userLabel').textContent = session.nombre + ' · ' + session.rol;
-  renderDashboard();
   if (!heartbeatTimer) {
     heartbeatTimer = setInterval(() => apiCall({ action: 'heartbeat', pin: session.pin }), 45000);
+  }
+  const yaVioBienvenida = localStorage.getItem('mebu_bienvenida_' + session.pin);
+  if (!yaVioBienvenida) {
+    renderBienvenidaGate(false);
+  } else {
+    renderDashboard();
   }
 }
 
@@ -421,15 +426,28 @@ function isUnlocked(mod, index) {
 }
 
 function renderWelcome() {
-  const videoHtml = VIDEO_BIENVENIDA_ID
-    ? `<div class="video-wrap"><iframe src="https://www.youtube.com/embed/${VIDEO_BIENVENIDA_ID}" title="Bienvenida a MEB-U" allowfullscreen></iframe></div>`
-    : '';
   return `
     <div class="welcome">
       <h2>¿Qué es MEB-U?</h2>
-      ${videoHtml}
       <p>MEB-U es la plataforma propia de capacitación de MEB Machinery Solutions. Acá vas a encontrar los módulos de formación técnica que acompañan la práctica directa con Emmanuel — cada módulo se lee, se mira, y se pone a prueba con una evaluación antes de pasar al siguiente.</p>
+      <a class="back-link" style="display:inline-block;margin-top:6px;" onclick="renderBienvenidaGate(true)">↺ Ver la bienvenida de nuevo</a>
     </div>`;
+}
+
+function renderBienvenidaGate(soloLectura) {
+  const html = `
+    <div class="login-card" style="margin-top:70px;">
+      <h2 style="font-family:'Bebas Neue';color:var(--yellow);font-size:28px;margin:0 0 14px;">¿Qué es MEB-U?</h2>
+      <p style="text-align:left;line-height:1.7;">MEB-U es la plataforma propia de capacitación de MEB Machinery Solutions. Acá vas a encontrar los módulos de formación técnica que acompañan la práctica directa con Emmanuel.</p>
+      <p style="text-align:left;line-height:1.7;">Antes de tocar una máquina, hay que entenderla — por eso cada módulo se lee, se mira, y se pone a prueba con una evaluación antes de pasar al siguiente.</p>
+      <button onclick="cerrarBienvenidaGate()">${soloLectura ? 'Volver' : 'Leído, comenzar →'}</button>
+    </div>`;
+  document.getElementById('mainContent').innerHTML = html;
+}
+
+function cerrarBienvenidaGate() {
+  localStorage.setItem('mebu_bienvenida_' + session.pin, '1');
+  renderDashboard();
 }
 
 function renderDashboard() {
@@ -707,11 +725,17 @@ async function submitQuiz(modId) {
   }
 
   resultEl.style.color = 'var(--green)';
-  resultEl.textContent = `Puntaje: ${puntaje}%. ¡Módulo aprobado! 🎉`;
+  const fechaHoy = new Date().toLocaleDateString('es-AR');
+  const modTitulo = MODULOS.find(m => m.id === modId).titulo;
+  const certUrl = 'certificado.html?nombre=' + encodeURIComponent(session.nombre)
+    + '&modulo=' + encodeURIComponent(modTitulo)
+    + '&fecha=' + encodeURIComponent(fechaHoy)
+    + '&puntaje=' + puntaje;
+  resultEl.innerHTML = `Puntaje: ${puntaje}%. ¡Módulo aprobado! 🎉<br><a href="${certUrl}" target="_blank" style="color:var(--yellow);font-weight:700;">🏆 Ver tu certificado</a>`;
   await apiCall({ action: 'completeModule', pin: session.pin, modulo: modId, puntaje });
   const data = await apiCall({ action: 'getProgress', pin: session.pin });
   progreso = data.progreso || {};
-  setTimeout(renderDashboard, 1400);
+  setTimeout(renderDashboard, 2600);
 }
 
 if (session) { apiCall({ action: 'getProgress', pin: session.pin }).then(d => { progreso = d.progreso || {}; showApp(); }); }
