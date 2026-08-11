@@ -142,6 +142,15 @@
   .admin-panel .reset-btn{background:none;border:1px solid var(--red);color:var(--red);padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer;}
   .admin-panel .reset-btn:hover{background:var(--red);color:#fff;}
   .live-dot{display:inline-block;width:7px;height:7px;background:var(--green);border-radius:50%;margin-right:5px;animation:pulseDot 1.5s infinite;}
+
+  #tourOverlay{position:fixed;inset:0;z-index:1000;pointer-events:none;}
+  #tourSpotlight{position:fixed;border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.78);transition:all .35s ease;pointer-events:none;z-index:1001;}
+  #tourTooltip{position:fixed;background:var(--card);border:1px solid var(--yellow);border-radius:10px;padding:16px 18px;max-width:280px;z-index:1002;box-shadow:0 8px 30px rgba(0,0,0,.6);pointer-events:auto;transition:all .35s ease;}
+  #tourTooltip p{font-size:13.5px;color:var(--bone);margin:0 0 12px;line-height:1.5;}
+  #tourTooltip .tour-actions{display:flex;justify-content:space-between;align-items:center;}
+  #tourTooltip .tour-step{font-size:11px;color:var(--gray);}
+  #tourTooltip button{background:var(--yellow);color:#1a1a1a;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;}
+  #tourTooltip button.skip{background:none;color:var(--gray);font-weight:400;text-decoration:underline;padding:7px 4px;}
 </style>
 </head>
 <body>
@@ -178,15 +187,15 @@ const ESQUEMA_MOTOR_SVG = `
 <svg viewBox="0 0 680 380" xmlns="http://www.w3.org/2000/svg">
   <rect x="220" y="60" width="240" height="260" rx="14" fill="none" stroke="#6E6E6E" stroke-width="1.5"/>
   <text x="340" y="42" text-anchor="middle" fill="#F5F2EC" font-size="16" font-family="Barlow" font-weight="600">Bloque de motor — esquema genérico (vista superior)</text>
-  <rect x="235" y="95" width="90" height="50" rx="8" fill="#3a2f0d" stroke="#F4B400" stroke-width="1"/>
-  <text x="280" y="124" text-anchor="middle" fill="#F4B400" font-size="12" font-family="Barlow">Filtro de aire</text>
-  <rect x="335" y="95" width="105" height="50" rx="8" fill="#2a2318" stroke="#c98a3a" stroke-width="1"/>
-  <text x="387" y="117" text-anchor="middle" fill="#e0a45a" font-size="11" font-family="Barlow">Filtro de</text>
-  <text x="387" y="131" text-anchor="middle" fill="#e0a45a" font-size="11" font-family="Barlow">combustible</text>
-  <rect x="290" y="175" width="115" height="55" rx="8" fill="#1c3a5c" stroke="#4E9BE0" stroke-width="1.5"/>
-  <text x="347" y="207" text-anchor="middle" fill="#F5F2EC" font-size="13" font-weight="600" font-family="Barlow">Filtro de aceite</text>
-  <rect x="235" y="250" width="205" height="35" rx="6" fill="#182b1e" stroke="#5CB85C" stroke-width="1"/>
-  <text x="337" y="272" text-anchor="middle" fill="#8fd68f" font-size="12" font-family="Barlow">Tapón de drenaje</text>
+  <rect x="245" y="95" width="95" height="50" rx="8" fill="#3a2f0d" stroke="#F4B400" stroke-width="1"/>
+  <text x="292" y="124" text-anchor="middle" fill="#F4B400" font-size="12" font-family="Barlow">Filtro de aire</text>
+  <rect x="350" y="95" width="95" height="50" rx="8" fill="#2a2318" stroke="#c98a3a" stroke-width="1"/>
+  <text x="397" y="117" text-anchor="middle" fill="#e0a45a" font-size="11" font-family="Barlow">Filtro de</text>
+  <text x="397" y="131" text-anchor="middle" fill="#e0a45a" font-size="11" font-family="Barlow">combustible</text>
+  <rect x="275" y="175" width="130" height="55" rx="8" fill="#1c3a5c" stroke="#4E9BE0" stroke-width="1.5"/>
+  <text x="340" y="207" text-anchor="middle" fill="#F5F2EC" font-size="13" font-weight="600" font-family="Barlow">Filtro de aceite</text>
+  <rect x="235" y="250" width="210" height="35" rx="6" fill="#182b1e" stroke="#5CB85C" stroke-width="1"/>
+  <text x="340" y="272" text-anchor="middle" fill="#8fd68f" font-size="12" font-family="Barlow">Tapón de drenaje</text>
   <text x="340" y="360" text-anchor="middle" fill="#9B9990" font-size="11" font-family="Barlow">Esquema genérico e ilustrativo — no representa un modelo real.</text>
   <text x="340" y="374" text-anchor="middle" fill="#9B9990" font-size="11" font-family="Barlow">La ubicación exacta varía según marca y modelo — seguí siempre lo que indique Emmanuel.</text>
 </svg>`;
@@ -198,6 +207,7 @@ const MODULOS = [
     titulo: 'Señalización y simbología',
     resumen: 'Símbolos de tablero y advertencias de la máquina',
     disponible: true,
+    horas: 2,
     manualHtml: 'manual-modulo0.html',
     manualPdf: 'manual-modulo0.pdf',
     secciones: [
@@ -263,6 +273,7 @@ const MODULOS = [
     titulo: 'Cambio de aceite y filtros + Inspección visual',
     resumen: 'Procedimiento completo de mantenimiento base (hito 250hs)',
     disponible: true,
+    horas: 4,
     manualHtml: 'manual-modulo1.html',
     manualPdf: 'manual-modulo1.pdf',
     secciones: [
@@ -415,11 +426,10 @@ function showApp() {
   if (!heartbeatTimer) {
     heartbeatTimer = setInterval(() => apiCall({ action: 'heartbeat', pin: session.pin }), 45000);
   }
-  const yaVioBienvenida = localStorage.getItem('mebu_bienvenida_' + session.pin);
-  if (!yaVioBienvenida) {
-    renderBienvenidaGate(false);
-  } else {
-    renderDashboard();
+  renderDashboard();
+  const yaVioTour = localStorage.getItem('mebu_tour_' + session.pin);
+  if (!yaVioTour) {
+    setTimeout(() => iniciarTour(), 500);
   }
 }
 
@@ -432,26 +442,10 @@ function isUnlocked(mod, index) {
 function renderWelcome() {
   return `
     <div class="welcome">
-      <h2>¿Qué es MEB-U?</h2>
+      <h2>Bienvenido a MEB-U</h2>
       <p>MEB-U es la plataforma propia de capacitación de MEB Machinery Solutions. Acá vas a encontrar los módulos de formación técnica que acompañan la práctica directa con Emmanuel — cada módulo se lee, se mira, y se pone a prueba con una evaluación antes de pasar al siguiente.</p>
-      <a class="back-link" style="display:inline-block;margin-top:6px;" onclick="renderBienvenidaGate(true)">↺ Ver la bienvenida de nuevo</a>
+      <a class="back-link" style="display:inline-block;margin-top:6px;" onclick="iniciarTour()">❓ Ver cómo funciona (tour rápido)</a>
     </div>`;
-}
-
-function renderBienvenidaGate(soloLectura) {
-  const html = `
-    <div class="login-card" style="margin-top:70px;">
-      <h2 style="font-family:'Bebas Neue';color:var(--yellow);font-size:28px;margin:0 0 14px;">¿Qué es MEB-U?</h2>
-      <p style="text-align:left;line-height:1.7;">MEB-U es la plataforma propia de capacitación de MEB Machinery Solutions. Acá vas a encontrar los módulos de formación técnica que acompañan la práctica directa con Emmanuel.</p>
-      <p style="text-align:left;line-height:1.7;">Antes de tocar una máquina, hay que entenderla — por eso cada módulo se lee, se mira, y se pone a prueba con una evaluación antes de pasar al siguiente.</p>
-      <button onclick="cerrarBienvenidaGate()">${soloLectura ? 'Volver' : 'Leído, comenzar →'}</button>
-    </div>`;
-  document.getElementById('mainContent').innerHTML = html;
-}
-
-function cerrarBienvenidaGate() {
-  localStorage.setItem('mebu_bienvenida_' + session.pin, '1');
-  renderDashboard();
 }
 
 function renderDashboard() {
@@ -478,6 +472,8 @@ function renderDashboard() {
       const p = progreso[mod.id];
       const certUrl = 'certificado.html?nombre=' + encodeURIComponent(session.nombre)
         + '&modulo=' + encodeURIComponent(mod.titulo)
+        + '&numero=' + encodeURIComponent(mod.numero)
+        + '&horas=' + encodeURIComponent(mod.horas || '')
         + '&fecha=' + encodeURIComponent(p.fecha || '')
         + '&puntaje=' + encodeURIComponent(p.puntaje || '');
       badge = `<div style="margin-left:auto;display:flex;align-items:center;flex-shrink:0;"><a href="${certUrl}" target="_blank" onclick="event.stopPropagation()" style="color:var(--yellow);font-size:11px;font-weight:700;text-decoration:none;margin-right:10px;white-space:nowrap;">🏆 Certificado</a><span class="badge done">Completado</span></div>`;
@@ -533,6 +529,74 @@ async function doReset(targetPin, nombre) {
   if (!confirm(`¿Reiniciar todo el progreso de ${nombre}? Esta acción no se puede deshacer.`)) return;
   await apiCall({ action: 'resetProgress', adminPin: session.pin, targetPin });
   loadAdminPanel();
+}
+
+/* ---------- Tour guiado (spotlight) ---------- */
+const TOUR_STEPS = [
+  { selector: '.welcome', texto: 'Acá arriba siempre vas a poder repasar qué es MEB-U, y volver a ver este recorrido cuando quieras.' },
+  { selector: '.overview', texto: 'Esta barra muestra tu progreso general — cuántos módulos ya completaste.' },
+  { selector: '.modules-grid .module-card', texto: 'Tocá un módulo disponible para empezar. Los bloqueados se abren solos cuando termines el anterior.' },
+  { selector: 'header .user', texto: 'Acá ves tu nombre y tu rol dentro de MEB-U.' },
+];
+
+let tourIdx = 0;
+
+function iniciarTour() {
+  tourIdx = 0;
+  if (!document.getElementById('tourOverlay')) {
+    const ov = document.createElement('div');
+    ov.id = 'tourOverlay';
+    ov.innerHTML = '<div id="tourSpotlight"></div><div id="tourTooltip"></div>';
+    document.body.appendChild(ov);
+  }
+  document.getElementById('tourOverlay').style.display = 'block';
+  mostrarPasoTour();
+}
+
+function finalizarTour() {
+  localStorage.setItem('mebu_tour_' + session.pin, '1');
+  const ov = document.getElementById('tourOverlay');
+  if (ov) ov.style.display = 'none';
+}
+
+function mostrarPasoTour() {
+  // saltea pasos cuyo elemento no existe en esta pantalla (ej: admin panel si no es admin)
+  while (tourIdx < TOUR_STEPS.length && !document.querySelector(TOUR_STEPS[tourIdx].selector)) {
+    tourIdx++;
+  }
+  if (tourIdx >= TOUR_STEPS.length) { finalizarTour(); return; }
+
+  const step = TOUR_STEPS[tourIdx];
+  const el = document.querySelector(step.selector);
+  const rect = el.getBoundingClientRect();
+  const pad = 8;
+
+  const spot = document.getElementById('tourSpotlight');
+  spot.style.top = (rect.top - pad) + 'px';
+  spot.style.left = (rect.left - pad) + 'px';
+  spot.style.width = (rect.width + pad * 2) + 'px';
+  spot.style.height = (rect.height + pad * 2) + 'px';
+
+  const tip = document.getElementById('tourTooltip');
+  const esUltimo = tourIdx === TOUR_STEPS.length - 1;
+  tip.innerHTML = `
+    <p>${step.texto}</p>
+    <div class="tour-actions">
+      <button class="skip" onclick="finalizarTour()">Omitir</button>
+      <span class="tour-step">${tourIdx + 1} / ${TOUR_STEPS.length}</span>
+      <button onclick="siguientePasoTour()">${esUltimo ? 'Entendido' : 'Siguiente →'}</button>
+    </div>`;
+
+  let top = rect.bottom + pad + 12;
+  if (top + 140 > window.innerHeight) top = Math.max(10, rect.top - 150);
+  let left = Math.min(Math.max(10, rect.left), window.innerWidth - 300);
+  tip.style.top = top + 'px';
+  tip.style.left = left + 'px';
+}
+
+function siguientePasoTour() {
+  tourIdx++;
+  mostrarPasoTour();
 }
 
 function openModule(modId) {
@@ -755,9 +819,11 @@ async function submitQuiz(modId) {
 
   resultEl.style.color = 'var(--green)';
   const fechaHoy = new Date().toLocaleDateString('es-AR');
-  const modTitulo = MODULOS.find(m => m.id === modId).titulo;
+  const modObj = MODULOS.find(m => m.id === modId);
   const certUrl = 'certificado.html?nombre=' + encodeURIComponent(session.nombre)
-    + '&modulo=' + encodeURIComponent(modTitulo)
+    + '&modulo=' + encodeURIComponent(modObj.titulo)
+    + '&numero=' + encodeURIComponent(modObj.numero)
+    + '&horas=' + encodeURIComponent(modObj.horas || '')
     + '&fecha=' + encodeURIComponent(fechaHoy)
     + '&puntaje=' + puntaje;
   resultEl.innerHTML = `Puntaje: ${puntaje}%. ¡Módulo aprobado! 🎉<br><a href="${certUrl}" target="_blank" style="color:var(--yellow);font-weight:700;">🏆 Ver tu certificado</a>`;
