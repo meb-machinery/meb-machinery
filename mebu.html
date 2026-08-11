@@ -178,15 +178,15 @@ const ESQUEMA_MOTOR_SVG = `
 <svg viewBox="0 0 680 380" xmlns="http://www.w3.org/2000/svg">
   <rect x="220" y="60" width="240" height="260" rx="14" fill="none" stroke="#6E6E6E" stroke-width="1.5"/>
   <text x="340" y="42" text-anchor="middle" fill="#F5F2EC" font-size="16" font-family="Barlow" font-weight="600">Bloque de motor — esquema genérico (vista superior)</text>
-  <rect x="295" y="90" width="90" height="50" rx="8" fill="#3a2f0d" stroke="#F4B400" stroke-width="1"/>
-  <text x="340" y="119" text-anchor="middle" fill="#F4B400" font-size="12" font-family="Barlow">Filtro de aire</text>
-  <rect x="235" y="170" width="85" height="50" rx="8" fill="#182530" stroke="#4E9BE0" stroke-width="1"/>
-  <text x="277" y="199" text-anchor="middle" fill="#8fc2ee" font-size="12" font-family="Barlow">Filtro de aceite</text>
-  <rect x="360" y="170" width="90" height="50" rx="8" fill="#2a2318" stroke="#c98a3a" stroke-width="1"/>
-  <text x="405" y="192" text-anchor="middle" fill="#e0a45a" font-size="11" font-family="Barlow">Filtro de</text>
-  <text x="405" y="206" text-anchor="middle" fill="#e0a45a" font-size="11" font-family="Barlow">combustible</text>
-  <rect x="260" y="250" width="140" height="35" rx="6" fill="#182b1e" stroke="#5CB85C" stroke-width="1"/>
-  <text x="330" y="272" text-anchor="middle" fill="#8fd68f" font-size="12" font-family="Barlow">Tapón de drenaje</text>
+  <rect x="235" y="95" width="90" height="50" rx="8" fill="#3a2f0d" stroke="#F4B400" stroke-width="1"/>
+  <text x="280" y="124" text-anchor="middle" fill="#F4B400" font-size="12" font-family="Barlow">Filtro de aire</text>
+  <rect x="335" y="95" width="105" height="50" rx="8" fill="#2a2318" stroke="#c98a3a" stroke-width="1"/>
+  <text x="387" y="117" text-anchor="middle" fill="#e0a45a" font-size="11" font-family="Barlow">Filtro de</text>
+  <text x="387" y="131" text-anchor="middle" fill="#e0a45a" font-size="11" font-family="Barlow">combustible</text>
+  <rect x="290" y="175" width="115" height="55" rx="8" fill="#1c3a5c" stroke="#4E9BE0" stroke-width="1.5"/>
+  <text x="347" y="207" text-anchor="middle" fill="#F5F2EC" font-size="13" font-weight="600" font-family="Barlow">Filtro de aceite</text>
+  <rect x="235" y="250" width="205" height="35" rx="6" fill="#182b1e" stroke="#5CB85C" stroke-width="1"/>
+  <text x="337" y="272" text-anchor="middle" fill="#8fd68f" font-size="12" font-family="Barlow">Tapón de drenaje</text>
   <text x="340" y="360" text-anchor="middle" fill="#9B9990" font-size="11" font-family="Barlow">Esquema genérico e ilustrativo — no representa un modelo real.</text>
   <text x="340" y="374" text-anchor="middle" fill="#9B9990" font-size="11" font-family="Barlow">La ubicación exacta varía según marca y modelo — seguí siempre lo que indique Emmanuel.</text>
 </svg>`;
@@ -228,8 +228,8 @@ const MODULOS = [
         bloques: [
           { tipo: 'texto', html: '<h3>2. Indicadores de estado (amarillo/verde)</h3><p>Informan una condición del equipo — no siempre implican detenerse, pero sí requieren atención.</p>' },
           { tipo: 'simbolo', url: 'img/mebu/modulo0/filtro-hidraulico.png', caption: 'Filtro hidráulico — indicador de obstrucción, señal de que se acerca su reemplazo.' },
-          { tipo: 'simbolo', url: 'img/mebu/modulo0/nivel-combustible.svg', caption: 'Nivel de combustible bajo.' },
-          { tipo: 'simbolo', url: 'img/mebu/modulo0/freno-estacionamiento.svg', caption: 'Freno de estacionamiento activado — no se puede desplazar la máquina hasta liberarlo.' },
+          { tipo: 'simbolo', url: 'img/mebu/modulo0/nivel-combustible.png', caption: 'Nivel de combustible bajo.' },
+          { tipo: 'simbolo', url: 'img/mebu/modulo0/freno-estacionamiento.png', caption: 'Freno de estacionamiento activado — no se puede desplazar la máquina hasta liberarlo.' },
         ],
       },
       {
@@ -473,7 +473,15 @@ function renderDashboard() {
     const done = progreso[mod.id] && progreso[mod.id].estado === 'Completado';
     const unlocked = isUnlocked(mod, i) && mod.disponible;
     const cls = done ? 'done' : (unlocked ? '' : 'locked');
-    const badge = done ? '<span class="badge done">Completado</span>' : (unlocked ? '<span class="badge available">Disponible</span>' : '<span class="badge locked">Bloqueado</span>');
+    let badge = done ? '<span class="badge done">Completado</span>' : (unlocked ? '<span class="badge available">Disponible</span>' : '<span class="badge locked">Bloqueado</span>');
+    if (done) {
+      const p = progreso[mod.id];
+      const certUrl = 'certificado.html?nombre=' + encodeURIComponent(session.nombre)
+        + '&modulo=' + encodeURIComponent(mod.titulo)
+        + '&fecha=' + encodeURIComponent(p.fecha || '')
+        + '&puntaje=' + encodeURIComponent(p.puntaje || '');
+      badge = `<div style="margin-left:auto;display:flex;align-items:center;flex-shrink:0;"><a href="${certUrl}" target="_blank" onclick="event.stopPropagation()" style="color:var(--yellow);font-size:11px;font-weight:700;text-decoration:none;margin-right:10px;white-space:nowrap;">🏆 Certificado</a><span class="badge done">Completado</span></div>`;
+    }
     html += `
       <div class="module-card ${cls}" onclick="${unlocked ? `openModule('${mod.id}')` : ''}">
         <div class="module-num">${done ? '✓' : mod.numero}</div>
