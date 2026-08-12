@@ -1131,7 +1131,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwCef1fQwaRq0RXqj2RIctB1gWsaPv4yHXVQWIkkIf8fjjPKes3A4JMJraY6NuMyc0b1A/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyp4yaqovmUID496G5seX61P-dCr4L5ITs-fgspNUk8opeGMMOkEgq2NRaBOp2iQilknw/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1589,7 +1589,7 @@ async function syncAll() {
             usdRecibido:parseFloat(r.USD_RECIBIDO)||0,
             diferenciaUsd:parseFloat(r.DIFERENCIA_USD)||0,
             diferenciaPct:parseFloat(r.DIFERENCIA_PCT)||0,
-            estado:_estadoFinal,
+            comprobantePago:r.COMPROBANTE_PAGO||'',
             fecha:r.FECHA||'', notas:r.NOTAS||'',
             serieMaquina:r.SERIE_MAQUINA||'', modeloMaquina:r.MODELO_MAQUINA||'', horometro:r.HOROMETRO||'',
             fechaDescarga:r.FECHA_DESCARGA||'', fechaEnviado:r.FECHA_ENVIADO||'',
@@ -1651,6 +1651,7 @@ async function syncAll() {
         moneda:(r.MONEDA||'ARS').toUpperCase(),
         montoUsd:parseFloat(r.MONTO_USD)||0, tcAlMomento:parseFloat(r.TC_AL_MOMENTO)||0,
         fecha:r.FECHA||'', notas:r.NOTAS||'',
+        comprobantePago:r.COMPROBANTE_PAGO||'',
         entregasLog: deserializarEntregas(r.ENTREGAS_LOG||'')
       }));
     } else { if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; }
@@ -1673,7 +1674,8 @@ async function syncAll() {
       estadoCobro:r.ESTADO_COBRO||'pendiente', fechaCobroReal:r.FECHA_COBRO_REAL||'',
       tcCobro:parseFloat(r.TC_COBRO)||0, montoCobradoReal:parseMonto(r.MONTO_COBRADO_REAL||'0'),
       usdRecibido:parseFloat(r.USD_RECIBIDO)||0, diferenciaUsd:parseFloat(r.DIFERENCIA_USD)||0,
-      diferenciaPct:parseFloat(r.DIFERENCIA_PCT)||0
+      diferenciaPct:parseFloat(r.DIFERENCIA_PCT)||0,
+      comprobantePago:r.COMPROBANTE_PAGO||''
     }));
 
     // TARIFARIO — historial completo; el más reciente por fecha es el "vigente"
@@ -2979,6 +2981,7 @@ function renderPresupuestos() {
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','rechazado'])">Estado</button>
         ${p.estado==='aprobado'&&p.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Registrar cobro real">💰 Cobro</button>`:''}
         ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroPresupuesto('${p.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`:''}
+        <button class="btn-secondary" style="${p.comprobantePago?'background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366':''}" onclick="adjuntarComprobante('presupuestos','${p.id}')" title="${p.comprobantePago?'Comprobante cargado — clic para cambiarlo':'Adjuntar comprobante de pago (captura, ticket)'}">${p.comprobantePago?'📎✔':'📎'}</button>
         <button class="btn-secondary" onclick="duplicarPresupuesto('${p.id}')" title="Duplicar">⧉</button>
         <button class="btn-secondary" onclick="generarPresupuestoPDF('${p.id}')">📄 PDF</button>
         <button class="btn-secondary" style="background:rgba(0,59,112,0.2);border-color:#003B70;color:#6fa8dc" onclick="generarInformeTecnico('${p.id}')">🔧 Informe</button>
@@ -3026,6 +3029,7 @@ function renderContratos() {
         <button class="btn-secondary" title="Editar" onclick="openModal('contrato',DB.contratos.find(x=>x.id==='${c.id}'))">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('contratos','${c.id}',['activo','pausado','vencido'])">Estado</button>
         ${c.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Registrar cobro real">💰 Cobro</button>`:`<span style="font-size:10px;color:${(c.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap">${(c.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${c.diferenciaUsd}</span> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroContrato('${c.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`}
+        <button class="btn-secondary" style="${c.comprobantePago?'background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366':''}" onclick="adjuntarComprobante('contratos','${c.id}')" title="${c.comprobantePago?'Comprobante cargado — clic para cambiarlo':'Adjuntar comprobante de pago (captura, ticket)'}">${c.comprobantePago?'📎✔':'📎'}</button>
         <button class="btn-secondary" onclick="generarContratoPDF('${c.id}')">📄 PDF</button>
         <button class="btn-secondary" style="background:rgba(244,180,0,0.15);border-color:var(--yellow);color:var(--yellow)" onclick="generarDocumentoOpcionesPagoContrato('${c.id}')" title="Documento de opciones de pago para el cliente">📑 Opciones pago</button>
         <button class="btn-danger" onclick="eliminar('contratos','${c.id}')">✕</button>
@@ -5292,6 +5296,7 @@ function renderProveedores() {
       <td><div class="actions">
         <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="verEntregasCompra('${c.id}')" title="Ver / registrar entregas">📦 ${entregasTxt}</button>
         <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="editCompra('${c.id}')" title="Editar">✏️</button>
+        <button class="btn-secondary" style="font-size:10px;padding:3px 7px;${c.comprobantePago?'background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366':''}" onclick="adjuntarComprobante('compras','${c.id}')" title="${c.comprobantePago?'Comprobante cargado — clic para cambiarlo':'Adjuntar comprobante de pago (captura, ticket)'}">${c.comprobantePago?'📎✔':'📎'}</button>
         <button class="btn-danger" style="font-size:10px;padding:3px 7px" onclick="eliminar('compras','${c.id}')" title="Eliminar">✕</button>
       </div></td>
     </tr>`;
@@ -7950,6 +7955,27 @@ function cambiarEstado(tipo, id, estados) {
   if(tipo==='trabajos') writeToSheet({ action:'updateEstadoTrabajo', id:id, estado:item.estado });
   if(tipo==='presupuestos') writeToSheet({ action:'updateEstadoPresupuesto', id:id, estado:item.estado });
   if(tipo==='contratos') writeToSheet({ action:'updateEstadoContrato', id:id, estado:item.estado });
+}
+
+// Comprobante de pago (captura, ticket, PDF) — mismo criterio que el link de
+// Drive de Informes: el archivo vive en Drive, acá solo se guarda el link.
+// Una sola función para los 3 lugares que lo necesitan (Presupuestos,
+// Contratos, Compras/Proveedores) en vez de repetir el mismo código 3 veces.
+function adjuntarComprobante(tipo, id) {
+  const item = (DB[tipo]||[]).find(x=>x.id===id);
+  if(!item) return;
+  const actual = item.comprobantePago || '';
+  const nuevo = prompt('Pegá el link de Drive del comprobante (captura, ticket, PDF):', actual);
+  if(nuevo === null) return;
+  const limpio = nuevo.trim();
+  if(limpio && !limpio.includes('drive.google.com')) {
+    if(!confirm('Ese link no parece ser de Google Drive — ¿lo guardo igual?')) return;
+  }
+  item.comprobantePago = limpio;
+  saveLocal();
+  refreshCurrentPage();
+  writeToSheet({ action:'adjuntarComprobante', tipo:tipo, id:id, row:{ tipo:tipo, url:limpio } });
+  showToast(limpio ? 'Comprobante guardado ✔' : 'Comprobante borrado','success');
 }
 
 function eliminar(tipo, id) {
