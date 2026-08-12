@@ -1354,7 +1354,12 @@ function resolverIdEstable(r, sheetName) {
 
 async function fetchSheet(sheetName) {
   try {
-    const res = await fetch(SHEET_CSV_BASE + encodeURIComponent(sheetName));
+    // Cache-busting: sin esto, tanto el navegador como el servidor de Google
+    // pueden seguir sirviendo una copia vieja de la hoja durante un buen
+    // rato después de borrar/editar filas — ya lo vimos con hojas nuevas,
+    // y también pasa con filas borradas en una hoja existente.
+    const url = SHEET_CSV_BASE + encodeURIComponent(sheetName) + '&_ts=' + Date.now();
+    const res = await fetch(url, { cache: 'no-store' });
     if(!res.ok) throw new Error('No se pudo leer la hoja');
     const text = await res.text();
     return parseCSV(text);
