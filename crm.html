@@ -1131,7 +1131,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzRGWVvY9q7_VE1UgKr0ncLRgsujOgikvuIE6qlPDn1uiVkIEd4dbJq1zAGwrQ_uL1rNg/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwCef1fQwaRq0RXqj2RIctB1gWsaPv4yHXVQWIkkIf8fjjPKes3A4JMJraY6NuMyc0b1A/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -2719,10 +2719,15 @@ async function writeToSheet(payload) {
         try {
           const resp = JSON.parse(xhr.responseText);
           resolve(resp);
+          if (payload.action === 'deleteRow' && resp.encontrado === false) {
+            console.warn('⚠️ No se borró nada — no había ninguna fila con ese ID en el Sheet:', payload.tipo, payload.id, '(típico en registros de antes del sistema de ID — hay que borrarlos a mano en el Sheet)');
+          } else {
+            console.log('Sheet write OK:', payload.action, payload.id || '');
+          }
         } catch(e) {
           resolve({ ok: true });
+          console.log('Sheet write OK:', payload.action, payload.id || '');
         }
-        console.log('Sheet write OK:', payload.action, payload.id || '');
       };
       xhr.onerror = () => {
         console.warn('Sheet write error');
@@ -7960,7 +7965,11 @@ function eliminar(tipo, id) {
   // y "revivía" en el próximo Sincronizar. Ahora avisa al Sheet también, y
   // además queda protegido un rato por si el sync trae una copia vieja.
   registrarDelete(tipo, id);
-  writeToSheet({ action:'deleteRow', tipo:tipo, id:id, row:{ descripcion: descripcionBorrado } });
+  writeToSheet({ action:'deleteRow', tipo:tipo, id:id, row:{ descripcion: descripcionBorrado } }).then(resp => {
+    if (resp && resp.encontrado === false) {
+      showToast('⚠️ Se sacó de la lista, pero no había ninguna fila con ese ID en el Sheet — es un registro viejo, de antes del sistema de ID. Hay que borrarlo a mano ahí.', 'error');
+    }
+  });
   showToast('Eliminado — podés deshacer con ↩','');
 }
 
