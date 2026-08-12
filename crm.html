@@ -311,7 +311,7 @@ select option { background:var(--dark); }
     <button onclick="doLogin()">INGRESAR</button>
     <div class="login-error" id="loginError">Usuario o contraseña incorrectos</div>
   </div>
-  <p class="login-hint">MEB Machinery Solutions · Sistema interno<br><span style="color:var(--muted2);font-size:10px">Usuario: meb &nbsp;|&nbsp; Contraseña: meb2025</span></p>
+  <p class="login-hint">MEB Machinery Solutions · Sistema interno</p>
 </div>
 
 <!-- TOPBAR -->
@@ -1314,7 +1314,7 @@ function doLogin() {
     } else {
       const errEl = document.getElementById('loginError');
       errEl.style.display='block';
-      errEl.textContent='Usuario incorrecto. Usar: meb / meb2025';
+      errEl.textContent='Usuario o contraseña incorrectos';
     }
   } catch(e) {
     console.error('doLogin error:',e);
@@ -4143,6 +4143,7 @@ function generarInformeTecnico(presupId) {
     + '<title>Informe T\u00E9cnico N\u00B0 ' + numPresup + ' \u2014 MEB</title>'
     + '<style>'
     + '*{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}'
+    + 'body{font-family:Arial,Helvetica,"Liberation Sans","Segoe UI",Roboto,sans-serif;font-size:13px;color:#1A1A1A;background:#fff;padding:32px;max-width:960px;margin:0 auto}'
     + '.no-print{margin-bottom:20px;display:flex;gap:8px;flex-wrap:wrap;padding:12px 14px;background:#f5f5f5;border-radius:6px;border-left:4px solid #F4B400;align-items:center}'
     + '.no-print button{padding:8px 16px;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer;border:none;letter-spacing:.5px}'
     + '.btn-print{background:#F4B400;color:#1A1A1A}'
@@ -4167,14 +4168,14 @@ function generarInformeTecnico(presupId) {
     + '.bloque{border:1px solid #e0e0e0;border-radius:6px;margin-bottom:16px;overflow:hidden}'
     + '.bloque-titulo{background:#1A1A1A;color:#F4B400;padding:9px 14px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;page-break-after:avoid;break-after:avoid}'
     + '.bloque-body{padding:14px;min-height:80px}'
-    + '.texto-libre{width:100%;min-height:80px;border:none;outline:none;font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;resize:vertical;background:transparent}'
-    + '.editable-bloque{width:100%;min-height:80px;outline:none;font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A}'
+    + '.texto-libre{width:100%;min-height:80px;border:none;outline:none;font-family:Arial,Helvetica,\"Liberation Sans\",\"Segoe UI\",Roboto,sans-serif;font-size:13px;color:#1A1A1A;resize:vertical;background:transparent}'
+    + '.editable-bloque{width:100%;min-height:80px;outline:none;font-family:Arial,Helvetica,\"Liberation Sans\",\"Segoe UI\",Roboto,sans-serif;font-size:13px;color:#1A1A1A}'
     + '.fotos-grid{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px}'
     + '.foto-item{flex:0 0 calc(50% - 7px);max-width:calc(50% - 7px);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;position:relative;page-break-inside:avoid;break-inside:avoid}'
     + '.foto-item img{width:100%;max-height:340px;object-fit:contain;background:#f2f2f2;display:block}'
     + '.foto-caption{padding:8px}'
     + '.foto-caption-label{font-size:9px;color:#999;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;display:block}'
-    + '.foto-caption-editable{width:100%;border:1px solid #ddd;border-radius:4px;outline:none;font-size:12px;color:#1A1A1A;background:#fdfdfd;padding:6px 8px;font-family:Arial,sans-serif;line-height:1.4;min-height:36px;word-wrap:break-word;white-space:pre-wrap}'
+    + '.foto-caption-editable{width:100%;border:1px solid #ddd;border-radius:4px;outline:none;font-size:12px;color:#1A1A1A;background:#fdfdfd;padding:6px 8px;font-family:Arial,Helvetica,\"Liberation Sans\",\"Segoe UI\",Roboto,sans-serif;line-height:1.4;min-height:36px;word-wrap:break-word;white-space:pre-wrap}'
     + '.foto-caption-editable:focus{border-color:#F4B400;background:#fffdf0}'
     + '.foto-drop{border:2px dashed #F4B400;border-radius:6px;padding:20px;text-align:center;cursor:pointer;color:#888;font-size:12px;background:#fffdf0}'
     + '.salto-pagina-manual{flex:0 0 100%;width:100%;page-break-before:always;break-before:always}'
@@ -4183,7 +4184,7 @@ function generarInformeTecnico(presupId) {
     + '.diag-cell{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;page-break-inside:avoid;break-inside:avoid}'
     + '.diag-label{background:#F4B400;color:#1A1A1A;font-size:10px;font-weight:700;letter-spacing:1px;padding:6px 10px;text-transform:uppercase;page-break-after:avoid;break-after:avoid}'
     + '.diag-body{padding:8px;min-height:80px}'
-    + '.diag-editable{width:100%;min-height:72px;outline:none;font-family:Arial,sans-serif;font-size:12px;color:#1A1A1A;line-height:1.5;word-wrap:break-word;white-space:pre-wrap}'
+    + '.diag-editable{width:100%;min-height:72px;outline:none;font-family:Arial,Helvetica,\"Liberation Sans\",\"Segoe UI\",Roboto,sans-serif;font-size:12px;color:#1A1A1A;line-height:1.5;word-wrap:break-word;white-space:pre-wrap}'
     + '[data-placeholder]:empty:before{content:attr(data-placeholder);color:#aaa;font-style:italic}'
     + '.firma-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:32px;padding-top:16px;border-top:1px solid #e0e0e0}'
     + '.firma-box{text-align:center}'
