@@ -1131,7 +1131,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbypZOK3b0C74gjctPygfe2MJRpCriH_yEg7yu1YM9VoApE7dxCE-4UUvULAXSOlEWa8Yw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzRGWVvY9q7_VE1UgKr0ncLRgsujOgikvuIE6qlPDn1uiVkIEd4dbJq1zAGwrQ_uL1rNg/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1689,7 +1689,7 @@ async function syncAll() {
     // otro dispositivo, aunque los informes sí se hubieran guardado. Ahora
     // se sincroniza igual que el resto de las hojas.
     DB.informes = (inf.length ? inf : []).map(r => ({
-      id: r.ID_DRIVE || r.ID || uid(),
+      id: r.ID || r.ID_DRIVE || uid(),
       num: r['N°_INFORME'] || r.N_INFORME || r['Nº_INFORME'] || '',
       fecha: r.FECHA || '',
       cliente: r.CLIENTE || '',
@@ -4106,6 +4106,7 @@ function generarInformeTecnico(presupId) {
     '  var payload={',
     '    action:"addInforme",',
     '    row:{',
+    '      id:PRESUP_ID,',
     '      num:NUM_PRESUP,',
     '      fecha:new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"}),',
     '      cliente:CLIENTE_NOMBRE,',
@@ -6732,6 +6733,7 @@ function renderInformes() {
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
           <button class="btn-primary" style="font-size:11px;padding:5px 12px" onclick="verInformeDetalle(${idx})">👁 Ver detalle</button>
           ${inf.driveUrl ? `<a href="${inf.driveUrl}" target="_blank" class="btn-secondary" style="font-size:11px;padding:5px 12px;text-decoration:none">📄 Abrir en Drive</a>` : ''}
+          <button class="btn-secondary" style="font-size:11px;padding:5px 10px" onclick="editarLinkDriveInforme(${idx})">🔗 ${inf.driveUrl?'Cambiar':'Pegar'} link</button>
           <button class="btn-secondary" style="font-size:11px;padding:5px 10px;background:rgba(231,76,60,0.1);border-color:#e74c3c;color:#e74c3c" onclick="eliminarInformeLocal(${idx})">🗑 Quitar</button>
         </div>
       </div>
@@ -6792,14 +6794,31 @@ function verInformeDetalle(idx) {
   document.body.appendChild(m);
 }
 
+function editarLinkDriveInforme(idx) {
+  const inf = _informesRenderizados[idx];
+  if(!inf) return;
+  const actual = inf.driveUrl || '';
+  const nuevo = prompt('Pegá el link de Drive del PDF de este informe (Ctrl+C en Drive → clic derecho → "Obtener enlace"):', actual);
+  if(nuevo === null) return; // canceló
+  const limpio = nuevo.trim();
+  if(limpio && !limpio.includes('drive.google.com')) {
+    if(!confirm('Ese link no parece ser de Google Drive — ¿lo guardo igual?')) return;
+  }
+  inf.driveUrl = limpio;
+  saveLocal();
+  renderInformes();
+  writeToSheet({ action:'addInforme', row:{ id: inf.id, driveUrl: limpio }});
+  showToast(limpio ? 'Link de Drive guardado ✔' : 'Link de Drive borrado','success');
+}
+
 function eliminarInformeLocal(idx) {
   const inf = _informesRenderizados[idx];
   if(!inf) return;
-  if(!confirm('¿Quitar este informe de la lista? El archivo en Drive no se elimina.')) return;
-  DB.informes = (DB.informes||[]).filter(x=>x!==inf);
-  saveLocal();
-  renderInformes();
-  showToast('Informe quitado de la lista — ojo, si sincronizás puede volver a aparecer (viene del Sheet)','success');
+  // Ahora usa la función genérica de borrado (misma que Clientes, Presupuestos,
+  // etc.) — antes esto solo escondía la tarjeta local y nunca avisaba al
+  // Sheet, por eso "volvía" al sincronizar. El archivo del PDF en Drive
+  // nunca se toca, esto solo borra el registro/fila del informe.
+  eliminar('informes', inf.id);
 }
 
 function abrirInforme(id) {
@@ -7928,7 +7947,7 @@ function eliminar(tipo, id) {
   const item = DB[tipo].find(x=>x.id===id);
   // Nombre legible para el registro de actividad — sin esto, "Actividad"
   // mostraría un borrado sin decir de qué, que no sirve para nada.
-  const descripcionBorrado = item ? (item.titulo||item.nombre||item.descripcion||item.plan||item.detalle||item.marca||'') : '';
+  const descripcionBorrado = item ? (item.titulo||item.nombre||item.descripcion||item.plan||item.detalle||item.marca||(item.cliente?('Informe #'+(item.num||'')+' '+item.cliente):'')) : '';
   pushUndo('Eliminar '+tipo.replace('s',''));
   DB[tipo]=DB[tipo].filter(x=>x.id!==id);
   saveLocal(); updateBadges(); refreshCurrentPage();
