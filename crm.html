@@ -1577,6 +1577,7 @@ async function syncAll() {
             clienteNombreSheet:_cnm,
             descripcion:_desc,
             monto:_montoFinal,
+            estado:_estadoFinal,
             // Dólar: solo existe en presupuestos hechos a partir de ahora (columnas nuevas).
             // Si no está, queda en 0 y el CRM no muestra el bloque USD para ese presupuesto viejo.
             montoUsd:parseMonto(r.PRECIO_USD||r.MONTO_USD||'0'),
