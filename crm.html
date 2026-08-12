@@ -3900,11 +3900,20 @@ function generarInformeTecnico(presupId) {
     '  var div=document.createElement("div");',
     '  div.className="foto-item";',
     '  div.innerHTML="<img src=\\""+src+"\\" onerror=\\"this.parentNode.remove()\\">"',
-    '    +"<div class=\\"foto-caption\\"><span class=\\"foto-caption-label\\">\ud83d\udcdd Pie de foto (opcional)</span><textarea rows=\\"2\\" placeholder=\\"Ej: Cambio de reten trasero del diferencial...\\" oninput=\\"this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'\\"></textarea></div>"',
+    '    +"<div class=\\"foto-caption\\"><span class=\\"foto-caption-label\\">\ud83d\udcdd Pie de foto (opcional)</span><div class=\\"foto-caption-editable\\" contenteditable=\\"true\\" data-placeholder=\\"Ej: Cambio de reten trasero del diferencial...\\"></div></div>"',
     '    +"<button onclick=\\"this.parentNode.remove()\\" style=\\"position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px;line-height:1\\">\u00D7</button>";',
     '  cont.appendChild(div);',
-    '  var nuevoInput=div.querySelector(".foto-caption textarea");',
+    '  var nuevoInput=div.querySelector(".foto-caption-editable");',
     '  if(nuevoInput) nuevoInput.focus();',
+    '}',
+    '',
+    'function insertarSaltoPagina(){',
+    '  var cont=document.getElementById("fotosContainer");',
+    '  var marcador=document.createElement("div");',
+    '  marcador.className="salto-pagina-manual";',
+    '  marcador.innerHTML="<div class=\\"salto-label\\">\u2702\ufe0f Salto de p\u00e1gina \u2014 lo que sigue empieza en hoja nueva "',
+    '    +"<button onclick=\\"this.closest(\'.salto-pagina-manual\').remove()\\" style=\\"cursor:pointer;background:#eee;border:none;border-radius:3px;padding:2px 8px;font-size:10px\\">\u2715 Quitar</button></div>";',
+    '  cont.appendChild(marcador);',
     '}',
     '',
     'function agregarVideo(){',
@@ -3932,9 +3941,10 @@ function generarInformeTecnico(presupId) {
     '  var dropVideo = document.getElementById("videoDropZone");',
     '  if(dropVideo){ dropVideo.style.display="none"; oculto.push(dropVideo); }',
     '  document.querySelectorAll(".foto-caption-label").forEach(function(lbl){ lbl.style.display="none"; oculto.push(lbl); });',
+    '  document.querySelectorAll(".salto-label").forEach(function(lbl){ lbl.style.display="none"; oculto.push(lbl); });',
     '  document.querySelectorAll(".foto-caption").forEach(function(cap){',
-    '    var ta = cap.querySelector("textarea");',
-    '    var txt = ta ? (ta.value||"") : "";',
+    '    var ed = cap.querySelector(".foto-caption-editable");',
+    '    var txt = ed ? (ed.innerText||"") : "";',
     '    if(!txt.trim()){ cap.style.display="none"; oculto.push(cap); }',
     '  });',
     '  var videosBloque = document.getElementById("videosBloque");',
@@ -4013,8 +4023,8 @@ function generarInformeTecnico(presupId) {
     '  var fotos=[];',
     '  var fotosCount=0;',
     '  document.querySelectorAll("#fotosContainer .foto-item").forEach(function(item){',
-    '    var inp=item.querySelector(".foto-caption textarea");',
-    '    fotos.push(inp?inp.value:"foto");',
+    '    var inp=item.querySelector(".foto-caption-editable");',
+    '    fotos.push(inp?(inp.innerText||"foto"):"foto");',
     '    fotosCount++;',
     '  });',
     '',
@@ -4023,9 +4033,6 @@ function generarInformeTecnico(presupId) {
     '  document.querySelectorAll("#videosLista a").forEach(function(a){ videos.push(a.href); });',
     '',
     '  // Capture full HTML but remove editor-only chrome before saving (toolbar, hints, empty video block, empty captions)',
-    '  // OJO: hay que sincronizar el texto escrito en cada textarea al DOM antes de clonar,',
-    '  // porque el navegador no serializa el valor tipeado en el outerHTML de un <textarea>.',
-    '  document.querySelectorAll(".foto-caption textarea").forEach(function(ta){ ta.textContent = ta.value; });',
     '  var tempDiv = document.createElement("div");',
     '  tempDiv.innerHTML = document.documentElement.outerHTML;',
     '  var noPrint = tempDiv.querySelector(".no-print");',
@@ -4037,9 +4044,10 @@ function generarInformeTecnico(presupId) {
     '  var dropVideoTmp = tempDiv.querySelector("#videoDropZone");',
     '  if(dropVideoTmp) dropVideoTmp.remove();',
     '  tempDiv.querySelectorAll(".foto-caption-label").forEach(function(lbl){ lbl.remove(); });',
+    '  tempDiv.querySelectorAll(".salto-label").forEach(function(lbl){ lbl.remove(); });',
     '  tempDiv.querySelectorAll(".foto-caption").forEach(function(cap){',
-    '    var ta = cap.querySelector("textarea");',
-    '    if(!ta || !(ta.value||"").trim()) cap.remove();',
+    '    var ed = cap.querySelector(".foto-caption-editable");',
+    '    if(!ed || !(ed.innerText||"").trim()) cap.remove();',
     '  });',
     '  if(videos.length===0){ var videosBloqueTmp = tempDiv.querySelector("#videosBloque"); if(videosBloqueTmp) videosBloqueTmp.remove(); }',
     '  var fullHtml = "<!DOCTYPE html>" + tempDiv.innerHTML;',
@@ -4141,6 +4149,7 @@ function generarInformeTecnico(presupId) {
     + '.btn-print{background:#F4B400;color:#1A1A1A}'
     + '.btn-foto{background:#003B70;color:#fff}'
     + '.btn-video{background:#555;color:#fff}'
+    + '.btn-break{background:#8e44ad;color:#fff}'
     + '.btn-save{background:#1A1A1A;color:#F4B400;border:2px solid #F4B400!important}'
     + '.btn-close{background:#888;color:#fff}'
     + '.tip{font-size:11px;color:#888;flex:1;min-width:180px}'
@@ -4161,15 +4170,16 @@ function generarInformeTecnico(presupId) {
     + '.bloque-body{padding:14px;min-height:80px}'
     + '.texto-libre{width:100%;min-height:80px;border:none;outline:none;font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A;resize:vertical;background:transparent}'
     + '.editable-bloque{width:100%;min-height:80px;outline:none;font-family:Arial,sans-serif;font-size:13px;color:#1A1A1A}'
-    + '.fotos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:8px}'
-    + '.foto-item{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;position:relative;page-break-inside:avoid;break-inside:avoid}'
+    + '.fotos-grid{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px}'
+    + '.foto-item{flex:0 0 calc(50% - 7px);max-width:calc(50% - 7px);border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;position:relative;page-break-inside:avoid;break-inside:avoid}'
     + '.foto-item img{width:100%;max-height:340px;object-fit:contain;background:#f2f2f2;display:block}'
     + '.foto-caption{padding:8px}'
     + '.foto-caption-label{font-size:9px;color:#999;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;display:block}'
-    + '.foto-caption textarea{width:100%;border:1px solid #ddd;border-radius:4px;outline:none;font-size:12px;color:#1A1A1A;background:#fdfdfd;padding:6px 8px;font-family:Arial,sans-serif;resize:vertical;min-height:36px;line-height:1.4}'
-    + '.foto-caption textarea:focus{border-color:#F4B400;background:#fffdf0}'
-    + '.foto-caption textarea::placeholder{color:#aaa;font-style:italic}'
+    + '.foto-caption-editable{width:100%;border:1px solid #ddd;border-radius:4px;outline:none;font-size:12px;color:#1A1A1A;background:#fdfdfd;padding:6px 8px;font-family:Arial,sans-serif;line-height:1.4;min-height:36px;word-wrap:break-word;white-space:pre-wrap}'
+    + '.foto-caption-editable:focus{border-color:#F4B400;background:#fffdf0}'
     + '.foto-drop{border:2px dashed #F4B400;border-radius:6px;padding:20px;text-align:center;cursor:pointer;color:#888;font-size:12px;background:#fffdf0}'
+    + '.salto-pagina-manual{flex:0 0 100%;width:100%;page-break-before:always;break-before:always}'
+    + '.salto-label{display:flex;align-items:center;gap:8px;font-size:10px;color:#8e44ad;border-top:2px dashed #8e44ad;padding-top:6px;margin-top:4px}'
     + '.diagnostico-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:14px}'
     + '.diag-cell{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;page-break-inside:avoid;break-inside:avoid}'
     + '.diag-label{background:#F4B400;color:#1A1A1A;font-size:10px;font-weight:700;letter-spacing:1px;padding:6px 10px;text-transform:uppercase}'
@@ -4193,6 +4203,7 @@ function generarInformeTecnico(presupId) {
     + '<button class="btn-mail" onclick="envMail_informe()">\uD83D\uDCE7 MAIL</button>'
     + '<button class="btn-foto" onclick="agregarFoto()">\uD83D\uDCF7 Agregar foto</button>'
     + '<button class="btn-video" onclick="agregarVideo()">\uD83C\uDFA5 Agregar video</button>'
+    + '<button class="btn-break" onclick="insertarSaltoPagina()" title="Empuja lo que sigue a una hoja nueva">\u2B07\uFE0F Salto de p\u00E1gina</button>'
     + '<button class="btn-save" id="btnGuardar" onclick="guardarInforme()">\uD83D\uDCBE Guardar</button>'
     + '<button class="btn-close" onclick="window.close()">\u00D7 Cerrar</button>'
     + '<span class="tip">\u270F Edit\u00E1 cualquier campo \u00B7 Ctrl+V para pegar fotos \u00B7 PDF+Drive sube autom\u00e1ticamente</span>'
