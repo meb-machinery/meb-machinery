@@ -732,6 +732,23 @@ select option { background:var(--dark); }
         <tbody id="rentabilidad-cliente-tabla"></tbody>
       </table></div>
     </div>
+    <!-- Estacionalidad y tiempos de respuesta -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header"><span class="card-title">📅 ESTACIONALIDAD Y TIEMPOS</span></div>
+      <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">
+        En qué mes se concentra más trabajo (para anticipar carga y vender contratos con un argumento real), y cuánto tarda un trabajo típico una vez que arranca.
+      </p>
+      <div style="font-size:12px;color:var(--yellow);font-weight:600;margin-bottom:6px">Trabajos por mes (todo el historial, cualquier año)</div>
+      <div id="estacionalidad-meses" style="margin-bottom:4px"></div>
+      <div style="font-size:12px;color:var(--yellow);font-weight:600;margin:18px 0 6px">Tiempo de ejecución promedio por tipo (inicio → fin)</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Tipo</th><th style="text-align:center">Trabajos medidos</th><th style="text-align:right">Promedio</th></tr></thead>
+        <tbody id="tiempos-ejecucion-tabla"></tbody>
+      </table></div>
+      <div style="font-size:12px;color:var(--yellow);font-weight:600;margin:18px 0 6px">Presupuesto aprobado → trabajo terminado</div>
+      <div id="tiempo-respuesta-resumen"></div>
+      <p style="font-size:10px;color:var(--muted2);margin-top:6px">Solo cuenta trabajos vinculados a un presupuesto (campo nuevo, opcional, en la ficha del Trabajo) — no hay forma confiable de reconstruir esto para trabajos viejos sin ese vínculo, así que este número va a empezar en 0 y crecer a medida que vincules trabajos nuevos.</p>
+    </div>
     <!-- Fila 3: Estado de cobro -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px">
       <div class="stat-card green"><div class="stat-val" id="e-cobro-cobrado">$0</div><div class="stat-label">✅ Ya cobrado</div><div class="stat-sub" id="e-cobro-cobrado-n">0 trabajos</div></div>
@@ -1178,7 +1195,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxEg6PT1ph0dgoyY7vbtmtZzAoBBwCPhGjMLpWeh5tsNd1VBTBZ42oj_0gnAilM_rrgWQ/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzn3e_3ij8zBW_mTp9e3r0XP_8ylLa3O_KYMoXD7d-BtB1D4NYxV5SfRVhT6iE2QrpWZQ/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1541,6 +1558,7 @@ async function syncAll() {
     })); else if(!DB.maquinas.length) DB.maquinas=[];
     if(tr.length) DB.trabajos = tr.map(r=>({
       id:resolverIdEstable(r,'TRABAJOS'), clienteId:String(r.CLIENTE_ID||'').trim(), maquinaId:String(r.MAQUINA_ID||'').trim(),
+      presupuestoId:String(r.PRESUPUESTO_ID||'').trim(),
       titulo:r.TITULO||r.DESCRIPCION||'', tipo:r.TIPO||'', estado:(r.ESTADO||'pendiente').toLowerCase().trim(),
       estadoMaquina:r.ESTADO_MAQUINA||'', fechaInicio:r.FECHA_INICIO||'',
       fechaFin:r.FECHA_FIN||'', montoCobrado:parseMonto(r.MONTO_COBRADO),
@@ -5101,6 +5119,86 @@ function renderEstadisticas() {
   renderPorCobrarPlazos();
   renderProyeccionMes();
   renderRentabilidadReal();
+  renderEstacionalidadYTiempos();
+}
+
+// ── Estacionalidad y tiempos de respuesta ───────────────────────────────────
+// Estacionalidad: en qué mes (sin importar el año) se concentran más
+// trabajos — dato que ya existe en cada Trabajo (fechaInicio), nunca se
+// había agregado. Tiempo de ejecución: fechaInicio → fechaFin, por Tipo —
+// confiable porque son dos fechas del mismo registro. Tiempo de respuesta
+// (presupuesto aprobado → trabajo terminado) SOLO cuenta para trabajos con
+// el vínculo nuevo (presupuestoId) — no se puede reconstruir con confianza
+// para trabajos viejos sin ese dato, así que arranca en 0 a propósito.
+function renderEstacionalidadYTiempos() {
+  const contMeses = document.getElementById('estacionalidad-meses');
+  const contTiempos = document.getElementById('tiempos-ejecucion-tabla');
+  const contRespuesta = document.getElementById('tiempo-respuesta-resumen');
+  if (!contMeses || !contTiempos || !contRespuesta) return;
+
+  const NOMBRES_MES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+  // Estacionalidad — cuenta por mes calendario, todos los años juntos
+  const porMes = new Array(12).fill(0);
+  DB.trabajos.forEach(t => {
+    const f = parseFechaAny(t.fechaInicio) || parseFechaAny(t.fechaFin);
+    if (f) porMes[f.getMonth()]++;
+  });
+  const maxMes = Math.max(...porMes, 1);
+  contMeses.innerHTML = '<div style="display:flex;align-items:flex-end;gap:6px;height:90px">'
+    + porMes.map((n, i) => {
+        const alturaPct = Math.round((n / maxMes) * 100);
+        const esMax = n === maxMes && n > 0;
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
+          <div style="font-size:10px;color:${esMax?'var(--yellow)':'var(--muted)'};margin-bottom:3px;font-weight:${esMax?'700':'400'}">${n||''}</div>
+          <div style="width:100%;background:${esMax?'var(--yellow)':'var(--border2)'};border-radius:3px 3px 0 0;height:${Math.max(alturaPct,n>0?6:2)}%;min-height:2px"></div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">${NOMBRES_MES[i]}</div>
+        </div>`;
+      }).join('')
+    + '</div>';
+
+  // Tiempo de ejecución promedio por tipo (días, fechaInicio → fechaFin)
+  const gruposTiempo = {};
+  DB.trabajos.forEach(t => {
+    const fi = parseFechaAny(t.fechaInicio), ff = parseFechaAny(t.fechaFin);
+    if (!fi || !ff) return;
+    const dias = Math.round((ff - fi) / 86400000);
+    if (dias < 0) return; // dato inconsistente, no lo cuento
+    const key = t.tipo || 'Sin especificar';
+    if (!gruposTiempo[key]) gruposTiempo[key] = { n:0, sumaDias:0 };
+    gruposTiempo[key].n++;
+    gruposTiempo[key].sumaDias += dias;
+  });
+  const filasTiempo = Object.entries(gruposTiempo)
+    .map(([tipo, v]) => ({ tipo, n:v.n, prom: v.sumaDias/v.n }))
+    .sort((a,b) => a.prom - b.prom);
+  contTiempos.innerHTML = filasTiempo.length
+    ? filasTiempo.map(f => `<tr>
+        <td>${f.tipo}</td>
+        <td style="text-align:center">${f.n}</td>
+        <td style="text-align:right;font-weight:700">${f.prom < 1 ? 'mismo día' : f.prom.toFixed(1)+' días'}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="3"><div class="empty-state"><div class="icon">📅</div><p>Todavía no hay trabajos con fecha de inicio Y de fin cargadas</p></div></td></tr>';
+
+  // Tiempo de respuesta real: presupuesto aprobado → trabajo terminado
+  // (solo para trabajos vinculados vía el campo nuevo presupuestoId)
+  const vinculados = DB.trabajos.filter(t => t.presupuestoId && t.estado === 'completado' && t.fechaFin);
+  const medidos = [];
+  vinculados.forEach(t => {
+    const p = DB.presupuestos.find(x => String(x.id) === String(t.presupuestoId));
+    if (!p || p.estado !== 'aprobado') return;
+    const fp = parseFechaAny(p.fecha), ff = parseFechaAny(t.fechaFin);
+    if (!fp || !ff) return;
+    const dias = Math.round((ff - fp) / 86400000);
+    if (dias < 0) return;
+    medidos.push(dias);
+  });
+  if (medidos.length) {
+    const prom = medidos.reduce((s,d)=>s+d,0) / medidos.length;
+    contRespuesta.innerHTML = `<div class="stat-card blue"><div class="stat-val">${prom.toFixed(1)} días</div><div class="stat-label">PROMEDIO — SOBRE ${medidos.length} TRABAJO${medidos.length!==1?'S':''} VINCULADO${medidos.length!==1?'S':''}</div></div>`;
+  } else {
+    contRespuesta.innerHTML = `<div class="empty-state" style="padding:16px"><div class="icon">🔗</div><p>Todavía no hay trabajos completados vinculados a un presupuesto aprobado</p></div>`;
+  }
 }
 
 // ── Rentabilidad real — margen por tipo de trabajo y por cliente ───────────
@@ -6043,6 +6141,22 @@ function renderMapa() {
 
 function maquinaOptions(selected='') {
   return DB.maquinas.map(m=>`<option value="${m.id}" ${m.id===selected?'selected':''}>${m.marca} ${m.modelo}</option>`).join('');
+}
+
+// Vínculo opcional Trabajo → Presupuesto de origen — antes no existía
+// ninguna forma de conectarlos, así que era imposible medir cuánto tarda un
+// trabajo real desde que el presupuesto se aprueba hasta que se termina.
+// Ordenados por fecha más reciente primero (lo más probable es que se
+// vincule un presupuesto reciente).
+function presupuestoOptionsParaTrabajo(selectedId='') {
+  return [...DB.presupuestos]
+    .sort((a,b) => (parseFechaAny(b.fecha)||0) - (parseFechaAny(a.fecha)||0))
+    .map(p => {
+      const cl = DB.clientes.find(c => String(c.id)===String(p.clienteId));
+      const nombreCl = cl ? cl.nombre : (p.clienteNombreSheet || '—');
+      const label = `N° ${p.num||'—'} — ${nombreCl} — ${fmtMonto(p.monto||0)}`;
+      return `<option value="${p.id}" ${String(selectedId)===String(p.id)?'selected':''}>${label}</option>`;
+    }).join('');
 }
 
 // ============================================================
@@ -7174,6 +7288,9 @@ function openModal(type, data={}) {
       <div class="form-group full"><label>Título *</label><input id="f-ttit" value="${data.titulo||''}"/></div>
       <div class="form-group"><label>Cliente</label><select id="f-tcli"><option value="">Sin cliente</option>${clienteOptions(data.clienteId)}</select></div>
       <div class="form-group"><label>Máquina</label><select id="f-tmaq"><option value="">Sin máquina</option>${maquinaOptions(data.maquinaId)}</select></div>
+      <div class="form-group full"><label>Presupuesto de origen (opcional)</label><select id="f-tpresup"><option value="">Sin vincular</option>${presupuestoOptionsParaTrabajo(data.presupuestoId)}</select>
+        <p style="font-size:10px;color:var(--muted);margin-top:3px">Vincularlo permite medir a futuro cu\u00E1nto tarda un trabajo desde que se aprueba el presupuesto hasta que termina.</p>
+      </div>
       <div class="form-group"><label>Tipo</label>
         <select id="f-ttipo" onchange="compararPisoTarifario()">
           <option ${(data.tipo||'Reparación')==='Reparación'?'selected':''}>Reparación</option>
@@ -7233,7 +7350,7 @@ function openModal(type, data={}) {
       // esperado corresponde exactamente a lo que Emmanuel ve como ganancia.
       const gananciaArsAlGuardar = (manoObraV+movilidadV+(precioRepV-costoRepV)) || (montoCobradoV-costoRepV-montoGastosV);
       const gananciaUsdEsperadaCalc = tcMomento>0 ? Math.round(gananciaArsAlGuardar/tcMomento) : (data.gananciaUsdEsperada||0);
-      guardar('trabajos',{id:data.id||uid(),titulo:gv('f-ttit'),clienteId:gv('f-tcli'),maquinaId:gv('f-tmaq'),tipo:gv('f-ttipo'),estado:gv('f-testado'),estadoMaquina:gv('f-tmaqestado'),fechaInicio:gv('f-tfecha'),fechaFin:gv('f-tfechafin'),montoCobrado:montoCobradoV,montoGastos:montoGastosV,costoRepuesto:costoRepV,precioRepuestoFacturado:precioRepV,manoObraCobrada:manoObraV,movilidad:movilidadV,repuestosDetalle:gv('f-trepdetalle'),fotoUrl:gv('f-tfoto'),notas:gv('f-tnotas'),tcAlMomento:tcMomento||data.tcAlMomento||0,gananciaUsdEsperada:gananciaUsdEsperadaCalc},'titulo');
+      guardar('trabajos',{id:data.id||uid(),titulo:gv('f-ttit'),clienteId:gv('f-tcli'),maquinaId:gv('f-tmaq'),presupuestoId:gv('f-tpresup'),tipo:gv('f-ttipo'),estado:gv('f-testado'),estadoMaquina:gv('f-tmaqestado'),fechaInicio:gv('f-tfecha'),fechaFin:gv('f-tfechafin'),montoCobrado:montoCobradoV,montoGastos:montoGastosV,costoRepuesto:costoRepV,precioRepuestoFacturado:precioRepV,manoObraCobrada:manoObraV,movilidad:movilidadV,repuestosDetalle:gv('f-trepdetalle'),fotoUrl:gv('f-tfoto'),notas:gv('f-tnotas'),tcAlMomento:tcMomento||data.tcAlMomento||0,gananciaUsdEsperada:gananciaUsdEsperadaCalc},'titulo');
     };
     setTimeout(()=>compararPisoTarifario(), 50);
   }
