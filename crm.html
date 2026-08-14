@@ -2986,7 +2986,6 @@ function renderPresupuestos() {
         <button class="btn-secondary" onclick="duplicarPresupuesto('${p.id}')" title="Duplicar">⧉</button>
         <button class="btn-secondary" onclick="generarPresupuestoPDF('${p.id}')">📄 PDF</button>
         <button class="btn-secondary" style="background:rgba(0,59,112,0.2);border-color:#003B70;color:#6fa8dc" onclick="generarInformeTecnico('${p.id}')">🔧 Informe</button>
-        <button class="btn-secondary" style="background:rgba(244,180,0,0.15);border-color:var(--yellow);color:var(--yellow)" onclick="generarDocumentoOpcionesPago('${p.id}')" title="Documento de opciones de pago para el cliente">📑 Opciones pago</button>
         <button class="btn-danger" onclick="eliminar('presupuestos','${p.id}')">✕</button>
       </div></td>
     </tr>`;
@@ -5863,91 +5862,11 @@ function maquinaOptions(selected='') {
 // ============================================================
 // GENERADOR DE PRESUPUESTO PDF
 // ============================================================
-function generarDocumentoOpcionesPago(presupId) {
-  const p = DB.presupuestos.find(x => x.id === presupId);
-  if (!p) return;
-  const cl = DB.clientes.find(c => String(c.id) === String(p.clienteId))
-          || DB.clientes.find(c => c.nombre.toUpperCase() === String(p.clienteNombreSheet||'').toUpperCase())
-          || DB.clientes.find(c => c.nombre.toUpperCase() === String(p.clienteId||'').toUpperCase());
-  const clienteNombre = cl ? cl.nombre : (p.clienteNombreSheet||p.clienteId||'—');
-  const numPresup = String(p.num||p.id).padStart(4,'0');
-  const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
-  const tc = p.tcAlMomento || 0;
-  const montoArsAncla = p.monto || 0;
-
-  if(!tc || !montoArsAncla) {
-    showToast('Este presupuesto todavía no tiene dólar/USD cargado — abrilo y guardalo con el TC del día primero', 'error');
-    return;
-  }
-
-  const tf = tarifarioVigente();
-  const tramos = [
-    {label:'CONTADO', pct:0},
-    {label:'A 30 DÍAS', pct:tf?tf.recargo30:3},
-    {label:'A 60 DÍAS', pct:tf?tf.recargo60:6},
-    {label:'A 90 DÍAS', pct:tf?tf.recargo90:9},
-  ];
-  const marcado = p.plazoPago==='30'?1:p.plazoPago==='60'?2:p.plazoPago==='90'?3:0;
-
-  // FIX: antes se calculaba yendo y viniendo por el dólar (ars = usd*(1+%)*tc),
-  // y el redondeo del dólar generaba números feos ("$3.150.002" en vez de
-  // "$3.150.000"). Ahora el ARS sale directo del monto en pesos del
-  // presupuesto (exacto) y el dólar es solo una referencia derivada.
-  const filasHTML = tramos.map((t,i)=>{
-    const arsT = Math.round(montoArsAncla*(1+t.pct/100));
-    const usdT = tc>0 ? arsT/tc : 0;
-    return `<tr${i===marcado?' style="background:#FFF7DE"':''}>
-      <td style="text-align:center;font-weight:bold">${i===marcado?'☑':'☐'}</td>
-      <td>${t.label}${t.pct>0?` <span style="color:#6E6E6E;font-size:11px">(+${t.pct}%)</span>`:''}</td>
-      <td style="text-align:right;font-weight:bold">$${arsT.toLocaleString('es-AR')}</td>
-      <td style="text-align:right;color:#003B70">USD ${Math.round(usdT).toLocaleString('es-AR')}</td>
-    </tr>`;
-  }).join('');
-
-  const htmlContent = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
-    <title>Opciones de pago — Presupuesto ${numPresup}</title>
-    <style>
-      body{font-family:'Barlow',Arial,sans-serif;color:#1A1A1A;max-width:720px;margin:24px auto;padding:0 20px}
-      h1{font-family:'Bebas Neue',Arial,sans-serif;letter-spacing:2px;color:#1A1A1A;font-size:26px;margin-bottom:2px}
-      h1 span{color:#F4B400}
-      .meta{color:#6E6E6E;font-size:13px;margin-bottom:18px}
-      table{width:100%;border-collapse:collapse;margin:14px 0}
-      th{background:#1A1A1A;color:#F4B400;padding:8px;font-size:12px;text-align:left}
-      td{padding:9px 8px;border-bottom:1px solid #eee;font-size:14px}
-      .nota{background:#F5F2EC;border-left:3px solid #F4B400;padding:10px 14px;font-size:12.5px;color:#333;margin-top:16px;line-height:1.5}
-      .firma{margin-top:50px;display:flex;justify-content:space-between;font-size:12px;color:#6E6E6E}
-      .linea{border-top:1px solid #999;width:220px;padding-top:4px;text-align:center}
-      .header{display:flex;align-items:center;gap:14px;margin-bottom:4px}
-      .header img{height:52px}
-      .print-btn{margin-top:24px;background:#003B70;color:#fff;border:none;padding:10px 18px;border-radius:4px;cursor:pointer;font-family:'Barlow';font-weight:600}
-      @media print{.print-btn{display:none}}
-    </style></head><body>
-    <div class="header">
-      <img src="${typeof MEB_LOGO_PDF_B64!=='undefined'?MEB_LOGO_PDF_B64:''}" alt="MEB" style="height:70px"/>
-    </div>
-    <div class="meta">Opciones de pago — Presupuesto N° ${numPresup} · ${fechaHoy}<br/>Cliente: ${clienteNombre}</div>
-    <table>
-      <thead><tr><th></th><th>Modalidad</th><th style="text-align:right">Monto ARS</th><th style="text-align:right">Referencia USD</th></tr></thead>
-      <tbody>${filasHTML}</tbody>
-    </table>
-    <div class="nota">
-      Los precios están expresados en su equivalente en dólares al tipo de cambio del día de emisión (TC $${tc}).
-      El monto final en pesos para pagos a 30/60/90 días se actualiza al tipo de cambio vigente el día efectivo del pago,
-      manteniéndose fijo el recargo pactado en esta tabla. Por favor, marque la opción elegida antes de comenzar el trabajo.
-    </div>
-    <div class="firma">
-      <div class="linea">Firma del cliente</div>
-      <div class="linea">Aclaración y fecha</div>
-    </div>
-    <button class="print-btn" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
-    </body></html>`;
-
-  const blob = new Blob([htmlContent], {type:'text/html;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const w = window.open(url, '_blank', 'width=820,height=920');
-  if(w) setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
-  else { alert('Bloqueador de popups activo. Permití los popups para este sitio.'); URL.revokeObjectURL(url); }
-}
+// NOTA: el documento aparte "Opciones de pago" para Presupuestos
+// (generarDocumentoOpcionesPago) se sacó — la tabla de 30/60/90 días ahora
+// vive directo adentro del PDF del presupuesto (ver generarPresupuestoPDF,
+// sección "Opciones de pago"), así que ese paso extra quedó redundante.
+// La versión de Contratos sigue igual, más abajo.
 
 // ── DOCUMENTO DE OPCIONES DE PAGO — CONTRATOS (mismo criterio que Presupuestos) ──
 function generarDocumentoOpcionesPagoContrato(contratoId) {
@@ -6621,6 +6540,7 @@ function generarPresupuestoPDF(presupId) {
     + '<tbody id="tbodyPagos"></tbody>'
     + '</table>'
     + '<div style="padding:9px 14px;font-size:10.5px;color:#888;background:#fafafa;border-top:1px solid #f0f0f0">El monto final para pagos a 30/60/90 d\u00EDas se actualiza al tipo de cambio vigente el d\u00EDa efectivo del pago, manteni\u00E9ndose fijo el recargo pactado en esta tabla.</div>'
+    + '<div style="padding:9px 14px;font-size:10.5px;color:#888;border-top:1px solid #f0f0f0">Planes de mantenimiento preventivo (1.000/2.000 hs) con descuentos desde el 15% \u2014 reducen el riesgo de una parada mayor como esta.</div>'
     + '</div>'
 
     + '<div class="notas-box" id="notasBox" contenteditable="true">' + (p.notas||'Agregar notas, condiciones especiales o aclaraciones...') + '</div>'
