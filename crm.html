@@ -527,7 +527,18 @@ select option { background:var(--dark); }
       <button class="filter-tab" onclick="setFilter('presup','en curso',this)">En curso</button>
       <button class="filter-tab" onclick="setFilter('presup','no aprobado',this)">No aprobados</button>
     </div>
-    <div class="search-bar"><span>🔍</span><input type="text" placeholder="Buscar número, cliente, descripción..." id="searchPresupuestos" oninput="renderPresupuestos()"></div>
+    <div style="display:flex;align-items:center;gap:16px">
+      <div class="search-bar" style="flex:1;margin-bottom:0"><span>🔍</span><input type="text" placeholder="Buscar número, cliente, descripción..." id="searchPresupuestos" oninput="renderPresupuestos()"></div>
+      <div style="display:flex;align-items:center;gap:8px;white-space:nowrap">
+        <label style="font-size:11px;color:var(--muted)">Ordenar por</label>
+        <select id="presupSortBy" onchange="renderPresupuestos()" style="background:var(--darker);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:6px 8px;font-size:12px">
+          <option value="num">N° (ascendente)</option>
+          <option value="fecha_desc">Fecha (más reciente primero)</option>
+          <option value="cliente">Cliente (A-Z)</option>
+          <option value="monto_desc">Monto (mayor primero)</option>
+        </select>
+      </div>
+    </div>
     <div id="presup-resumen-estados" style="margin-bottom:12px"></div>
     <div class="card"><div class="table-wrap"><table>
       <thead><tr><th>#</th><th>Cliente</th><th>Descripción</th><th>Monto</th><th>Estado</th><th>Fecha</th><th>Estado documento</th><th style="color:#9b59b6">Informe</th><th>Acciones</th></tr></thead>
@@ -560,6 +571,18 @@ select option { background:var(--dark); }
       <div style="display:flex;align-items:center;gap:10px">
         <span style="font-size:12px;color:var(--muted)">Se sincronizan con el Sheet — accesibles desde cualquier dispositivo</span>
         <button class="btn-secondary" style="font-size:11px;padding:6px 12px" onclick="vincularInformesConDrive()" title="Busca en la carpeta de Drive los archivos que correspondan a informes sin link guardado">🔗 Vincular con Drive</button>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
+      <div class="search-bar" style="flex:1;margin-bottom:0"><span>🔍</span><input type="text" placeholder="Buscar por N°, cliente, queja..." id="searchInformes" oninput="renderInformes()"></div>
+      <div style="display:flex;align-items:center;gap:8px;white-space:nowrap">
+        <label style="font-size:11px;color:var(--muted)">Ordenar por</label>
+        <select id="informesSortBy" onchange="renderInformes()" style="background:var(--darker);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:6px 8px;font-size:12px">
+          <option value="fecha_desc">Fecha (más reciente primero)</option>
+          <option value="fecha_asc">Fecha (más antigua primero)</option>
+          <option value="cliente">Cliente (A-Z)</option>
+          <option value="num">N° de informe</option>
+        </select>
       </div>
     </div>
     <div id="informes-resumen" style="margin-bottom:16px"></div>
@@ -1894,6 +1917,12 @@ function parseFechaAny(d) {
   if(/^\d{4}-\d{1,2}-\d{1,2}$/.test(d)) return new Date(d+'T00:00:00');
   const m = String(d).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if(m) return new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}T00:00:00`);
+  // DD-MM-YYYY (guiones) — formato usado por los informes migrados desde
+  // el archivo histórico de Emmanuel (ej. "29-01-2026"). Sin esto, esas
+  // fechas quedaban como inválidas y los informes históricos se iban
+  // siempre al final al ordenar por fecha.
+  const m2 = String(d).match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if(m2) return new Date(`${m2[3]}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}T00:00:00`);
   return null;
 }
 // Días de plazo vencido sin cobro real registrado — null si no aplica
@@ -2506,6 +2535,17 @@ function verCliente(id) {
   const trs=DB.trabajos.filter(t=>t.clienteId===id);
   const totalCobrado=trs.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
   const porCobrarCliente=trs.filter(t=>t.estado==='completado'&&(t.estadoCobro||'pendiente')!=='cobrado').reduce((s,t)=>s+Number(t.montoCobrado||0),0);
+  // Informes técnicos de este cliente — los Informes se guardan con el
+  // nombre del cliente como texto libre (no por ID), así que el match acá
+  // es por nombre/empresa, tolerante a mayúsculas y espacios de sobra.
+  const nombreNorm = (c.nombre||'').toUpperCase().trim();
+  const empresaNorm = (c.empresa||'').toUpperCase().trim();
+  const infs = (DB.informes||[]).filter(i => {
+    const infCliente = (i.cliente||'').toUpperCase().trim();
+    if(!infCliente) return false;
+    return infCliente===nombreNorm || (empresaNorm && infCliente===empresaNorm)
+      || (nombreNorm && infCliente.includes(nombreNorm)) || (nombreNorm && nombreNorm.includes(infCliente));
+  }).sort((a,b)=>(parseFechaAny(b.fecha)||0)-(parseFechaAny(a.fecha)||0));
   document.getElementById('detailContent').innerHTML=`
     <div class="detail-name">${c.nombre}</div>
     <div class="detail-company">${c.empresa||'Sin empresa'}</div>
@@ -2524,10 +2564,24 @@ function verCliente(id) {
       ${porCobrarCliente>0?`<div class="detail-row"><span class="detail-key">⚠️ Por cobrar</span><span class="detail-val" style="color:var(--red);font-family:'Bebas Neue';font-size:15px">${fmtMonto(porCobrarCliente)}</span></div>`:''}
       <div class="detail-row"><span class="detail-key">Presupuestos</span><span class="detail-val">${prs.length} (${prs.filter(p=>p.estado==='aprobado').length} aprobados)</span></div>
       <div class="detail-row"><span class="detail-key">Trabajos</span><span class="detail-val">${trs.length} (${trs.filter(t=>t.estado==='completado').length} completados)</span></div>
+      <div class="detail-row"><span class="detail-key">Informes técnicos</span><span class="detail-val">${infs.length}</span></div>
     </div>
     <div class="detail-section">
       <div class="detail-section-title">Máquinas (${mqs.length})</div>
       ${mqs.length?mqs.map(m=>`<div class="maquina-card" style="cursor:pointer" onclick="verMaquina('${m.id}')"><div class="maquina-info"><div class="mq-name">${m.marca} ${m.modelo}</div><div class="mq-sub">${m.tipo||''} · Serie: ${m.serie||'—'}</div></div><span class="badge badge-blue">Ver →</span></div>`).join(''):'<p style="font-size:12px;color:var(--muted)">Sin máquinas registradas</p>'}
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Informes técnicos (${infs.length})</span>
+        ${infs.length?`<a href="#" onclick="event.preventDefault();document.getElementById('searchInformes')&&(document.getElementById('searchInformes').value='${(c.nombre||'').replace(/'/g,"\\'")}');showPage('informes');" style="font-size:10px;color:var(--blue-light)">Ver en Informes →</a>`:''}
+      </div>
+      ${infs.length?infs.map(i=>`<div class="maquina-card" style="cursor:pointer" onclick="verInformeDetalle('${i.id}')">
+        <div class="maquina-info">
+          <div class="mq-name">N° ${i.num||'—'} — ${fmtDate(i.fecha)}</div>
+          <div class="mq-sub">${(i.queja||'—').substring(0,70)}${(i.queja||'').length>70?'...':''}</div>
+        </div>
+        ${i.driveUrl?'<span class="badge badge-blue">📄 Drive</span>':''}
+      </div>`).join(''):'<p style="font-size:12px;color:var(--muted)">Sin informes técnicos registrados para este cliente</p>'}
     </div>
     <div class="detail-section">
       <div class="detail-section-title" style="display:flex;justify-content:space-between;align-items:center">
@@ -2949,9 +3003,24 @@ function renderPresupuestos() {
   }
   let data=DB.presupuestos;
   if(filters.presup!=='todos') data=data.filter(p=>p.estado===filters.presup);
-  // Orden por N° — antes se mostraban en el orden en que venían del Sheet
-  // (no necesariamente secuencial), independiente de la columna NUMERO.
-  data = [...data].sort((a,b) => (parseInt(a.num)||0) - (parseInt(b.num)||0));
+  // Orden elegible — antes era fijo por N°, y como los N° vienen del Sheet
+  // sin garantía de ser secuenciales prolijos, quedaban "desparramados".
+  // Ahora Belu elige el criterio de orden desde el selector de la página.
+  const sortByPresup = (document.getElementById('presupSortBy')||{value:'num'}).value;
+  const clientePresup = (p) => DB.clientes.find(c=>String(c.id)===String(p.clienteId))||DB.clientes.find(c=>c.nombre.toUpperCase()===(p.clienteNombreSheet||p.clienteId||'').toUpperCase());
+  if (sortByPresup === 'fecha_desc') {
+    data = [...data].sort((a,b) => (parseFechaAny(b.fecha)||0) - (parseFechaAny(a.fecha)||0));
+  } else if (sortByPresup === 'cliente') {
+    data = [...data].sort((a,b) => {
+      const na = clientePresup(a)?.nombre || a.clienteNombreSheet || '';
+      const nb = clientePresup(b)?.nombre || b.clienteNombreSheet || '';
+      return na.localeCompare(nb, 'es');
+    });
+  } else if (sortByPresup === 'monto_desc') {
+    data = [...data].sort((a,b) => (parseFloat(b.monto)||0) - (parseFloat(a.monto)||0));
+  } else {
+    data = [...data].sort((a,b) => (parseInt(a.num)||0) - (parseInt(b.num)||0)); // num (default)
+  }
   // Buscador interno
   const search=(document.getElementById('searchPresupuestos')||{value:''}).value.toLowerCase().trim();
   if(search){
@@ -6690,7 +6759,31 @@ function renderInformes() {
   const cont = document.getElementById('informes-lista');
   if(!cont) return;
   if(!DB.informes) DB.informes = [];
-  const informes = [...DB.informes].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+
+  // Orden elegible — antes era fijo por fecha, desparramado cuando la
+  // fecha venía vacía o en formato raro. Ahora Belu elige el criterio.
+  const sortBy = (document.getElementById('informesSortBy')||{value:'fecha_desc'}).value;
+  let informes = [...DB.informes];
+  if (sortBy === 'fecha_asc') {
+    informes.sort((a,b) => (parseFechaAny(a.fecha)||0) - (parseFechaAny(b.fecha)||0));
+  } else if (sortBy === 'cliente') {
+    informes.sort((a,b) => (a.cliente||'').localeCompare(b.cliente||'', 'es'));
+  } else if (sortBy === 'num') {
+    informes.sort((a,b) => (parseInt(a.num)||0) - (parseInt(b.num)||0));
+  } else {
+    informes.sort((a,b) => (parseFechaAny(b.fecha)||0) - (parseFechaAny(a.fecha)||0)); // fecha_desc (default)
+  }
+
+  // Buscador — por N° de informe, cliente o texto de la queja.
+  const searchInf = (document.getElementById('searchInformes')||{value:''}).value.toLowerCase().trim();
+  if (searchInf) {
+    informes = informes.filter(i =>
+      String(i.num||'').toLowerCase().includes(searchInf) ||
+      (i.cliente||'').toLowerCase().includes(searchInf) ||
+      (i.queja||'').toLowerCase().includes(searchInf)
+    );
+  }
+
   // v17.18 FIX: antes se referenciaba cada tarjeta por inf.id — pero un
   // informe sin link de Drive todavía no tiene un ID estable (se genera de
   // nuevo, al azar, en cada sincronización), así que el botón "Ver detalle"
@@ -6699,31 +6792,31 @@ function renderInformes() {
   // misma pantalla.
   _informesRenderizados = informes;
   const badge = document.getElementById('badge-informes');
-  if(badge) { badge.textContent = informes.length; badge.style.display = informes.length ? 'inline-flex' : 'none'; }
+  if(badge) { badge.textContent = DB.informes.length; badge.style.display = DB.informes.length ? 'inline-flex' : 'none'; }
 
   // Resumen: total, cuántos con link a Drive, cuántos este mes — para tener
   // de un vistazo cuántos informes se hicieron (Emmanuel los genera seguido).
+  // Se calcula siempre sobre el total real, no sobre el resultado filtrado.
   const resumenEl = document.getElementById('informes-resumen');
   if(resumenEl) {
-    const conDrive = informes.filter(i=>i.driveUrl).length;
+    const todos = DB.informes;
+    const conDrive = todos.filter(i=>i.driveUrl).length;
     const ahora = new Date();
-    const esteMes = informes.filter(i=>{
-      if(!i.fecha) return false;
-      const parts = i.fecha.includes('/') ? i.fecha.split('/').reverse() : i.fecha.split('-');
-      if(parts.length<3) return false;
-      const y = parts[0].length===4 ? parts[0] : '20'+parts[0];
-      const d = new Date(y, (parseInt(parts[1])||1)-1, parts[2]||1);
-      return !isNaN(d.getTime()) && d.getMonth()===ahora.getMonth() && d.getFullYear()===ahora.getFullYear();
+    const esteMes = todos.filter(i=>{
+      const f = parseFechaAny(i.fecha);
+      return f && f.getMonth()===ahora.getMonth() && f.getFullYear()===ahora.getFullYear();
     }).length;
     resumenEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
-      <div class="stat-card"><div class="stat-val">${informes.length}</div><div class="stat-label">TOTAL DE INFORMES</div></div>
+      <div class="stat-card"><div class="stat-val">${todos.length}</div><div class="stat-label">TOTAL DE INFORMES</div></div>
       <div class="stat-card green"><div class="stat-val">${conDrive}</div><div class="stat-label">GUARDADOS EN DRIVE</div></div>
       <div class="stat-card yellow"><div class="stat-val">${esteMes}</div><div class="stat-label">ESTE MES</div></div>
     </div>`;
   }
 
   if(!informes.length) {
-    cont.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>No hay informes guardados</p><p style="font-size:12px;color:var(--muted);margin-top:8px">Generá un informe desde Presupuestos → 🔧 Informe y presioná 💾 Guardar</p></div>';
+    cont.innerHTML = DB.informes.length
+      ? '<div class="empty-state"><div class="icon">📋</div><p>Ningún informe coincide con la búsqueda</p></div>'
+      : '<div class="empty-state"><div class="icon">📋</div><p>No hay informes guardados</p><p style="font-size:12px;color:var(--muted);margin-top:8px">Generá un informe desde Presupuestos → 🔧 Informe y presioná 💾 Guardar</p></div>';
     return;
   }
   cont.innerHTML = informes.map((inf, idx) =>
@@ -6769,8 +6862,13 @@ async function vincularInformesConDrive() {
   }
 }
 
-function verInformeDetalle(idx) {
-  const inf = _informesRenderizados[idx];
+function verInformeDetalle(idxOrId) {
+  // Acepta la posición en la lista ya renderizada (uso normal, desde la
+  // pestaña Informes) O el ID directo del informe (uso desde la ficha del
+  // Cliente, donde no depende de que Informes ya se haya renderizado antes).
+  const inf = (typeof idxOrId === 'number')
+    ? _informesRenderizados[idxOrId]
+    : (DB.informes||[]).find(x => String(x.id) === String(idxOrId));
   if(!inf) return;
   const m = document.createElement('div');
   m.className = 'modal-overlay open';
