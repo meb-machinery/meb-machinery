@@ -708,6 +708,23 @@ select option { background:var(--dark); }
       <p style="font-size:11px;color:var(--muted);margin:0 12px 10px">De lo que se formuló, cuánto efectivamente se mandó al cliente, y de eso, cuánto se aprobó — la pregunta real no es "cuántos aprobé de todos", es "cuántos aprobé de los que el cliente realmente vio".</p>
       <div id="embudo-conversion-lista" style="padding:0 12px 14px"></div>
     </div>
+    <!-- Rentabilidad real: margen por Tipo de trabajo y por Cliente, sobre lo ya cobrado -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header"><span class="card-title">💹 RENTABILIDAD REAL</span></div>
+      <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">
+        Margen real (cobrado − repuesto − movilidad − gastos) sobre trabajos ya cobrados — no sobre lo presupuestado. Sirve para ver qué tipo de trabajo y qué clientes dejan mejor margen, más allá de cuánto facturan.
+      </p>
+      <div style="font-size:12px;color:var(--yellow);font-weight:600;margin-bottom:6px">Por tipo de trabajo</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Tipo</th><th style="text-align:center">Trabajos</th><th style="text-align:right">Cobrado</th><th style="text-align:right">Margen</th><th style="text-align:right">% Margen</th></tr></thead>
+        <tbody id="rentabilidad-tipo-tabla"></tbody>
+      </table></div>
+      <div style="font-size:12px;color:var(--yellow);font-weight:600;margin:16px 0 6px">Por cliente</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Cliente</th><th style="text-align:center">Trabajos</th><th style="text-align:right">Cobrado</th><th style="text-align:right">Margen</th><th style="text-align:right">% Margen</th></tr></thead>
+        <tbody id="rentabilidad-cliente-tabla"></tbody>
+      </table></div>
+    </div>
     <!-- Fila 3: Estado de cobro -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px">
       <div class="stat-card green"><div class="stat-val" id="e-cobro-cobrado">$0</div><div class="stat-label">✅ Ya cobrado</div><div class="stat-sub" id="e-cobro-cobrado-n">0 trabajos</div></div>
@@ -5039,6 +5056,62 @@ function renderEstadisticas() {
   }
   renderPorCobrarPlazos();
   renderProyeccionMes();
+  renderRentabilidadReal();
+}
+
+// ── Rentabilidad real — margen por tipo de trabajo y por cliente ───────────
+// A diferencia de "Monto cobrado real" (arriba), esto no mira solo ingresos:
+// resta lo que cada trabajo realmente costó (repuesto, movilidad, gastos)
+// para ver el margen efectivo, agrupado por Tipo y por Cliente. Solo entran
+// trabajos ya marcados como "Cobrado" — plata real, no proyectada.
+function renderRentabilidadReal() {
+  const contTipo = document.getElementById('rentabilidad-tipo-tabla');
+  const contCliente = document.getElementById('rentabilidad-cliente-tabla');
+  if (!contTipo || !contCliente) return;
+
+  const cobrados = DB.trabajos.filter(t => t.estadoCobro === 'cobrado');
+
+  function margenDe(t) {
+    const cobrado = Number(t.montoCobrado||0);
+    const costo = Number(t.costoRepuesto||0) + Number(t.movilidad||0) + Number(t.montoGastos||0);
+    return { cobrado, margen: cobrado - costo };
+  }
+
+  function agrupar(keyFn) {
+    const grupos = {};
+    cobrados.forEach(t => {
+      const key = keyFn(t) || 'Sin especificar';
+      if (!grupos[key]) grupos[key] = { cantidad:0, cobrado:0, margen:0 };
+      const { cobrado, margen } = margenDe(t);
+      grupos[key].cantidad++;
+      grupos[key].cobrado += cobrado;
+      grupos[key].margen += margen;
+    });
+    return Object.entries(grupos)
+      .map(([key, v]) => ({ key, ...v, pct: v.cobrado>0 ? (v.margen/v.cobrado*100) : 0 }))
+      .sort((a,b) => b.pct - a.pct);
+  }
+
+  const porTipo = agrupar(t => t.tipo);
+  const porCliente = agrupar(t => {
+    const cl = DB.clientes.find(c => String(c.id)===String(t.clienteId));
+    return cl ? cl.nombre : '';
+  });
+
+  function filaHTML(g) {
+    const color = g.pct>=40 ? 'var(--green)' : g.pct>=20 ? 'var(--yellow)' : 'var(--red)';
+    return `<tr>
+      <td class="td-name">${g.key}</td>
+      <td style="text-align:center">${g.cantidad}</td>
+      <td style="text-align:right" class="monto">${fmtMonto(g.cobrado)}</td>
+      <td style="text-align:right" class="monto">${fmtMonto(g.margen)}</td>
+      <td style="text-align:right;color:${color};font-weight:700;font-family:'Bebas Neue';font-size:14px">${g.pct.toFixed(0)}%</td>
+    </tr>`;
+  }
+
+  const vacio = `<tr><td colspan="5"><div class="empty-state"><div class="icon">💹</div><p>Todavía no hay trabajos marcados como "Cobrado" para calcular esto</p></div></td></tr>`;
+  contTipo.innerHTML = porTipo.length ? porTipo.map(filaHTML).join('') : vacio;
+  contCliente.innerHTML = porCliente.length ? porCliente.map(filaHTML).join('') : vacio;
 }
 
 // ── POR COBRAR SEGÚN PRESUPUESTOS, DESGLOSADO POR PLAZO ──────────────────────
