@@ -3705,9 +3705,13 @@ function resolverOAutoCrearMaquina(clienteId, serie, modelo, tipo, maquinaIdPrev
   return nueva.id;
 }
 
-function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail, tipoMaquina) {
+function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail, tipoMaquina, tcDesdePdf) {
   let p = DB.presupuestos.find(x=>x.id===presupId);
   const esNuevoPresup = !p;
+  // Tipo de cambio cargado en el campo nuevo de la ficha del PDF (Opciones
+  // de pago) — si vino con valor, pisa el que hubiera guardado y recalcula
+  // el ancla en dólares para que quede consistente en todo el CRM.
+  const tcNuevo = parseFloat(tcDesdePdf) || 0;
 
   // Resolver el cliente: si se eligió uno del desplegable, usar ese ID
   // directo. Si no, buscar por nombre exacto (para no duplicar si solo se
@@ -3762,7 +3766,9 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
     if (!clienteIdFinal) { showToast('No se pudo guardar: falta el cliente','error'); return; }
     p = {
       id: presupId, num: DB.presupCounter++, clienteId: clienteIdFinal,
-      descripcion: descripcion||'', monto: monto||0, montoUsd:0, tcAlMomento:0,
+      descripcion: descripcion||'', monto: monto||0,
+      montoUsd: tcNuevo>0 ? Math.round((monto||0)/tcNuevo*100)/100 : 0,
+      tcAlMomento: tcNuevo,
       plazoPago:'contado', recargoPct:0, moneda:'ARS', monedaSym:'$',
       estado:'pendiente', estadoCobro:'pendiente', fecha: today(),
       notas: notas||'', serieMaquina: serie||'', modeloMaquina: modeloMaquina||'', horometro: horometro||'',
@@ -3772,6 +3778,10 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
   } else {
     p.descripcion = descripcion;
     if(monto > 0) p.monto = monto;
+    if(tcNuevo > 0) {
+      p.tcAlMomento = tcNuevo;
+      p.montoUsd = Math.round((monto>0?monto:(p.monto||0))/tcNuevo*100)/100;
+    }
     if(notas) p.notas = notas;
     if(serie !== undefined) p.serieMaquina = serie;
     if(modeloMaquina !== undefined) p.modeloMaquina = modeloMaquina;
@@ -3799,7 +3809,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
   if (esNuevoPresup) {
     writeToSheet({ action:'addPresupuesto', row:{
       id:p.id, num:p.num, cliente_id:p.clienteId, cliente:clNom2, descripcion:descripcionCompleta2,
-      monto: monto||0, precio_usd:0, tc_al_momento:0, plazo_pago:'contado', recargo_pct:0,
+      monto: monto||0, precio_usd:p.montoUsd||0, tc_al_momento:p.tcAlMomento||0, plazo_pago:'contado', recargo_pct:0,
       serie_maquina:p.serieMaquina||'', modelo_maquina:p.modeloMaquina||'', horometro:p.horometro||'',
       tipo_maquina:p.tipoMaquina||'', maquina_id:p.maquinaId||'',
       estado:p.estado, fecha:p.fecha, notas:p.notas||''
@@ -6162,6 +6172,13 @@ function generarPresupuestoPDF(presupId) {
   const numPresup = String(p.num||p.id).padStart(4,'0');
   const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const fechaVence = new Date(Date.now()+15*24*60*60*1000).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  // Recargos por plazo (30/60/90 días) — se leen del Tarifario vigente y se
+  // embeben como constantes en el JS del PDF, para que la tabla de Opciones
+  // de Pago pueda recalcularse sola ahí adentro sin depender de esta ventana.
+  const tfPresup = tarifarioVigente();
+  const recargo30Presup = tfPresup ? tfPresup.recargo30 : 3;
+  const recargo60Presup = tfPresup ? tfPresup.recargo60 : 6;
+  const recargo90Presup = tfPresup ? tfPresup.recargo90 : 9;
 
   // Build initial rows
   const lineas = (p.descripcion||'').split('\n').filter(l=>l.trim());
@@ -6234,6 +6251,9 @@ function generarPresupuestoPDF(presupId) {
     'var CLIENTE_EMAIL=' + JSON.stringify(clienteEmail) + ';',
     'var CLIENTE_NOMBRE=' + JSON.stringify(clienteNombre) + ';',
     'var NUM_PRESUP=' + JSON.stringify(numPresup) + ';',
+    'var REC30=' + JSON.stringify(recargo30Presup) + ';',
+    'var REC60=' + JSON.stringify(recargo60Presup) + ';',
+    'var REC90=' + JSON.stringify(recargo90Presup) + ';',
     '',
     'function onClienteSelectChange() {',
     '  var sel = document.getElementById("pdf-cli-select");',
@@ -6280,6 +6300,37 @@ function generarPresupuestoPDF(presupId) {
     '  document.getElementById("tRep").innerText = tRep>0?fmt(tRep):"\\u2014";',
     '  document.getElementById("tMov").innerText = tMov>0?fmt(tMov):"\\u2014";',
     '  document.getElementById("tTotal").innerText = grand>0?fmt(grand):"\\u2014";',
+    '  recalcPagos();',
+    '}',
+    // recalcPagos(): arma la tabla de Opciones de Pago (Contado/30/60/90)
+    // en vivo, a partir del TOTAL ya calculado y del tipo de cambio cargado
+    // en la ficha. Sin dólar cargado, igual muestra los montos en pesos —
+    // la referencia en USD queda en "—" hasta que se complete ese campo.
+    'function recalcPagos() {',
+    '  var tbody = document.getElementById("tbodyPagos");',
+    '  if (!tbody) return;',
+    '  var total = parse(document.getElementById("tTotal").innerText);',
+    '  var tcEl = document.getElementById("pdf-tc");',
+    '  var tc = tcEl ? parse(tcEl.innerText) : 0;',
+    '  if (!(total > 0)) {',
+    '    tbody.innerHTML = "<tr><td colspan=\\"3\\" style=\\"text-align:center;color:#999;font-size:11px;padding:16px\\">Carg\\u00E1 los \\u00EDtems del presupuesto para ver los plazos de pago</td></tr>";',
+    '    return;',
+    '  }',
+    '  var tramos = [',
+    '    {label:"CONTADO", pct:0},',
+    '    {label:"A 30 D\\u00CDAS", pct:REC30},',
+    '    {label:"A 60 D\\u00CDAS", pct:REC60},',
+    '    {label:"A 90 D\\u00CDAS", pct:REC90}',
+    '  ];',
+    '  var html = "";',
+    '  tramos.forEach(function(t) {',
+    '    var ars = Math.round(total * (1 + t.pct/100));',
+    '    var usdTxt = tc > 0 ? ("USD " + Math.round(ars/tc).toLocaleString("es-AR")) : "\\u2014";',
+    '    html += "<tr><td>" + t.label + (t.pct>0 ? (" <span style=\\"color:#999;font-size:10px\\">(+"+t.pct+"%)</span>") : "") + "</td>"',
+    '      + "<td style=\\"text-align:right;font-weight:bold\\">$" + ars.toLocaleString("es-AR") + "</td>"',
+    '      + "<td style=\\"text-align:right;color:#003B70;font-size:11px\\">" + usdTxt + "</td></tr>";',
+    '  });',
+    '  tbody.innerHTML = html;',
     '}',
     'function delRow(btn) {',
     '  btn.closest("tr").remove();',
@@ -6322,6 +6373,8 @@ function generarPresupuestoPDF(presupId) {
     '}',
     'document.getElementById("btnAgregar").onclick = addRow;',
     'document.querySelectorAll("#tbodyItems tr").forEach(function(tr){ bindRow(tr); });',
+    'var tcEl0 = document.getElementById("pdf-tc");',
+    'if (tcEl0) { tcEl0.addEventListener("input", recalcPagos); tcEl0.addEventListener("blur", recalcPagos); }',
     'recalc();',
     '',
     'function envWA() {',
@@ -6372,6 +6425,8 @@ function generarPresupuestoPDF(presupId) {
     '  var modeloEl = document.getElementById("pdf-modelo");',
     '  var horometroEl = document.getElementById("pdf-horometro");',
     '  var tipoEl = document.getElementById("pdf-tipo");',
+    '  var tcElSave = document.getElementById("pdf-tc");',
+    '  var tcGuardar = tcElSave ? parse(tcElSave.innerText) : 0;',
     '  var serie = serieEl ? (serieEl.innerText||"").replace("—","").trim() : "";',
     '  var modeloMaq = modeloEl ? (modeloEl.innerText||"").trim() : "";',
     '  var horometro = horometroEl ? (horometroEl.innerText||"").replace("—","").trim() : "";',
@@ -6389,7 +6444,7 @@ function generarPresupuestoPDF(presupId) {
     '    return;',
     '  }',
     '  if(window.opener && window.opener._recibirCambiosPresupuesto) {',
-    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro, clienteIdSel, cliNombre, cliEmpresa.replace("—","").trim(), cliZona.replace("—","").trim(), cliTelefono.replace("—","").trim(), cliEmail.replace("—","").trim(), tipoMaq);',
+    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro, clienteIdSel, cliNombre, cliEmpresa.replace("—","").trim(), cliZona.replace("—","").trim(), cliTelefono.replace("—","").trim(), cliEmail.replace("—","").trim(), tipoMaq, tcGuardar);',
     '    var sb = document.querySelector(".btn-save");',
     '    if(sb){sb.style.background="#25d366";sb.style.color="#fff";sb.textContent="\\u2714 Guardado";}',
     '    setTimeout(function(){if(sb){sb.style.background="#1A1A1A";sb.style.color="#F4B400";sb.textContent="\\uD83D\\uDCBE GUARDAR";}},2500);',
@@ -6467,6 +6522,8 @@ function generarPresupuestoPDF(presupId) {
     + '.footer{margin-top:24px;padding-top:12px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;font-size:10px;color:#aaa}'
     + '[contenteditable]{color:#1A1A1A;outline:none}'
     + '.vencimiento{background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:5px 12px;font-size:11px;color:#856404;font-weight:700}'
+    + '#pdf-tc{border-bottom:1px dashed #999;padding:0 3px;min-width:36px;display:inline-block;font-weight:700}'
+    + '#pdf-tc:empty:before{content:"tocá acá";color:#bbb;font-weight:400;font-style:italic;font-size:10px}'
     + '@media print{.no-print{display:none}body{padding:20px}[contenteditable]{color:#1A1A1A!important}.btn-del{display:none!important}}'
     + '</style>'
     + '</head><body>'
@@ -6554,6 +6611,17 @@ function generarPresupuestoPDF(presupId) {
       + '</div>'
     ) : '')
     + '</div></div>'
+
+    + '<div class="detalle-wrap">'
+    + '<div class="detalle-titulo">Opciones de pago'
+    + '<span style="font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:#1A1A1A">Tipo de cambio del d\u00EDa: $<span id="pdf-tc" contenteditable="true">' + (p.tcAlMomento||'') + '</span></span>'
+    + '</div>'
+    + '<table>'
+    + '<thead><tr><th>Modalidad</th><th style="text-align:right">Monto ARS</th><th style="text-align:right">Referencia USD</th></tr></thead>'
+    + '<tbody id="tbodyPagos"></tbody>'
+    + '</table>'
+    + '<div style="padding:9px 14px;font-size:10.5px;color:#888;background:#fafafa;border-top:1px solid #f0f0f0">El monto final para pagos a 30/60/90 d\u00EDas se actualiza al tipo de cambio vigente el d\u00EDa efectivo del pago, manteni\u00E9ndose fijo el recargo pactado en esta tabla.</div>'
+    + '</div>'
 
     + '<div class="notas-box" id="notasBox" contenteditable="true">' + (p.notas||'Agregar notas, condiciones especiales o aclaraciones...') + '</div>'
 
