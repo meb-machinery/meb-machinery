@@ -663,8 +663,12 @@ select option { background:var(--dark); }
       <button class="btn-primary" onclick="openModal('cliente',{estado:'prospecto',lockEstado:true})">+ NUEVO PROSPECTO</button>
     </div>
     <p style="font-size:12px;color:var(--muted);margin-top:-10px;margin-bottom:18px">
-      Todo lo que puede terminar en un contrato de mantenimiento: clientes reales sin contrato vigente (reconexión) y negocios que todavía no son clientes de MEB (prospección en frío).
+      Todo lo que puede terminar en un contrato de mantenimiento: reparaciones recién terminadas, clientes reales sin contrato vigente (reconexión) y negocios que todavía no son clientes de MEB (prospección en frío).
     </p>
+
+    <div style="font-family:'Bebas Neue';font-size:16px;color:#6fa8dc;letter-spacing:2px;margin-bottom:8px">🔧 POST-REPARACIÓN <span style="color:var(--muted);font-size:11px;letter-spacing:0;font-family:'Barlow'">— informes recientes (últimos 60 días) sin oferta de contrato todavía</span></div>
+    <div id="postinforme-resumen" style="margin-bottom:14px"></div>
+    <div class="card" style="margin-bottom:28px"><div id="postinforme-lista"></div></div>
 
     <div style="font-family:'Bebas Neue';font-size:16px;color:var(--yellow);letter-spacing:2px;margin-bottom:8px">🔄 RECONECTAR <span style="color:var(--muted);font-size:11px;letter-spacing:0;font-family:'Barlow'">— clientes reales, máquina sin contrato vigente</span></div>
     <div id="reconectar-resumen" style="margin-bottom:14px"></div>
@@ -6903,6 +6907,7 @@ function renderInformes() {
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
           <button class="btn-primary" style="font-size:11px;padding:5px 12px" onclick="verInformeDetalle(${idx})">👁 Ver detalle</button>
           ${inf.driveUrl ? `<a href="${inf.driveUrl}" target="_blank" class="btn-secondary" style="font-size:11px;padding:5px 12px;text-decoration:none">📄 Abrir en Drive</a>` : ''}
+          <button class="btn-secondary" style="font-size:11px;padding:5px 10px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="ofrecerContratoDesdeInformeCard(${idx})" title="Registrar oferta de contrato de mantenimiento a partir de este informe">🛠️ Ofrecer contrato</button>
           <button class="btn-secondary" style="font-size:11px;padding:5px 10px" onclick="editarLinkDriveInforme(${idx})">🔗 ${inf.driveUrl?'Cambiar':'Pegar'} link</button>
           <button class="btn-secondary" style="font-size:11px;padding:5px 10px;background:rgba(231,76,60,0.1);border-color:#e74c3c;color:#e74c3c" onclick="eliminarInformeLocal(${idx})">🗑 Quitar</button>
         </div>
@@ -6967,6 +6972,20 @@ function verInformeDetalle(idxOrId) {
     </div>
   </div>`;
   document.body.appendChild(m);
+}
+
+// Botón "🛠️ Ofrecer contrato" directo desde la tarjeta del informe — mismo
+// flujo que ya usan Reconectar/Prospección, resolviendo el Cliente real a
+// partir del nombre en texto libre que guarda el informe.
+function ofrecerContratoDesdeInformeCard(idx) {
+  const inf = _informesRenderizados[idx];
+  if (!inf) return;
+  const cl = resolverClientePorNombreLibre(inf.cliente);
+  if (!cl) {
+    showToast('No pude identificar a qué Cliente cargado corresponde "'+(inf.cliente||'—')+'" — revisá que el nombre coincida con el de la ficha del Cliente', 'error');
+    return;
+  }
+  abrirOfrecerContratoModal('Informe', cl.id, cl.nombre.replace(/'/g,"\\'"), '', 'Post-informe N°'+(inf.num||'—'), 'Post-reparación');
 }
 
 function editarLinkDriveInforme(idx) {
@@ -8382,6 +8401,105 @@ function calcularAlertasRepuesto() {
 // ============================================================
 // PARA RECONECTAR — máquinas sin contrato de mantenimiento vigente
 // ============================================================
+// ── POST-REPARACIÓN — de un Informe a un Contrato ──────────────────────────
+// v17.30: cierra el círculo que faltaba — MEB ya arma el mensaje de "planes
+// de mantenimiento con 15% dto" al mandar cada informe, pero no había forma
+// de saber si eso se OFRECÍA de verdad ni si se convertía en contrato real.
+// Reutiliza el mismo sistema de OPORTUNIDADES_LOG que ya usan Reconectar y
+// Prospección — un origen más ('Informe'), no una hoja ni un flujo nuevo.
+
+// Los Informes guardan el cliente como texto libre (no por ID), así que
+// para poder ofrecerle un contrato hace falta resolver a qué Cliente real
+// corresponde ese texto. Mismo criterio de match que ya usa la ficha del
+// Cliente para mostrar sus informes.
+function resolverClientePorNombreLibre(nombreLibre) {
+  const norm = (nombreLibre||'').toUpperCase().trim();
+  if (!norm) return null;
+  return DB.clientes.find(c => (c.nombre||'').toUpperCase().trim()===norm)
+      || DB.clientes.find(c => (c.empresa||'').toUpperCase().trim()===norm)
+      || DB.clientes.find(c => norm.includes((c.nombre||'').toUpperCase().trim()) && c.nombre)
+      || DB.clientes.find(c => (c.nombre||'').toUpperCase().trim().includes(norm) && norm)
+      || null;
+}
+
+// Informes de los últimos 60 días (ventana razonable para ofrecer — más
+// viejo que eso, ya no es "post-reparación", es reconexión normal) que
+// todavía no tienen una "Oferta de contrato" registrada para ese cliente.
+function calcularPostInforme() {
+  const HOY = new Date();
+  const LIMITE_DIAS = 60;
+  return (DB.informes||[])
+    .map(i => {
+      const f = parseFechaAny(i.fecha);
+      const dias = f ? Math.round((HOY - f) / 86400000) : null;
+      const cl = resolverClientePorNombreLibre(i.cliente);
+      return {
+        informeId: i.id, num: i.num, fecha: i.fecha, dias,
+        clienteId: cl ? cl.id : '', clienteNombre: cl ? cl.nombre : (i.cliente || 'Sin cliente identificado'),
+        telefono: cl ? (cl.telefono||'') : '', queja: i.queja || ''
+      };
+    })
+    .filter(x => x.dias !== null && x.dias >= 0 && x.dias <= LIMITE_DIAS)
+    .filter(x => x.clienteId) // solo si se pudo identificar el Cliente real
+    .filter(x => !ultimaAccionOportunidad(x.clienteId, '', 'Oferta de contrato'))
+    .sort((a,b) => a.dias - b.dias);
+}
+
+// Conversión real: de las ofertas de contrato registradas con origen
+// "Informe", cuántas terminaron con un Contrato efectivamente cargado para
+// ese mismo cliente (creado el mismo día de la oferta o después).
+function calcularConversionInformeContrato() {
+  const ofertas = (DB.oportunidadesLog||[]).filter(o => o.origen==='Informe' && o.tipoAccion==='Oferta de contrato');
+  let convertidas = 0;
+  ofertas.forEach(o => {
+    const fOferta = parseFechaAny(o.fecha);
+    const tiene = DB.contratos.some(c => {
+      if (String(c.clienteId) !== String(o.clienteId)) return false;
+      const fContrato = parseFechaAny(c.fechaCreado);
+      if (!fOferta || !fContrato) return true; // sin fecha confiable de un lado, cuenta como conversión si el contrato existe
+      return fContrato >= fOferta;
+    });
+    if (tiene) convertidas++;
+  });
+  return { total: ofertas.length, convertidas, pct: ofertas.length ? Math.round(convertidas/ofertas.length*100) : 0 };
+}
+
+function renderPostInforme() {
+  const lista = calcularPostInforme();
+  const conv = calcularConversionInformeContrato();
+  const resumenEl = document.getElementById('postinforme-resumen');
+  const cont = document.getElementById('postinforme-lista');
+  if (resumenEl) {
+    resumenEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      <div class="stat-card orange"><div class="stat-val">${lista.length}</div><div class="stat-label">SIN OFERTA TODAVÍA</div></div>
+      <div class="stat-card blue"><div class="stat-val">${conv.total}</div><div class="stat-label">OFERTAS HECHAS (post-informe)</div></div>
+      <div class="stat-card green"><div class="stat-val">${conv.pct}%</div><div class="stat-label">${conv.convertidas}/${conv.total} CONVIRTIERON EN CONTRATO</div></div>
+    </div>`;
+  }
+  if (!cont) return;
+  if (!lista.length) {
+    cont.innerHTML = `<div class="empty-state"><div class="icon">✅</div><p>Sin informes recientes pendientes de ofrecer contrato</p></div>`;
+    return;
+  }
+  cont.innerHTML = lista.map(x => {
+    const tieneWA = !!x.telefono;
+    const nombreEsc = x.clienteNombre.replace(/'/g,"\\'");
+    return `<div style="padding:10px 14px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="badge" style="background:rgba(0,59,112,0.2);color:#6fa8dc">INFORME N° ${x.num||'—'}</span>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${x.clienteNombre}</div>
+          <div style="font-size:11px;color:var(--muted)">${fmtDate(x.fecha)} · hace ${x.dias}d${x.queja?' · '+x.queja.substring(0,60):''}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">
+        ${tieneWA?`<button class="btn-secondary" style="font-size:10px;padding:2px 8px;background:rgba(37,211,102,0.12);border-color:#25d366;color:#25d366" onclick="contactarOportunidad('Informe','${x.clienteId}','${nombreEsc}','','Post-informe N°${x.num}','Post-reparación','WA');abrirWAReconectar('${x.telefono}','${nombreEsc}')">📲 WA</button>`:''}
+        <button class="btn-secondary" style="font-size:10px;padding:2px 8px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="abrirOfrecerContratoModal('Informe','${x.clienteId}','${nombreEsc}','','Post-informe N°${x.num}','Post-reparación')">🛠️ Ofrecer contrato</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function calcularParaReconectar() {
   const resultado = [];
   const alertaPorMaquina = {};
@@ -8476,8 +8594,9 @@ function renderReconectar() {
   }
 
   renderProspeccionContrato();
+  renderPostInforme();
   const badge = document.getElementById('badge-reconectar');
-  if (badge) badge.textContent = lista.length + calcularProspectosContrato().length;
+  if (badge) badge.textContent = lista.length + calcularProspectosContrato().length + calcularPostInforme().length;
 }
 
 function calcularProspectosContrato() {
