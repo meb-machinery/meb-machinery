@@ -677,6 +677,9 @@ select option { background:var(--dark); }
     <div style="font-family:'Bebas Neue';font-size:16px;color:var(--blue-light);letter-spacing:2px;margin-bottom:8px">🎯 PROSPECCIÓN <span style="color:var(--muted);font-size:11px;letter-spacing:0;font-family:'Barlow'">— todavía no son clientes de MEB</span></div>
     <div id="reconectar-prospeccion-resumen" style="margin-bottom:14px"></div>
     <div class="card"><div id="reconectar-prospeccion-lista"></div></div>
+
+    <div style="font-family:'Bebas Neue';font-size:16px;color:var(--muted);letter-spacing:2px;margin:28px 0 8px">📜 HISTORIAL DE OFERTAS <span style="color:var(--muted);font-size:11px;letter-spacing:0;font-family:'Barlow'">— todas las ofertas de contrato registradas, con quién y cuándo</span></div>
+    <div class="card"><div id="historial-ofertas-lista"></div></div>
   </div>
 
   <!-- ESTADÍSTICAS -->
@@ -1175,7 +1178,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyp4yaqovmUID496G5seX61P-dCr4L5ITs-fgspNUk8opeGMMOkEgq2NRaBOp2iQilknw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwU45SomljgM--3y1WOfAalObq0iM-mmD2p7Y6MXWVRcBlb4vIusfLVYufCCQbDAXVB/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -2115,7 +2118,7 @@ function refreshCurrentPage() {
     trabajos:renderTrabajos, presupuestos:renderPresupuestos, contratos:renderContratos,
     pipeline:renderPipeline, alertas:renderAlertas, reconectar:renderReconectar, estadisticas:renderEstadisticas,
     repuestos:renderRepuestos, proveedores:renderProveedores, mapa:renderMapa, calendario:renderCalendario,
-    actividad:renderActividad, movilidad:renderMovilidad
+    actividad:renderActividad, movilidad:renderMovilidad, informes:renderInformes
   };
   if(renders[name]) renders[name]();
 }
@@ -3939,6 +3942,7 @@ function generarInformeTecnico(presupId) {
     'var CLIENTE_NOMBRE=' + JSON.stringify(cl?cl.nombre:'') + ';',
     'var CLIENTE_TEL=' + JSON.stringify(clTelIT) + ';',
     'var CLIENTE_EMAIL=' + JSON.stringify(clEmailIT) + ';',
+    'var yaGuardado=false;', // se pone true al hacer clic en Guardar — usado por confirmarImprimir()
     '',
     'function envWA_informe() {',
     '  if(!CLIENTE_TEL){alert("Este cliente no tiene tel\\u00e9fono registrado.");return;}',
@@ -4119,7 +4123,20 @@ function generarInformeTecnico(presupId) {
     '  });',
     '}',
     '',
+    // Aviso antes de imprimir sin haber guardado — antes se podía imprimir
+    // y subir el PDF a Drive a mano sin que el informe quedara registrado
+    // en el CRM (Belu lo vivió con el informe N°102: se generó el PDF, se
+    // subió a Drive, pero nunca apareció en la pestaña Informes porque
+    // nunca se tocó este botón — no había forma de darse cuenta a tiempo).
+    'function confirmarImprimir(){',
+    '  if(!yaGuardado){',
+    '    var seguir=confirm("Todav\u00eda no toc\u00e1s el bot\u00f3n \uD83D\uDCBE Guardar en este informe.\\n\\nSi imprim\u00eds ahora sin guardar, el PDF se genera igual, pero el informe NO va a quedar registrado en el CRM (ni va a aparecer en la pesta\u00f1a Informes), aunque despu\u00e9s subas el PDF a Drive a mano.\\n\\nAceptar = igual quiero imprimir as\u00ed\\nCancelar = mejor guardo primero");',
+    '    if(!seguir) return;',
+    '  }',
+    '  window.print();',
+    '}',
     'function guardarInforme(){',
+    '  yaGuardado=true;',
     '  var btn=document.getElementById("btnGuardar");',
     '  if(btn){btn.disabled=true;btn.textContent="\u231B Guardando...";}',
     '',
@@ -4318,7 +4335,7 @@ function generarInformeTecnico(presupId) {
     + '</head><body>'
 
     + '<div class="no-print">'
-    + '<button class="btn-print" id="btnPDF" onclick="window.print()">\uD83D\uDDA8 Imprimir / PDF</button>'
+    + '<button class="btn-print" id="btnPDF" onclick="confirmarImprimir()">\uD83D\uDDA8 Imprimir / PDF</button>'
     + '<button class="btn-wa" onclick="envWA_informe()">\uD83D\uDCF2 WA</button>'
     + '<button class="btn-mail" onclick="envMail_informe()">\uD83D\uDCE7 MAIL</button>'
     + '<button class="btn-foto" onclick="agregarFoto()">\uD83D\uDCF7 Agregar foto</button>'
@@ -4326,7 +4343,7 @@ function generarInformeTecnico(presupId) {
     + '<button class="btn-break" onclick="insertarSaltoPagina()" title="Empuja lo que sigue a una hoja nueva">\u2B07\uFE0F Salto de p\u00E1gina</button>'
     + '<button class="btn-save" id="btnGuardar" onclick="guardarInforme()">\uD83D\uDCBE Guardar</button>'
     + '<button class="btn-close" onclick="window.close()">\u00D7 Cerrar</button>'
-    + '<span class="tip">\u270F Edit\u00E1 cualquier campo \u00B7 Ctrl+V para pegar fotos \u00B7 PDF+Drive sube autom\u00e1ticamente</span>'
+    + '<span class="tip">\u270F Edit\u00E1 cualquier campo \u00B7 Ctrl+V para pegar fotos \u00B7 Guard\u00E1 (\uD83D\uDCBE) ANTES de imprimir, si no el informe no queda registrado en el CRM</span>'
     + '</div>'
 
     + '<div class="header">'
@@ -6896,8 +6913,15 @@ function renderInformes() {
       : '<div class="empty-state"><div class="icon">📋</div><p>No hay informes guardados</p><p style="font-size:12px;color:var(--muted);margin-top:8px">Generá un informe desde Presupuestos → 🔧 Informe y presioná 💾 Guardar</p></div>';
     return;
   }
-  cont.innerHTML = informes.map((inf, idx) =>
-    `<div class="stat-card" style="padding:16px">
+  cont.innerHTML = informes.map((inf, idx) => {
+    // Resuelve si ESTE cliente ya tiene una oferta de contrato registrada
+    // (de cualquier origen) — antes el botón siempre decía "Ofrecer
+    // contrato" sin importar si ya se había hecho, como si nunca hubiera
+    // pasado nada. Ahora refleja el estado real y deja volver a ofrecer o
+    // deshacer el último registro.
+    const clInf = resolverClientePorNombreLibre(inf.cliente);
+    const ofertaInf = clInf ? ultimaAccionOportunidad(clInf.id, '', 'Oferta de contrato') : null;
+    return `<div class="stat-card" style="padding:16px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
         <div>
           <div style="font-family:'Bebas Neue';font-size:18px;color:var(--yellow);letter-spacing:1px">N° ${inf.num||'—'}</div>
@@ -6907,7 +6931,14 @@ function renderInformes() {
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
           <button class="btn-primary" style="font-size:11px;padding:5px 12px" onclick="verInformeDetalle(${idx})">👁 Ver detalle</button>
           ${inf.driveUrl ? `<a href="${inf.driveUrl}" target="_blank" class="btn-secondary" style="font-size:11px;padding:5px 12px;text-decoration:none">📄 Abrir en Drive</a>` : ''}
-          <button class="btn-secondary" style="font-size:11px;padding:5px 10px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="ofrecerContratoDesdeInformeCard(${idx})" title="Registrar oferta de contrato de mantenimiento a partir de este informe">🛠️ Ofrecer contrato</button>
+          ${ofertaInf
+            ? `<div style="text-align:right">
+                 <div style="font-size:10px;color:var(--yellow);margin-bottom:3px">✔ Ofrecido: ${ofertaInf.detalle||'—'} — ${ofertaInf.fecha}</div>
+                 <button class="btn-secondary" style="font-size:11px;padding:5px 10px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="ofrecerContratoDesdeInformeCard(${idx})">🛠️ Volver a ofrecer</button>
+                 <a href="#" onclick="event.preventDefault();deshacerOfertaContrato('${ofertaInf.id}')" style="font-size:10px;color:#e74c3c;display:block;margin-top:3px">↩ deshacer</a>
+               </div>`
+            : `<button class="btn-secondary" style="font-size:11px;padding:5px 10px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="ofrecerContratoDesdeInformeCard(${idx})" title="Registrar oferta de contrato de mantenimiento a partir de este informe">🛠️ Ofrecer contrato</button>`
+          }
           <button class="btn-secondary" style="font-size:11px;padding:5px 10px" onclick="editarLinkDriveInforme(${idx})">🔗 ${inf.driveUrl?'Cambiar':'Pegar'} link</button>
           <button class="btn-secondary" style="font-size:11px;padding:5px 10px;background:rgba(231,76,60,0.1);border-color:#e74c3c;color:#e74c3c" onclick="eliminarInformeLocal(${idx})">🗑 Quitar</button>
         </div>
@@ -6915,8 +6946,8 @@ function renderInformes() {
       ${inf.queja ? `<div style="font-size:11px;color:var(--muted);margin-bottom:4px"><strong style="color:var(--text)">Queja:</strong> ${inf.queja.substring(0,100)}${inf.queja.length>100?'...':''}</div>` : ''}
       ${inf.solucion ? `<div style="font-size:11px;color:var(--muted)"><strong style="color:var(--text)">Solución:</strong> ${inf.solucion.substring(0,100)}${inf.solucion.length>100?'...':''}</div>` : ''}
       ${inf.fotosCount ? `<div style="font-size:10px;color:#6fa8dc;margin-top:6px">📷 ${inf.fotosCount} foto(s)</div>` : ''}
-    </div>`
-  ).join('');
+    </div>`;
+  }).join('');
 }
 
 async function vincularInformesConDrive() {
@@ -6986,6 +7017,13 @@ function ofrecerContratoDesdeInformeCard(idx) {
     return;
   }
   abrirOfrecerContratoModal('Informe', cl.id, cl.nombre.replace(/'/g,"\\'"), '', 'Post-informe N°'+(inf.num||'—'), 'Post-reparación');
+}
+
+// "Deshacer" una Oferta de contrato registrada por error o de prueba —
+// reutiliza el borrado genérico (mismo mecanismo que Clientes, Presupuestos,
+// etc.), que además ya ofrece su propio ↩ para deshacer el deshacer.
+function deshacerOfertaContrato(logId) {
+  eliminar('oportunidadesLog', logId);
 }
 
 function editarLinkDriveInforme(idx) {
@@ -8500,6 +8538,32 @@ function renderPostInforme() {
   }).join('');
 }
 
+// Historial completo de ofertas de contrato — el que faltaba: mostraba el
+// texto del plan pero no decía a QUIÉN se le había ofrecido (Belu lo probó
+// con Bordigoni y solo veía el registro "genérico"), y no había forma de
+// deshacer una oferta cargada por error o de prueba.
+function renderHistorialOfertasContrato() {
+  const cont = document.getElementById('historial-ofertas-lista');
+  if (!cont) return;
+  const ofertas = (DB.oportunidadesLog||[]).filter(o => o.tipoAccion === 'Oferta de contrato')
+    .sort((a,b) => {
+      const da = (a.fecha||'').split('/').reverse().join('-')+'T'+(a.hora||'00:00');
+      const db = (b.fecha||'').split('/').reverse().join('-')+'T'+(b.hora||'00:00');
+      return new Date(db) - new Date(da);
+    });
+  if (!ofertas.length) {
+    cont.innerHTML = '<div class="empty-state"><div class="icon">🛠️</div><p>Todavía no se registró ninguna oferta de contrato</p></div>';
+    return;
+  }
+  cont.innerHTML = ofertas.map(o => `<div style="padding:9px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px">
+    <div>
+      <div style="font-size:13px;font-weight:600;color:var(--text)">${o.cliente||'Sin cliente'}${o.maquina?' · '+o.maquina:''}</div>
+      <div style="font-size:10px;color:var(--muted)">${o.detalle||'—'} · ${o.fecha||''} ${o.hora||''} · origen: ${o.origen||'—'}${o.motivo?' ('+o.motivo+')':''}</div>
+    </div>
+    <a href="#" onclick="event.preventDefault();deshacerOfertaContrato('${o.id}')" style="font-size:10px;color:#e74c3c;white-space:nowrap">↩ deshacer</a>
+  </div>`).join('');
+}
+
 function calcularParaReconectar() {
   const resultado = [];
   const alertaPorMaquina = {};
@@ -8595,6 +8659,7 @@ function renderReconectar() {
 
   renderProspeccionContrato();
   renderPostInforme();
+  renderHistorialOfertasContrato();
   const badge = document.getElementById('badge-reconectar');
   if (badge) badge.textContent = lista.length + calcularProspectosContrato().length + calcularPostInforme().length;
 }
