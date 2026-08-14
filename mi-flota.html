@@ -65,6 +65,24 @@
   .contrato-cta strong{color:var(--yellow); display:block; font-family:'Bebas Neue'; font-size:17px; letter-spacing:1px; margin-bottom:4px;}
   .contrato-cta p{font-size:12px; color:var(--text); line-height:1.6; margin-bottom:8px;}
   .contrato-cta a{display:inline-block; background:var(--yellow); color:var(--black); font-weight:700; font-size:12px; text-decoration:none; padding:8px 16px; border-radius:20px;}
+  .accion-box{background:var(--card); border:1px solid var(--border); border-left:3px solid var(--yellow); border-radius:6px; padding:16px 18px; margin-bottom:24px;}
+  .accion-box .titulo{font-family:'Bebas Neue'; font-size:17px; letter-spacing:1px; color:var(--text); margin-bottom:4px;}
+  .accion-box .bajada{font-size:12px; color:var(--muted); margin-bottom:12px;}
+  .accion-botones{display:flex; gap:10px; flex-wrap:wrap;}
+  .btn-accion{flex:1; min-width:150px; background:var(--yellow); color:var(--black); border:none; border-radius:6px; padding:12px 14px; font-family:'Barlow'; font-weight:700; font-size:13px; cursor:pointer; text-align:center;}
+  .btn-accion.secundario{background:transparent; border:1px solid var(--yellow); color:var(--yellow);}
+  .accion-form{margin-top:14px; display:none;}
+  .accion-form.open{display:block;}
+  .accion-form .form-titulo{font-size:13px; color:var(--text); font-weight:600; margin-bottom:8px;}
+  .accion-form select, .accion-form textarea{width:100%; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:10px 12px; font-family:'Barlow'; font-size:13px; margin-bottom:10px;}
+  .accion-form textarea{min-height:80px; resize:vertical;}
+  .accion-form-botones{display:flex; gap:8px;}
+  .btn-enviar{background:var(--yellow); color:var(--black); border:none; border-radius:6px; padding:10px 16px; font-weight:700; font-size:13px; cursor:pointer;}
+  .btn-enviar:disabled{opacity:0.6; cursor:default;}
+  .btn-cancelar{background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:10px 16px; font-size:13px; cursor:pointer;}
+  .accion-status{font-size:12px; margin-top:4px; padding:10px 12px; border-radius:6px;}
+  .accion-status.ok{background:rgba(37,211,102,0.12); border:1px solid rgba(37,211,102,0.35); color:#7fe0a0;}
+  .accion-status.error{background:rgba(224,122,122,0.12); border:1px solid rgba(224,122,122,0.35); color:#e07a7a;}
 </style>
 </head>
 <body>
@@ -100,7 +118,7 @@
 </div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbypZOK3b0C74gjctPygfe2MJRpCriH_yEg7yu1YM9VoApE7dxCE-4UUvULAXSOlEWa8Yw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxEg6PT1ph0dgoyY7vbtmtZzAoBBwCPhGjMLpWeh5tsNd1VBTBZ42oj_0gnAilM_rrgWQ/exec';
 
 function fmtDate(d) {
   if (!d) return '—';
@@ -139,6 +157,75 @@ function renderError(msg) {
     '<div class="estado error">⚠️ ' + escHtml(msg) + '<br><br>Si crees que esto es un error, comunicate con nosotros por WhatsApp.</div>';
 }
 
+// ── ¿Necesitás algo? — formulario de pedido (presupuesto / falla) ──────────
+let accionTipoActual = null;
+
+function mostrarFormAccion(tipo) {
+  accionTipoActual = tipo;
+  const form = document.getElementById('accion-form');
+  const textEl = document.getElementById('accion-mensaje');
+  const tituloForm = document.getElementById('accion-form-titulo');
+  if (tituloForm) tituloForm.textContent = tipo === 'falla' ? '¿Qué está pasando?' : '¿Qué necesitás presupuestar?';
+  if (textEl) textEl.placeholder = tipo === 'falla' ? 'Contanos qué falla notaste y en qué máquina...' : 'Contanos qué necesitás — la máquina, el trabajo, lo que haga falta...';
+  document.getElementById('accion-status').innerHTML = '';
+  if (form) {
+    form.classList.add('open');
+    form.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+}
+
+function cerrarFormAccion() {
+  const form = document.getElementById('accion-form');
+  if (form) form.classList.remove('open');
+  const textEl = document.getElementById('accion-mensaje');
+  if (textEl) textEl.value = '';
+  document.getElementById('accion-status').innerHTML = '';
+  accionTipoActual = null;
+}
+
+function mostrarEstadoAccion(msg, tipo) {
+  document.getElementById('accion-status').innerHTML =
+    '<div class="accion-status ' + tipo + '">' + escHtml(msg) + '</div>';
+}
+
+function enviarSolicitud() {
+  const textEl = document.getElementById('accion-mensaje');
+  const maqEl = document.getElementById('accion-maquina');
+  const mensaje = (textEl ? textEl.value : '').trim();
+  if (!mensaje) { mostrarEstadoAccion('Contanos brevemente qué necesitás.', 'error'); return; }
+
+  const btn = document.getElementById('accion-btn-enviar');
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('t') || '';
+  const payload = {
+    action: 'solicitudPortal',
+    row: { token: token, tipo: accionTipoActual || 'presupuesto', maquina: maqEl ? maqEl.value : '', detalle: mensaje }
+  };
+
+  fetch(SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS, mismo criterio que el CRM
+    body: JSON.stringify(payload)
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(resp){
+      if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; }
+      if (resp && resp.ok) {
+        mostrarEstadoAccion('¡Listo! Recibimos tu pedido — te vamos a contactar a la brevedad.', 'ok');
+        if (textEl) textEl.value = '';
+        setTimeout(cerrarFormAccion, 3500);
+      } else {
+        mostrarEstadoAccion('No se pudo enviar. Probá de nuevo o escribinos por WhatsApp.', 'error');
+      }
+    })
+    .catch(function(){
+      if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; }
+      mostrarEstadoAccion('No se pudo conectar. Probá de nuevo o escribinos por WhatsApp.', 'error');
+    });
+}
+
 function renderFlota(data) {
   const cont = document.getElementById('contenido');
   const totalTrabajos = data.maquinas.reduce(function(s,m){ return s + (m.trabajos?m.trabajos.length:0); }, 0);
@@ -147,6 +234,46 @@ function renderFlota(data) {
     + '<div class="nombre">' + escHtml(data.cliente.nombre||'') + '</div>'
     + (data.cliente.empresa && data.cliente.empresa !== data.cliente.nombre ? '<div class="empresa">' + escHtml(data.cliente.empresa) + '</div>' : '')
     + '<div class="resumen">' + data.maquinas.length + ' máquina' + (data.maquinas.length!==1?'s':'') + ' registrada' + (data.maquinas.length!==1?'s':'') + ' · ' + totalTrabajos + ' trabajo' + (totalTrabajos!==1?'s':'') + ' realizado' + (totalTrabajos!==1?'s':'') + '</div>'
+    + '</div>';
+
+  // ── ¿Necesitás algo? — la única acción que puede tomar el cliente desde
+  // acá. Antes el portal era 100% lectura: veía su historial y nada más.
+  // Esto crea una Alerta en el CRM (prioridad alta), visible apenas Belu o
+  // Emmanuel entran — no queda perdido en un WhatsApp que se puede pasar
+  // por alto.
+  let maquinaCampoHtml = '';
+  if (data.maquinas && data.maquinas.length > 1) {
+    maquinaCampoHtml = '<select id="accion-maquina"><option value="">¿Sobre qué máquina? (opcional)</option>'
+      + data.maquinas.map(function(m) {
+          const label = ((m.marca||'')+' '+(m.modelo||'')).trim() || 'Máquina sin datos';
+          return '<option value="' + escHtml(label + (m.serie?' - Serie '+m.serie:'')) + '">' + escHtml(label) + '</option>';
+        }).join('')
+      + '</select>';
+  } else if (data.maquinas && data.maquinas.length === 1) {
+    const unica = data.maquinas[0];
+    const labelUnica = ((unica.marca||'')+' '+(unica.modelo||'')).trim();
+    maquinaCampoHtml = '<input type="hidden" id="accion-maquina" value="' + escHtml(labelUnica) + '">';
+  } else {
+    maquinaCampoHtml = '<input type="hidden" id="accion-maquina" value="">';
+  }
+
+  html += '<div class="accion-box">'
+    + '<div class="titulo">¿Necesitás algo?</div>'
+    + '<div class="bajada">Pedí un presupuesto o contanos si notaste una falla — nos llega directo, sin que tengas que llamar.</div>'
+    + '<div class="accion-botones" id="accion-botones">'
+    + '<button class="btn-accion" onclick="mostrarFormAccion(\'presupuesto\')">📋 Pedir un presupuesto</button>'
+    + '<button class="btn-accion secundario" onclick="mostrarFormAccion(\'falla\')">⚠️ Reportar una falla</button>'
+    + '</div>'
+    + '<div class="accion-form" id="accion-form">'
+    + '<div class="form-titulo" id="accion-form-titulo">¿Qué necesitás?</div>'
+    + maquinaCampoHtml
+    + '<textarea id="accion-mensaje" placeholder="Contanos brevemente qué necesitás..."></textarea>'
+    + '<div id="accion-status"></div>'
+    + '<div class="accion-form-botones">'
+    + '<button class="btn-enviar" id="accion-btn-enviar" onclick="enviarSolicitud()">Enviar</button>'
+    + '<button class="btn-cancelar" onclick="cerrarFormAccion()">Cancelar</button>'
+    + '</div>'
+    + '</div>'
     + '</div>';
 
   html += '<div class="contrato-cta">'
