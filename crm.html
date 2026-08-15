@@ -4455,7 +4455,7 @@ function generarInformeTecnico(presupId) {
 
     + (miFlotaLinkIT ? (
     '<div class="bloque" style="background:linear-gradient(135deg, rgba(0,59,112,0.06), transparent);border:1px solid rgba(0,59,112,0.25);border-radius:6px;padding:14px 16px">'
-    + '<div class="bloque-titulo" style="color:#003B70">\uD83D\uDCF1 MI FLOTA \u2014 SEGUIMIENTO EN TIEMPO REAL</div>'
+    + '<div class="bloque-titulo">\uD83D\uDCF1 MI FLOTA \u2014 SEGUIMIENTO EN TIEMPO REAL</div>'
     + '<div class="bloque-body">'
     + '<div id="miFlotaMsg" class="editable-bloque" contenteditable="true" style="outline:none;font-size:12.5px;color:#333;margin-bottom:8px">\u00BFSab\u00EDas que pod\u00E9s ver el estado de tu flota en tiempo real \u2014 m\u00E1quinas, trabajos y service \u2014 sin tener que llamarnos? Entr\u00E1 al link y chequealo:</div>'
     + '<div id="miFlotaLinkBox" contenteditable="true" style="outline:none;font-size:12px;color:#003B70;font-weight:700;word-break:break-all;border-bottom:1px dashed #ccc;padding-bottom:4px">' + miFlotaLinkIT + '</div>'
@@ -6592,6 +6592,41 @@ function generarPresupuestoPDF(presupId) {
     '}',
     'document.getElementById("btnAgregar").onclick = addRow;',
     'document.querySelectorAll("#tbodyItems tr").forEach(function(tr){ bindRow(tr); });',
+    // Urgencia: agrega un ítem de recargo por atención prioritaria, calculado
+    // como % sobre el subtotal que ya está cargado en ese momento — solo se
+    // usa cuando el trabajo realmente se atendió reorganizando la agenda,
+    // nunca automático. Queda como una fila más del presupuesto: se puede
+    // editar o borrar igual que cualquier otra.
+    'var btnUrg = document.getElementById("btnUrgencia");',
+    'var menuUrg = document.getElementById("menuUrgencia");',
+    'if (btnUrg && menuUrg) {',
+    '  btnUrg.addEventListener("click", function(ev){',
+    '    ev.stopPropagation();',
+    '    menuUrg.style.display = menuUrg.style.display === "block" ? "none" : "block";',
+    '  });',
+    '  document.addEventListener("click", function(){ menuUrg.style.display = "none"; });',
+    '  menuUrg.querySelectorAll(".opt-urgencia").forEach(function(opt){',
+    '    opt.addEventListener("mouseenter", function(){ opt.style.background = "#fff3cd"; });',
+    '    opt.addEventListener("mouseleave", function(){ opt.style.background = "#fff"; });',
+    '    opt.addEventListener("click", function(ev){',
+    '      ev.stopPropagation();',
+    '      var pct = parseInt(opt.getAttribute("data-pct"), 10) || 0;',
+    '      var subtotalActual = parse(document.getElementById("tTotal").innerText);',
+    '      if (!(subtotalActual > 0)) { alert("Carg\\u00E1 primero los \\u00EDtems del trabajo — el recargo de urgencia se calcula sobre ese subtotal."); menuUrg.style.display = "none"; return; }',
+    '      var montoUrgencia = Math.round(subtotalActual * pct / 100);',
+    '      addRow();',
+    '      var filas = document.querySelectorAll("#tbodyItems tr");',
+    '      var ultima = filas[filas.length - 1];',
+    '      var celdas = ultima.querySelectorAll("td[contenteditable]");',
+    '      celdas[0].innerText = "Atenci\\u00f3n de urgencia (+" + pct + "%)";',
+    '      celdas[1].innerText = "Servicio";',
+    '      celdas[2].innerText = "1";',
+    '      celdas[3].innerText = fmt(montoUrgencia);',
+    '      recalc();',
+    '      menuUrg.style.display = "none";',
+    '    });',
+    '  });',
+    '}',
     'var tcEl0 = document.getElementById("pdf-tc");',
     'if (tcEl0) { tcEl0.addEventListener("input", recalcPagos); tcEl0.addEventListener("blur", recalcPagos); }',
     'recalc();',
@@ -6797,8 +6832,16 @@ function generarPresupuestoPDF(presupId) {
     + '</div>'
 
     + '<div class="detalle-wrap">'
-    + '<div class="detalle-titulo">Detalle de trabajos y repuestos'
+    + '<div class="detalle-titulo" style="position:relative">Detalle de trabajos y repuestos'
+    + '<div style="display:flex;gap:8px">'
+    + '<button id="btnUrgencia" type="button" style="background:#fff3cd;border:1px solid #e0a800;color:#7a5c00">\u26A1 Urgencia</button>'
     + '<button id="btnAgregar" type="button">\u2795 Agregar fila</button>'
+    + '</div>'
+    + '<div id="menuUrgencia" style="display:none;position:absolute;right:14px;top:38px;background:#fff;border:1px solid #ccc;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.18);z-index:50;overflow:hidden;min-width:160px">'
+    + [5,10,15,20,25,30].map(function(pct){
+        return '<div class="opt-urgencia" data-pct="' + pct + '" style="padding:9px 16px;font-size:12.5px;color:#1A1A1A;cursor:pointer;border-bottom:1px solid #f0f0f0">+' + pct + '%</div>';
+      }).join('')
+    + '</div>'
     + '</div>'
     + '<table>'
     + '<thead><tr>'
