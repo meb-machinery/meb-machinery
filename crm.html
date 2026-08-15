@@ -1411,7 +1411,16 @@ let _idsParaCorregir = [];
 function resolverIdEstable(r, sheetName) {
   const idOriginal = String(r.ID||'').trim();
   if(idOriginal) return idOriginal;
-  const nuevoId = uid();
+  // FIX DE RAÍZ: antes acá se generaba un ID al azar (uid()) — distinto en
+  // cada sincronización, hasta que el guardado de corrección (más abajo)
+  // llegaba a escribirlo de vuelta en el Sheet. Si algo escribía ANTES de
+  // que ese guardado terminara (ej. "Pegar link"), el ID al azar no
+  // coincidía con nada real → se creaba una fila nueva casi vacía en vez de
+  // actualizar la fila real. Ahora el ID temporal se arma a partir de la
+  // POSICIÓN de la fila en el Sheet (_rowIndex) — es el mismo en cada
+  // sincronización aunque la corrección todavía no haya llegado, así que
+  // cualquier acción mientras tanto encuentra la fila correcta.
+  const nuevoId = 'legacy_' + sheetName.toLowerCase() + '_row' + (r._rowIndex!=null ? r._rowIndex : uid());
   _idsParaCorregir.push({ sheet: sheetName, rowIndex: r._rowIndex, id: nuevoId });
   return nuevoId;
 }
@@ -1761,8 +1770,14 @@ async function syncAll() {
     // aparecía vacía apenas se recargaba la página o se sincronizaba desde
     // otro dispositivo, aunque los informes sí se hubieran guardado. Ahora
     // se sincroniza igual que el resto de las hojas.
+    // FIX DE RAÍZ: esta hoja tenía su PROPIO atajo de ID separado del resto
+    // (resolverIdEstable) — generaba un ID al azar en cada sincronización
+    // sin ningún intento de fijarlo en el Sheet. Por eso "Pegar link" en un
+    // informe viejo (sin ID guardado) terminaba creando una fila nueva cada
+    // vez: el ID de la vez anterior ya no existía más. Ahora usa el mismo
+    // mecanismo estable que Trabajos/Contratos/Presupuestos/Máquinas.
     DB.informes = (inf.length ? inf : []).map(r => ({
-      id: r.ID || r.ID_DRIVE || uid(),
+      id: r.ID || r.ID_DRIVE || resolverIdEstable(r, 'INFORMES'),
       num: r['N°_INFORME'] || r.N_INFORME || r['Nº_INFORME'] || '',
       fecha: r.FECHA || '',
       cliente: r.CLIENTE || '',
@@ -7219,7 +7234,10 @@ function editarLinkDriveInforme(idx) {
   inf.driveUrl = limpio;
   saveLocal();
   renderInformes();
-  writeToSheet({ action:'addInforme', row:{ id: inf.id, driveUrl: limpio }});
+  // Manda tambi\u00e9n num/cliente (adem\u00e1s del link) — si por alguna carrera el
+  // ID no matchea y termina creando una fila nueva en vez de actualizar la
+  // real, que al menos quede identificable y no una fila vac\u00eda hu\u00e9rfana.
+  writeToSheet({ action:'addInforme', row:{ id: inf.id, num: inf.num||'', cliente: inf.cliente||'', driveUrl: limpio }});
   showToast(limpio ? 'Link de Drive guardado ✔' : 'Link de Drive borrado','success');
 }
 
