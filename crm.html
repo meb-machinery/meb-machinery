@@ -6730,6 +6730,26 @@ function generarPresupuestoPDF(presupId) {
     '}',
     'var tcEl0 = document.getElementById("pdf-tc");',
     'if (tcEl0) { tcEl0.addEventListener("input", recalcPagos); tcEl0.addEventListener("blur", recalcPagos); }',
+    // "Traer" TC en vivo: usa la misma fuente que ya usa el resto del CRM
+    // (obtenerDolarReferencia, vía window.opener porque esta ventana es un
+    // documento aparte) — así no hay que salir a buscarlo a mano. Sigue
+    // siendo editable despu\u00e9s, por si algo est\u00e1 mal o hace falta ajustarlo.
+    'var btnTraerTC = document.getElementById("btnTraerTC");',
+    'if (btnTraerTC) {',
+    '  btnTraerTC.addEventListener("click", function(){',
+    '    if (!window.opener || !window.opener.obtenerDolarReferencia) { alert("No se pudo conectar con el CRM para traer el d\\u00f3lar — cargalo a mano."); return; }',
+    '    btnTraerTC.disabled = true; btnTraerTC.textContent = "...";',
+    '    window.opener.obtenerDolarReferencia().then(function(valor){',
+    '      tcEl0.innerText = valor;',
+    '      recalcPagos();',
+    '      if (typeof actualizarPreviewMovilidad === "function") actualizarPreviewMovilidad();',
+    '      btnTraerTC.disabled = false; btnTraerTC.textContent = "\\uD83D\\uDD04 Traer";',
+    '    }).catch(function(){',
+    '      alert("No se pudo traer el d\\u00f3lar en vivo — cargalo a mano.");',
+    '      btnTraerTC.disabled = false; btnTraerTC.textContent = "\\uD83D\\uDD04 Traer";',
+    '    });',
+    '  });',
+    '}',
     'recalc();',
     '',
     'function envWA() {',
@@ -6987,7 +7007,7 @@ function generarPresupuestoPDF(presupId) {
 
     + '<div class="detalle-wrap">'
     + '<div class="detalle-titulo">Opciones de pago'
-    + '<span style="font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:#1A1A1A">Tipo de cambio del d\u00EDa: $<span id="pdf-tc" contenteditable="true">' + (p.tcAlMomento||'') + '</span></span>'
+    + '<span style="font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:#1A1A1A">Tipo de cambio del d\u00EDa: $<span id="pdf-tc" contenteditable="true">' + (p.tcAlMomento||'') + '</span> <button id="btnTraerTC" type="button" style="background:#1A1A1A;color:#F4B400;border:none;padding:3px 9px;border-radius:3px;cursor:pointer;font-size:10px;font-weight:700;margin-left:4px">\uD83D\uDD04 Traer</button></span>'
     + '</div>'
     + '<table>'
     + '<thead><tr><th>Modalidad</th><th style="text-align:right">Monto ARS</th><th style="text-align:right">Referencia USD</th></tr></thead>'
