@@ -1195,7 +1195,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyk1UkJel5rn7Q26VJBLfEycE1-EHFRLkT8vOEXrzZGqIxwuT9QWZzx6kAJRaeREYerbA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx--czHBRMrgfQpaVZMEVDdU2ShghCcj6p4HqykEfPHWSYgSHBl794avTWTqajnnpLM/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -2429,11 +2429,20 @@ function kmEstimadoDesdeBase(zona) {
 const ZONA_PEAJE_MAP = {
   'PILAR':'pilar/escobar/campana', 'ESCOBAR':'pilar/escobar/campana', 'CAMPANA':'pilar/escobar/campana',
   'CORRALON MUNICIPAL':'pilar/escobar/campana', 'VILLA ROSA':'pilar/escobar/campana', 'VILLA LA ÑATA':'pilar/escobar/campana',
-  'DON TORCUATO NORTE':'pilar/escobar/campana',
-  'SAN ISIDRO':'san isidro/avellaneda', 'AVELLANEDA':'san isidro/avellaneda', 'LOMA DE ZAMORA':'san isidro/avellaneda',
-  'LUJAN':'luján', 'LA PLATA':'la plata i/v — fuera de pico',
+  'DON TORCUATO':'pilar/escobar/campana', 'DON TORCUATO NORTE':'pilar/escobar/campana',
+  'SAN ISIDRO':'san isidro/avellaneda', 'AVELLANEDA':'san isidro/avellaneda',
+  // Lomas de Zamora antes compartía corredor (y precio) con San Isidro — Belu
+  // confirmó que el costo real es distinto, así que ahora tiene su propio
+  // corredor. Se dejan las dos variantes de escritura ("Loma"/"Lomas") por
+  // si la zona quedó cargada de una forma u otra en distintos clientes.
+  'LOMA DE ZAMORA':'lomas de zamora', 'LOMAS DE ZAMORA':'lomas de zamora',
+  'LUJAN':'luján', 'LUJAN OPEN DOOR':'luján',
+  'LA PLATA':'la plata i/v — fuera de pico',
   'TANDIL':'vasconia', 'PERGAMINO':'pergamino', 'SAN JUSTO':'san justo',
   'CAÑUELAS':'cañuelas', 'TRENQUE LAUQUEN':'trenque lauquen',
+  'OLAVARRIA':'olavarría', 'CAPITAL':'capital federal', 'CAPITAL FEDERAL':'capital federal',
+  'MORON':'morón', 'BURZACO':'burzaco', 'LA PAMPA':'la pampa',
+  'SAN ANDRES DE GILES':'giles/areco', 'ARECO':'giles/areco', 'SAN ANTONIO DE ARECO':'giles/areco',
 };
 
 function corredorParaZona(zona) {
