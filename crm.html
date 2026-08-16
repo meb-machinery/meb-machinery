@@ -1120,7 +1120,7 @@ select option { background:var(--dark); }
           revisalos cada tanto, los peajes suben con frecuencia.
         </p>
         <div class="table-wrap"><table>
-          <thead><tr><th>Corredor</th><th>Cant.</th><th>Con TelePASE</th><th>Sin TelePASE</th><th></th></tr></thead>
+          <thead><tr><th>Corredor</th><th>Cant.</th><th>Con TelePASE</th><th>Sin TelePASE</th><th>Ajuste</th><th></th></tr></thead>
           <tbody id="tabla-peajes"></tbody>
         </table></div>
       </div>
@@ -1195,7 +1195,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzn3e_3ij8zBW_mTp9e3r0XP_8ylLa3O_KYMoXD7d-BtB1D4NYxV5SfRVhT6iE2QrpWZQ/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyk1UkJel5rn7Q26VJBLfEycE1-EHFRLkT8vOEXrzZGqIxwuT9QWZzx6kAJRaeREYerbA/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1810,6 +1810,7 @@ async function syncAll() {
       conTelepase: parseFloat(r.CON_TELEPASE)||0,
       sinTelepase: parseFloat(r.SIN_TELEPASE)||0,
       cantidad: parseInt(r.CANTIDAD_PEAJES)||0,
+      ajusteArs: parseFloat(r.AJUSTE_ARS)||0,
       detalle: r.DETALLE || '',
       fotoUrl: r.FOTO_RUTA_URL || ''
     }));
@@ -2375,12 +2376,13 @@ function renderTablaPeajes() {
       <td style="text-align:center">${p.cantidad>0?p.cantidad:'<span style="color:var(--muted2)">?</span>'}${p.fotoUrl?` <a href="${p.fotoUrl}" target="_blank" title="Ver ruta en Drive">📷</a>`:''}</td>
       <td>${fmtMonto(p.conTelepase)}</td>
       <td>${fmtMonto(p.sinTelepase)}</td>
+      <td>${p.ajusteArs>0?fmtMonto(p.ajusteArs):'<span style="color:var(--muted2)">—</span>'}</td>
       <td><div class="actions">
         <button class="btn-secondary" style="font-size:10px;padding:2px 6px" onclick="usarPeajeEnCalculadora(${p.conTelepase})">Usar</button>
         <button class="btn-secondary" style="font-size:10px;padding:2px 6px" onclick="openModal('peaje', DB.peajes.find(x=>x.id==='${p.id}'))" title="Editar">✏️</button>
         <button class="btn-danger" style="font-size:10px;padding:2px 6px" onclick="eliminar('peajes','${p.id}')">✕</button>
       </div></td>
-    </tr>`).join('') : `<tr><td colspan="5"><div class="empty-state"><div class="icon">🛣️</div><p>Sin peajes cargados — sumá el primero</p></div></td></tr>`;
+    </tr>`).join('') : `<tr><td colspan="6"><div class="empty-state"><div class="icon">🛣️</div><p>Sin peajes cargados — sumá el primero</p></div></td></tr>`;
 }
 
 function usarPeajeEnCalculadora(monto) {
@@ -6414,6 +6416,26 @@ function generarPresupuestoPDF(presupId) {
   const recargo60Presup = tfPresup ? tfPresup.recargo60 : 6;
   const recargo90Presup = tfPresup ? tfPresup.recargo90 : 9;
 
+  // Movilidad por zona — se precalcula acá (km, peaje, ajuste manual) para
+  // cada zona conocida, y se embebe como datos fijos en el PDF. La ventana
+  // del presupuesto es un documento aparte sin acceso en vivo al CRM, así
+  // que no puede consultar DB.clientes/DB.peajes por su cuenta.
+  const kmUsdRatePresup = tfPresup ? (tfPresup.km||0) : 0;
+  const zonasParaMovilidad = {};
+  const zonasSet = new Set(DB.clientes.map(c=>c.zona).filter(Boolean));
+  if (cl && cl.zona) zonasSet.add(cl.zona);
+  Array.from(zonasSet).sort().forEach(z => {
+    const km = kmEstimadoDesdeBase(z) || 0;
+    const peajeObj = corredorParaZona(z);
+    zonasParaMovilidad[z] = {
+      km: km,
+      peajeArs: peajeObj ? (peajeObj.conTelepase||0) : 0,
+      ajusteArs: peajeObj ? (peajeObj.ajusteArs||0) : 0,
+      corredor: peajeObj ? peajeObj.corredor : ''
+    };
+  });
+  const zonaDefaultPresup = cl ? (cl.zona||'') : '';
+
   // Build initial rows
   const lineas = (p.descripcion||'').split('\n').filter(l=>l.trim());
   let initRows = [];
@@ -6488,6 +6510,9 @@ function generarPresupuestoPDF(presupId) {
     'var REC30=' + JSON.stringify(recargo30Presup) + ';',
     'var REC60=' + JSON.stringify(recargo60Presup) + ';',
     'var REC90=' + JSON.stringify(recargo90Presup) + ';',
+    'var ZONAS_MOV=' + JSON.stringify(zonasParaMovilidad) + ';',
+    'var KM_USD_RATE=' + JSON.stringify(kmUsdRatePresup) + ';',
+    'var ZONA_DEFAULT=' + JSON.stringify(zonaDefaultPresup) + ';',
     '',
     'function onClienteSelectChange() {',
     '  var sel = document.getElementById("pdf-cli-select");',
@@ -6617,6 +6642,7 @@ function generarPresupuestoPDF(presupId) {
     'if (btnUrg && menuUrg) {',
     '  btnUrg.addEventListener("click", function(ev){',
     '    ev.stopPropagation();',
+    '    if (typeof menuMov !== "undefined" && menuMov) menuMov.style.display = "none";',
     '    menuUrg.style.display = menuUrg.style.display === "block" ? "none" : "block";',
     '  });',
     '  document.addEventListener("click", function(){ menuUrg.style.display = "none"; });',
@@ -6641,6 +6667,66 @@ function generarPresupuestoPDF(presupId) {
     '      menuUrg.style.display = "none";',
     '    });',
     '  });',
+    '}',
+    // Movilidad: agrega un ítem de traslado calculado a partir de la zona
+    // elegida — km (ida y vuelta) × USD/km del Tarifario, más el peaje total
+    // y el ajuste manual (tiempo/tráfico) que tenga cargados esa zona en la
+    // Tabla de Referencia de Peajes. Usa el mismo tipo de cambio que ya está
+    // cargado arriba para Opciones de Pago — si todavía no se cargó, avisa.
+    'var btnMov = document.getElementById("btnMovilidad");',
+    'var menuMov = document.getElementById("menuMovilidad");',
+    'var movZonaSelect = document.getElementById("movZonaSelect");',
+    'var movPreview = document.getElementById("movZonaPreview");',
+    'var btnMovAgregar = document.getElementById("btnMovAgregar");',
+    'function actualizarPreviewMovilidad() {',
+    '  if (!movZonaSelect || !movPreview) return;',
+    '  var zona = movZonaSelect.value;',
+    '  var datos = zona ? ZONAS_MOV[zona] : null;',
+    '  if (!zona) { movPreview.innerHTML = ""; return; }',
+    '  if (!datos || (!datos.km && !datos.peajeArs)) { movPreview.innerHTML = "No tengo km ni peaje cargados todav\\u00eda para esta zona \\u2014 se puede agregar igual y editar el monto a mano."; return; }',
+    '  var kmIV = (datos.km||0) * 2;',
+    '  var tc = parse((document.getElementById("pdf-tc")||{innerText:""}).innerText) || 0;',
+    '  var montoKm = tc > 0 ? Math.round(kmIV * KM_USD_RATE * tc) : 0;',
+    '  var total = montoKm + (datos.peajeArs||0) + (datos.ajusteArs||0);',
+    '  var lineas = [];',
+    '  if (kmIV) lineas.push(kmIV + " km (ida y vuelta) \\u00d7 USD " + KM_USD_RATE + "/km" + (tc>0 ? " = " + fmt(montoKm) : " \\u2014 cargá el TC arriba para convertir a pesos"));',
+    '  if (datos.peajeArs>0) lineas.push("+ Peaje: " + fmt(datos.peajeArs) + (datos.corredor?" ("+datos.corredor+")":""));',
+    '  if (datos.ajusteArs>0) lineas.push("+ Ajuste (tiempo/tr\\u00e1fico): " + fmt(datos.ajusteArs));',
+    '  lineas.push("<b>Total estimado: " + (tc>0?fmt(total):"\\u2014") + "</b>");',
+    '  movPreview.innerHTML = lineas.join("<br>");',
+    '}',
+    'if (btnMov && menuMov) {',
+    '  btnMov.addEventListener("click", function(ev){',
+    '    ev.stopPropagation();',
+    '    if (menuUrg) menuUrg.style.display = "none";',
+    '    menuMov.style.display = menuMov.style.display === "block" ? "none" : "block";',
+    '    if (menuMov.style.display === "block") actualizarPreviewMovilidad();',
+    '  });',
+    '  document.addEventListener("click", function(){ menuMov.style.display = "none"; });',
+    '  menuMov.addEventListener("click", function(ev){ ev.stopPropagation(); });',
+    '  if (movZonaSelect) movZonaSelect.addEventListener("change", actualizarPreviewMovilidad);',
+    '  if (btnMovAgregar) {',
+    '    btnMovAgregar.addEventListener("click", function(){',
+    '      var zona = movZonaSelect ? movZonaSelect.value : "";',
+    '      if (!zona) { alert("Eleg\\u00ed primero una zona."); return; }',
+    '      var datos = ZONAS_MOV[zona] || { km:0, peajeArs:0, ajusteArs:0 };',
+    '      var tc = parse((document.getElementById("pdf-tc")||{innerText:""}).innerText) || 0;',
+    '      if (!(tc > 0)) { alert("Carg\\u00E1 el tipo de cambio del d\\u00eda (junto a Opciones de pago, m\\u00e1s abajo) antes de agregar movilidad \\u2014 hace falta para convertir los km a pesos."); return; }',
+    '      var kmIV = (datos.km||0) * 2;',
+    '      var montoKm = Math.round(kmIV * KM_USD_RATE * tc);',
+    '      var montoTotal = montoKm + (datos.peajeArs||0) + (datos.ajusteArs||0);',
+    '      addRow();',
+    '      var filas = document.querySelectorAll("#tbodyItems tr");',
+    '      var ultima = filas[filas.length - 1];',
+    '      var celdas = ultima.querySelectorAll("td[contenteditable]");',
+    '      celdas[0].innerText = "Movilidad \\u2014 " + zona + " (ida y vuelta)";',
+    '      celdas[1].innerText = "Traslado";',
+    '      celdas[2].innerText = "1";',
+    '      celdas[3].innerText = fmt(montoTotal);',
+    '      recalc();',
+    '      menuMov.style.display = "none";',
+    '    });',
+    '  }',
     '}',
     'var tcEl0 = document.getElementById("pdf-tc");',
     'if (tcEl0) { tcEl0.addEventListener("input", recalcPagos); tcEl0.addEventListener("blur", recalcPagos); }',
@@ -6849,8 +6935,18 @@ function generarPresupuestoPDF(presupId) {
     + '<div class="detalle-wrap">'
     + '<div class="detalle-titulo" style="position:relative">Detalle de trabajos y repuestos'
     + '<div style="display:flex;gap:8px">'
+    + '<button id="btnMovilidad" type="button" style="background:#d6e9fb;border:1px solid #6fa8dc;color:#003B70">\uD83D\uDE97 Movilidad</button>'
     + '<button id="btnUrgencia" type="button" style="background:#fff3cd;border:1px solid #e0a800;color:#7a5c00">\u26A1 Urgencia</button>'
     + '<button id="btnAgregar" type="button">\u2795 Agregar fila</button>'
+    + '</div>'
+    + '<div id="menuMovilidad" style="display:none;position:absolute;right:170px;top:38px;background:#fff;border:1px solid #ccc;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.18);z-index:50;overflow:hidden;min-width:250px;padding:12px 14px">'
+    + '<label style="font-size:11px;color:#555;display:block;margin-bottom:5px;font-weight:600">Zona del trabajo</label>'
+    + '<select id="movZonaSelect" style="width:100%;padding:7px;border:1px solid #ccc;border-radius:4px;font-size:12.5px;margin-bottom:8px;color:#1A1A1A">'
+    + '<option value="">Elegir zona...</option>'
+    + Object.keys(zonasParaMovilidad).map(function(z){ return '<option value="' + z.replace(/"/g,'&quot;') + '"' + (z===zonaDefaultPresup?' selected':'') + '>' + z + '</option>'; }).join('')
+    + '</select>'
+    + '<div id="movZonaPreview" style="font-size:11px;color:#666;margin-bottom:9px;line-height:1.5"></div>'
+    + '<button id="btnMovAgregar" type="button" style="width:100%;background:#003B70;color:#fff;border:none;border-radius:4px;padding:8px;font-size:12px;font-weight:700;cursor:pointer">Agregar a la mano de obra</button>'
     + '</div>'
     + '<div id="menuUrgencia" style="display:none;position:absolute;right:14px;top:38px;background:#fff;border:1px solid #ccc;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.18);z-index:50;overflow:hidden;min-width:160px">'
     + [5,10,15,20,25,30].map(function(pct){
@@ -7804,6 +7900,9 @@ function openModal(type, data={}) {
       <div class="form-group"><label>Con TelePASE ($ ARS) — total del trayecto</label><input id="f-pjtelepase" type="number" value="${data.conTelepase||''}"/></div>
       <div class="form-group"><label>Sin TelePASE ($ ARS) — total del trayecto</label><input id="f-pjmanual" type="number" value="${data.sinTelepase||''}"/></div>
       <div class="form-group"><label>Cantidad de cabinas de peaje</label><input id="f-pjcantidad" type="number" min="0" value="${data.cantidad||''}" placeholder="Ej: 2"/></div>
+      <div class="form-group"><label>Ajuste manual ($ ARS, opcional)</label><input id="f-pjajuste" type="number" value="${data.ajusteArs||''}" placeholder="Ej: 15000"/>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px">Para compensar algo que el km y el peaje solos no capturan — tráfico, tiempo en cola, zona complicada. Se suma aparte, editable por trayecto.</div>
+      </div>
       <div class="form-group full"><label>Detalle (opcional)</label><input id="f-pjdetalle" value="${data.detalle||''}" placeholder="Ej: Hudson (ida) + Dock Sud (vuelta)"/></div>
       <div class="form-group full"><label>Foto de la ruta — link de Drive (opcional)</label><input id="f-pjfoto" value="${data.fotoUrl||''}" placeholder="https://drive.google.com/..."/></div>
     </div>`;
@@ -7812,6 +7911,7 @@ function openModal(type, data={}) {
       const conTelepase = parseFloat(gv('f-pjtelepase'))||0;
       const sinTelepase = parseFloat(gv('f-pjmanual'))||0;
       const cantidad = parseInt(gv('f-pjcantidad'))||0;
+      const ajusteArs = parseFloat(gv('f-pjajuste'))||0;
       const detalle = gv('f-pjdetalle');
       const fotoUrl = gv('f-pjfoto');
       if(!corredor){ showToast('Completá el nombre del corredor','error'); return; }
@@ -7819,13 +7919,13 @@ function openModal(type, data={}) {
       if(data.id) {
         // Editar: actualizar la fila existente en vez de crear una nueva
         const idx = DB.peajes.findIndex(p=>p.id===data.id);
-        const obj = { ...(idx>=0?DB.peajes[idx]:{}), id:data.id, corredor, conTelepase, sinTelepase, cantidad, detalle, fotoUrl };
+        const obj = { ...(idx>=0?DB.peajes[idx]:{}), id:data.id, corredor, conTelepase, sinTelepase, cantidad, ajusteArs, detalle, fotoUrl };
         if(idx>=0) DB.peajes[idx] = obj; else DB.peajes.push(obj);
         saveLocal(); closeModal(); renderTablaPeajes();
         writeToSheet({ action:'addPeaje', row: obj });
         showToast('Peaje actualizado ✔','success');
       } else {
-        const obj = { id:uid(), corredor, conTelepase, sinTelepase, cantidad, detalle, fotoUrl, _local:true };
+        const obj = { id:uid(), corredor, conTelepase, sinTelepase, cantidad, ajusteArs, detalle, fotoUrl, _local:true };
         DB.peajes.push(obj);
         saveLocal(); closeModal(); renderTablaPeajes();
         writeToSheet({ action:'addPeaje', row: obj });
