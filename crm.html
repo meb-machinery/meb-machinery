@@ -1060,56 +1060,17 @@ select option { background:var(--dark); }
     </div>
   </div>
 
-  <!-- TARIFARIO DE MOVILIDAD -->
+  <!-- PEAJES DE REFERENCIA -->
   <div class="page" id="page-movilidad">
     <div class="page-header">
-      <div class="page-title">TARIFARIO <span>DE MOVILIDAD</span></div>
+      <div class="page-title">PEAJES <span>DE REFERENCIA</span></div>
     </div>
     <p style="font-size:12px;color:var(--muted);margin-top:-8px">
-      Cargá los km reales (medidos en Google Maps) y el peaje del trayecto — el sistema
-      calcula el total en pesos y en dólares. El valor por km está fijo en USD 0,5.
+      La calculadora de movilidad se sacó de acá — ahora vive directo dentro de cada Presupuesto
+      (botón "🚗 Movilidad"), que lee estos mismos corredores automáticamente según la zona del
+      cliente. Esta tabla queda solo para cargar y mantener actualizados los corredores.
     </p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-      <div class="card">
-        <div class="card-header"><span class="card-title">CALCULADORA</span></div>
-        <div style="padding:14px">
-          <div class="form-grid">
-            <div class="form-group full">
-              <label>Cliente — autocompleta km y peaje sugerido</label>
-              <select id="mov-cliente" onchange="precargarDesdeCliente()"><option value="">Sin cliente (cargar todo a mano)</option></select>
-              <div id="mov-hint" style="font-size:11px;margin-top:6px"></div>
-            </div>
-            <div class="form-group">
-              <label>KM recorridos (ida) *</label>
-              <input id="mov-km" type="number" step="0.1" oninput="calcularMovilidadUI()" placeholder="Ej: 45"/>
-            </div>
-            <div class="form-group">
-              <label>Valor por km (USD) *</label>
-              <input id="mov-valorkm" type="number" step="0.01" value="0.5" oninput="calcularMovilidadUI()"/>
-            </div>
-            <div class="form-group">
-              <label>Ida y vuelta</label>
-              <select id="mov-idayvuelta" onchange="calcularMovilidadUI()">
-                <option value="1">Sí (duplica los km)</option>
-                <option value="0">No, solo ida</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Dólar de referencia (Banco Nación)</label>
-              <div style="display:flex;gap:6px">
-                <input id="mov-tc" type="number" oninput="calcularMovilidadUI()" style="flex:1"/>
-                <button type="button" class="btn-secondary" onclick="actualizarTCMovilidad()" style="white-space:nowrap" title="Fuente: Ámbito Financiero — dólar Banco Nación (venta)">↻ En vivo</button>
-              </div>
-            </div>
-            <div class="form-group">
-              <label>Peaje total del trayecto ($ ARS)</label>
-              <input id="mov-peaje" type="number" oninput="calcularMovilidadUI()" placeholder="Sumá abajo desde la tabla de referencia"/>
-            </div>
-          </div>
-          <div id="mov-resultado" class="card" style="padding:12px;background:var(--dark);margin-top:12px"></div>
-        </div>
-      </div>
-
+    <div style="margin-bottom:16px">
       <div class="card">
         <div class="card-header">
           <span class="card-title">TABLA DE REFERENCIA — PEAJES</span>
@@ -2306,64 +2267,9 @@ async function obtenerDolarReferencia() {
 }
 
 // ============================================================
-// TARIFARIO DE MOVILIDAD — 0.5 USD/km + tabla de referencia de peajes
+// PEAJES DE REFERENCIA — fuente de datos para el botón "🚗 Movilidad" del
+// Presupuesto (la calculadora manual que vivía acá se sacó, ver v17.33)
 // ============================================================
-// El valor USD/km se carga en el campo "mov-valorkm" del formulario (0.5 por
-// defecto, editable) — ya no es una constante fija, para que Emmanuel pueda
-// ajustarlo sin tocar código.
-let _tcMovilidadActual = 0;
-
-function calcularMovilidad({ km, usdPorKm, tc, peajeArs = 0 }) {
-  const kmN = Number(km) || 0;
-  const usdPorKmN = Number(usdPorKm) || 0;
-  const tcN = Number(tc) || 0;
-  const peajeN = Number(peajeArs) || 0;
-  const totalUsd = kmN * usdPorKmN;
-  const totalArs = tcN > 0 ? Math.round(totalUsd * tcN) + peajeN : null;
-  return { totalUsd: Math.round(totalUsd * 100) / 100, totalArs, kmN, peajeN };
-}
-
-function calcularMovilidadUI() {
-  const kmBase = parseFloat(gv('mov-km')) || 0;
-  const idaYVuelta = gv('mov-idayvuelta') !== '0';
-  const km = idaYVuelta ? kmBase * 2 : kmBase;
-  const usdPorKm = parseFloat(gv('mov-valorkm')) || 0;
-  const tc = parseFloat(gv('mov-tc')) || 0;
-  const peaje = parseFloat(gv('mov-peaje')) || 0;
-  const r = calcularMovilidad({ km, usdPorKm, tc, peajeArs: peaje });
-  const el = document.getElementById('mov-resultado');
-  if (!el) return;
-  if (kmBase <= 0) {
-    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:12px">Cargá los km para ver el total</div>`;
-    return;
-  }
-  el.innerHTML = `
-    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px">
-      <span>Km a cobrar (${idaYVuelta?'ida y vuelta':'solo ida'})</span><span>${km} km</span>
-    </div>
-    <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--blue-light);margin-bottom:6px">
-      <span>Movilidad (${km} km × USD ${usdPorKm})</span><span>USD ${r.totalUsd}</span>
-    </div>
-    ${peaje>0?`<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px"><span>+ Peaje</span><span>${fmtMonto(peaje)}</span></div>`:''}
-    <div style="display:flex;justify-content:space-between;font-size:18px;border-top:1px solid var(--border);padding-top:8px">
-      <span style="color:var(--yellow)">TOTAL MOVILIDAD</span>
-      <span class="monto" style="font-family:'Bebas Neue';font-size:20px">${r.totalArs!==null?fmtMonto(r.totalArs):'—'}</span>
-    </div>
-    ${tc<=0?`<div style="font-size:10px;color:var(--orange);margin-top:6px">⚠️ Cargá el dólar del día para ver el total en pesos</div>`:''}
-  `;
-}
-
-async function actualizarTCMovilidad() {
-  const tcInput = document.getElementById('mov-tc');
-  try {
-    const valor = await obtenerDolarReferencia();
-    _tcMovilidadActual = valor;
-    if (tcInput) tcInput.value = valor;
-    calcularMovilidadUI();
-  } catch (e) {
-    showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
-  }
-}
 
 // Tabla de referencia de peajes — se guarda local + Sheet (hoja PEAJES)
 function renderTablaPeajes() {
@@ -2378,26 +2284,20 @@ function renderTablaPeajes() {
       <td>${fmtMonto(p.sinTelepase)}</td>
       <td>${p.ajusteArs>0?fmtMonto(p.ajusteArs):'<span style="color:var(--muted2)">—</span>'}</td>
       <td><div class="actions">
-        <button class="btn-secondary" style="font-size:10px;padding:2px 6px" onclick="usarPeajeEnCalculadora(${p.conTelepase})">Usar</button>
         <button class="btn-secondary" style="font-size:10px;padding:2px 6px" onclick="openModal('peaje', DB.peajes.find(x=>x.id==='${p.id}'))" title="Editar">✏️</button>
         <button class="btn-danger" style="font-size:10px;padding:2px 6px" onclick="eliminar('peajes','${p.id}')">✕</button>
       </div></td>
     </tr>`).join('') : `<tr><td colspan="6"><div class="empty-state"><div class="icon">🛣️</div><p>Sin peajes cargados — sumá el primero</p></div></td></tr>`;
 }
 
-function usarPeajeEnCalculadora(monto) {
-  const actual = parseFloat(gv('mov-peaje')) || 0;
-  document.getElementById('mov-peaje').value = actual + monto;
-  calcularMovilidadUI();
-  showToast('Peaje sumado ✓','success');
-}
-
+// v17.33: la calculadora de movilidad (km/valorkm/TC/peaje manual) se sacó
+// de acá — quedó redundante desde que el botón "🚗 Movilidad" del
+// Presupuesto hace exactamente esto mismo, mejor: inserta el resultado
+// directo como ítem, en vez de mostrar un número que había que copiar a
+// mano a otro lado. Esta página ahora es solo la tabla de referencia, que
+// SÍ sigue siendo necesaria — es la fuente de datos que lee ese botón.
 function renderMovilidad() {
-  const sel = document.getElementById('mov-cliente');
-  if (sel) sel.innerHTML = '<option value="">Sin cliente (cargar todo a mano)</option>' + clienteOptions();
   renderTablaPeajes();
-  calcularMovilidadUI();
-  if (!_tcMovilidadActual) actualizarTCMovilidad();
 }
 
 // ── Autocompletar km + peaje según la zona del cliente elegido ─────────────
@@ -2450,35 +2350,6 @@ function corredorParaZona(zona) {
   const keyword = ZONA_PEAJE_MAP[z];
   if (!keyword || !DB.peajes) return null;
   return DB.peajes.find(p => (p.corredor||'').toLowerCase().includes(keyword)) || null;
-}
-
-function precargarDesdeCliente() {
-  const clienteId = gv('mov-cliente');
-  const hintEl = document.getElementById('mov-hint');
-  if (!clienteId) { if(hintEl) hintEl.innerHTML = ''; return; }
-  const cliente = (DB.clientes||[]).find(c => c.id === clienteId);
-  if (!cliente || !cliente.zona) {
-    if(hintEl) hintEl.innerHTML = '<span style="color:var(--orange)">⚠️ Este cliente no tiene zona cargada — no puedo estimar km ni peaje, cargalos a mano.</span>';
-    return;
-  }
-  const km = kmEstimadoDesdeBase(cliente.zona);
-  const peaje = corredorParaZona(cliente.zona);
-  let partes = [];
-  if (km) {
-    document.getElementById('mov-km').value = km;
-    partes.push(`Km estimado a ${cliente.zona}: <b>${km} km</b> (línea recta × 1.3 — editalo si medís el real en Maps)`);
-  } else {
-    partes.push(`No tengo coordenadas para "${cliente.zona}" — cargá los km a mano.`);
-  }
-  if (peaje) {
-    document.getElementById('mov-peaje').value = peaje.conTelepase;
-    partes.push(`Peaje sugerido: "${peaje.corredor}" (${fmtMonto(peaje.conTelepase)}) — sumá otro con "Usar" en la tabla si falta alguna cabina.`);
-  } else {
-    document.getElementById('mov-peaje').value = 0;
-    partes.push(`No tengo un corredor cargado para esta zona todavía — buscalo en la tabla o dejalo en $0.`);
-  }
-  if (hintEl) hintEl.innerHTML = `<span style="color:var(--blue-light)">${partes.join('<br>')}</span>`;
-  calcularMovilidadUI();
 }
 
 // Resumen de dólar en el Dashboard — la pantalla que Emmanuel ve primero al
