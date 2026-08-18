@@ -297,7 +297,7 @@ const MODULOS = [
       {
         bloques: [
           { tipo: 'texto', html: '<h3>2. Inspección visual previa</h3><p>Se realiza siempre antes de tocar cualquier componente.</p>' },
-          { tipo: 'imagen_svg', caption: 'Esquema genérico de referencia — dónde suelen ubicarse estas cuatro zonas en un motor diésel. La posición real varía según marca y modelo: siempre se confirma con Emmanuel o el manual del fabricante del equipo.' },
+          { tipo: 'imagen', url: 'img/mebu/modulo1/esquema-filtros.png', caption: 'Esquema genérico de referencia — dónde suelen ubicarse estas cuatro zonas en un motor diésel. La posición real varía según marca y modelo: siempre se confirma con Emmanuel o el manual del fabricante del equipo.' },
           { tipo: 'texto', html: '<ol><li>Registrar horómetro.</li><li>Revisar fugas visibles (aceite, combustible, refrigerante, hidráulico).</li><li>Revisar mangueras y correas.</li><li>Verificar nivel y color del aceite con la varilla.</li><li>Revisar filtro de aire externo, neumáticos/orugas, luces y alarma de retroceso.</li></ol>' },
           { tipo: 'aviso', texto: 'Cualquier anomalía se registra en el Informe Técnico ANTES de intervenir.' },
         ],
@@ -305,17 +305,14 @@ const MODULOS = [
       {
         bloques: [
           { tipo: 'texto', html: '<h3>3. Cambio de aceite de motor</h3>' },
-          { tipo: 'imagen', url: 'img/mebu/modulo1/tapon-drenaje.jpg', caption: 'Foto real de MEB — punto de drenaje (foto tomada sin el tapón colocado, para mostrar el orificio con claridad).' },
-          { tipo: 'imagen', url: 'img/mebu/modulo1/drenaje-aceite.jpg', caption: 'Foto real de MEB — drenaje del aceite hacia un recipiente homologado.' },
+          { tipo: 'imagen', url: 'img/mebu/modulo1/tapon-drenaje-real.jpg', caption: 'Foto real de MEB — tapón de drenaje de aceite de motor.' },
           { tipo: 'texto', html: '<ol><li>Ubicar bandeja bajo el tapón de drenaje.</li><li>Aflojar y retirar el tapón — el aceite sale caliente.</li><li>Dejar drenar 10-15 minutos.</li><li>Revisar tapón y junta; reemplazar junta si está dañada.</li><li>Colocar tapón con el torque indicado por el fabricante.</li><li>Llenar con el aceite especificado en la orden de trabajo.</li><li>Verificar nivel con varilla, arrancar, chequear fugas.</li></ol>' },
         ],
       },
       {
         bloques: [
           { tipo: 'texto', html: '<h3>4. Filtro de aceite</h3>' },
-          { tipo: 'imagen', url: 'img/mebu/modulo1/filtro-instalado.jpg', caption: 'Foto real de MEB — filtro en su ubicación, antes de retirarlo.' },
-          { tipo: 'imagen', url: 'img/mebu/modulo1/filtro-viejo.jpg', caption: 'Foto real de MEB — filtro viejo ya retirado.' },
-          { tipo: 'imagen', url: 'img/mebu/modulo1/filtro-nuevo.jpg', caption: 'Foto real de MEB — filtro nuevo colocado.' },
+          { tipo: 'placeholder', texto: '📷 Filtro de aceite antes/después del cambio — pendiente de foto real confirmada (las que había acá antes eran de otro componente, se sacaron)' },
           { tipo: 'texto', html: '<ol><li>Aflojar en sentido antihorario, con bandeja debajo.</li><li>Verificar que el o-ring viejo salió completo.</li><li>Lubricar o-ring del filtro nuevo con aceite limpio.</li><li>Enroscar a mano hasta contacto + 3/4 de vuelta. No usar llave salvo indicación del fabricante.</li></ol>' },
         ],
         miniquiz: {
@@ -328,7 +325,9 @@ const MODULOS = [
       {
         bloques: [
           { tipo: 'texto', html: '<h3>5. Filtro de combustible</h3><p>Sistema sensible al ingreso de aire y suciedad — extremar la limpieza del entorno antes de abrir el circuito. Purgar el sistema si el modelo tiene cebador manual.</p><h3>6. Filtro de aire</h3><p>Inspeccionar roturas o desgaste. No lavar elementos de papel. El elemento de seguridad (si tiene doble filtro) nunca se limpia, solo se reemplaza.</p>' },
-          { tipo: 'imagen', url: 'img/mebu/modulo1/filtros-comparacion.jpg', caption: 'Foto real de MEB — comparación entre filtros dañados/usados y nuevos. Así se ve la diferencia a simple vista antes de decidir el reemplazo.' },
+          { tipo: 'imagen', url: 'img/mebu/modulo1/filtro-aire-primario-secundario.jpg', caption: 'Foto real de MEB — filtro de aire de motor, elemento primario y secundario.' },
+          { tipo: 'aviso', texto: 'Nota aparte (no es parte del temario de este módulo): el filtro de aire de cabina es un componente distinto, de mantenimiento del confort del operador, no del motor. Se lo menciona acá solo como referencia visual de comparación viejo/nuevo.' },
+          { tipo: 'imagen', url: 'img/mebu/modulo1/filtro-cabina-comparacion.jpg', caption: 'Foto real de MEB — filtro de aire de cabina, comparación entre uno usado y uno nuevo.' },
         ],
       },
       {
