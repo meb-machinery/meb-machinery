@@ -520,30 +520,45 @@ select option { background:var(--dark); }
       <div class="page-title">PRESUPUESTOS</div>
       <button class="btn-primary" onclick="abrirNuevoPresupuestoFicha()">+ NUEVO PRESUPUESTO</button>
     </div>
-    <div class="filter-tabs">
-      <button class="filter-tab active" onclick="setFilter('presup','todos',this)">Todos</button>
-      <button class="filter-tab" onclick="setFilter('presup','pendiente',this)">Pendientes</button>
-      <button class="filter-tab" onclick="setFilter('presup','aprobado',this)">Aprobados</button>
-      <button class="filter-tab" onclick="setFilter('presup','en curso',this)">En curso</button>
-      <button class="filter-tab" onclick="setFilter('presup','no aprobado',this)">No aprobados</button>
+    <div class="filter-tabs" style="margin-bottom:4px">
+      <button class="filter-tab active" id="subtab-presup-lista" onclick="mostrarSubvistaPresupuestos('lista')">📋 Presupuestos</button>
+      <button class="filter-tab" id="subtab-presup-checklists" onclick="mostrarSubvistaPresupuestos('checklists')">✅ Checklists de Visita <span id="badge-checklists-pendientes" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px"></span></button>
     </div>
-    <div style="display:flex;align-items:center;gap:16px">
-      <div class="search-bar" style="flex:1;margin-bottom:0"><span>🔍</span><input type="text" placeholder="Buscar número, cliente, descripción..." id="searchPresupuestos" oninput="renderPresupuestos()"></div>
-      <div style="display:flex;align-items:center;gap:8px;white-space:nowrap">
-        <label style="font-size:11px;color:var(--muted)">Ordenar por</label>
-        <select id="presupSortBy" onchange="renderPresupuestos()" style="background:var(--darker);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:6px 8px;font-size:12px">
-          <option value="num">N° (ascendente)</option>
-          <option value="fecha_desc">Fecha (más reciente primero)</option>
-          <option value="cliente">Cliente (A-Z)</option>
-          <option value="monto_desc">Monto (mayor primero)</option>
-        </select>
+
+    <div id="subvista-presup-lista">
+      <div class="filter-tabs">
+        <button class="filter-tab active" onclick="setFilter('presup','todos',this)">Todos</button>
+        <button class="filter-tab" onclick="setFilter('presup','pendiente',this)">Pendientes</button>
+        <button class="filter-tab" onclick="setFilter('presup','aprobado',this)">Aprobados</button>
+        <button class="filter-tab" onclick="setFilter('presup','en curso',this)">En curso</button>
+        <button class="filter-tab" onclick="setFilter('presup','no aprobado',this)">No aprobados</button>
       </div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <div class="search-bar" style="flex:1;margin-bottom:0"><span>🔍</span><input type="text" placeholder="Buscar número, cliente, descripción..." id="searchPresupuestos" oninput="renderPresupuestos()"></div>
+        <div style="display:flex;align-items:center;gap:8px;white-space:nowrap">
+          <label style="font-size:11px;color:var(--muted)">Ordenar por</label>
+          <select id="presupSortBy" onchange="renderPresupuestos()" style="background:var(--darker);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:6px 8px;font-size:12px">
+            <option value="num">N° (ascendente)</option>
+            <option value="fecha_desc">Fecha (más reciente primero)</option>
+            <option value="cliente">Cliente (A-Z)</option>
+            <option value="monto_desc">Monto (mayor primero)</option>
+          </select>
+        </div>
+      </div>
+      <div id="presup-resumen-estados" style="margin-bottom:12px"></div>
+      <div class="card"><div class="table-wrap"><table>
+        <thead><tr><th>#</th><th>Cliente</th><th>Descripción</th><th>Monto</th><th>Estado</th><th>Fecha</th><th>Estado documento</th><th style="color:#9b59b6">Informe</th><th>Acciones</th></tr></thead>
+        <tbody id="tabla-presupuestos"></tbody>
+      </table></div></div>
     </div>
-    <div id="presup-resumen-estados" style="margin-bottom:12px"></div>
-    <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>#</th><th>Cliente</th><th>Descripción</th><th>Monto</th><th>Estado</th><th>Fecha</th><th>Estado documento</th><th style="color:#9b59b6">Informe</th><th>Acciones</th></tr></thead>
-      <tbody id="tabla-presupuestos"></tbody>
-    </table></div></div>
+
+    <div id="subvista-presup-checklists" style="display:none">
+      <p style="font-size:12px;color:var(--muted);margin:4px 0 14px">
+        Lo que Emmanuel o el operario van cargando desde el checklist del celular — inspección visual rápida.
+        Si algo quedó marcado "necesita atención", desde acá se arma el presupuesto directo con el cliente ya cargado.
+      </p>
+      <div id="lista-checklists"></div>
+    </div>
   </div>
 
   <!-- CONTRATOS DE MANTENIMIENTO -->
@@ -1483,12 +1498,12 @@ async function syncAll() {
   const _calendarioEventos = DB.calendarioEventos || [];
 
   try {
-    const [cl,mq,tr,pr,al,pv,ct,tf,inf,opl,pj,ch] = await Promise.all([
+    const [cl,mq,tr,pr,al,pv,ct,tf,inf,opl,pj,ch,chk] = await Promise.all([
       fetchSheet('CLIENTES'), fetchSheet('MAQUINAS'),
       fetchSheet('TRABAJOS'), fetchSheet('PRESUPUESTOS'), fetchSheet('ALERTAS'),
       fetchSheet('PROVEEDORES'), fetchSheet('CONTRATOS'), fetchSheet('TARIFARIO'),
       fetchSheet('INFORMES'), fetchSheet('OPORTUNIDADES_LOG'), fetchSheet('PEAJES'),
-      fetchSheet('CAJAS_HERRAMIENTAS')
+      fetchSheet('CAJAS_HERRAMIENTAS'), fetchSheet('CHECKLIST_VISITAS')
     ]);
 
     // ── Salvavidas: detectar encabezados rotos ──────────────────────────────
@@ -1775,6 +1790,21 @@ async function syncAll() {
       detalle: r.DETALLE || '',
       fotoUrl: r.FOTO_RUTA_URL || ''
     }));
+
+    // Checklists de visita — cargados desde checklist.html por Emmanuel/el
+    // operario, sin acceso al CRM. ITEMS_JSON viene como texto; si algo
+    // llegara corrupto o vacío, mejor una lista vacía que romper el sync
+    // entero por un solo registro con problema.
+    DB.checklistVisitas = (chk.length ? chk : []).map(r => {
+      let items = [];
+      try { items = JSON.parse(r.ITEMS_JSON || '[]'); } catch(e) { items = []; }
+      return {
+        id: resolverIdEstable(r,'CHECKLIST_VISITAS'),
+        fecha: r.FECHA || '', hora: r.HORA || '',
+        cliente: r.CLIENTE || '', maquina: r.MAQUINA || '', usuario: r.USUARIO || '',
+        items: items
+      };
+    });
 
     DB.cajasHerramientas = (ch.length ? ch : []).map(r => ({
       id: resolverIdEstable(r,'CAJAS_HERRAMIENTAS'),
@@ -2925,6 +2955,76 @@ function renderTrabajos() {
 // ============================================================
 // PRESUPUESTOS
 // ============================================================
+// ── Sub-pestañas dentro de Presupuestos: lista normal / Checklists de Visita ──
+// Viven juntas a propósito — el flujo real es "reviso el checklist que cargó
+// el operario → armo el presupuesto", no dos pantallas separadas sin relación.
+function mostrarSubvistaPresupuestos(vista) {
+  document.getElementById('subvista-presup-lista').style.display = vista === 'lista' ? 'block' : 'none';
+  document.getElementById('subvista-presup-checklists').style.display = vista === 'checklists' ? 'block' : 'none';
+  document.getElementById('subtab-presup-lista').classList.toggle('active', vista === 'lista');
+  document.getElementById('subtab-presup-checklists').classList.toggle('active', vista === 'checklists');
+  if (vista === 'checklists') renderChecklistsVisita();
+}
+
+function renderChecklistsVisita() {
+  if (!DB.checklistVisitas) DB.checklistVisitas = [];
+  const cont = document.getElementById('lista-checklists');
+  if (!cont) return;
+
+  const checklists = [...DB.checklistVisitas].sort((a,b) => {
+    const da = (a.fecha||'').split('/').reverse().join('-')+'T'+(a.hora||'00:00');
+    const db = (b.fecha||'').split('/').reverse().join('-')+'T'+(b.hora||'00:00');
+    return new Date(db) - new Date(da);
+  });
+
+  const pendientesBadge = checklists.filter(c => (c.items||[]).some(it => it.estado === 'atencion')).length;
+  const badge = document.getElementById('badge-checklists-pendientes');
+  if (badge) { badge.textContent = pendientesBadge; badge.style.display = pendientesBadge ? 'inline-block' : 'none'; }
+
+  if (!checklists.length) {
+    cont.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Todavía no se cargó ningún checklist desde el celular</p></div>';
+    return;
+  }
+
+  cont.innerHTML = checklists.map(c => {
+    const items = c.items || [];
+    const conAtencion = items.filter(it => it.estado === 'atencion');
+    const ok = items.filter(it => it.estado === 'ok').length;
+    const cl = resolverClientePorNombreLibre(c.cliente);
+    const idBase = c.id.replace(/[^a-zA-Z0-9]/g,'_');
+    return `<div class="card" style="margin-bottom:12px;padding:16px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-size:15px;font-weight:700;color:var(--text)">${c.cliente || '—'}${c.maquina?' <span style="color:var(--muted);font-weight:400">— '+c.maquina+'</span>':''}</div>
+          <div style="font-size:11px;color:var(--muted)">${c.fecha} ${c.hora} · completado por ${c.usuario || '—'}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${conAtencion.length ? `<span class="badge" style="background:rgba(224,122,122,0.15);color:#e07a7a">⚠️ ${conAtencion.length} necesitan atención</span>` : ''}
+          ${ok ? `<span class="badge" style="background:rgba(37,211,102,0.12);color:#25d366">✅ ${ok} OK</span>` : ''}
+        </div>
+      </div>
+      ${conAtencion.length ? `<div style="margin-top:12px;background:rgba(224,122,122,0.06);border-left:3px solid #e07a7a;border-radius:4px;padding:10px 14px">
+        ${conAtencion.map(it => `<div style="font-size:12.5px;margin-bottom:4px"><b>${it.item}</b>${it.comentario ? ' — '+it.comentario : ''} <span style="color:var(--muted);font-size:10px">(${it.categoria})</span></div>`).join('')}
+      </div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn-secondary" style="font-size:11px;padding:5px 10px" onclick="toggleDetalleChecklist('${idBase}')">👁 Ver todos los ítems</button>
+        <button class="btn-primary" style="font-size:11px;padding:5px 10px" onclick="abrirNuevoPresupuestoFicha('${cl?cl.id:''}')" ${!cl?'title="No pude identificar a qué Cliente cargado corresponde — vas a tener que elegirlo a mano en el presupuesto"':''}>🧾 Armar presupuesto</button>
+      </div>
+      <div id="detalle-checklist-${idBase}" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+        ${items.length ? items.map(it => `<div style="font-size:12px;padding:4px 0;display:flex;gap:8px">
+          <span style="min-width:16px">${it.estado==='ok'?'✅':it.estado==='atencion'?'⚠️':'—'}</span>
+          <span style="flex:1"><b>${it.item}</b> <span style="color:var(--muted);font-size:10px">(${it.categoria})</span>${it.comentario?'<br><span style="color:var(--muted)">'+it.comentario+'</span>':''}</span>
+        </div>`).join('') : '<p style="font-size:11px;color:var(--muted)">Sin ítems cargados todavía</p>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleDetalleChecklist(idBase) {
+  const el = document.getElementById('detalle-checklist-' + idBase);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
 function renderPresupuestos() {
   // Resumen siempre visible (no depende del filtro activo ni del buscador) —
   // responde de un vistazo "cuántos no aprobados hay y cuánta plata es".
@@ -2998,6 +3098,14 @@ function renderPresupuestos() {
       </div></td>
     </tr>`;
   }).join('');
+
+  // Actualiza el badge de "necesita atención" aunque la sub-pestaña de
+  // Checklists no esté visible en este momento — así se ve apenas se entra
+  // a Presupuestos, sin tener que hacer clic para enterarse.
+  if (!DB.checklistVisitas) DB.checklistVisitas = [];
+  const pendientesBadge = DB.checklistVisitas.filter(c => (c.items||[]).some(it => it.estado === 'atencion')).length;
+  const badgeChk = document.getElementById('badge-checklists-pendientes');
+  if (badgeChk) { badgeChk.textContent = pendientesBadge; badgeChk.style.display = pendientesBadge ? 'inline-block' : 'none'; }
 }
 
 // ============================================================
@@ -6256,17 +6364,17 @@ function reclamarPresupuestoWhatsApp(presupId) {
   window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
-function abrirNuevoPresupuestoFicha() {
-  generarPresupuestoPDF(uid());
+function abrirNuevoPresupuestoFicha(clienteIdPrellenado) {
+  generarPresupuestoPDF(uid(), clienteIdPrellenado || '');
 }
 
-function generarPresupuestoPDF(presupId) {
+function generarPresupuestoPDF(presupId, clienteIdPrellenado) {
   let p = DB.presupuestos.find(x => x.id === presupId);
   const esNuevo = !p;
   if (esNuevo) {
     // Ficha en blanco — el N° es solo una previsualización: el número real
     // se reserva recién al GUARDAR, para no dejar huecos si se cierra sin guardar.
-    p = { id: presupId, num: DB.presupCounter, clienteId:'', descripcion:'', monto:0,
+    p = { id: presupId, num: DB.presupCounter, clienteId: clienteIdPrellenado||'', descripcion:'', monto:0,
       moneda:'ARS', estado:'pendiente', fecha: today(), notas:'',
       serieMaquina:'', modeloMaquina:'', horometro:'' };
   }
