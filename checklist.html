@@ -113,7 +113,9 @@
     <div class="resumen-final">
       <div class="num" id="numRevisados">0</div>
       <div style="font-size:12px;color:var(--muted)">&iacute;tems revisados de <span id="numTotal">0</span></div>
-      <button class="btn-secondary" onclick="terminarVisita()" style="margin-top:14px">&#10003; Terminar esta visita</button>
+      <button class="btn-primary" onclick="guardarManual()" id="btnGuardarManual" style="margin-top:14px">&#128190; Guardar todo</button>
+      <button class="btn-secondary" onclick="imprimirRespaldo()">&#128424;&#65039; Imprimir / PDF (respaldo)</button>
+      <button class="btn-secondary" onclick="terminarVisita()">&#10003; Terminar esta visita</button>
     </div>
   </div>
 
@@ -310,23 +312,7 @@ function programarGuardado() {
 }
 
 function guardarAhora() {
-  const itemsArray = Object.keys(itemsState)
-    .filter(function(k){ return itemsState[k].estado || itemsState[k].comentario; })
-    .map(function(k){
-      const partes = k.split('|');
-      return { categoria: partes[0], item: partes[1], estado: itemsState[k].estado, comentario: itemsState[k].comentario };
-    });
-
-  const payload = {
-    action: 'guardarChecklist',
-    row: {
-      id: sesionId,
-      cliente: clienteActual,
-      maquina: maquinaActual,
-      usuario: usuarioActual,
-      itemsJson: JSON.stringify(itemsArray)
-    }
-  };
+  const payload = armarPayloadGuardado();
 
   fetch(SCRIPT_URL, {
     method: 'POST',
@@ -341,6 +327,115 @@ function mostrarGuardado() {
   const el = document.getElementById('guardadoIndicador');
   el.classList.add('show');
   setTimeout(function(){ el.classList.remove('show'); }, 1400);
+}
+
+// Botón "Guardar todo" — fuerza el guardado inmediato (salta el pequeño
+// delay del guardado automático) y da una confirmación clara, para cuando
+// el operario quiere estar 100% seguro antes de guardar el celular o irse
+// del lugar.
+function guardarManual() {
+  clearTimeout(guardarTimeout);
+  const btn = document.getElementById('btnGuardarManual');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+  const payload = armarPayloadGuardado();
+  fetch(SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  })
+    .then(function(){
+      btn.disabled = false;
+      btn.innerHTML = '&#10003; Guardado';
+      mostrarGuardado();
+      setTimeout(function(){ btn.innerHTML = '&#128190; Guardar todo'; }, 2000);
+    })
+    .catch(function(){
+      btn.disabled = false;
+      btn.innerHTML = '&#128190; Guardar todo';
+      alert('No se pudo guardar — revisá tu conexión. Mientras tanto, usá "Imprimir / PDF (respaldo)" para no perder lo cargado.');
+    });
+}
+
+// Plan B — respaldo local en el celular del operario. Si por lo que sea el
+// guardado automático falla (sin señal, etc.), esto arma un resumen de todo
+// lo cargado hasta el momento e imprime/guarda como PDF DIRECTO EN EL
+// TELÉFONO — no depende de que el guardado al servidor haya funcionado.
+function imprimirRespaldo() {
+  const fechaHoy = new Date().toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' });
+  const horaHoy = new Date().toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' });
+
+  let filasHtml = '';
+  let totalConDatos = 0;
+  Object.keys(CHECKLIST_ITEMS).forEach(function(categoria) {
+    const items = CHECKLIST_ITEMS[categoria];
+    const itemsConDatos = items.filter(function(item) {
+      const st = itemsState[categoria + '|' + item];
+      return st && (st.estado || st.comentario);
+    });
+    if (!itemsConDatos.length) return;
+    filasHtml += '<tr class="cat-row"><td colspan="3">' + escHtml(categoria) + '</td></tr>';
+    itemsConDatos.forEach(function(item) {
+      const st = itemsState[categoria + '|' + item];
+      totalConDatos++;
+      const estadoTxt = st.estado === 'ok' ? '✅ No necesita atención' : st.estado === 'atencion' ? '⚠️ NECESITA ATENCIÓN' : '—';
+      const estadoColor = st.estado === 'atencion' ? 'color:#c0392b;font-weight:700' : '';
+      filasHtml += '<tr><td>' + escHtml(item) + '</td><td style="' + estadoColor + '">' + estadoTxt + '</td><td>' + escHtml(st.comentario || '') + '</td></tr>';
+    });
+  });
+
+  if (!totalConDatos) { alert('Todavía no marcaste ningún ítem.'); return; }
+
+  const htmlContent = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>'
+    + '<title>Checklist — ' + escHtml(clienteActual) + '</title>'
+    + '<style>'
+    + 'body{font-family:Arial,Helvetica,sans-serif;color:#1A1A1A;max-width:720px;margin:20px auto;padding:0 16px;background:#fff}'
+    + 'h1{font-size:20px;margin-bottom:2px}'
+    + '.meta{color:#666;font-size:12px;margin-bottom:16px}'
+    + '.meta b{color:#1A1A1A}'
+    + 'table{width:100%;border-collapse:collapse;font-size:12.5px}'
+    + 'th{background:#1A1A1A;color:#F4B400;text-align:left;padding:7px 8px;font-size:10px;text-transform:uppercase}'
+    + 'td{padding:7px 8px;border-bottom:1px solid #eee;vertical-align:top}'
+    + '.cat-row td{background:#F5F2EC;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding-top:12px}'
+    + '.print-btn{margin:18px 0;background:#003B70;color:#fff;border:none;padding:10px 18px;border-radius:4px;cursor:pointer;font-family:Arial;font-weight:600}'
+    + '.aviso{background:#fff3cd;border:1px solid #e0a800;border-radius:4px;padding:8px 12px;font-size:11px;margin-bottom:14px}'
+    + '@media print{.print-btn,.aviso{display:none}}'
+    + '</style></head><body>'
+    + '<div class="aviso">📋 Este es un respaldo local — guardalo o imprimilo por las dudas. Los datos también se están guardando solos en el sistema si hay conexión.</div>'
+    + '<h1>MEB MACHINERY SOLUTIONS — CHECKLIST DE VISITA</h1>'
+    + '<div class="meta"><b>Cliente:</b> ' + escHtml(clienteActual) + (maquinaActual ? ' &nbsp;·&nbsp; <b>Máquina:</b> ' + escHtml(maquinaActual) : '') + '<br/><b>Completado por:</b> ' + escHtml(usuarioActual) + ' &nbsp;·&nbsp; <b>Fecha:</b> ' + fechaHoy + ' ' + horaHoy + '</div>'
+    + '<table><thead><tr><th>Ítem</th><th>Estado</th><th>Comentario</th></tr></thead><tbody>'
+    + filasHtml
+    + '</tbody></table>'
+    + '<button class="print-btn" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>'
+    + '</body></html>';
+
+  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, '_blank', 'width=760,height=900');
+  if (w) setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
+  else { alert('Bloqueador de popups activo. Permití los popups para este sitio.'); URL.revokeObjectURL(url); }
+}
+
+// Arma el mismo payload que usa el guardado automático — reutilizado por
+// guardarAhora() y guardarManual() para no duplicar la lógica.
+function armarPayloadGuardado() {
+  const itemsArray = Object.keys(itemsState)
+    .filter(function(k){ return itemsState[k].estado || itemsState[k].comentario; })
+    .map(function(k){
+      const partes = k.split('|');
+      return { categoria: partes[0], item: partes[1], estado: itemsState[k].estado, comentario: itemsState[k].comentario };
+    });
+  return {
+    action: 'guardarChecklist',
+    row: {
+      id: sesionId,
+      cliente: clienteActual,
+      maquina: maquinaActual,
+      usuario: usuarioActual,
+      itemsJson: JSON.stringify(itemsArray)
+    }
+  };
 }
 </script>
 </body>
