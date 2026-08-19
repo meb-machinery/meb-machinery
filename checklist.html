@@ -175,6 +175,17 @@ function uid() {
   return 'chk_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
 }
 
+// FIX: los botones de cada ítem usaban JSON.stringify() para armar el
+// argumento del onclick — eso genera comillas DOBLES, y como el propio
+// atributo onclick="..." también usa comillas dobles, el navegador cortaba
+// el texto ahí mismo y el clic nunca llegaba a ejecutar nada. Esta función
+// arma un string con comillas SIMPLES (seguro adentro de un atributo con
+// comillas dobles), escapando cualquier comilla simple o barra que tenga
+// el texto original.
+function jsStr(s) {
+  return "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+}
+
 // Recuerda el nombre de quien completa (Emmanuel / operario) para no
 // tener que volver a escribirlo cada vez que abre el link.
 (function precargarUsuario(){
@@ -260,10 +271,10 @@ function renderCategorias() {
       html += '<div class="item-row">'
         + '<div class="item-nombre">' + escHtml(item) + '</div>'
         + '<div class="item-botones">'
-        + '<div class="btn-item" id="btnOk_' + idBase + '" onclick="marcarItem(' + JSON.stringify(key) + ',\'ok\')">\u2705 No necesita atenci\u00f3n</div>'
-        + '<div class="btn-item" id="btnAt_' + idBase + '" onclick="marcarItem(' + JSON.stringify(key) + ',\'atencion\')">\u26A0\uFE0F Necesita atenci\u00f3n</div>'
+        + '<div class="btn-item" id="btnOk_' + idBase + '" onclick="marcarItem(' + jsStr(key) + ',\'ok\')">\u2705 No necesita atenci\u00f3n</div>'
+        + '<div class="btn-item" id="btnAt_' + idBase + '" onclick="marcarItem(' + jsStr(key) + ',\'atencion\')">\u26A0\uFE0F Necesita atenci\u00f3n</div>'
         + '</div>'
-        + '<textarea class="item-comentario" id="com_' + idBase + '" placeholder="Comentario (opcional)..." oninput="onComentarioChange(' + JSON.stringify(key) + ')"></textarea>'
+        + '<textarea class="item-comentario" id="com_' + idBase + '" placeholder="Comentario (opcional)..." oninput="onComentarioChange(' + jsStr(key) + ')"></textarea>'
         + '</div>';
     });
     html += '</div>';
