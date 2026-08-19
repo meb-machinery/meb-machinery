@@ -1171,7 +1171,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAJ2Vtu9UHQAM1wihlPaSowWDrkR3h3DirFusrP7WycneQB-TCtPU6MUT-1KdFPh01/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwtB0EZ7o0zSyBXMICe9V93vobLFb0LLaLhpnNpy0ufYZdoeXp2Ar6D_ir-WJqpXIqFYA/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1647,7 +1647,8 @@ async function syncAll() {
             maquinaId:r.MAQUINA_ID||'', tipoMaquina:r.TIPO_MAQUINA||'',
             informeGenerado:r.INFORME_GENERADO||r.INFORME||'',
             informeGuardado:r.INFORME_GUARDADO||'',
-            informeDriveUrl:r.INFORME_DRIVE_URL||r.LINK_DRIVE||r.INFORME_DRIVE_URL_||''
+            informeDriveUrl:r.INFORME_DRIVE_URL||r.LINK_DRIVE||r.INFORME_DRIVE_URL_||'',
+            checklistId:r.CHECKLIST_ID||''
           };
         } else {
           // Append item description from subsequent rows
@@ -2992,6 +2993,10 @@ function renderChecklistsVisita() {
     const ok = items.filter(it => it.estado === 'ok').length;
     const cl = resolverClientePorNombreLibre(c.cliente);
     const idBase = c.id.replace(/[^a-zA-Z0-9]/g,'_');
+    // ¿Ya se armó un presupuesto a partir de este checklist puntual? Uso
+    // interno — nunca se muestra al cliente, solo para no perder el rastro
+    // de "esto ya se cotizó" cuando hay varios checklists de un mismo cliente.
+    const presupYaCreado = DB.presupuestos.find(p => p.checklistId === c.id);
     return `<div class="card" style="margin-bottom:12px;padding:16px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
         <div>
@@ -3001,6 +3006,7 @@ function renderChecklistsVisita() {
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           ${conAtencion.length ? `<span class="badge" style="background:rgba(224,122,122,0.15);color:#e07a7a">⚠️ ${conAtencion.length} necesitan atención</span>` : ''}
           ${ok ? `<span class="badge" style="background:rgba(37,211,102,0.12);color:#25d366">✅ ${ok} OK</span>` : ''}
+          ${presupYaCreado ? `<span class="badge" style="background:rgba(244,180,0,0.15);color:var(--yellow)">🧾 Presupuesto N° ${presupYaCreado.num}</span>` : ''}
         </div>
       </div>
       ${conAtencion.length ? `<div style="margin-top:12px;background:rgba(224,122,122,0.06);border-left:3px solid #e07a7a;border-radius:4px;padding:10px 14px">
@@ -3008,7 +3014,11 @@ function renderChecklistsVisita() {
       </div>` : ''}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
         <button class="btn-secondary" style="font-size:11px;padding:5px 10px" onclick="toggleDetalleChecklist('${idBase}')">👁 Ver todos los ítems</button>
-        <button class="btn-primary" style="font-size:11px;padding:5px 10px" onclick="abrirNuevoPresupuestoFicha('${cl?cl.id:''}')" ${!cl?'title="No pude identificar a qué Cliente cargado corresponde — vas a tener que elegirlo a mano en el presupuesto"':''}>🧾 Armar presupuesto</button>
+        ${presupYaCreado
+          ? `<button class="btn-secondary" style="font-size:11px;padding:5px 10px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="generarPresupuestoPDF('${presupYaCreado.id}')">🧾 Ver presupuesto N° ${presupYaCreado.num}</button>`
+          : `<button class="btn-primary" style="font-size:11px;padding:5px 10px" onclick="abrirNuevoPresupuestoFicha('${cl?cl.id:''}','${c.id}')" ${!cl?'title="No pude identificar a qué Cliente cargado corresponde — vas a tener que elegirlo a mano en el presupuesto"':''}>🧾 Armar presupuesto</button>`
+        }
+        <button class="btn-danger" style="font-size:11px;padding:5px 10px" onclick="eliminar('checklistVisitas','${c.id}')">🗑 Eliminar</button>
       </div>
       <div id="detalle-checklist-${idBase}" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
         ${items.length ? items.map(it => `<div style="font-size:12px;padding:4px 0;display:flex;gap:8px">
@@ -3106,6 +3116,11 @@ function renderPresupuestos() {
   const pendientesBadge = DB.checklistVisitas.filter(c => (c.items||[]).some(it => it.estado === 'atencion')).length;
   const badgeChk = document.getElementById('badge-checklists-pendientes');
   if (badgeChk) { badgeChk.textContent = pendientesBadge; badgeChk.style.display = pendientesBadge ? 'inline-block' : 'none'; }
+  // Si la sub-pestaña de Checklists está abierta en este momento (ej: se
+  // acaba de borrar uno desde ahí), la vuelve a pintar — si no, el borrado
+  // funciona pero la tarjeta queda visible hasta cambiar de pestaña.
+  const subvistaChecklists = document.getElementById('subvista-presup-checklists');
+  if (subvistaChecklists && subvistaChecklists.style.display !== 'none') renderChecklistsVisita();
 }
 
 // ============================================================
@@ -3820,7 +3835,7 @@ function resolverOAutoCrearMaquina(clienteId, serie, modelo, tipo, maquinaIdPrev
   return nueva.id;
 }
 
-function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail, tipoMaquina, tcDesdePdf) {
+function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail, tipoMaquina, tcDesdePdf, checklistIdOrigen) {
   let p = DB.presupuestos.find(x=>x.id===presupId);
   const esNuevoPresup = !p;
   // Tipo de cambio cargado en el campo nuevo de la ficha del PDF (Opciones
@@ -3887,7 +3902,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
       plazoPago:'contado', recargoPct:0, moneda:'ARS', monedaSym:'$',
       estado:'pendiente', estadoCobro:'pendiente', fecha: today(),
       notas: notas||'', serieMaquina: serie||'', modeloMaquina: modeloMaquina||'', horometro: horometro||'',
-      tipoMaquina: tipoMaquina||'', maquinaId:'', _local:true
+      tipoMaquina: tipoMaquina||'', maquinaId:'', checklistId: checklistIdOrigen||'', _local:true
     };
     DB.presupuestos.push(p);
   } else {
@@ -3926,7 +3941,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
       id:p.id, num:p.num, cliente_id:p.clienteId, cliente:clNom2, descripcion:descripcionCompleta2,
       monto: monto||0, precio_usd:p.montoUsd||0, tc_al_momento:p.tcAlMomento||0, plazo_pago:'contado', recargo_pct:0,
       serie_maquina:p.serieMaquina||'', modelo_maquina:p.modeloMaquina||'', horometro:p.horometro||'',
-      tipo_maquina:p.tipoMaquina||'', maquina_id:p.maquinaId||'',
+      tipo_maquina:p.tipoMaquina||'', maquina_id:p.maquinaId||'', checklist_id:p.checklistId||'',
       estado:p.estado, fecha:p.fecha, notas:p.notas||''
     }});
   } else {
@@ -6364,11 +6379,11 @@ function reclamarPresupuestoWhatsApp(presupId) {
   window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
-function abrirNuevoPresupuestoFicha(clienteIdPrellenado) {
-  generarPresupuestoPDF(uid(), clienteIdPrellenado || '');
+function abrirNuevoPresupuestoFicha(clienteIdPrellenado, checklistIdOrigen) {
+  generarPresupuestoPDF(uid(), clienteIdPrellenado || '', checklistIdOrigen || '');
 }
 
-function generarPresupuestoPDF(presupId, clienteIdPrellenado) {
+function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen) {
   let p = DB.presupuestos.find(x => x.id === presupId);
   const esNuevo = !p;
   if (esNuevo) {
@@ -6376,7 +6391,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado) {
     // se reserva recién al GUARDAR, para no dejar huecos si se cierra sin guardar.
     p = { id: presupId, num: DB.presupCounter, clienteId: clienteIdPrellenado||'', descripcion:'', monto:0,
       moneda:'ARS', estado:'pendiente', fecha: today(), notas:'',
-      serieMaquina:'', modeloMaquina:'', horometro:'' };
+      serieMaquina:'', modeloMaquina:'', horometro:'', checklistId: checklistIdOrigen||'' };
   }
   const ph = (v) => (v || (esNuevo ? '' : '&mdash;'));
   // Buscar cliente por ID exacto, luego por nombre (por si el Sheet guardó el nombre como clienteId)
@@ -6489,6 +6504,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado) {
   // Inline JS - written as a regular string, NO template substitution inside
   const jsCode = [
     'var PRESUP_ID=' + JSON.stringify(p.id) + ';',
+    'var CHECKLIST_ID_ORIGEN=' + JSON.stringify(p.checklistId||'') + ';',
     'var ES_NUEVO=' + JSON.stringify(esNuevo) + ';',
     'var CLIENTES_DATA=' + JSON.stringify(clientesParaEmbeber) + ';',
     'var CLIENTE_TEL=' + JSON.stringify(clienteTel) + ';',
@@ -6807,7 +6823,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado) {
     '    return;',
     '  }',
     '  if(window.opener && window.opener._recibirCambiosPresupuesto) {',
-    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro, clienteIdSel, cliNombre, cliEmpresa.replace("—","").trim(), cliZona.replace("—","").trim(), cliTelefono.replace("—","").trim(), cliEmail.replace("—","").trim(), tipoMaq, tcGuardar);',
+    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro, clienteIdSel, cliNombre, cliEmpresa.replace("—","").trim(), cliZona.replace("—","").trim(), cliTelefono.replace("—","").trim(), cliEmail.replace("—","").trim(), tipoMaq, tcGuardar, CHECKLIST_ID_ORIGEN);',
     '    var sb = document.querySelector(".btn-save");',
     '    if(sb){sb.style.background="#25d366";sb.style.color="#fff";sb.textContent="\\u2714 Guardado";}',
     '    setTimeout(function(){if(sb){sb.style.background="#1A1A1A";sb.style.color="#F4B400";sb.textContent="\\uD83D\\uDCBE GUARDAR";}},2500);',

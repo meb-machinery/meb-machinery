@@ -101,13 +101,15 @@
     <input type="text" id="inputMaquina" placeholder="Ej: Retro John Deere 310L"/>
     <label>Tu nombre</label>
     <input type="text" id="inputUsuario" placeholder="Ej: Emmanuel"/>
+    <label>Fecha de la visita</label>
+    <input type="date" id="inputFecha"/>
     <button class="btn-primary" id="btnEmpezar" onclick="empezarChecklist()">Empezar checklist</button>
   </div>
 
   <div id="zonaChecklist">
     <div class="sesion-info">
       <span class="cambiar" onclick="cambiarCliente()">Cambiar &rarr;</span>
-      Visitando: <b id="infoCliente"></b><span id="infoMaquina"></span>
+      Visitando: <b id="infoCliente"></b><span id="infoMaquina"></span> &middot; <span id="infoFecha"></span>
     </div>
     <div id="categorias"></div>
     <div class="resumen-final">
@@ -125,7 +127,7 @@
 <div class="guardado-indicador" id="guardadoIndicador">&#10003; Guardado</div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAJ2Vtu9UHQAM1wihlPaSowWDrkR3h3DirFusrP7WycneQB-TCtPU6MUT-1KdFPh01/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwtB0EZ7o0zSyBXMICe9V93vobLFb0LLaLhpnNpy0ufYZdoeXp2Ar6D_ir-WJqpXIqFYA/exec';
 
 // ── Contenido del checklist — inspección visual, rápida, general ───────────
 // Si algo necesita más análisis, eso ya no es un checklist, es un
@@ -163,6 +165,7 @@ let sesionId = null;
 let clienteActual = '';
 let maquinaActual = '';
 let usuarioActual = '';
+let fechaVisitaActual = '';
 let guardarTimeout = null;
 
 function escHtml(s) {
@@ -193,6 +196,14 @@ function jsStr(s) {
   if (guardado) document.getElementById('inputUsuario').value = guardado;
 })();
 
+// Fecha de la visita — precargada con hoy, pero editable: por si el
+// checklist se termina de completar más tarde que la visita real.
+(function precargarFecha(){
+  const hoy = new Date();
+  const iso = hoy.getFullYear() + '-' + String(hoy.getMonth()+1).padStart(2,'0') + '-' + String(hoy.getDate()).padStart(2,'0');
+  document.getElementById('inputFecha').value = iso;
+})();
+
 // ── Paso 1: cargar lista de clientes (solo nombres, público y sin datos sensibles) ──
 fetch(SCRIPT_URL + '?action=listaClientesPublica')
   .then(function(r){ return r.json(); })
@@ -221,13 +232,19 @@ function empezarChecklist() {
   const manual = document.getElementById('inputClienteManual').value.trim();
   const cliente = manual || sel;
   const usuario = document.getElementById('inputUsuario').value.trim();
+  const fechaIso = document.getElementById('inputFecha').value;
 
   if (!cliente) { alert('Eleg\u00ed un cliente de la lista, o escribilo a mano.'); return; }
   if (!usuario) { alert('Falta tu nombre.'); return; }
+  if (!fechaIso) { alert('Falta la fecha de la visita.'); return; }
 
   clienteActual = cliente;
   maquinaActual = document.getElementById('inputMaquina').value.trim();
   usuarioActual = usuario;
+  // Del input type="date" viene como AAAA-MM-DD — se convierte a DD/MM/AAAA,
+  // el mismo formato que ya usa el resto del CRM (Sheet, tarjetas, etc.).
+  const partes = fechaIso.split('-');
+  fechaVisitaActual = partes[2] + '/' + partes[1] + '/' + partes[0];
   localStorage.setItem('meb_checklist_usuario', usuario);
 
   sesionId = uid();
@@ -237,6 +254,7 @@ function empezarChecklist() {
   document.getElementById('zonaChecklist').style.display = 'block';
   document.getElementById('infoCliente').textContent = clienteActual;
   document.getElementById('infoMaquina').textContent = maquinaActual ? (' — ' + maquinaActual) : '';
+  document.getElementById('infoFecha').textContent = fechaVisitaActual;
 
   renderCategorias();
   actualizarResumen();
@@ -373,8 +391,7 @@ function guardarManual() {
 // lo cargado hasta el momento e imprime/guarda como PDF DIRECTO EN EL
 // TELÉFONO — no depende de que el guardado al servidor haya funcionado.
 function imprimirRespaldo() {
-  const fechaHoy = new Date().toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' });
-  const horaHoy = new Date().toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' });
+  const fechaMostrar = fechaVisitaActual || new Date().toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' });
 
   let filasHtml = '';
   let totalConDatos = 0;
@@ -414,7 +431,7 @@ function imprimirRespaldo() {
     + '</style></head><body>'
     + '<div class="aviso">📋 Este es un respaldo local — guardalo o imprimilo por las dudas. Los datos también se están guardando solos en el sistema si hay conexión.</div>'
     + '<h1>MEB MACHINERY SOLUTIONS — CHECKLIST DE VISITA</h1>'
-    + '<div class="meta"><b>Cliente:</b> ' + escHtml(clienteActual) + (maquinaActual ? ' &nbsp;·&nbsp; <b>Máquina:</b> ' + escHtml(maquinaActual) : '') + '<br/><b>Completado por:</b> ' + escHtml(usuarioActual) + ' &nbsp;·&nbsp; <b>Fecha:</b> ' + fechaHoy + ' ' + horaHoy + '</div>'
+    + '<div class="meta"><b>Cliente:</b> ' + escHtml(clienteActual) + (maquinaActual ? ' &nbsp;·&nbsp; <b>Máquina:</b> ' + escHtml(maquinaActual) : '') + '<br/><b>Completado por:</b> ' + escHtml(usuarioActual) + ' &nbsp;·&nbsp; <b>Fecha de la visita:</b> ' + fechaMostrar + '</div>'
     + '<table><thead><tr><th>Ítem</th><th>Estado</th><th>Comentario</th></tr></thead><tbody>'
     + filasHtml
     + '</tbody></table>'
@@ -444,6 +461,7 @@ function armarPayloadGuardado() {
       cliente: clienteActual,
       maquina: maquinaActual,
       usuario: usuarioActual,
+      fecha: fechaVisitaActual,
       itemsJson: JSON.stringify(itemsArray)
     }
   };
