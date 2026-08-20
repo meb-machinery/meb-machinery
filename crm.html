@@ -730,6 +730,13 @@ select option { background:var(--dark); }
       <p style="font-size:11px;color:var(--muted);margin:0 12px 10px">De lo que se formuló, cuánto efectivamente se mandó al cliente, y de eso, cuánto se aprobó — la pregunta real no es "cuántos aprobé de todos", es "cuántos aprobé de los que el cliente realmente vio".</p>
       <div id="embudo-conversion-lista" style="padding:0 12px 14px"></div>
     </div>
+    <!-- Motivos de no aprobación — para no confundir un duplicado (se aprobó
+         la otra opción) con una venta perdida de verdad -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header"><span class="card-title">❓ MOTIVOS DE NO APROBACIÓN</span></div>
+      <p style="font-size:11px;color:var(--muted);margin:0 12px 10px">Antes de esto, "No aprobados" era un solo número que mezclaba pérdidas reales con duplicados (dos presupuestos para el mismo trabajo, uno con repuestos originales y otro con genéricos) — ahora se ve separado.</p>
+      <div id="motivos-no-aprobacion-lista" style="padding:0 12px 14px"></div>
+    </div>
     <!-- Rentabilidad real: margen por Tipo de trabajo y por Cliente, sobre lo ya cobrado -->
     <div class="card" style="margin-bottom:12px">
       <div class="card-header"><span class="card-title">💹 RENTABILIDAD REAL</span></div>
@@ -1171,7 +1178,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwtB0EZ7o0zSyBXMICe9V93vobLFb0LLaLhpnNpy0ufYZdoeXp2Ar6D_ir-WJqpXIqFYA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzHncDu3dNzETVouh7xSFD0JKaSphAsKdo0zmEeo9lAXG_Y1QdaL91emxv1B8JeZxaUgQ/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1648,7 +1655,10 @@ async function syncAll() {
             informeGenerado:r.INFORME_GENERADO||r.INFORME||'',
             informeGuardado:r.INFORME_GUARDADO||'',
             informeDriveUrl:r.INFORME_DRIVE_URL||r.LINK_DRIVE||r.INFORME_DRIVE_URL_||'',
-            checklistId:r.CHECKLIST_ID||''
+            checklistId:r.CHECKLIST_ID||'',
+            motivoNoAprobado:r.MOTIVO_NO_APROBADO||'',
+            motivoNota:r.MOTIVO_NOTA||'',
+            presupVinculadoId:r.PRESUP_VINCULADO_ID||''
           };
         } else {
           // Append item description from subsequent rows
@@ -2021,6 +2031,23 @@ function parseMonto(v) {
 }
 function fmtMonto(n) { const v=parseMonto(n); return '$'+(isNaN(v)?0:v).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}); }
 function gv(id) { return document.getElementById(id)?.value?.trim()||''; }
+
+// Motivo de no aprobación — categorías fijas (no texto libre) para que
+// después se puedan sacar estadísticas reales. "Duplicado" es el caso que
+// contó Emmanuel: dos presupuestos para el mismo trabajo (repuestos
+// originales vs. genéricos), donde uno queda sin aprobar solo porque se
+// aprobó el otro — no es una venta perdida de verdad.
+const MOTIVOS_NO_APROBADO = {
+  duplicado: 'Duplicado — se aprobó la otra opción',
+  precio: 'Precio',
+  fondos: 'Fondos insuficientes',
+  comunicacion: 'Demora / mala comunicación',
+  no_necesita: 'Cliente ya no necesita el trabajo',
+  otro: 'Otro'
+};
+function etiquetaMotivoNoAprobado(codigo) {
+  return MOTIVOS_NO_APROBADO[codigo] || codigo || '—';
+}
 
 function badgeEstado(e) {
   const m={
@@ -3044,11 +3071,23 @@ function renderPresupuestos() {
     const aprob = DB.presupuestos.filter(p=>p.estado==='aprobado');
     const pend = DB.presupuestos.filter(p=>p.estado==='pendiente');
     const sum = (arr) => arr.reduce((a,p)=>a+(parseFloat(p.monto)||0),0);
+    // Separa "no aprobado por duplicado" (se aprobó la otra opción — no es
+    // una venta perdida real) del resto, para que este número no lleve a
+    // sospechar de precio o comunicación cuando en realidad es solo que se
+    // cotizó la misma máquina dos veces (repuestos originales vs. genéricos).
+    const noAprobDuplicados = noAprob.filter(p => p.motivoNoAprobado === 'duplicado');
+    const noAprobReales = noAprob.filter(p => p.motivoNoAprobado !== 'duplicado');
+    const sinMotivo = noAprob.filter(p => !p.motivoNoAprobado).length;
     resumenEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
       <div class="stat-card orange"><div class="stat-val">${pend.length}</div><div class="stat-label">PENDIENTES · ${fmtMonto(sum(pend))}</div></div>
       <div class="stat-card green"><div class="stat-val">${aprob.length}</div><div class="stat-label">APROBADOS · ${fmtMonto(sum(aprob))}</div></div>
       <div class="stat-card red"><div class="stat-val">${noAprob.length}</div><div class="stat-label">NO APROBADOS · ${fmtMonto(sum(noAprob))}</div></div>
-    </div>`;
+    </div>
+    ${noAprob.length ? `<div style="font-size:11px;color:var(--muted);margin-top:8px;padding:8px 12px;background:var(--card);border-radius:6px">
+      De esos ${noAprob.length}: <b style="color:#e07a7a">${noAprobReales.length} son pérdida real</b> (precio, fondos, comunicación, etc.)
+      ${noAprobDuplicados.length ? ` · <b style="color:var(--yellow)">${noAprobDuplicados.length} duplicados</b> (se aprobó la otra opción, no cuenta como venta perdida)` : ''}
+      ${sinMotivo ? ` · <b style="color:var(--red)">⚠️ ${sinMotivo} sin motivo cargado todavía</b> — usá el botón "❓" en cada uno` : ''}
+    </div>` : ''}`;
   }
   let data=DB.presupuestos;
   if(filters.presup!=='todos') data=data.filter(p=>p.estado===filters.presup);
@@ -3097,7 +3136,11 @@ function renderPresupuestos() {
       <td style="font-size:9px;text-align:center;white-space:nowrap">${p.informeGuardado?`<a href="${p.informeDriveUrl||'#'}" target="_blank" style="color:#25d366;text-decoration:none" title="Guardado en Drive">✔ Drive<br><span style='color:var(--muted);font-size:8px'>${p.informeGuardado}</span></a>`:p.informeGenerado?`<span style='color:#9b59b6'>📋 ${p.informeGenerado}</span>`:'—'}</td>
       <td><div class="actions">
         <button class="btn-secondary" title="Editar" onclick="generarPresupuestoPDF('${p.id}')">✏️</button>
-        <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','rechazado'])">Estado</button>
+        <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','no aprobado'])">Estado</button>
+        ${p.estado==='no aprobado' ? (p.motivoNoAprobado
+          ? `<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('motivoNoAprobado',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Motivo cargado — clic para editar">❓ ${etiquetaMotivoNoAprobado(p.motivoNoAprobado)}</button>`
+          : `<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(224,122,122,0.15);border-color:#e07a7a;color:#e07a7a" onclick="openModal('motivoNoAprobado',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Falta cargar el motivo">❓ Falta motivo</button>`
+        ) : ''}
         ${p.estado==='aprobado'&&p.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Registrar cobro real">💰 Cobro</button>`:''}
         ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroPresupuesto('${p.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`:''}
         <button class="btn-secondary" style="${p.comprobantePago?'background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366':''}" onclick="adjuntarComprobante('presupuestos','${p.id}')" title="${p.comprobantePago?'Comprobante cargado — clic para cambiarlo':'Adjuntar comprobante de pago (captura, ticket)'}">${p.comprobantePago?'📎✔':'📎'}</button>
@@ -3489,7 +3532,7 @@ function renderPipeline() {
     } else if(stage==='Finalizado'){
       allItems=DB.trabajos.filter(t=>norm(t.estado)==='completado');
     } else if(stage==='Sin avance'){
-      allItems=DB.presupuestos.filter(p=>norm(p.estado)==='rechazado'||norm(p.estado)==='cancelado');
+      allItems=DB.presupuestos.filter(p=>norm(p.estado)==='rechazado'||norm(p.estado)==='cancelado'||norm(p.estado)==='no aprobado');
     }
 
     const total=allItems.reduce((s,i)=>s+Number(i.monto||i.montoCobrado||0),0);
@@ -5138,6 +5181,7 @@ function renderEstadisticas() {
   }
   renderPorCobrarPlazos();
   renderProyeccionMes();
+  renderMotivosNoAprobacion();
   renderRentabilidadReal();
   renderEstacionalidadYTiempos();
 }
@@ -5226,6 +5270,49 @@ function renderEstacionalidadYTiempos() {
 // resta lo que cada trabajo realmente costó (repuesto, movilidad, gastos)
 // para ver el margen efectivo, agrupado por Tipo y por Cliente. Solo entran
 // trabajos ya marcados como "Cobrado" — plata real, no proyectada.
+// ── Motivos de no aprobación ─────────────────────────────────────────────
+// Separa un "no aprobado" real (precio, fondos, comunicación, ya no lo
+// necesita) de un "duplicado" (se cargaron dos presupuestos para el mismo
+// trabajo — repuestos originales vs. genéricos — y uno queda sin aprobar
+// solo porque se aprobó el otro). Antes esto era un único número que
+// llevaba a sospechar de precio o mala comunicación sin ser el caso real.
+function renderMotivosNoAprobacion() {
+  const cont = document.getElementById('motivos-no-aprobacion-lista');
+  if (!cont) return;
+  const noAprob = DB.presupuestos.filter(p => p.estado === 'no aprobado');
+  if (!noAprob.length) {
+    cont.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Sin presupuestos no aprobados por ahora</p></div>';
+    return;
+  }
+  const grupos = {};
+  let sinMotivo = 0;
+  noAprob.forEach(p => {
+    if (!p.motivoNoAprobado) { sinMotivo++; return; }
+    if (!grupos[p.motivoNoAprobado]) grupos[p.motivoNoAprobado] = { cantidad: 0, monto: 0 };
+    grupos[p.motivoNoAprobado].cantidad++;
+    grupos[p.motivoNoAprobado].monto += Number(p.monto) || 0;
+  });
+  const filas = Object.keys(grupos)
+    .map(k => ({ label: etiquetaMotivoNoAprobado(k), esDuplicado: k === 'duplicado', ...grupos[k] }))
+    .sort((a, b) => b.cantidad - a.cantidad);
+
+  let html = '<div class="table-wrap"><table>'
+    + '<thead><tr><th>Motivo</th><th style="text-align:center">Cantidad</th><th style="text-align:right">Monto</th></tr></thead><tbody>'
+    + filas.map(f => `<tr>
+        <td>${f.esDuplicado ? '<span style="color:var(--yellow)">' + f.label + '</span>' : f.label}</td>
+        <td style="text-align:center">${f.cantidad}</td>
+        <td style="text-align:right;color:${f.esDuplicado?'var(--muted)':'#e07a7a'}">${fmtMonto(f.monto)}</td>
+      </tr>`).join('')
+    + '</tbody></table></div>';
+
+  if (sinMotivo) {
+    html += `<div style="margin-top:10px;padding:9px 14px;background:rgba(224,122,122,0.08);border-left:3px solid #e07a7a;border-radius:4px;font-size:12px;color:#e07a7a">
+      ⚠️ ${sinMotivo} presupuesto${sinMotivo!==1?'s':''} no aprobado${sinMotivo!==1?'s':''} sin motivo cargado — andá a Presupuestos y usá el botón "❓" en cada uno.
+    </div>`;
+  }
+  cont.innerHTML = html;
+}
+
 function renderRentabilidadReal() {
   const contTipo = document.getElementById('rentabilidad-tipo-tabla');
   const contCliente = document.getElementById('rentabilidad-cliente-tabla');
@@ -7731,7 +7818,7 @@ function openModal(type, data={}) {
         <select id="f-pestado">
           <option value="pendiente"${(data.estado||'pendiente')==='pendiente'?' selected':''}>Pendiente</option>
           <option value="aprobado"${data.estado==='aprobado'?' selected':''}>Aprobado</option>
-          <option value="rechazado"${data.estado==='rechazado'?' selected':''}>Rechazado</option>
+          <option value="no aprobado"${data.estado==='no aprobado'||data.estado==='rechazado'?' selected':''}>No aprobado</option>
         </select>
       </div>
 
@@ -7955,6 +8042,43 @@ function openModal(type, data={}) {
         writeToSheet({ action:'addPeaje', row: obj });
         showToast('Peaje guardado ✔','success');
       }
+    };
+  }
+  else if(type==='motivoNoAprobado') {
+    title = 'MOTIVO DE NO APROBACIÓN — PRESUPUESTO N° ' + (data.num||'—');
+    // Otros presupuestos del MISMO cliente (para el vínculo "cuál se aprobó
+    // en su lugar") — se excluye a sí mismo de la lista.
+    const otrosDelCliente = DB.presupuestos.filter(p => p.id !== data.id && String(p.clienteId) === String(data.clienteId));
+    const opcionesVinculo = otrosDelCliente.map(p => {
+      const montoTxt = fmtMonto(p.monto||0);
+      return `<option value="${p.id}" ${data.presupVinculadoId===p.id?'selected':''}>N° ${p.num||'—'} — ${montoTxt} — ${(p.descripcion||'').substring(0,40)}</option>`;
+    }).join('');
+    body=`<div class="form-grid">
+      <div class="form-group full">
+        <label>Categoría *</label>
+        <select id="f-motCategoria" onchange="document.getElementById('wrap-motVinculo').style.display = this.value==='duplicado' ? 'block' : 'none'">
+          <option value="">Elegir...</option>
+          ${Object.keys(MOTIVOS_NO_APROBADO).map(k => `<option value="${k}" ${data.motivoNoAprobado===k?'selected':''}>${MOTIVOS_NO_APROBADO[k]}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group full" id="wrap-motVinculo" style="display:${data.motivoNoAprobado==='duplicado'?'block':'none'}">
+        <label>¿Cuál presupuesto se aprobó en su lugar?</label>
+        <select id="f-motVinculo">
+          <option value="">${otrosDelCliente.length ? 'Elegir...' : 'Este cliente no tiene otros presupuestos cargados'}</option>
+          ${opcionesVinculo}
+        </select>
+      </div>
+      <div class="form-group full">
+        <label>Nota (opcional)</label>
+        <textarea id="f-motNota" placeholder="Cualquier detalle extra que quieras dejar anotado...">${data.motivoNota||''}</textarea>
+      </div>
+    </div>`;
+    onSave=()=>{
+      const categoria = gv('f-motCategoria');
+      if(!categoria){ showToast('Elegí una categoría','error'); return; }
+      const vinculo = categoria==='duplicado' ? gv('f-motVinculo') : '';
+      const nota = gv('f-motNota');
+      guardarMotivoNoAprobado(data.id, categoria, vinculo, nota);
     };
   }
   else if(type==='cajaHerramienta') {
@@ -8497,6 +8621,31 @@ function cambiarEstado(tipo, id, estados) {
   if(tipo==='trabajos') writeToSheet({ action:'updateEstadoTrabajo', id:id, estado:item.estado });
   if(tipo==='presupuestos') writeToSheet({ action:'updateEstadoPresupuesto', id:id, estado:item.estado });
   if(tipo==='contratos') writeToSheet({ action:'updateEstadoContrato', id:id, estado:item.estado });
+  // Al aterrizar justo en "no aprobado", abre directo el modal del motivo —
+  // así queda cargado en el momento, en vez de tener que acordarse de
+  // volver después. Si se sigue cambiando de estado (el botón cicla), no
+  // vuelve a abrirse solo — solo la primera vez que llega a ese estado.
+  if(tipo==='presupuestos' && item.estado==='no aprobado') {
+    openModal('motivoNoAprobado', item);
+  }
+}
+
+// Actualización PARCIAL a propósito — nunca uso guardar() genérico acá
+// porque ese reemplaza el objeto entero, y este modal solo toca 3 campos.
+// Reemplazar todo el presupuesto de paso borraría cliente, monto,
+// descripción, todo lo demás que ya tenía cargado.
+function guardarMotivoNoAprobado(id, categoria, vinculoId, nota) {
+  const p = DB.presupuestos.find(x => x.id === id);
+  if(!p) return;
+  pushUndo('Motivo de no aprobación');
+  p.motivoNoAprobado = categoria;
+  p.presupVinculadoId = vinculoId || '';
+  p.motivoNota = nota || '';
+  saveLocal(); closeModal(); refreshCurrentPage();
+  writeToSheet({ action:'updatePresupuesto', id:id, row:{
+    motivo_no_aprobado: categoria, presup_vinculado_id: vinculoId||'', motivo_nota: nota||''
+  }});
+  showToast('Motivo guardado ✔','success');
 }
 
 // Comprobante de pago (captura, ticket, PDF) — mismo criterio que el link de
@@ -8580,7 +8729,11 @@ function exportarExcel() {
       'Fecha': p.fecha||'', 'Fecha de cobro real': p.fechaCobroReal||'',
       'TC del cobro': Number(p.tcCobro)||0, 'Monto cobrado real': Number(p.montoCobradoReal)||0,
       'USD recibido': Number(p.usdRecibido)||0, 'Diferencia USD': Number(p.diferenciaUsd)||0,
-      'Diferencia %': Number(p.diferenciaPct)||0, 'Notas': p.notas||''
+      'Diferencia %': Number(p.diferenciaPct)||0,
+      'Motivo no aprobación': p.motivoNoAprobado ? etiquetaMotivoNoAprobado(p.motivoNoAprobado) : '',
+      'Nota del motivo': p.motivoNota||'',
+      'N° presupuesto vinculado (duplicado)': p.presupVinculadoId ? (DB.presupuestos.find(x=>x.id===p.presupVinculadoId)?.num || '') : '',
+      'Notas': p.notas||''
     }));
     if(hojaPresup.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hojaPresup), 'Presupuestos');
 
