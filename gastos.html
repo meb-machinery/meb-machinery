@@ -14,7 +14,7 @@
     --green:#25d366; --red:#e07a7a;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
-  body{background:var(--bg); color:var(--text); font-family:'Barlow',sans-serif; line-height:1.5; min-height:100vh;}
+  body{background:var(--bg); color:var(--text); font-family:'Barlow',sans-serif; line-height:1.5; min-height:100vh; overflow-x:hidden;}
   .wrap{max-width:640px; margin:0 auto; padding:20px 16px 100px;}
   header{display:flex; align-items:center; gap:12px; margin-bottom:22px;}
   .logo-img{height:40px; width:auto; display:block;}
@@ -28,6 +28,7 @@
   select, input[type=text], input[type=number], input[type=date], textarea{
     width:100%; background:var(--bg); border:1px solid var(--border); border-radius:6px;
     color:var(--text); padding:11px 12px; font-family:'Barlow'; font-size:16px; margin-bottom:14px;
+    word-break:break-all; overflow-wrap:break-word;
   }
   select:focus, input:focus, textarea:focus{outline:none; border-color:var(--yellow);}
   .btn-primary{
@@ -108,7 +109,7 @@
 <div class="guardado-indicador" id="guardadoIndicador">&#10003; Guardado</div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzHncDu3dNzETVouh7xSFD0JKaSphAsKdo0zmEeo9lAXG_Y1QdaL91emxv1B8JeZxaUgQ/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzRaKuryDgToNKsojnpoZoV3StJi7CjJjoJFm_pvJcl-4V2yb6ZEVKmxlj9Tlnh4QUWVw/exec';
 
 // ── Categorías de gasto ──────────────────────────────────────────────────
 // "Horas trabajadas" y "Horas de viaje" son las dos que usan el valor-hora
@@ -211,6 +212,61 @@ function onCambioCategoria(itemId, valor) {
   programarGuardado();
 }
 
+// ── Foto del ticket ──────────────────────────────────────────────────────
+// Se comprime en el celular ANTES de mandarla (máx. 1280px de lado más
+// largo, calidad 70%) — el campo suele tener señal floja, y una foto de
+// cámara sin comprimir puede pesar varios MB.
+function onFotoSeleccionada(inputEl, itemId) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('fotoStatus_' + itemId);
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--yellow)">Comprimiendo la foto...</span>';
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const maxDim = 1280;
+      let w = img.width, h = img.height;
+      if (w > h && w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; }
+      else if (h >= w && h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      subirFotoTicket(itemId, canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = function() {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--red)">No se pudo leer la foto — probá de nuevo</span>';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function subirFotoTicket(itemId, dataUrlComprimido) {
+  const it = items.find(function(x){ return x.id === itemId; });
+  const statusEl = document.getElementById('fotoStatus_' + itemId);
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--yellow)">Subiendo foto...</span>';
+  fetch(SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'subirTicketGasto', row: { fotoBase64: dataUrlComprimido, usuario: usuarioActual, categoria: it ? it.categoria : '' } })
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(resp){
+      if (resp && resp.ok && resp.url) {
+        if (it) it.ticketUrl = resp.url;
+        if (statusEl) statusEl.innerHTML = '<span style="color:var(--green)">✅ Foto cargada</span> — <a href="' + resp.url + '" target="_blank" style="color:var(--yellow)">verla</a>';
+        programarGuardado();
+      } else {
+        if (statusEl) statusEl.innerHTML = '<span style="color:var(--red)">⚠️ No se pudo subir — probá de nuevo</span>';
+      }
+    })
+    .catch(function(){
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--red)">⚠️ No se pudo subir — revisá la conexión y probá de nuevo</span>';
+    });
+}
+
 function onCambioCampo(itemId, campo, valor) {
   const it = items.find(function(x){ return x.id === itemId; });
   if (!it) return;
@@ -251,13 +307,14 @@ function renderItems() {
       + '<label>Categor\u00eda</label>'
       + '<select onchange="onCambioCategoria(' + jsStr(it.id) + ', this.value)">' + opciones + '</select>'
       + '<label>Descripci\u00f3n (opcional)</label>'
-      + '<input type="text" value="' + escHtml(it.descripcion) + '" placeholder="Ej: nafta YPF ruta a Tandil" oninput="onCambioCampo(' + jsStr(it.id) + ', \'descripcion\', this.value)"/>'
+      + '<textarea style="min-height:44px;resize:vertical" placeholder="Ej: nafta YPF ruta a Tandil" oninput="onCambioCampo(' + jsStr(it.id) + ', \'descripcion\', this.value)">' + escHtml(it.descripcion) + '</textarea>'
       + '<div class="fila-doble">'
       + '<div><label>' + (esHoras ? 'Cantidad de horas' : 'Cantidad') + '</label><input type="number" value="' + (it.cantidad||'') + '" oninput="onCambioCampo(' + jsStr(it.id) + ', \'cantidad\', this.value)"/></div>'
       + '<div><label>' + (esHoras ? 'Valor hora ($)' : 'Monto unitario ($)') + '</label><input type="number" value="' + (it.monto||'') + '" oninput="onCambioCampo(' + jsStr(it.id) + ', \'monto\', this.value)"/></div>'
       + '</div>'
-      + '<label>Link del ticket (opcional)</label>'
-      + '<input type="text" value="' + escHtml(it.ticketUrl) + '" placeholder="Foto o link de Drive, si lo tenés" oninput="onCambioCampo(' + jsStr(it.id) + ', \'ticketUrl\', this.value)"/>'
+      + '<label>Foto del ticket (opcional)</label>'
+      + '<input type="file" accept="image/*" capture="environment" onchange="onFotoSeleccionada(this, ' + jsStr(it.id) + ')"/>'
+      + '<div id="fotoStatus_' + it.id + '" style="font-size:11px;margin:-8px 0 14px">' + (it.ticketUrl ? '<span style="color:var(--green)">\u2705 Foto cargada</span> — <a href="' + it.ticketUrl + '" target="_blank" style="color:var(--yellow)">verla</a>' : '<span style="color:var(--muted)">Sin foto todav\u00eda</span>') + '</div>'
       + '<div class="subtotal-linea">Subtotal <b id="subtotal_' + it.id + '">' + fmt((it.cantidad||0)*(it.monto||0)) + '</b></div>'
       + '</div>';
   }).join('');
