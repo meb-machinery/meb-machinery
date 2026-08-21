@@ -626,6 +626,8 @@ select option { background:var(--dark); }
     <div id="alertas-vencidos-panel" style="margin-bottom:12px"></div>
     <!-- Panel de presupuestos pendientes sin seguimiento -->
     <div id="alertas-seguimiento-panel" style="margin-bottom:12px"></div>
+    <!-- Panel de contratos con seguimiento programado vencido -->
+    <div id="alertas-seguimiento-contratos-panel" style="margin-bottom:12px"></div>
     <div class="card"><div id="lista-alertas"></div></div>
   </div>
 
@@ -1223,7 +1225,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx4HLBJedZxwmxqGf5W7-Y9jiXGHB1YGCI4tZKV6CvEm0WFiJqqL3GtUYOpSc6CMg_Hzw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1CwVfqFLy3_dXq6zTxYQq2c3ALWPh9-AlkMhRM8ZCT7fB1idOELGs7ntPKb2HKh36Rw/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1785,7 +1787,8 @@ async function syncAll() {
       tcCobro:parseFloat(r.TC_COBRO)||0, montoCobradoReal:parseMonto(r.MONTO_COBRADO_REAL||'0'),
       usdRecibido:parseFloat(r.USD_RECIBIDO)||0, diferenciaUsd:parseFloat(r.DIFERENCIA_USD)||0,
       diferenciaPct:parseFloat(r.DIFERENCIA_PCT)||0,
-      comprobantePago:r.COMPROBANTE_PAGO||''
+      comprobantePago:r.COMPROBANTE_PAGO||'',
+      proximoSeguimiento:r.PROXIMO_SEGUIMIENTO||''
     }));
 
     // TARIFARIO — historial completo; el más reciente por fecha es el "vigente"
@@ -2136,6 +2139,19 @@ function diasPresupuestoSinSeguimiento(p) {
 function trabajosCobroEnCero() {
   return (DB.trabajos||[]).filter(t=>t.estado==='completado' && Number(t.montoCobrado||0)===0);
 }
+// v17.41 — misma calendarización que ya existe en Presupuestos, ahora
+// para Contratos. A diferencia de Presupuestos, un Contrato no tiene un
+// estado "pendiente de decisión" que envejezca solo — por eso acá SOLO
+// avisa cuando hay una fecha de seguimiento programada a mano y ya pasó
+// (no hay umbral automático de "30 días sin seguimiento programado").
+function diasContratoSinSeguimiento(c) {
+  if(!c || !c.proximoSeguimiento) return null;
+  const fechaSeg = parseFechaAny(c.proximoSeguimiento);
+  if(!fechaSeg) return null;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const diff = Math.floor((hoy - fechaSeg) / 86400000);
+  return diff >= 0 ? diff : null;
+}
 // Igual que diasPlazoVencido, pero para Contratos — la base es la fecha de
 // inicio del contrato (no tiene "fecha de cotización" como el presupuesto).
 function diasPlazoVencidoContrato(c) {
@@ -2214,8 +2230,9 @@ function updateBadges() {
   const vencidosPlazo = DB.presupuestos.filter(p=>diasPlazoVencido(p)).length;
   const vencidosPlazoCon = DB.contratos.filter(c=>diasPlazoVencidoContrato(c)).length;
   const sinSeguimientoCount = DB.presupuestos.filter(p=>diasPresupuestoSinSeguimiento(p)!==null).length;
+  const sinSeguimientoConCount = (DB.contratos||[]).filter(c=>diasContratoSinSeguimiento(c)!==null).length;
   const trabajosCeroCount = (typeof trabajosCobroEnCero==="function" ? trabajosCobroEnCero().length : 0);
-  const al=DB.alertas.filter(a=>!a.resuelta).length + (typeof calcularAlertasRepuesto==="function" ? calcularAlertasRepuesto().length : 0) + vencidosPlazo + vencidosPlazoCon + sinSeguimientoCount + trabajosCeroCount;
+  const al=DB.alertas.filter(a=>!a.resuelta).length + (typeof calcularAlertasRepuesto==="function" ? calcularAlertasRepuesto().length : 0) + vencidosPlazo + vencidosPlazoCon + sinSeguimientoCount + sinSeguimientoConCount + trabajosCeroCount;
   document.getElementById('badge-alertas').textContent=al;
   const reconectarCount = (typeof calcularParaReconectar==="function" ? calcularParaReconectar().length : 0)
                          + (typeof calcularProspectosContrato==="function" ? calcularProspectosContrato().length : 0);
@@ -3349,10 +3366,11 @@ function renderContratos() {
       <td>${c.proximoServiceHs||'—'} hs</td>
       <td><span class="monto">${fmtMonto(c.recargoPct?Math.round(c.precioArs*(1+c.recargoPct/100)):c.precioArs)}</span>${c.plazoPago&&c.plazoPago!=='contado'?`<div style="font-size:9px;color:var(--orange)">A ${c.plazoPago} días (+${c.recargoPct}%)</div>`:''}</td>
       <td><span class="monto" style="color:var(--blue-light)">USD ${Math.round(c.recargoPct?(c.precioUsd||0)*(1+c.recargoPct/100):(c.precioUsd||0)).toLocaleString('es-AR')}</span></td>
-      <td><span style="color:${estadoColor};text-transform:capitalize;font-family:'Bebas Neue';letter-spacing:1px">${estadoVisual}</span>${diasPlazoVencidoContrato(c)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${c.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencidoContrato(c)}d</div><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="reclamarContratoWhatsApp('${c.id}')" title="Mandar recordatorio por WhatsApp">📲 Reclamar</button>`:''}</td>
+      <td><span style="color:${estadoColor};text-transform:capitalize;font-family:'Bebas Neue';letter-spacing:1px">${estadoVisual}</span>${diasPlazoVencidoContrato(c)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${c.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencidoContrato(c)}d</div><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="reclamarContratoWhatsApp('${c.id}')" title="Mandar recordatorio por WhatsApp">📲 Reclamar</button>`:''}${diasContratoSinSeguimiento(c)!==null?`<div style="font-size:9px;color:var(--orange);margin-top:2px" title="El seguimiento programado venció hace ${diasContratoSinSeguimiento(c)} días">📅 Seguimiento vencido (${diasContratoSinSeguimiento(c)}d)</div>`:''}</td>
       <td><div class="actions">
         <button class="btn-secondary" title="Editar" onclick="openModal('contrato',DB.contratos.find(x=>x.id==='${c.id}'))">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('contratos','${c.id}',['activo','pausado','vencido'])">Estado</button>
+        <button class="btn-secondary" style="font-size:10px;padding:3px 8px${diasContratoSinSeguimiento(c)!==null?';background:rgba(230,126,34,0.15);border-color:#e67e22;color:#e67e22':''}" onclick="guardarProximoSeguimientoContrato('${c.id}')" title="${c.proximoSeguimiento?'Próximo seguimiento: '+c.proximoSeguimiento+' — clic para cambiarlo':'Programar próximo seguimiento'}">📅 ${c.proximoSeguimiento||'Seguimiento'}</button>${diasContratoSinSeguimiento(c)!==null&&cl&&cl.telefono?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="seguirContratoWhatsApp('${c.id}')" title="Mandar mensaje de seguimiento por WhatsApp">📲</button>`:''}
         ${c.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Registrar cobro real">💰 Cobro</button>`:`<span style="font-size:10px;color:${(c.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap">${(c.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${c.diferenciaUsd}</span> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroContrato('${c.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`}
         <button class="btn-secondary" style="${c.comprobantePago?'background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366':''}" onclick="adjuntarComprobante('contratos','${c.id}')" title="${c.comprobantePago?'Comprobante cargado — clic para cambiarlo':'Adjuntar comprobante de pago (captura, ticket)'}">${c.comprobantePago?'📎✔':'📎'}</button>
         <button class="btn-secondary" onclick="generarContratoPDF('${c.id}')">📄 PDF</button>
@@ -3892,6 +3910,40 @@ function renderAlertas() {
       </div>`;
     } else {
       segPanel.innerHTML = '';
+    }
+  }
+
+  // Panel de contratos con seguimiento programado vencido — misma lógica
+  // que el de Presupuestos, pero sin umbral automático (ver comentario en
+  // diasContratoSinSeguimiento).
+  const segConPanel = document.getElementById('alertas-seguimiento-contratos-panel');
+  if(segConPanel) {
+    const sinSegCon = [...(DB.contratos||[])]
+      .filter(c=>diasContratoSinSeguimiento(c)!==null)
+      .sort((a,b)=>diasContratoSinSeguimiento(b)-diasContratoSinSeguimiento(a));
+    if(sinSegCon.length) {
+      segConPanel.innerHTML = `<div class="card" style="border-left:3px solid var(--orange);margin-bottom:12px">
+        <div class="card-header">
+          <span class="card-title" style="color:var(--orange)">📅 CONTRATOS CON SEGUIMIENTO VENCIDO (${sinSegCon.length})</span>
+          <button class="btn-secondary" style="font-size:11px" onclick="showPage('contratos')">Ver en Contratos →</button>
+        </div>
+        <div style="padding:4px 12px 8px">${sinSegCon.map(c=>{
+          const cl=DB.clientes.find(x=>String(x.id)===String(c.clienteId));
+          const dias = diasContratoSinSeguimiento(c);
+          const tieneWA = cl && cl.telefono;
+          return `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--orange);flex-shrink:0"></div>
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:600">${cl?cl.nombre:'—'} — ${nombrePlanContrato(c)}</div>
+              <div style="font-size:11px;color:var(--muted)">Seguimiento programado venció hace ${dias}d</div>
+            </div>
+            <button class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="guardarProximoSeguimientoContrato('${c.id}')" title="Reprogramar seguimiento">📅 Reprogramar</button>
+            ${tieneWA?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(37,211,102,0.12);border-color:#25d366;color:#25d366" onclick="seguirContratoWhatsApp('${c.id}')" title="Mandar mensaje de seguimiento">📲</button>`:''}
+          </div>`;
+        }).join('')}</div>
+      </div>`;
+    } else {
+      segConPanel.innerHTML = '';
     }
   }
 
@@ -7022,9 +7074,42 @@ function reclamarContratoWhatsApp(contratoId) {
   }
   const dias = diasPlazoVencidoContrato(c);
   const montoFinal = c.recargoPct ? Math.round(c.precioArs*(1+c.recargoPct/100)) : (c.precioArs||0);
-  const msg = `Hola ${cl.nombre}! Te escribimos de MEB Machinery Solutions. `
-    + `El contrato de mantenimiento (plan ${nombrePlanContrato(c)}, a ${c.plazoPago} días) venció hace ${dias} día${dias===1?'':'s'} sin que hayamos registrado el cobro. `
-    + `El monto es de $${montoFinal.toLocaleString('es-AR')}. ¿Podemos coordinar el pago? Gracias!`;
+  const msg = `Buen día ${cl.nombre}, ¿cómo está? Le escribimos de MEB Machinery Solutions. `
+    + `Queríamos consultarle por el contrato de mantenimiento (plan ${nombrePlanContrato(c)}) — el plazo de pago de ${c.plazoPago} días ya se cumplió hace ${dias} día${dias===1?'':'s'} y todavía no tenemos el cobro registrado de nuestro lado. `
+    + `El monto es de $${montoFinal.toLocaleString('es-AR')}. ¿Podríamos coordinar el pago cuando tenga un momento? Quedamos a disposición, ¡muchas gracias!`;
+  const tel = cl.telefono.replace(/\D/g,'');
+  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+// v17.41 — misma calendarización que ya existe en Presupuestos, ahora
+// para Contratos.
+async function guardarProximoSeguimientoContrato(id) {
+  const c = DB.contratos.find(x=>x.id===id);
+  if(!c) return;
+  const input = prompt('¿Cuándo hacés el próximo seguimiento de este contrato? (formato dd/mm/aaaa — dejalo vacío para borrarlo)', c.proximoSeguimiento||'');
+  if(input === null) return;
+  const limpio = input.trim();
+  if(limpio && !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(limpio)) { alert('Formato inválido — usá dd/mm/aaaa, por ejemplo 15/09/2026.'); return; }
+  c.proximoSeguimiento = limpio;
+  saveLocal();
+  renderContratos();
+  await writeToSheet({ action:'updateSeguimientoContrato', id, row:{ proximo_seguimiento: limpio } });
+  showToast(limpio ? 'Seguimiento programado' : 'Seguimiento borrado', 'success');
+}
+
+// Mensaje de seguimiento comercial para Contratos — mismo tono cordial
+// que el de Presupuestos, pensado para renovación, upsell, o un simple
+// chequeo con clientes de mantenimiento recurrente.
+function seguirContratoWhatsApp(contratoId) {
+  const c = DB.contratos.find(x => x.id === contratoId);
+  if (!c) return;
+  const cl = DB.clientes.find(x => String(x.id) === String(c.clienteId));
+  if (!cl || !cl.telefono) {
+    showToast('Este cliente no tiene teléfono cargado — no se puede mandar el mensaje', 'error');
+    return;
+  }
+  const msg = `Buen día ${cl.nombre}, ¿cómo está? Le escribimos de MEB Machinery Solutions para hacer un seguimiento del contrato de mantenimiento (plan ${nombrePlanContrato(c)}). `
+    + `Quedamos a disposición por cualquier consulta o si necesita coordinar algo. ¡Muchas gracias, saludos!`;
   const tel = cl.telefono.replace(/\D/g,'');
   window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
 }
@@ -7040,9 +7125,9 @@ function reclamarPresupuestoWhatsApp(presupId) {
   const dias = diasPlazoVencido(p);
   const montoFinal = p.recargoPct ? Math.round(p.monto*(1+p.recargoPct/100)) : (p.monto||0);
   const numPresup = String(p.num||p.id).padStart(4,'0');
-  const msg = `Hola ${cl.nombre}! Te escribimos de MEB Machinery Solutions. `
-    + `El presupuesto N° ${numPresup} (a ${p.plazoPago} días) venció hace ${dias} día${dias===1?'':'s'} sin que hayamos registrado el cobro. `
-    + `El monto es de $${montoFinal.toLocaleString('es-AR')}. ¿Podemos coordinar el pago? Gracias!`;
+  const msg = `Buen día ${cl.nombre}, ¿cómo está? Le escribimos de MEB Machinery Solutions. `
+    + `Queríamos consultarle por el presupuesto N° ${numPresup} — el plazo de pago de ${p.plazoPago} días ya se cumplió hace ${dias} día${dias===1?'':'s'} y todavía no tenemos el cobro registrado de nuestro lado. `
+    + `El monto es de $${montoFinal.toLocaleString('es-AR')}. ¿Podríamos coordinar el pago cuando tenga un momento? Quedamos a disposición, ¡muchas gracias!`;
   const tel = cl.telefono.replace(/\D/g,'');
   window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
 }
@@ -7066,7 +7151,8 @@ async function guardarProximoSeguimiento(id) {
 
 // Mensaje de seguimiento comercial — distinto del reclamo de cobro: este
 // es para un presupuesto que TODAVÍA no se aprobó ni rechazó, no para uno
-// aprobado y sin cobrar.
+// aprobado y sin cobrar. Tono cordial, sin apuro — es una consulta, no un
+// reclamo.
 function seguirPresupuestoWhatsApp(presupId) {
   const p = DB.presupuestos.find(x => x.id === presupId);
   if (!p) return;
@@ -7077,8 +7163,9 @@ function seguirPresupuestoWhatsApp(presupId) {
   }
   const numPresup = String(p.num||p.id).padStart(4,'0');
   const montoFinal = p.recargoPct ? Math.round(p.monto*(1+p.recargoPct/100)) : (p.monto||0);
-  const msg = `Hola ${cl.nombre}! Te escribimos de MEB Machinery Solutions para hacer seguimiento del presupuesto N° ${numPresup} por $${montoFinal.toLocaleString('es-AR')}. `
-    + `¿Pudiste evaluarlo? Quedamos atentos por cualquier consulta que tengas. Gracias!`;
+  const msg = `Buen día ${cl.nombre}, ¿cómo está? Le escribimos de MEB Machinery Solutions. `
+    + `Queríamos saber si pudo evaluar el presupuesto N° ${numPresup} (por $${montoFinal.toLocaleString('es-AR')}) que le enviamos. `
+    + `Quedamos a disposición por cualquier consulta que tenga. ¡Muchas gracias, saludos!`;
   const tel = cl.telefono.replace(/\D/g,'');
   window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
 }
