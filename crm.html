@@ -628,6 +628,8 @@ select option { background:var(--dark); }
     <div id="alertas-seguimiento-panel" style="margin-bottom:12px"></div>
     <!-- Panel de contratos con seguimiento programado vencido -->
     <div id="alertas-seguimiento-contratos-panel" style="margin-bottom:12px"></div>
+    <!-- Panel de clientes activos sin operación en 90+ días -->
+    <div id="alertas-clientes-inactivos-panel" style="margin-bottom:12px"></div>
     <div class="card"><div id="lista-alertas"></div></div>
   </div>
 
@@ -754,6 +756,7 @@ select option { background:var(--dark); }
       <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">
         Margen real (cobrado − repuesto − movilidad − gastos) sobre trabajos ya cobrados — no sobre lo presupuestado. Sirve para ver qué tipo de trabajo y qué clientes dejan mejor margen, más allá de cuánto facturan.
       </p>
+      <div id="margen-neto-real-panel" style="margin-bottom:14px"></div>
       <div style="font-size:12px;color:var(--yellow);font-weight:600;margin-bottom:6px">Por tipo de trabajo</div>
       <div class="table-wrap"><table>
         <thead><tr><th>Tipo</th><th style="text-align:center">Trabajos</th><th style="text-align:right">Cobrado</th><th style="text-align:right">Margen</th><th style="text-align:right">% Margen</th></tr></thead>
@@ -781,6 +784,9 @@ select option { background:var(--dark); }
       <div style="font-size:12px;color:var(--yellow);font-weight:600;margin:18px 0 6px">Presupuesto aprobado → trabajo terminado</div>
       <div id="tiempo-respuesta-resumen"></div>
       <p style="font-size:10px;color:var(--muted2);margin-top:6px">Solo cuenta trabajos vinculados a un presupuesto (campo nuevo, opcional, en la ficha del Trabajo) — no hay forma confiable de reconstruir esto para trabajos viejos sin ese vínculo, así que este número va a empezar en 0 y crecer a medida que vincules trabajos nuevos.</p>
+      <div style="font-size:12px;color:var(--yellow);font-weight:600;margin:18px 0 6px">Tasa de conversión medida (presupuestos vinculados a un trabajo)</div>
+      <div id="tasa-conversion-resumen"></div>
+      <p style="font-size:10px;color:var(--muted2);margin-top:6px">De los presupuestos aprobados, qué porcentaje tiene un Trabajo vinculado — el vínculo es opcional, así que este número solo mide lo vinculado, no el negocio real completo (todavía).</p>
     </div>
     <!-- Fila 3: Estado de cobro -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px">
@@ -1103,6 +1109,9 @@ select option { background:var(--dark); }
         <div class="form-group"><label>Contrato preventivo 1000hs (USD)</label><input type="number" id="tf-contrato-1000" step="0.01"/></div>
         <div class="form-group"><label>Contrato preventivo 2000hs (USD)</label><input type="number" id="tf-contrato-2000" step="0.01"/></div>
         <div class="form-group"><label>Margen mínimo sobre repuestos (%)</label><input type="number" id="tf-margen-repuestos" step="1"/></div>
+        <div class="form-group"><label>Costo hora propia — tu mano de obra (ARS)</label><input type="number" id="tf-costo-hora-propia" step="1"/>
+          <p style="font-size:10px;color:var(--muted);margin-top:3px">Lo que te cuesta REALMENTE una hora tuya en el campo (no lo que cobrás) — combustible, desgaste de herramientas y vehículo, tiempo. Se usa para calcular el margen neto real en Estadísticas, junto con las horas que cargues en cada Trabajo.</p>
+        </div>
       </div>
     </div>
     <div class="card" style="margin-bottom:16px">
@@ -1225,7 +1234,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1CwVfqFLy3_dXq6zTxYQq2c3ALWPh9-AlkMhRM8ZCT7fB1idOELGs7ntPKb2HKh36Rw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwLlRlhY3s43YBpJ5bgO59zztEhlaKNP8_NSFkr513kVmLwSaVevSIBDPKcE0Bibo1bBg/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1615,7 +1624,8 @@ async function syncAll() {
       gananciaUsd:parseFloat(r.GANANCIA_USD)||0,
       tcAlMomento:parseFloat(r.TC_AL_MOMENTO)||0, gananciaUsdEsperada:parseFloat(r.GANANCIA_USD_ESPERADA)||0,
       diferenciaUsd:parseFloat(r.DIFERENCIA_USD)||0, diferenciaPct:parseFloat(r.DIFERENCIA_PCT)||0,
-      fechaCobroReal:r.FECHA_COBRO_REAL||''
+      fechaCobroReal:r.FECHA_COBRO_REAL||'',
+      horasTrabajadas:parseFloat(r.HORAS_TRABAJADAS)||0
     })); else if(!DB.trabajos.length) DB.trabajos=[];
     // FIX carrera de sincronización: si un cambio de cobro se hizo hace menos
     // de 90s, se respeta lo local en vez de lo que trajo el Sheet (que puede
@@ -1800,7 +1810,8 @@ async function syncAll() {
       km:parseFloat(r.KM_USD)||0, contrato1000:parseFloat(r.CONTRATO_1000_USD)||0,
       contrato2000:parseFloat(r.CONTRATO_2000_USD)||0, margenRepuestos:parseFloat(r.MARGEN_REPUESTOS_PCT)||0,
       recargo30:parseFloat(r.RECARGO_30_PCT)||0, recargo60:parseFloat(r.RECARGO_60_PCT)||0,
-      recargo90:parseFloat(r.RECARGO_90_PCT)||0, actualizadoPor:r.ACTUALIZADO_POR||''
+      recargo90:parseFloat(r.RECARGO_90_PCT)||0, actualizadoPor:r.ACTUALIZADO_POR||'',
+      costoHoraPropia:parseMonto(r.COSTO_HORA_PROPIA_ARS||'0')
     }));
 
     // v17.14 FIX: la pestaña Informes leía SOLO de una lista local en el
@@ -2152,6 +2163,38 @@ function diasContratoSinSeguimiento(c) {
   const diff = Math.floor((hoy - fechaSeg) / 86400000);
   return diff >= 0 ? diff : null;
 }
+// v17.42 — pedido de la auditoría (punto 6, alerta MEDIA): un cliente
+// marcado "activo" que hace 90+ días no tiene ninguna operación (trabajo,
+// presupuesto, ni contacto registrado) corre riesgo de pasar a inactivo
+// sin que nadie se dé cuenta. Toma la fecha más reciente entre Trabajos,
+// Presupuestos y Último contacto — si no hay ninguna fecha de referencia,
+// no se puede calcular con confianza y se deja sin avisar.
+function diasClienteSinOperacion(c) {
+  if(!c || c.estado!=='activo') return null;
+  let ultima = null;
+  DB.trabajos.forEach(t=>{
+    if(String(t.clienteId)!==String(c.id)) return;
+    const f = parseFechaAny(t.fechaFin) || parseFechaAny(t.fechaInicio);
+    if(f && (!ultima || f>ultima)) ultima = f;
+  });
+  DB.presupuestos.forEach(p=>{
+    const clP = DB.clientes.find(x=>String(x.id)===String(p.clienteId));
+    if(!clP || clP.id!==c.id) return;
+    const f = parseFechaAny(p.fecha);
+    if(f && (!ultima || f>ultima)) ultima = f;
+  });
+  if(c.ultimoContacto) {
+    const f = parseFechaAny(c.ultimoContacto);
+    if(f && (!ultima || f>ultima)) ultima = f;
+  }
+  if(!ultima) return null;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const diff = Math.floor((hoy - ultima) / 86400000);
+  return diff >= 90 ? diff : null;
+}
+function clientesSinOperacion() {
+  return DB.clientes.filter(c=>diasClienteSinOperacion(c)!==null);
+}
 // Igual que diasPlazoVencido, pero para Contratos — la base es la fecha de
 // inicio del contrato (no tiene "fecha de cotización" como el presupuesto).
 function diasPlazoVencidoContrato(c) {
@@ -2231,8 +2274,9 @@ function updateBadges() {
   const vencidosPlazoCon = DB.contratos.filter(c=>diasPlazoVencidoContrato(c)).length;
   const sinSeguimientoCount = DB.presupuestos.filter(p=>diasPresupuestoSinSeguimiento(p)!==null).length;
   const sinSeguimientoConCount = (DB.contratos||[]).filter(c=>diasContratoSinSeguimiento(c)!==null).length;
+  const clientesInactivosCount = (typeof clientesSinOperacion==="function" ? clientesSinOperacion().length : 0);
   const trabajosCeroCount = (typeof trabajosCobroEnCero==="function" ? trabajosCobroEnCero().length : 0);
-  const al=DB.alertas.filter(a=>!a.resuelta).length + (typeof calcularAlertasRepuesto==="function" ? calcularAlertasRepuesto().length : 0) + vencidosPlazo + vencidosPlazoCon + sinSeguimientoCount + sinSeguimientoConCount + trabajosCeroCount;
+  const al=DB.alertas.filter(a=>!a.resuelta).length + (typeof calcularAlertasRepuesto==="function" ? calcularAlertasRepuesto().length : 0) + vencidosPlazo + vencidosPlazoCon + sinSeguimientoCount + sinSeguimientoConCount + clientesInactivosCount + trabajosCeroCount;
   document.getElementById('badge-alertas').textContent=al;
   const reconectarCount = (typeof calcularParaReconectar==="function" ? calcularParaReconectar().length : 0)
                          + (typeof calcularProspectosContrato==="function" ? calcularProspectosContrato().length : 0);
@@ -3106,7 +3150,7 @@ function renderTrabajos() {
     const margen=montoCobrado>0?Math.round(ganancia/montoCobrado*100):(factTerceros>0?Math.round(ganancia/factTerceros*100):0);
     const margenColor=margen>=30?'var(--green)':margen>=10?'var(--yellow)':'var(--red)';
     return `<tr>
-      <td><div class="td-name">${t.titulo}</div><div class="td-muted">${fmtDate(t.fechaInicio)}</div></td>
+      <td><div class="td-name">${t.titulo}</div><div class="td-muted">${fmtDate(t.fechaInicio)}${t.horasTrabajadas?` · ⏱ ${t.horasTrabajadas}h`:''}</div></td>
       <td>${cl?cl.nombre:'—'}</td>
       <td>${mq?`${mq.marca} ${mq.modelo}`:'—'}</td>
       <td><span class="badge badge-blue">${t.tipo||'—'}</span></td>
@@ -3480,6 +3524,7 @@ function renderTarifario() {
     document.getElementById('tf-contrato-1000').value = v.contrato1000||'';
     document.getElementById('tf-contrato-2000').value = v.contrato2000||'';
     document.getElementById('tf-margen-repuestos').value = v.margenRepuestos||'';
+    document.getElementById('tf-costo-hora-propia').value = v.costoHoraPropia||'';
     document.getElementById('tf-recargo-30').value = v.recargo30||'';
     document.getElementById('tf-recargo-60').value = v.recargo60||'';
     document.getElementById('tf-recargo-90').value = v.recargo90||'';
@@ -3519,7 +3564,8 @@ function guardarTarifario() {
     diagnostico: gv('tf-diagnostico'), horaNormal: gv('tf-hora-normal'), horaUrgencia: gv('tf-hora-urgencia'),
     km: gv('tf-km'), contrato1000: gv('tf-contrato-1000'), contrato2000: gv('tf-contrato-2000'),
     margenRepuestos: gv('tf-margen-repuestos'), recargo30: gv('tf-recargo-30'),
-    recargo60: gv('tf-recargo-60'), recargo90: gv('tf-recargo-90'), actualizadoPor:'CRM'
+    recargo60: gv('tf-recargo-60'), recargo90: gv('tf-recargo-90'), actualizadoPor:'CRM',
+    costoHoraPropia: gv('tf-costo-hora-propia')
   };
   DB.tarifario = DB.tarifario || [];
   DB.tarifario.push(nuevo);
@@ -3944,6 +3990,33 @@ function renderAlertas() {
       </div>`;
     } else {
       segConPanel.innerHTML = '';
+    }
+  }
+
+  // Panel de clientes activos sin operación en 90+ días.
+  const clInactPanel = document.getElementById('alertas-clientes-inactivos-panel');
+  if(clInactPanel) {
+    const sinOp = clientesSinOperacion().sort((a,b)=>diasClienteSinOperacion(b)-diasClienteSinOperacion(a));
+    if(sinOp.length) {
+      clInactPanel.innerHTML = `<div class="card" style="border-left:3px solid var(--yellow);margin-bottom:12px">
+        <div class="card-header">
+          <span class="card-title" style="color:var(--yellow)">👤 CLIENTES ACTIVOS SIN OPERACIÓN 90+ DÍAS (${sinOp.length})</span>
+          <button class="btn-secondary" style="font-size:11px" onclick="showPage('clientes')">Ver en Clientes →</button>
+        </div>
+        <div style="padding:4px 12px 8px">${sinOp.map(c=>{
+          const dias = diasClienteSinOperacion(c);
+          return `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--yellow);flex-shrink:0"></div>
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:600">${c.nombre}${c.empresa?' · '+c.empresa:''}</div>
+              <div style="font-size:11px;color:var(--muted)">Sin operación registrada hace ${dias} días</div>
+            </div>
+            <button class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="irACliente('${c.id}')" title="Ver ficha del cliente">Ver ficha</button>
+          </div>`;
+        }).join('')}</div>
+      </div>`;
+    } else {
+      clInactPanel.innerHTML = '';
     }
   }
 
@@ -5563,6 +5636,21 @@ function renderEstacionalidadYTiempos() {
   } else {
     contRespuesta.innerHTML = `<div class="empty-state" style="padding:16px"><div class="icon">🔗</div><p>Todavía no hay trabajos completados vinculados a un presupuesto aprobado</p></div>`;
   }
+
+  // v17.42 — pedido de la auditoría (punto 5): tasa de conversión real
+  // Presupuesto → Trabajo, usando el vínculo presupuestoId que ya existe.
+  const contConversion = document.getElementById('tasa-conversion-resumen');
+  if (contConversion) {
+    const aprobados = DB.presupuestos.filter(p => p.estado === 'aprobado');
+    const vinculadosSet = new Set(DB.trabajos.filter(t=>t.presupuestoId).map(t=>String(t.presupuestoId)));
+    const conTrabajo = aprobados.filter(p => vinculadosSet.has(String(p.id)));
+    if (aprobados.length) {
+      const pct = Math.round(conTrabajo.length/aprobados.length*100);
+      contConversion.innerHTML = `<div class="stat-card ${pct>=50?'green':'orange'}"><div class="stat-val">${pct}%</div><div class="stat-label">${conTrabajo.length} DE ${aprobados.length} PRESUPUESTOS APROBADOS TIENEN TRABAJO VINCULADO</div></div>`;
+    } else {
+      contConversion.innerHTML = `<div class="empty-state" style="padding:16px"><div class="icon">🔗</div><p>Todavía no hay presupuestos aprobados</p></div>`;
+    }
+  }
 }
 
 // ── Rentabilidad real — margen por tipo de trabajo y por cliente ───────────
@@ -5619,6 +5707,41 @@ function renderRentabilidadReal() {
   if (!contTipo || !contCliente) return;
 
   const cobrados = DB.trabajos.filter(t => t.estadoCobro === 'cobrado');
+
+  // v17.42 — pedido de la auditoría (punto 4): margen NETO real, no solo
+  // el bruto de arriba. Resta dos cosas que antes no se descontaban en
+  // ningún lado: el costo de la mano de obra propia de Emmanuel (horas
+  // cargadas por trabajo × costo/hora definido en Tarifario) y los Gastos
+  // de Estructura ya confirmados (combustible, vehículo, herramientas,
+  // seguros, software). El total de Gastos de Estructura es el registrado
+  // hasta hoy en general — no está recortado al mismo período que
+  // "cobrados", así que es una aproximación, no un cálculo exacto mes a
+  // mes; se aclara en el panel para no generar falsa precisión.
+  const panelMNR = document.getElementById('margen-neto-real-panel');
+  if (panelMNR) {
+    const tarifVig = tarifarioVigente();
+    const costoHora = tarifVig ? Number(tarifVig.costoHoraPropia||0) : 0;
+    const gananciaBruta = cobrados.reduce((s,t)=>s+margenDe(t).margen, 0);
+    const horasTotales = cobrados.reduce((s,t)=>s+Number(t.horasTrabajadas||0), 0);
+    const costoManoObraPropia = horasTotales * costoHora;
+    const gastosEstructConfirmados = (DB.gastosEstructura||[]).filter(g=>g.confirmado).reduce((s,g)=>s+Number(g.total||0),0);
+    const margenNeto = gananciaBruta - costoManoObraPropia - gastosEstructConfirmados;
+    const ingresoTotal = cobrados.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
+    const pctNeto = ingresoTotal>0 ? Math.round(margenNeto/ingresoTotal*100) : 0;
+    if (!costoHora) {
+      panelMNR.innerHTML = `<div style="padding:10px 14px;background:rgba(244,180,0,0.08);border-left:3px solid var(--yellow);border-radius:4px;font-size:12px;color:var(--yellow)">
+        ⚠️ Todavía no cargaste el "Costo hora propia" en Tarifario — sin eso no se puede calcular el margen neto real (solo se ve el margen bruto de las tablas de abajo).
+      </div>`;
+    } else {
+      panelMNR.innerHTML = `<div class="stats-grid" style="margin-bottom:6px">
+        <div class="stat-card orange"><div class="stat-val">${fmtMonto(gananciaBruta)}</div><div class="stat-label">Ganancia bruta reportada</div></div>
+        <div class="stat-card red"><div class="stat-val">−${fmtMonto(costoManoObraPropia)}</div><div class="stat-label">Costo mano de obra propia (${horasTotales}h)</div></div>
+        <div class="stat-card red"><div class="stat-val">−${fmtMonto(gastosEstructConfirmados)}</div><div class="stat-label">Gastos de Estructura confirmados</div></div>
+        <div class="stat-card ${margenNeto>=0?'green':'red'}"><div class="stat-val">${fmtMonto(margenNeto)}</div><div class="stat-label">MARGEN NETO REAL (${pctNeto}%)</div></div>
+      </div>
+      <p style="font-size:10px;color:var(--muted2);margin:2px 0 0">Los Gastos de Estructura son el total confirmado hasta hoy, no recortado al mismo período que los trabajos cobrados — es una aproximación para ver el orden de magnitud, no un cálculo mensual exacto.</p>`;
+    }
+  }
 
   function margenDe(t) {
     const cobrado = Number(t.montoCobrado||0);
@@ -8300,6 +8423,9 @@ function openModal(type, data={}) {
       </div>
       <div class="form-group"><label>Monto cobrado ($)</label><input id="f-tcobrado" type="number" value="${data.montoCobrado||0}"/></div>
       <div class="form-group"><label>Monto gastos ($)</label><input id="f-tgastos" type="number" value="${data.montoGastos||0}"/></div>
+      <div class="form-group"><label>Horas trabajadas</label><input id="f-thoras" type="number" step="0.5" value="${data.horasTrabajadas||''}" placeholder="Ej: 4.5"/>
+        <p style="font-size:10px;color:var(--muted);margin-top:3px">Para calcular el costo real de tu mano de obra (ver Costo hora propia en Tarifario) y llegar al margen neto real en Estadísticas.</p>
+      </div>
       <div class="form-group full" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><label style="color:var(--yellow);font-size:11px;letter-spacing:2px">DESGLOSE ECONÓMICO</label></div>
       <div class="form-group"><label>Costo repuesto ($) — lo que pagó MEB</label><input id="f-tcostoRep" type="number" value="${data.costoRepuesto||0}"/></div>
       <div class="form-group"><label>Repuesto facturado al cliente ($)</label><input id="f-tprecioRep" type="number" value="${data.precioRepuestoFacturado||0}"/></div>
@@ -8322,7 +8448,7 @@ function openModal(type, data={}) {
       // esperado corresponde exactamente a lo que Emmanuel ve como ganancia.
       const gananciaArsAlGuardar = (manoObraV+movilidadV+(precioRepV-costoRepV)) || (montoCobradoV-costoRepV-montoGastosV);
       const gananciaUsdEsperadaCalc = tcMomento>0 ? Math.round(gananciaArsAlGuardar/tcMomento) : (data.gananciaUsdEsperada||0);
-      guardar('trabajos',{id:data.id||uid(),titulo:gv('f-ttit'),clienteId:gv('f-tcli'),maquinaId:gv('f-tmaq'),presupuestoId:gv('f-tpresup'),tipo:gv('f-ttipo'),estado:gv('f-testado'),estadoMaquina:gv('f-tmaqestado'),fechaInicio:gv('f-tfecha'),fechaFin:gv('f-tfechafin'),montoCobrado:montoCobradoV,montoGastos:montoGastosV,costoRepuesto:costoRepV,precioRepuestoFacturado:precioRepV,manoObraCobrada:manoObraV,movilidad:movilidadV,repuestosDetalle:gv('f-trepdetalle'),fotoUrl:gv('f-tfoto'),notas:gv('f-tnotas'),tcAlMomento:tcMomento||data.tcAlMomento||0,gananciaUsdEsperada:gananciaUsdEsperadaCalc},'titulo');
+      guardar('trabajos',{id:data.id||uid(),titulo:gv('f-ttit'),clienteId:gv('f-tcli'),maquinaId:gv('f-tmaq'),presupuestoId:gv('f-tpresup'),tipo:gv('f-ttipo'),estado:gv('f-testado'),estadoMaquina:gv('f-tmaqestado'),fechaInicio:gv('f-tfecha'),fechaFin:gv('f-tfechafin'),montoCobrado:montoCobradoV,montoGastos:montoGastosV,costoRepuesto:costoRepV,precioRepuestoFacturado:precioRepV,manoObraCobrada:manoObraV,movilidad:movilidadV,repuestosDetalle:gv('f-trepdetalle'),fotoUrl:gv('f-tfoto'),notas:gv('f-tnotas'),tcAlMomento:tcMomento||data.tcAlMomento||0,gananciaUsdEsperada:gananciaUsdEsperadaCalc,horasTrabajadas:parseFloat(gv('f-thoras'))||0},'titulo');
     };
     setTimeout(()=>compararPisoTarifario(), 50);
   }
