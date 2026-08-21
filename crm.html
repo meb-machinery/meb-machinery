@@ -1109,8 +1109,8 @@ select option { background:var(--dark); }
         <div class="form-group"><label>Contrato preventivo 1000hs (USD)</label><input type="number" id="tf-contrato-1000" step="0.01"/></div>
         <div class="form-group"><label>Contrato preventivo 2000hs (USD)</label><input type="number" id="tf-contrato-2000" step="0.01"/></div>
         <div class="form-group"><label>Margen mínimo sobre repuestos (%)</label><input type="number" id="tf-margen-repuestos" step="1"/></div>
-        <div class="form-group"><label>Costo hora propia — tu mano de obra (ARS)</label><input type="number" id="tf-costo-hora-propia" step="1"/>
-          <p style="font-size:10px;color:var(--muted);margin-top:3px">Lo que te cuesta REALMENTE una hora tuya en el campo (no lo que cobrás) — combustible, desgaste de herramientas y vehículo, tiempo. Se usa para calcular el margen neto real en Estadísticas, junto con las horas que cargues en cada Trabajo.</p>
+        <div class="form-group"><label>Costo hora propia — tu mano de obra (USD)</label><input type="number" id="tf-costo-hora-propia" step="0.01"/>
+          <p style="font-size:10px;color:var(--muted);margin-top:3px">Lo que te cuesta REALMENTE una hora tuya en el campo (no lo que cobrás) — combustible, desgaste de herramientas y vehículo, tiempo. En dólares, como el resto del Tarifario — el CRM lo convierte solo a pesos con el dólar del día al calcular el margen neto real en Estadísticas, junto con las horas que cargues en cada Trabajo.</p>
         </div>
       </div>
     </div>
@@ -1234,7 +1234,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwLlRlhY3s43YBpJ5bgO59zztEhlaKNP8_NSFkr513kVmLwSaVevSIBDPKcE0Bibo1bBg/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwHUlI0tiCx9h-HnL52o9L9RsI5bRw6zsLJNZsQ5yWbjxp0L4dYwiJl1rA0duclGbqS_g/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1811,7 +1811,7 @@ async function syncAll() {
       contrato2000:parseFloat(r.CONTRATO_2000_USD)||0, margenRepuestos:parseFloat(r.MARGEN_REPUESTOS_PCT)||0,
       recargo30:parseFloat(r.RECARGO_30_PCT)||0, recargo60:parseFloat(r.RECARGO_60_PCT)||0,
       recargo90:parseFloat(r.RECARGO_90_PCT)||0, actualizadoPor:r.ACTUALIZADO_POR||'',
-      costoHoraPropia:parseMonto(r.COSTO_HORA_PROPIA_ARS||'0')
+      costoHoraPropiaUsd:parseFloat(r.COSTO_HORA_PROPIA_USD)||0
     }));
 
     // v17.14 FIX: la pestaña Informes leía SOLO de una lista local en el
@@ -2113,6 +2113,21 @@ function diasPlazoVencido(p) {
   const hoy = new Date(); hoy.setHours(0,0,0,0);
   const diff = Math.floor((hoy - vencimiento) / 86400000);
   return diff > 0 ? diff : null;
+}
+// v17.43 — pedido de la auditoría: la auditoría del 20/08/2026 encontró 5
+// presupuestos cargados por error con montos de $50 a $66 (coincidían con
+// el número de fila + 1 — error de fórmula/copiado). Esta validación
+// avisa ANTES de guardar si el monto parece demasiado bajo para un
+// presupuesto real, para que ese error no se repita. El umbral ($1.000)
+// es deliberadamente bajo — solo atrapa casos absurdos, no presupuestos
+// chicos legítimos. Devuelve true si está todo bien o el usuario confirmó
+// igual, false si hay que cancelar el guardado.
+function confirmarMontoPresupuesto(monto) {
+  const m = Number(monto) || 0;
+  if (m > 0 && m < 1000) {
+    return confirm(`El monto ingresado es $${m.toLocaleString('es-AR')} — parece demasiado bajo para un presupuesto real (la auditoría de agosto 2026 encontró varios presupuestos cargados por error con montos así, tipo $50 o $66). ¿Confirmás que el monto es correcto?`);
+  }
+  return true;
 }
 // v17.40 — pedido de la auditoría del 20/08/2026 (sección 18, alerta
 // CRÍTICA): un presupuesto "pendiente" (todavía no aprobado ni
@@ -3524,7 +3539,7 @@ function renderTarifario() {
     document.getElementById('tf-contrato-1000').value = v.contrato1000||'';
     document.getElementById('tf-contrato-2000').value = v.contrato2000||'';
     document.getElementById('tf-margen-repuestos').value = v.margenRepuestos||'';
-    document.getElementById('tf-costo-hora-propia').value = v.costoHoraPropia||'';
+    document.getElementById('tf-costo-hora-propia').value = v.costoHoraPropiaUsd||'';
     document.getElementById('tf-recargo-30').value = v.recargo30||'';
     document.getElementById('tf-recargo-60').value = v.recargo60||'';
     document.getElementById('tf-recargo-90').value = v.recargo90||'';
@@ -3565,7 +3580,7 @@ function guardarTarifario() {
     km: gv('tf-km'), contrato1000: gv('tf-contrato-1000'), contrato2000: gv('tf-contrato-2000'),
     margenRepuestos: gv('tf-margen-repuestos'), recargo30: gv('tf-recargo-30'),
     recargo60: gv('tf-recargo-60'), recargo90: gv('tf-recargo-90'), actualizadoPor:'CRM',
-    costoHoraPropia: gv('tf-costo-hora-propia')
+    costoHoraPropiaUsd: gv('tf-costo-hora-propia')
   };
   DB.tarifario = DB.tarifario || [];
   DB.tarifario.push(nuevo);
@@ -4252,6 +4267,7 @@ function resolverOAutoCrearMaquina(clienteId, serie, modelo, tipo, maquinaIdPrev
 }
 
 function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail, tipoMaquina, tcDesdePdf, checklistIdOrigen) {
+  if (!confirmarMontoPresupuesto(monto)) return;
   let p = DB.presupuestos.find(x=>x.id===presupId);
   const esNuevoPresup = !p;
   // Tipo de cambio cargado en el campo nuevo de la ficha del PDF (Opciones
@@ -5701,7 +5717,7 @@ function renderMotivosNoAprobacion() {
   cont.innerHTML = html;
 }
 
-function renderRentabilidadReal() {
+async function renderRentabilidadReal() {
   const contTipo = document.getElementById('rentabilidad-tipo-tabla');
   const contCliente = document.getElementById('rentabilidad-cliente-tabla');
   if (!contTipo || !contCliente) return;
@@ -5711,35 +5727,46 @@ function renderRentabilidadReal() {
   // v17.42 — pedido de la auditoría (punto 4): margen NETO real, no solo
   // el bruto de arriba. Resta dos cosas que antes no se descontaban en
   // ningún lado: el costo de la mano de obra propia de Emmanuel (horas
-  // cargadas por trabajo × costo/hora definido en Tarifario) y los Gastos
-  // de Estructura ya confirmados (combustible, vehículo, herramientas,
-  // seguros, software). El total de Gastos de Estructura es el registrado
-  // hasta hoy en general — no está recortado al mismo período que
-  // "cobrados", así que es una aproximación, no un cálculo exacto mes a
-  // mes; se aclara en el panel para no generar falsa precisión.
+  // cargadas por trabajo × costo/hora definido en Tarifario, en USD ×
+  // dólar del día — v17.43) y los Gastos de Estructura ya confirmados
+  // (combustible, vehículo, herramientas, seguros, software). El total de
+  // Gastos de Estructura es el registrado hasta hoy en general — no está
+  // recortado al mismo período que "cobrados", así que es una
+  // aproximación, no un cálculo exacto mes a mes; se aclara en el panel
+  // para no generar falsa precisión.
   const panelMNR = document.getElementById('margen-neto-real-panel');
   if (panelMNR) {
     const tarifVig = tarifarioVigente();
-    const costoHora = tarifVig ? Number(tarifVig.costoHoraPropia||0) : 0;
-    const gananciaBruta = cobrados.reduce((s,t)=>s+margenDe(t).margen, 0);
-    const horasTotales = cobrados.reduce((s,t)=>s+Number(t.horasTrabajadas||0), 0);
-    const costoManoObraPropia = horasTotales * costoHora;
-    const gastosEstructConfirmados = (DB.gastosEstructura||[]).filter(g=>g.confirmado).reduce((s,g)=>s+Number(g.total||0),0);
-    const margenNeto = gananciaBruta - costoManoObraPropia - gastosEstructConfirmados;
-    const ingresoTotal = cobrados.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
-    const pctNeto = ingresoTotal>0 ? Math.round(margenNeto/ingresoTotal*100) : 0;
-    if (!costoHora) {
+    const costoHoraUsd = tarifVig ? Number(tarifVig.costoHoraPropiaUsd||0) : 0;
+    if (!costoHoraUsd) {
       panelMNR.innerHTML = `<div style="padding:10px 14px;background:rgba(244,180,0,0.08);border-left:3px solid var(--yellow);border-radius:4px;font-size:12px;color:var(--yellow)">
         ⚠️ Todavía no cargaste el "Costo hora propia" en Tarifario — sin eso no se puede calcular el margen neto real (solo se ve el margen bruto de las tablas de abajo).
       </div>`;
     } else {
+      panelMNR.innerHTML = `<div style="padding:10px 14px;font-size:12px;color:var(--muted)">Consultando dólar del día para convertir el costo hora...</div>`;
+      let tc = 0;
+      try { tc = await obtenerDolarReferencia(); } catch(e) { /* sigue abajo con tc=0 */ }
+      if (!tc) {
+        panelMNR.innerHTML = `<div style="padding:10px 14px;background:rgba(224,122,122,0.08);border-left:3px solid #e07a7a;border-radius:4px;font-size:12px;color:#e07a7a">
+          ⚠️ No se pudo traer el dólar del día para convertir el costo hora propia (USD ${costoHoraUsd}) — probá sincronizar de nuevo en un momento.
+        </div>`;
+        return;
+      }
+      const costoHoraArs = costoHoraUsd * tc;
+      const gananciaBruta = cobrados.reduce((s,t)=>s+margenDe(t).margen, 0);
+      const horasTotales = cobrados.reduce((s,t)=>s+Number(t.horasTrabajadas||0), 0);
+      const costoManoObraPropia = horasTotales * costoHoraArs;
+      const gastosEstructConfirmados = (DB.gastosEstructura||[]).filter(g=>g.confirmado).reduce((s,g)=>s+Number(g.total||0),0);
+      const margenNeto = gananciaBruta - costoManoObraPropia - gastosEstructConfirmados;
+      const ingresoTotal = cobrados.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
+      const pctNeto = ingresoTotal>0 ? Math.round(margenNeto/ingresoTotal*100) : 0;
       panelMNR.innerHTML = `<div class="stats-grid" style="margin-bottom:6px">
         <div class="stat-card orange"><div class="stat-val">${fmtMonto(gananciaBruta)}</div><div class="stat-label">Ganancia bruta reportada</div></div>
-        <div class="stat-card red"><div class="stat-val">−${fmtMonto(costoManoObraPropia)}</div><div class="stat-label">Costo mano de obra propia (${horasTotales}h)</div></div>
+        <div class="stat-card red"><div class="stat-val">−${fmtMonto(costoManoObraPropia)}</div><div class="stat-label">Costo mano de obra propia (${horasTotales}h × USD ${costoHoraUsd} × $${tc})</div></div>
         <div class="stat-card red"><div class="stat-val">−${fmtMonto(gastosEstructConfirmados)}</div><div class="stat-label">Gastos de Estructura confirmados</div></div>
         <div class="stat-card ${margenNeto>=0?'green':'red'}"><div class="stat-val">${fmtMonto(margenNeto)}</div><div class="stat-label">MARGEN NETO REAL (${pctNeto}%)</div></div>
       </div>
-      <p style="font-size:10px;color:var(--muted2);margin:2px 0 0">Los Gastos de Estructura son el total confirmado hasta hoy, no recortado al mismo período que los trabajos cobrados — es una aproximación para ver el orden de magnitud, no un cálculo mensual exacto.</p>`;
+      <p style="font-size:10px;color:var(--muted2);margin:2px 0 0">Los Gastos de Estructura son el total confirmado hasta hoy, no recortado al mismo período que los trabajos cobrados — es una aproximación para ver el orden de magnitud, no un cálculo mensual exacto. El costo hora se convirtió con el dólar del día (USD ${costoHoraUsd} × $${tc} = ${fmtMonto(costoHoraArs)}/hora).</p>`;
     }
   }
 
@@ -9354,6 +9381,7 @@ async function actualizarTCCobroContrato(usdEsperado) {
 // ============================================================
 function guardar(tipo, obj, campoRequerido) {
   if(campoRequerido&&!obj[campoRequerido]){showToast('Completá los campos requeridos','error');return;}
+  if(tipo==='presupuestos' && !confirmarMontoPresupuesto(obj.monto)) return;
   const idx=DB[tipo].findIndex(x=>x.id===obj.id);
   const esNuevo = idx < 0;
   pushUndo((esNuevo?'Nuevo ':'Editar ')+tipo.replace('s',''));
