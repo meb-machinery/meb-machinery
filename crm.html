@@ -534,6 +534,7 @@ select option { background:var(--dark); }
         <button class="filter-tab" onclick="setFilter('presup','en curso',this)">En curso</button>
         <button class="filter-tab" onclick="setFilter('presup','no aprobado',this)">No aprobados</button>
         <button class="filter-tab" id="filtertab-presup-vencido" style="border-color:var(--red);color:var(--red)" onclick="setFilter('presup','vencido',this)">⏰ Vencidos <span class="nav-badge red" id="badge-presup-vencidos" style="margin-left:2px">0</span></button>
+        <button class="filter-tab" id="filtertab-presup-seguimiento" style="border-color:var(--orange);color:var(--orange)" onclick="setFilter('presup','seguimiento',this)">📅 Seguimiento <span class="nav-badge" id="badge-presup-seguimiento" style="margin-left:2px;background:var(--orange)">0</span></button>
       </div>
       <div style="display:flex;align-items:center;gap:16px">
         <div class="search-bar" style="flex:1;margin-bottom:0"><span>🔍</span><input type="text" placeholder="Buscar número, cliente, descripción..." id="searchPresupuestos" oninput="renderPresupuestos()"></div>
@@ -619,8 +620,12 @@ select option { background:var(--dark); }
     </div>
     <!-- Panel de alertas de mantenimiento -->
     <div id="alertas-mantenimiento-panel" style="margin-bottom:12px"></div>
+    <!-- Panel de trabajos completados sin monto cargado -->
+    <div id="alertas-trabajos-cero-panel" style="margin-bottom:12px"></div>
     <!-- Panel de presupuestos con plazo de pago vencido -->
     <div id="alertas-vencidos-panel" style="margin-bottom:12px"></div>
+    <!-- Panel de presupuestos pendientes sin seguimiento -->
+    <div id="alertas-seguimiento-panel" style="margin-bottom:12px"></div>
     <div class="card"><div id="lista-alertas"></div></div>
   </div>
 
@@ -1218,7 +1223,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbytIZQVd0rdcZElVQo7xkF62r6VkyCgCYTCH9KzRe3mzAsAfZcbplOYYm2_MxAhIA1TZQ/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx4HLBJedZxwmxqGf5W7-Y9jiXGHB1YGCI4tZKV6CvEm0WFiJqqL3GtUYOpSc6CMg_Hzw/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1700,7 +1705,8 @@ async function syncAll() {
             checklistId:r.CHECKLIST_ID||'',
             motivoNoAprobado:r.MOTIVO_NO_APROBADO||'',
             motivoNota:r.MOTIVO_NOTA||'',
-            presupVinculadoId:r.PRESUP_VINCULADO_ID||''
+            presupVinculadoId:r.PRESUP_VINCULADO_ID||'',
+            proximoSeguimiento:r.PROXIMO_SEGUIMIENTO||''
           };
         } else {
           // Append item description from subsequent rows
@@ -2094,6 +2100,42 @@ function diasPlazoVencido(p) {
   const diff = Math.floor((hoy - vencimiento) / 86400000);
   return diff > 0 ? diff : null;
 }
+// v17.40 — pedido de la auditoría del 20/08/2026 (sección 18, alerta
+// CRÍTICA): un presupuesto "pendiente" (todavía no aprobado ni
+// rechazado) que lleva mucho tiempo sin resolución es negocio que se
+// puede estar perdiendo por falta de seguimiento, no por decisión real
+// del cliente. Devuelve los días de atraso, o null si no aplica.
+// - Si tiene una fecha de PRÓXIMO_SEGUIMIENTO programada y ya pasó,
+//   avisa que ese seguimiento venció (por eso se prioriza sobre la
+//   antigüedad general).
+// - Si no tiene seguimiento programado, avisa recién a partir de los 30
+//   días desde la fecha del presupuesto (mismo umbral que recomienda la
+//   auditoría) — así no se generan avisos para presupuestos recién
+//   formulados.
+// - Si el presupuesto no tiene fecha cargada (18% de los casos, según
+//   la misma auditoría), no se puede calcular antigüedad — se deja sin
+//   avisar en vez de inventar un supuesto.
+function diasPresupuestoSinSeguimiento(p) {
+  if(!p || p.estado!=='pendiente') return null;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  if(p.proximoSeguimiento) {
+    const fechaSeg = parseFechaAny(p.proximoSeguimiento);
+    if(!fechaSeg) return null;
+    const diff = Math.floor((hoy - fechaSeg) / 86400000);
+    return diff >= 0 ? diff : null;
+  }
+  const base = parseFechaAny(p.fecha);
+  if(!base) return null;
+  const diff = Math.floor((hoy - base) / 86400000);
+  return diff >= 30 ? diff : null;
+}
+// v17.40 — pedido de la auditoría (sección 18, alerta ALTA): un trabajo
+// marcado "completado" con Monto cobrado = $0 es o bien un trabajo que
+// se hizo sin facturar, o un dato que falta cargar — cualquiera de los
+// dos casos merece revisión manual, nunca queda bien así en silencio.
+function trabajosCobroEnCero() {
+  return (DB.trabajos||[]).filter(t=>t.estado==='completado' && Number(t.montoCobrado||0)===0);
+}
 // Igual que diasPlazoVencido, pero para Contratos — la base es la fecha de
 // inicio del contrato (no tiene "fecha de cotización" como el presupuesto).
 function diasPlazoVencidoContrato(c) {
@@ -2171,7 +2213,9 @@ function updateBadges() {
   const bc=document.getElementById('badge-contratos'); if(bc) bc.textContent=contratosActivos;
   const vencidosPlazo = DB.presupuestos.filter(p=>diasPlazoVencido(p)).length;
   const vencidosPlazoCon = DB.contratos.filter(c=>diasPlazoVencidoContrato(c)).length;
-  const al=DB.alertas.filter(a=>!a.resuelta).length + (typeof calcularAlertasRepuesto==="function" ? calcularAlertasRepuesto().length : 0) + vencidosPlazo + vencidosPlazoCon;
+  const sinSeguimientoCount = DB.presupuestos.filter(p=>diasPresupuestoSinSeguimiento(p)!==null).length;
+  const trabajosCeroCount = (typeof trabajosCobroEnCero==="function" ? trabajosCobroEnCero().length : 0);
+  const al=DB.alertas.filter(a=>!a.resuelta).length + (typeof calcularAlertasRepuesto==="function" ? calcularAlertasRepuesto().length : 0) + vencidosPlazo + vencidosPlazoCon + sinSeguimientoCount + trabajosCeroCount;
   document.getElementById('badge-alertas').textContent=al;
   const reconectarCount = (typeof calcularParaReconectar==="function" ? calcularParaReconectar().length : 0)
                          + (typeof calcularProspectosContrato==="function" ? calcularProspectosContrato().length : 0);
@@ -3179,6 +3223,8 @@ function renderPresupuestos() {
     const sinMotivo = noAprob.filter(p => !p.motivoNoAprobado).length;
     const vencidos = DB.presupuestos.filter(p=>diasPlazoVencido(p)!==null);
     const bpv = document.getElementById('badge-presup-vencidos'); if(bpv) bpv.textContent = vencidos.length;
+    const sinSeguimiento = DB.presupuestos.filter(p=>diasPresupuestoSinSeguimiento(p)!==null);
+    const bps = document.getElementById('badge-presup-seguimiento'); if(bps) bps.textContent = sinSeguimiento.length;
     resumenEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
       <div class="stat-card orange"><div class="stat-val">${pend.length}</div><div class="stat-label">PENDIENTES · ${fmtMonto(sum(pend))}</div></div>
       <div class="stat-card green"><div class="stat-val">${aprob.length}</div><div class="stat-label">APROBADOS · ${fmtMonto(sum(aprob))}</div></div>
@@ -3193,6 +3239,7 @@ function renderPresupuestos() {
   }
   let data=DB.presupuestos;
   if(filters.presup==='vencido') data=data.filter(p=>diasPlazoVencido(p)!==null);
+  else if(filters.presup==='seguimiento') data=data.filter(p=>diasPresupuestoSinSeguimiento(p)!==null);
   else if(filters.presup!=='todos') data=data.filter(p=>p.estado===filters.presup);
   // Orden elegible — antes era fijo por N°, y como los N° vienen del Sheet
   // sin garantía de ser secuenciales prolijos, quedaban "desparramados".
@@ -3233,13 +3280,14 @@ function renderPresupuestos() {
       <td>${cl?`<div class="td-name">${cl.nombre}</div><div class="td-muted">${cl.empresa||''}</div>`:'—'}</td>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${descCorta}</td>
       <td><span class="monto">${fmtMonto((()=>{const a=p.recargoPct?p.monto*(1+p.recargoPct/100):p.monto;return Math.round(a);})())}</span>${p.montoUsd&&p.tcAlMomento?`<div style="font-size:10px;color:var(--blue-light)" title="El valor en dólares está sujeto al tipo de cambio del día de la fecha">USD ${Math.round((p.recargoPct?Math.round(p.monto*(1+p.recargoPct/100)):p.monto)/p.tcAlMomento).toLocaleString('es-AR')}</div>`:''}${p.plazoPago&&p.plazoPago!=='contado'?`<div style="font-size:9px;color:var(--orange)">A ${p.plazoPago} días (+${p.recargoPct}%)</div>`:''}</td>
-      <td>${badgeEstado(p.estado)}${diasPlazoVencido(p)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${p.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencido(p)}d</div><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="reclamarPresupuestoWhatsApp('${p.id}')" title="Mandar recordatorio por WhatsApp">📲 Reclamar</button>`:''}</td>
+      <td>${badgeEstado(p.estado)}${diasPlazoVencido(p)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${p.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencido(p)}d</div><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="reclamarPresupuestoWhatsApp('${p.id}')" title="Mandar recordatorio por WhatsApp">📲 Reclamar</button>`:''}${diasPresupuestoSinSeguimiento(p)!==null?`<div style="font-size:9px;color:var(--orange);margin-top:2px" title="${p.proximoSeguimiento?'El seguimiento programado venció hace '+diasPresupuestoSinSeguimiento(p)+' días':'Sin resolución hace '+diasPresupuestoSinSeguimiento(p)+' días, sin seguimiento programado'}">📅 ${p.proximoSeguimiento?'Seguimiento vencido':'Sin seguimiento'} (${diasPresupuestoSinSeguimiento(p)}d)</div>`:''}</td>
       <td class="td-muted">${fmtDate(p.fecha)}</td>
       <td style="font-size:10px;text-align:center;white-space:nowrap">${p.fechaEnviado?`<div style="color:var(--blue-light)">📤 ENVIADO</div><div style="font-size:9px;color:var(--muted2)">${p.fechaEnviado}</div>`:p.fechaDescarga?`<div style="color:#25d366">📄 DESCARGADO</div><div style="font-size:9px;color:var(--muted2)">${p.fechaDescarga}</div><div style="font-size:9px;margin-top:2px"><a href="#" onclick="event.preventDefault();marcarPresupuestoEnviadoManual('${p.id}')" style="color:var(--blue-light);text-decoration:underline;cursor:pointer">Marcar enviado</a></div>`:`<div style="color:var(--muted)">📝 FORMULADO</div><div style="font-size:9px;color:var(--muted2)">${fmtDate(p.fecha)}</div><div style="font-size:9px;margin-top:2px"><a href="#" onclick="event.preventDefault();marcarPresupuestoEnviadoManual('${p.id}')" style="color:var(--blue-light);text-decoration:underline;cursor:pointer">Marcar enviado</a></div>`}</td>
       <td style="font-size:9px;text-align:center;white-space:nowrap">${p.informeGuardado?`<a href="${p.informeDriveUrl||'#'}" target="_blank" style="color:#25d366;text-decoration:none" title="Guardado en Drive">✔ Drive<br><span style='color:var(--muted);font-size:8px'>${p.informeGuardado}</span></a>`:p.informeGenerado?`<span style='color:#9b59b6'>📋 ${p.informeGenerado}</span>`:'—'}</td>
       <td><div class="actions">
         <button class="btn-secondary" title="Editar" onclick="generarPresupuestoPDF('${p.id}')">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','no aprobado'])">Estado</button>
+        ${p.estado==='pendiente' ? `<button class="btn-secondary" style="font-size:10px;padding:3px 8px${diasPresupuestoSinSeguimiento(p)!==null?';background:rgba(230,126,34,0.15);border-color:#e67e22;color:#e67e22':''}" onclick="guardarProximoSeguimiento('${p.id}')" title="${p.proximoSeguimiento?'Próximo seguimiento: '+p.proximoSeguimiento+' — clic para cambiarlo':'Programar próximo seguimiento'}">📅 ${p.proximoSeguimiento||'Seguimiento'}</button>${diasPresupuestoSinSeguimiento(p)!==null&&cl&&cl.telefono?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="seguirPresupuestoWhatsApp('${p.id}')" title="Mandar mensaje de seguimiento por WhatsApp">📲</button>`:''}` : ''}
         ${p.estado==='no aprobado' ? (p.motivoNoAprobado
           ? `<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('motivoNoAprobado',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Motivo cargado — clic para editar">❓ ${etiquetaMotivoNoAprobado(p.motivoNoAprobado)}</button>`
           : `<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(224,122,122,0.15);border-color:#e07a7a;color:#e07a7a" onclick="openModal('motivoNoAprobado',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Falta cargar el motivo">❓ Falta motivo</button>`
@@ -3751,6 +3799,34 @@ function renderAlertas() {
 
   const el=document.getElementById('lista-alertas');
 
+  // Panel de trabajos "completados" con Monto cobrado = $0 — pedido de la
+  // auditoría del 20/08/2026 (sección 18, alerta ALTA). Es dinero que
+  // puede estar sin facturar, o simplemente sin cargar.
+  const ceroPanel = document.getElementById('alertas-trabajos-cero-panel');
+  if(ceroPanel) {
+    const enCero = trabajosCobroEnCero();
+    if(enCero.length) {
+      ceroPanel.innerHTML = `<div class="card" style="border-left:3px solid var(--red);margin-bottom:12px">
+        <div class="card-header">
+          <span class="card-title" style="color:var(--red)">⚠️ TRABAJOS COMPLETADOS SIN MONTO CARGADO (${enCero.length})</span>
+        </div>
+        <div style="padding:4px 12px 8px">${enCero.map(t=>{
+          const cl=DB.clientes.find(c=>String(c.id)===String(t.clienteId));
+          return `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--red);flex-shrink:0"></div>
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:600">${t.titulo||'—'} — ${cl?cl.nombre:'—'}</div>
+              <div style="font-size:11px;color:var(--muted)">${fmtDate(t.fechaInicio)} · ¿se facturó o falta cargar el monto?</div>
+            </div>
+            <button class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="editTrabajo('${t.id}')" title="Abrir y cargar el monto cobrado">✏️ Revisar</button>
+          </div>`;
+        }).join('')}</div>
+      </div>`;
+    } else {
+      ceroPanel.innerHTML = '';
+    }
+  }
+
   // Panel de presupuestos con plazo de pago vencido — separado del resto
   // de las alertas manuales porque se calcula solo (plazo de pago + fecha),
   // no depende de que Belu cargue nada a mano. El mismo criterio que ya
@@ -3781,6 +3857,41 @@ function renderAlertas() {
       </div>`;
     } else {
       vencPanel.innerHTML = '';
+    }
+  }
+
+  // Panel de presupuestos "pendiente" sin seguimiento — pedido de la
+  // auditoría (sección 18, alerta CRÍTICA). Distinto del panel de arriba:
+  // este es para presupuestos que TODAVÍA no se aprobaron ni rechazaron,
+  // no para los ya aprobados y sin cobrar.
+  const segPanel = document.getElementById('alertas-seguimiento-panel');
+  if(segPanel) {
+    const sinSeg = [...DB.presupuestos]
+      .filter(p=>diasPresupuestoSinSeguimiento(p)!==null)
+      .sort((a,b)=>diasPresupuestoSinSeguimiento(b)-diasPresupuestoSinSeguimiento(a));
+    if(sinSeg.length) {
+      segPanel.innerHTML = `<div class="card" style="border-left:3px solid var(--orange);margin-bottom:12px">
+        <div class="card-header">
+          <span class="card-title" style="color:var(--orange)">📅 PRESUPUESTOS PENDIENTES SIN SEGUIMIENTO (${sinSeg.length})</span>
+          <button class="btn-secondary" style="font-size:11px" onclick="showPage('presupuestos');setTimeout(()=>{setFilter('presup','seguimiento',document.getElementById('filtertab-presup-seguimiento'));},80)">Ver en Presupuestos →</button>
+        </div>
+        <div style="padding:4px 12px 8px">${sinSeg.map(p=>{
+          const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId))||DB.clientes.find(c=>c.nombre.toUpperCase()===(p.clienteNombreSheet||p.clienteId||'').toUpperCase());
+          const dias = diasPresupuestoSinSeguimiento(p);
+          const tieneWA = cl && cl.telefono;
+          return `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--orange);flex-shrink:0"></div>
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:600">#${String(p.num||0).padStart(4,'0')} — ${cl?cl.nombre:(p.clienteNombreSheet||'—')}</div>
+              <div style="font-size:11px;color:var(--muted)">${fmtMonto(p.monto)} · ${p.proximoSeguimiento?`seguimiento programado venció hace ${dias}d`:`sin resolución hace ${dias}d, sin seguimiento programado`}</div>
+            </div>
+            <button class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="guardarProximoSeguimiento('${p.id}')" title="Programar próximo seguimiento">📅 Programar</button>
+            ${tieneWA?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(37,211,102,0.12);border-color:#25d366;color:#25d366" onclick="seguirPresupuestoWhatsApp('${p.id}')" title="Mandar mensaje de seguimiento">📲</button>`:''}
+          </div>`;
+        }).join('')}</div>
+      </div>`;
+    } else {
+      segPanel.innerHTML = '';
     }
   }
 
@@ -6932,6 +7043,42 @@ function reclamarPresupuestoWhatsApp(presupId) {
   const msg = `Hola ${cl.nombre}! Te escribimos de MEB Machinery Solutions. `
     + `El presupuesto N° ${numPresup} (a ${p.plazoPago} días) venció hace ${dias} día${dias===1?'':'s'} sin que hayamos registrado el cobro. `
     + `El monto es de $${montoFinal.toLocaleString('es-AR')}. ¿Podemos coordinar el pago? Gracias!`;
+  const tel = cl.telefono.replace(/\D/g,'');
+  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+// v17.40 — pedido de la auditoría: seguimiento de presupuestos "pendiente"
+// que llevan tiempo sin resolución. Guarda la fecha del próximo contacto
+// planeado (o la borra si se deja vacío).
+async function guardarProximoSeguimiento(id) {
+  const p = DB.presupuestos.find(x=>x.id===id);
+  if(!p) return;
+  const input = prompt('¿Cuándo hacés el próximo seguimiento? (formato dd/mm/aaaa — dejalo vacío para borrarlo)', p.proximoSeguimiento||'');
+  if(input === null) return;
+  const limpio = input.trim();
+  if(limpio && !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(limpio)) { alert('Formato inválido — usá dd/mm/aaaa, por ejemplo 15/09/2026.'); return; }
+  p.proximoSeguimiento = limpio;
+  saveLocal();
+  renderPresupuestos();
+  await writeToSheet({ action:'updatePresupuesto', id, row:{ proximo_seguimiento: limpio } });
+  showToast(limpio ? 'Seguimiento programado' : 'Seguimiento borrado', 'success');
+}
+
+// Mensaje de seguimiento comercial — distinto del reclamo de cobro: este
+// es para un presupuesto que TODAVÍA no se aprobó ni rechazó, no para uno
+// aprobado y sin cobrar.
+function seguirPresupuestoWhatsApp(presupId) {
+  const p = DB.presupuestos.find(x => x.id === presupId);
+  if (!p) return;
+  const cl = DB.clientes.find(c => String(c.id) === String(p.clienteId));
+  if (!cl || !cl.telefono) {
+    showToast('Este cliente no tiene teléfono cargado — no se puede mandar el mensaje', 'error');
+    return;
+  }
+  const numPresup = String(p.num||p.id).padStart(4,'0');
+  const montoFinal = p.recargoPct ? Math.round(p.monto*(1+p.recargoPct/100)) : (p.monto||0);
+  const msg = `Hola ${cl.nombre}! Te escribimos de MEB Machinery Solutions para hacer seguimiento del presupuesto N° ${numPresup} por $${montoFinal.toLocaleString('es-AR')}. `
+    + `¿Pudiste evaluarlo? Quedamos atentos por cualquier consulta que tengas. Gracias!`;
   const tel = cl.telefono.replace(/\D/g,'');
   window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
 }
