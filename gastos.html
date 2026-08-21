@@ -97,6 +97,11 @@
     </div>
     <div id="itemsLista"></div>
     <button class="btn-add" onclick="agregarItem()">&#10133; Agregar gasto</button>
+    <div class="card" style="margin:14px 0">
+      <label>Km actual de la camioneta (opcional)</label>
+      <input type="number" id="inputKmVehiculo" placeholder="Ej: 84200" oninput="onCambioKmVehiculo(this.value)"/>
+      <div style="font-size:11px;color:var(--muted);margin-top:-8px">Si lo cargás acá, el CRM actualiza solo el kilometraje del vehículo — no hace falta anotarlo aparte.</div>
+    </div>
     <div class="total-box">
       <div class="num" id="totalGeneral">$0</div>
       <div class="label">Total del registro</div>
@@ -109,7 +114,7 @@
 <div class="guardado-indicador" id="guardadoIndicador">&#10003; Guardado</div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz6qS8_3ShyVZ39HI8DD6rTa8B4Qh30qumd7vl5E2DMrwa_f4kvlSX9hL2HQWxldLPC/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxM5zFY70qr-wSanZBqFWCIfmmvdbf-On-IcS7GvoXg79gO8Er4UUQ9BBbok555lt5Oyg/exec';
 
 // ── Categorías de gasto ──────────────────────────────────────────────────
 // "Horas trabajadas" y "Horas de viaje" son las dos que usan el valor-hora
@@ -124,6 +129,7 @@ let sesionId = null;
 let usuarioActual = '';
 let fechaActual = '';
 let valorHoraActual = 0;
+let kmVehiculoActual = ''; // opcional — string vacío si no lo cargó, así no se manda de más
 let items = []; // [{id, categoria, descripcion, cantidad, monto, subtotal, ticketUrl}]
 let guardarTimeout = null;
 
@@ -184,6 +190,13 @@ function cambiarSesion() {
   if (!confirm('Si empez\u00e1s un registro nuevo ahora, este queda guardado tal cual est\u00e1. \u00bfSeguimos?')) return;
   document.getElementById('zonaGastos').style.display = 'none';
   document.getElementById('pasoInicial').style.display = 'block';
+  kmVehiculoActual = '';
+  document.getElementById('inputKmVehiculo').value = '';
+}
+
+function onCambioKmVehiculo(valor) {
+  kmVehiculoActual = valor;
+  programarGuardado();
 }
 
 // ── Ítems ────────────────────────────────────────────────────────────────
@@ -337,7 +350,8 @@ function armarPayloadGuardado() {
     action: 'guardarGasto',
     row: {
       id: sesionId, fecha: fechaActual, usuario: usuarioActual,
-      valorHora: valorHoraActual, total: total, itemsJson: JSON.stringify(itemsLimpios)
+      valorHora: valorHoraActual, total: total, itemsJson: JSON.stringify(itemsLimpios),
+      kmVehiculo: kmVehiculoActual
     }
   };
 }
