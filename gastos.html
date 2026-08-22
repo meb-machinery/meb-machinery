@@ -103,11 +103,28 @@
       <div style="font-size:11px;color:var(--muted);margin-top:-8px">Si lo cargás acá, el CRM actualiza solo el kilometraje del vehículo — no hace falta anotarlo aparte.</div>
     </div>
     <div class="card" style="margin:14px 0">
-      <label>Horario de salida (opcional)</label>
-      <input type="time" id="inputHoraSalida" oninput="onCambioHoraSalidaLlegada()"/>
-      <label style="margin-top:10px">Horario de llegada / regreso (opcional)</label>
-      <input type="time" id="inputHoraLlegada" oninput="onCambioHoraSalidaLlegada()"/>
-      <div style="font-size:11px;color:var(--muted);margin-top:-8px">Desde que salís del punto de origen hasta que volvés — marca viaje + trabajo del día. Si no tenés tiempo de cargarlo, seguí registrando los gastos igual, no hace falta completarlo.</div>
+      <label>Cliente visitado (opcional)</label>
+      <input type="text" id="inputClienteVisitado" placeholder="Ej: Bordigoni" oninput="onCambioTiempos()"/>
+    </div>
+    <div class="card" style="margin:14px 0">
+      <label>⏱ Tiempos del día (todo opcional)</label>
+      <div style="font-size:11px;color:var(--muted);margin:-6px 0 10px">Cargá lo que puedas — cada horario ayuda a calcular mejor cuánto tarda un viaje, la comida, y el trabajo en sí.</div>
+
+      <label>Comienzo del trabajo</label>
+      <div style="font-size:10px;color:var(--muted);margin-top:-6px;margin-bottom:4px">Poné la hora desde que salís del origen (tu base), no cuando llegás al cliente.</div>
+      <input type="time" id="inputComienzoTrabajo" oninput="onCambioTiempos()"/>
+
+      <label style="margin-top:10px">Llegada al cliente</label>
+      <input type="time" id="inputLlegadaCliente" oninput="onCambioTiempos()"/>
+
+      <label style="margin-top:10px">Inicio de la comida</label>
+      <input type="time" id="inputInicioComida" oninput="onCambioTiempos()"/>
+
+      <label style="margin-top:10px">Fin de la comida</label>
+      <input type="time" id="inputFinComida" oninput="onCambioTiempos()"/>
+
+      <label style="margin-top:10px">Hora de finalización (de vuelta en el origen)</label>
+      <input type="time" id="inputHoraFinalizacion" oninput="onCambioTiempos()"/>
     </div>
     <div class="total-box">
       <div class="num" id="totalGeneral">$0</div>
@@ -121,7 +138,7 @@
 <div class="guardado-indicador" id="guardadoIndicador">&#10003; Guardado</div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzQkMuZRcgvTJHlz4-sECFIeqVsCeeup5LBb0rjqn1YY_rXOvTd0XQkuW3L4HoNj2reMA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzoxepAhyy7ga0qixCMmKsMkURgmV-utfRcafWWrL83cFQ5yZuSztIOaec-gftwO0FFrA/exec';
 
 // ── Categorías de gasto ──────────────────────────────────────────────────
 // "Horas trabajadas" y "Horas de viaje" son las dos que usan el valor-hora
@@ -137,8 +154,12 @@ let usuarioActual = '';
 let fechaActual = '';
 let valorHoraActual = 0;
 let kmVehiculoActual = ''; // opcional — string vacío si no lo cargó, así no se manda de más
-let horaSalidaActual = '';
-let horaLlegadaActual = '';
+let clienteVisitadoActual = '';
+let comienzoTrabajoActual = '';
+let llegadaClienteActual = '';
+let inicioComidaActual = '';
+let finComidaActual = '';
+let horaFinalizacionActual = '';
 let items = []; // [{id, categoria, descripcion, cantidad, monto, subtotal, ticketUrl}]
 let guardarTimeout = null;
 
@@ -201,15 +222,27 @@ function cambiarSesion() {
   document.getElementById('pasoInicial').style.display = 'block';
   kmVehiculoActual = '';
   document.getElementById('inputKmVehiculo').value = '';
-  horaSalidaActual = '';
-  horaLlegadaActual = '';
-  document.getElementById('inputHoraSalida').value = '';
-  document.getElementById('inputHoraLlegada').value = '';
+  clienteVisitadoActual = '';
+  comienzoTrabajoActual = '';
+  llegadaClienteActual = '';
+  inicioComidaActual = '';
+  finComidaActual = '';
+  horaFinalizacionActual = '';
+  document.getElementById('inputClienteVisitado').value = '';
+  document.getElementById('inputComienzoTrabajo').value = '';
+  document.getElementById('inputLlegadaCliente').value = '';
+  document.getElementById('inputInicioComida').value = '';
+  document.getElementById('inputFinComida').value = '';
+  document.getElementById('inputHoraFinalizacion').value = '';
 }
 
-function onCambioHoraSalidaLlegada() {
-  horaSalidaActual = document.getElementById('inputHoraSalida').value || '';
-  horaLlegadaActual = document.getElementById('inputHoraLlegada').value || '';
+function onCambioTiempos() {
+  clienteVisitadoActual = document.getElementById('inputClienteVisitado').value || '';
+  comienzoTrabajoActual = document.getElementById('inputComienzoTrabajo').value || '';
+  llegadaClienteActual = document.getElementById('inputLlegadaCliente').value || '';
+  inicioComidaActual = document.getElementById('inputInicioComida').value || '';
+  finComidaActual = document.getElementById('inputFinComida').value || '';
+  horaFinalizacionActual = document.getElementById('inputHoraFinalizacion').value || '';
   programarGuardado();
 }
 
@@ -373,7 +406,10 @@ function armarPayloadGuardado() {
       id: sesionId, fecha: fechaActual, usuario: usuarioActual,
       valorHora: valorHoraActual, total: total, itemsJson: JSON.stringify(itemsLimpios),
       kmVehiculo: kmVehiculoActual,
-      horaSalida: horaSalidaActual, horaLlegada: horaLlegadaActual
+      clienteVisitado: clienteVisitadoActual,
+      comienzoTrabajo: comienzoTrabajoActual, llegadaCliente: llegadaClienteActual,
+      inicioComida: inicioComidaActual, finComida: finComidaActual,
+      horaFinalizacion: horaFinalizacionActual
     }
   };
 }

@@ -1233,7 +1233,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzQkMuZRcgvTJHlz4-sECFIeqVsCeeup5LBb0rjqn1YY_rXOvTd0XQkuW3L4HoNj2reMA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzoxepAhyy7ga0qixCMmKsMkURgmV-utfRcafWWrL83cFQ5yZuSztIOaec-gftwO0FFrA/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1906,7 +1906,12 @@ async function syncAll() {
         valorHora: parseFloat(r.VALOR_HORA)||0, total: parseFloat(r.TOTAL)||0,
         resumen: r.RESUMEN || '', items: itemsGasto,
         confirmado: String(r.CONFIRMADO||'').toUpperCase()==='SI',
-        confirmadoPor: r.CONFIRMADO_POR || '', confirmadoFecha: r.CONFIRMADO_FECHA || ''
+        confirmadoPor: r.CONFIRMADO_POR || '', confirmadoFecha: r.CONFIRMADO_FECHA || '',
+        clienteVisitado: r.CLIENTE_VISITADO || '',
+        comienzoTrabajo: r.COMIENZO_TRABAJO || '', llegadaCliente: r.LLEGADA_CLIENTE || '',
+        inicioComida: r.INICIO_COMIDA || '', finComida: r.FIN_COMIDA || '',
+        horaFinalizacion: r.HORA_FINALIZACION || '',
+        trabajoId: String(r.TRABAJO_ID||'').trim()
       };
     });
 
@@ -6280,11 +6285,26 @@ function renderGastos() {
     // RESUMEN es la copia legible generada por Code.gs; si por algún motivo
     // vino vacía (registros viejos, antes de v17.38), arma una a partir de
     // ITEMS_JSON como respaldo.
-    const resumenTxt = g.resumen || (g.items||[]).map(it=>`${it.categoria||'—'}: ${fmtMonto(it.subtotal)}`).join(' · ') || '—';
+    // v17.46 FIX: antes usaba g.resumen (texto armado por Code.gs al
+    // guardar, que nunca incluía la hora de cada ítem) como fuente
+    // principal. Ahora se arma siempre en vivo acá, a partir de g.items
+    // (que sí tiene la hora) — así se ve la hora tanto en gastos nuevos
+    // como en los ya guardados antes de este fix, sin depender de una
+    // nueva implementación de Code.gs.
+    const resumenTxt = (g.items||[]).length
+      ? g.items.map(it=>`${it.categoria||'—'}${it.hora?' · '+it.hora+'hs':''}: ${fmtMonto(it.subtotal)}${it.descripcion?' ('+it.descripcion+')':''}`).join('\n')
+      : (g.resumen || '—');
+    const tiempos = calcularTiemposGasto(g);
+    const tiemposLinea = [
+      tiempos.viaje!==null ? `🚗 Viaje: ${fmtMin(tiempos.viaje)}` : '',
+      tiempos.comida!==null ? `🍽 Comida: ${fmtMin(tiempos.comida)}` : '',
+      tiempos.trabajoNeto!==null ? `🔧 Trabajo neto: ${fmtMin(tiempos.trabajoNeto)}` : ''
+    ].filter(Boolean).join(' · ');
+    const trabajoVinc = g.trabajoId ? DB.trabajos.find(x=>x.id===g.trabajoId) : null;
     return `<tr>
       <td class="td-muted">${fmtDate(g.fecha)} <span style="font-size:10px;color:var(--muted2)">${g.hora||''}</span></td>
       <td class="td-name">${g.usuario||'—'}</td>
-      <td style="font-size:11px;max-width:320px;white-space:pre-wrap">${resumenTxt}</td>
+      <td style="font-size:11px;max-width:320px;white-space:pre-wrap">${resumenTxt}${g.clienteVisitado?`<div style="font-size:10px;color:var(--blue-light);margin-top:4px">👤 ${g.clienteVisitado}</div>`:''}${tiemposLinea?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${tiemposLinea}</div>`:''}${trabajoVinc?`<div style="font-size:10px;color:var(--yellow);margin-top:2px;cursor:pointer" onclick="irATrabajo('${trabajoVinc.id}')" title="Ver trabajo vinculado">🔗 ${trabajoVinc.titulo}</div>`:''}</td>
       <td><span class="monto">${fmtMonto(g.total)}</span></td>
       <td>${g.confirmado ? `<span class="badge badge-green">✔ CONFIRMADO</span><div style="font-size:9px;color:var(--muted2)">${g.confirmadoPor||''} · ${g.confirmadoFecha||''}</div>` : `<span class="badge badge-orange">SIN REVISAR</span>`}</td>
       <td><div class="actions">
@@ -6292,6 +6312,8 @@ function renderGastos() {
           ? `<button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="toggleConfirmarGasto('${g.id}',true)" title="Marcar como sin revisar de nuevo">↩ Desconfirmar</button>`
           : `<button class="btn-primary" style="font-size:10px;padding:3px 7px" onclick="toggleConfirmarGasto('${g.id}',false)" title="Confirmar — cuenta para el margen real">✔ Confirmar</button>`
         }
+        <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="vincularGastoATrabajo('${g.id}')" title="${trabajoVinc?'Cambiar el trabajo vinculado':'Vincular a un Trabajo (opcional, se hace después)'}">🔗 ${trabajoVinc?'Cambiar':'Vincular'}</button>
+        ${trabajoVinc && tiempos.trabajoNeto!==null ? `<button class="btn-secondary" style="font-size:10px;padding:3px 7px;background:rgba(244,180,0,0.12);border-color:var(--yellow);color:var(--yellow)" onclick="usarComoHorasTrabajadas('${g.id}',${tiempos.trabajoNeto})" title="Cargar ${fmtMin(tiempos.trabajoNeto)} como Horas trabajadas en el Trabajo vinculado">➡ Usar como horas</button>` : ''}
         <button class="btn-danger" style="font-size:10px;padding:3px 7px" onclick="eliminar('gastosEstructura','${g.id}')" title="Eliminar">✕</button>
       </div></td>
     </tr>`;
@@ -6307,6 +6329,84 @@ async function toggleConfirmarGasto(id, estabaConfirmado) {
   renderGastos();
   saveLocal();
   await writeToSheet({ action:'confirmarGasto', id, row:{ confirmado: g.confirmado } });
+}
+
+// ── Tiempos del día (v17.47) ──────────────────────────────────────────────
+// Calcula viaje / comida / trabajo neto a partir de los checkpoints
+// opcionales cargados en gastos.html. Cualquiera que falte, esa parte
+// simplemente no se puede calcular — nunca inventa un número.
+function minutosEntre(horaIni, horaFin) {
+  if(!horaIni || !horaFin) return null;
+  const [h1,m1] = horaIni.split(':').map(Number);
+  const [h2,m2] = horaFin.split(':').map(Number);
+  if(isNaN(h1)||isNaN(m1)||isNaN(h2)||isNaN(m2)) return null;
+  let diff = (h2*60+m2) - (h1*60+m1);
+  if(diff < 0) diff += 24*60; // cruzó medianoche
+  return diff;
+}
+function fmtMin(min) {
+  if(min===null) return null;
+  const h = Math.floor(min/60), m = min%60;
+  return (h?h+'h ':'') + (m || !h ? m+'m' : '');
+}
+function calcularTiemposGasto(g) {
+  const viaje = minutosEntre(g.comienzoTrabajo, g.llegadaCliente);
+  const comida = minutosEntre(g.inicioComida, g.finComida);
+  let trabajoNeto = minutosEntre(g.comienzoTrabajo, g.horaFinalizacion);
+  if(trabajoNeto !== null) {
+    if(viaje !== null) trabajoNeto -= viaje;   // el viaje de ida no es trabajo
+    if(comida !== null) trabajoNeto -= comida;
+    // Nota: no se resta el viaje de vuelta porque no hay un checkpoint
+    // separado para "salida del cliente" — queda incluido como parte del
+    // tiempo entre comienzo y finalización. Aproximado, no exacto.
+    if(trabajoNeto < 0) trabajoNeto = null; // datos inconsistentes, mejor no mostrar
+  }
+  return { viaje, comida, trabajoNeto };
+}
+
+async function vincularGastoATrabajo(id) {
+  const g = DB.gastosEstructura.find(x=>x.id===id);
+  if(!g) return;
+  const opciones = [...DB.trabajos].sort((a,b)=>(b.fechaInicio||'').localeCompare(a.fechaInicio||''))
+    .map((t,i)=>{ const cl=DB.clientes.find(c=>c.id===t.clienteId); return `${i+1}. ${t.titulo||'—'} — ${cl?cl.nombre:'—'} (${fmtDate(t.fechaInicio)})`; });
+  if(!opciones.length) { alert('Todavía no hay Trabajos cargados para vincular.'); return; }
+  const listado = opciones.map((o,i)=>o).join('\n');
+  const eleccion = prompt('¿A qué Trabajo vinculás este gasto? Escribí el número de la lista (o dejalo vacío para desvincular):\n\n'+listado, '');
+  if(eleccion === null) return;
+  let trabajoId = '';
+  if(eleccion.trim()) {
+    const idx = parseInt(eleccion.trim())-1;
+    const ordenados = [...DB.trabajos].sort((a,b)=>(b.fechaInicio||'').localeCompare(a.fechaInicio||''));
+    const elegido = ordenados[idx];
+    if(!elegido) { alert('Ese número no corresponde a ningún trabajo de la lista.'); return; }
+    trabajoId = elegido.id;
+  }
+  g.trabajoId = trabajoId;
+  saveLocal();
+  renderGastos();
+  await writeToSheet({ action:'vincularGastoTrabajo', id, row:{ trabajoId } });
+  showToast(trabajoId ? 'Gasto vinculado al trabajo' : 'Vínculo borrado', 'success');
+}
+
+async function usarComoHorasTrabajadas(gastoId, minutos) {
+  const g = DB.gastosEstructura.find(x=>x.id===gastoId);
+  if(!g || !g.trabajoId) return;
+  const t = DB.trabajos.find(x=>x.id===g.trabajoId);
+  if(!t) return;
+  const horas = Math.round((minutos/60)*10)/10;
+  if(!confirm(`¿Cargar ${horas}h como "Horas trabajadas" en "${t.titulo}"? Esto reemplaza el valor que tenga cargado ahora (${t.horasTrabajadas||0}h).`)) return;
+  t.horasTrabajadas = horas;
+  saveLocal();
+  renderGastos();
+  await writeToSheet({ action:'addTrabajo', row:{
+    id:t.id, clienteId:t.clienteId, maquinaId:t.maquinaId, titulo:t.titulo||'', tipo:t.tipo||'',
+    estado:t.estado||'pendiente', estadoMaquina:t.estadoMaquina||'', fechaInicio:t.fechaInicio||'', fechaFin:t.fechaFin||'',
+    montoCobrado:t.montoCobrado||0, montoGastos:t.montoGastos||0, costoRepuesto:t.costoRepuesto||0,
+    precioRepuestoFacturado:t.precioRepuestoFacturado||0, manoObraCobrada:t.manoObraCobrada||0, movilidad:t.movilidad||0,
+    repuestosDetalle:t.repuestosDetalle||'', notas:t.notas||'', fotoUrl:t.fotoUrl||'',
+    tcAlMomento:t.tcAlMomento||0, gananciaUsdEsperada:t.gananciaUsdEsperada||0, horasTrabajadas:horas
+  }});
+  showToast('Horas trabajadas actualizadas en el Trabajo ✓', 'success');
 }
 
 // ── Vehículo propio ──────────────────────────────────────────────────────
@@ -7048,6 +7148,37 @@ function presupuestoOptionsParaTrabajo(selectedId='') {
       const label = `N° ${p.num||'—'} — ${nombreCl} — ${fmtMonto(p.monto||0)}`;
       return `<option value="${p.id}" ${String(selectedId)===String(p.id)?'selected':''}>${label}</option>`;
     }).join('');
+}
+
+// v17.47 — pedido de Belu: sugerir solo el Presupuesto de origen cruzando
+// cliente + máquina (los dos datos que ya elige al cargar el Trabajo),
+// en vez de que sea 100% manual buscar en una lista larga. NUNCA pisa una
+// selección que ya esté hecha — solo pre-completa si el campo está vacío,
+// y el desplegable sigue siendo 100% editable por si la sugerencia no es
+// la correcta.
+function sugerirPresupuestoParaTrabajo() {
+  const selPresup = document.getElementById('f-tpresup');
+  const nota = document.getElementById('f-tpresup-sugerencia');
+  if(!selPresup || !nota) return;
+  if(selPresup.value) { nota.style.display='none'; return; } // ya hay algo elegido — no tocar
+
+  const clienteId = document.getElementById('f-tcli').value;
+  const maquinaId = document.getElementById('f-tmaq').value;
+  if(!clienteId) { nota.style.display='none'; return; }
+
+  let candidatos = DB.presupuestos.filter(p => String(p.clienteId)===String(clienteId));
+  if(maquinaId) {
+    const conMaquina = candidatos.filter(p => String(p.maquinaId)===String(maquinaId));
+    if(conMaquina.length) candidatos = conMaquina; // si hay match de máquina, priorizarlo; si no, seguir solo con cliente
+  }
+  if(!candidatos.length) { nota.style.display='none'; return; }
+
+  candidatos.sort((a,b) => (parseFechaAny(b.fecha)||0) - (parseFechaAny(a.fecha)||0));
+  const mejor = candidatos[0];
+  selPresup.value = mejor.id;
+  const numPad = String(mejor.num||0).padStart(4,'0');
+  nota.textContent = `💡 Sugerido solo: Presupuesto N° ${numPad}${maquinaId && String(mejor.maquinaId)===String(maquinaId)?' (mismo cliente y máquina)':' (mismo cliente)'} — cambialo arriba si no es este.`;
+  nota.style.display = 'block';
 }
 
 // ============================================================
@@ -8474,9 +8605,10 @@ function openModal(type, data={}) {
     title=data.id?'EDITAR TRABAJO':'NUEVO TRABAJO';
     body=`<div class="form-grid">
       <div class="form-group full"><label>Título *</label><input id="f-ttit" value="${data.titulo||''}"/></div>
-      <div class="form-group"><label>Cliente</label><select id="f-tcli"><option value="">Sin cliente</option>${clienteOptions(data.clienteId)}</select></div>
-      <div class="form-group"><label>Máquina</label><select id="f-tmaq"><option value="">Sin máquina</option>${maquinaOptions(data.maquinaId)}</select></div>
+      <div class="form-group"><label>Cliente</label><select id="f-tcli" onchange="sugerirPresupuestoParaTrabajo()"><option value="">Sin cliente</option>${clienteOptions(data.clienteId)}</select></div>
+      <div class="form-group"><label>Máquina</label><select id="f-tmaq" onchange="sugerirPresupuestoParaTrabajo()"><option value="">Sin máquina</option>${maquinaOptions(data.maquinaId)}</select></div>
       <div class="form-group full"><label>Presupuesto de origen (opcional)</label><select id="f-tpresup"><option value="">Sin vincular</option>${presupuestoOptionsParaTrabajo(data.presupuestoId)}</select>
+        <p id="f-tpresup-sugerencia" style="font-size:10px;color:var(--yellow);margin-top:3px;display:none"></p>
         <p style="font-size:10px;color:var(--muted);margin-top:3px">Vincularlo permite medir a futuro cu\u00E1nto tarda un trabajo desde que se aprueba el presupuesto hasta que termina.</p>
       </div>
       <div class="form-group"><label>Tipo</label>
