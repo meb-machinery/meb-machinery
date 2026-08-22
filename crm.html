@@ -531,7 +531,6 @@ select option { background:var(--dark); }
         <button class="filter-tab active" onclick="setFilter('presup','todos',this)">Todos</button>
         <button class="filter-tab" onclick="setFilter('presup','pendiente',this)">Pendientes</button>
         <button class="filter-tab" onclick="setFilter('presup','aprobado',this)">Aprobados</button>
-        <button class="filter-tab" onclick="setFilter('presup','en curso',this)">En curso</button>
         <button class="filter-tab" onclick="setFilter('presup','no aprobado',this)">No aprobados</button>
         <button class="filter-tab" id="filtertab-presup-vencido" style="border-color:var(--red);color:var(--red)" onclick="setFilter('presup','vencido',this)">⏰ Vencidos <span class="nav-badge red" id="badge-presup-vencidos" style="margin-left:2px">0</span></button>
         <button class="filter-tab" id="filtertab-presup-seguimiento" style="border-color:var(--orange);color:var(--orange)" onclick="setFilter('presup','seguimiento',this)">📅 Seguimiento <span class="nav-badge" id="badge-presup-seguimiento" style="margin-left:2px;background:var(--orange)">0</span></button>
@@ -1234,7 +1233,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwHUlI0tiCx9h-HnL52o9L9RsI5bRw6zsLJNZsQ5yWbjxp0L4dYwiJl1rA0duclGbqS_g/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzQkMuZRcgvTJHlz4-sECFIeqVsCeeup5LBb0rjqn1YY_rXOvTd0XQkuW3L4HoNj2reMA/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -2114,6 +2113,56 @@ function diasPlazoVencido(p) {
   const diff = Math.floor((hoy - vencimiento) / 86400000);
   return diff > 0 ? diff : null;
 }
+// ── CORRELATIVIDAD Presupuesto ↔ Trabajo ↔ Informe (v17.45) ──────────────
+// Pedido de Belu: poder saltar de uno a otro por su número, sin tener que
+// buscar a mano. Se arma solo a partir de vínculos que ya existen
+// (t.presupuestoId, y el N° de Informe que siempre es el mismo que el del
+// Presupuesto del que salió) — no hace falta guardar nada nuevo.
+function irAPresupuestoPorNum(num) {
+  showPage('presupuestos');
+  setTimeout(function(){
+    const inp = document.getElementById('searchPresupuestos');
+    if(inp){ inp.value = String(num); renderPresupuestos(); }
+  }, 100);
+}
+function irAInformePorNum(num) {
+  showPage('informes');
+  setTimeout(function(){
+    const inp = document.getElementById('searchInformes');
+    if(inp){ inp.value = String(parseInt(num)||num); renderInformes(); }
+  }, 100);
+}
+function irATrabajo(trabajoId) {
+  showPage('trabajos');
+  setTimeout(function(){
+    renderTrabajos();
+    const el = document.getElementById('trabajo-row-'+trabajoId);
+    if(el){
+      el.scrollIntoView({behavior:'smooth', block:'center'});
+      el.style.outline = '2px solid var(--yellow)';
+      setTimeout(function(){ el.style.outline=''; }, 2500);
+    }
+  }, 100);
+}
+// Devuelve el HTML de los badges de correlatividad para una fila de Trabajo.
+function correlatividadTrabajo(t) {
+  if(!t.presupuestoId) return '';
+  const p = DB.presupuestos.find(x=>x.id===t.presupuestoId);
+  if(!p) return '';
+  const numPad = String(p.num||0).padStart(4,'0');
+  let html = `<div style="font-size:9px;color:var(--blue-light);margin-top:2px;cursor:pointer" onclick="irAPresupuestoPorNum('${p.num}')" title="Ver presupuesto vinculado">📄 Presup. #${numPad}</div>`;
+  if(p.informeGenerado || p.informeDriveUrl) {
+    html += `<div style="font-size:9px;color:#9b59b6;margin-top:2px;cursor:pointer" onclick="irAInformePorNum('${numPad}')" title="Ver informe vinculado">📋 Informe #${numPad}</div>`;
+  }
+  return html;
+}
+// Devuelve el HTML del badge "trabajo vinculado" para una fila de Presupuesto.
+function correlatividadPresupuesto(p) {
+  const t = DB.trabajos.find(x=>x.presupuestoId===p.id);
+  if(!t) return '';
+  return `<div style="font-size:9px;color:var(--blue-light);margin-top:2px;cursor:pointer" onclick="irATrabajo('${t.id}')" title="Ver trabajo vinculado">🔧 ${t.titulo}</div>`;
+}
+
 // v17.43 — pedido de la auditoría: la auditoría del 20/08/2026 encontró 5
 // presupuestos cargados por error con montos de $50 a $66 (coincidían con
 // el número de fila + 1 — error de fórmula/copiado). Esta validación
@@ -3165,7 +3214,7 @@ function renderTrabajos() {
     const margen=montoCobrado>0?Math.round(ganancia/montoCobrado*100):(factTerceros>0?Math.round(ganancia/factTerceros*100):0);
     const margenColor=margen>=30?'var(--green)':margen>=10?'var(--yellow)':'var(--red)';
     return `<tr>
-      <td><div class="td-name">${t.titulo}</div><div class="td-muted">${fmtDate(t.fechaInicio)}${t.horasTrabajadas?` · ⏱ ${t.horasTrabajadas}h`:''}</div></td>
+      <td id="trabajo-row-${t.id}"><div class="td-name">${t.titulo}</div><div class="td-muted">${fmtDate(t.fechaInicio)}${t.horasTrabajadas?` · ⏱ ${t.horasTrabajadas}h`:''}</div>${correlatividadTrabajo(t)}</td>
       <td>${cl?cl.nombre:'—'}</td>
       <td>${mq?`${mq.marca} ${mq.modelo}`:'—'}</td>
       <td><span class="badge badge-blue">${t.tipo||'—'}</span></td>
@@ -3356,7 +3405,7 @@ function renderPresupuestos() {
       <td>${cl?`<div class="td-name">${cl.nombre}</div><div class="td-muted">${cl.empresa||''}</div>`:'—'}</td>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${descCorta}</td>
       <td><span class="monto">${fmtMonto((()=>{const a=p.recargoPct?p.monto*(1+p.recargoPct/100):p.monto;return Math.round(a);})())}</span>${p.montoUsd&&p.tcAlMomento?`<div style="font-size:10px;color:var(--blue-light)" title="El valor en dólares está sujeto al tipo de cambio del día de la fecha">USD ${Math.round((p.recargoPct?Math.round(p.monto*(1+p.recargoPct/100)):p.monto)/p.tcAlMomento).toLocaleString('es-AR')}</div>`:''}${p.plazoPago&&p.plazoPago!=='contado'?`<div style="font-size:9px;color:var(--orange)">A ${p.plazoPago} días (+${p.recargoPct}%)</div>`:''}</td>
-      <td>${badgeEstado(p.estado)}${diasPlazoVencido(p)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${p.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencido(p)}d</div><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="reclamarPresupuestoWhatsApp('${p.id}')" title="Mandar recordatorio por WhatsApp">📲 Reclamar</button>`:''}${diasPresupuestoSinSeguimiento(p)!==null?`<div style="font-size:9px;color:var(--orange);margin-top:2px" title="${p.proximoSeguimiento?'El seguimiento programado venció hace '+diasPresupuestoSinSeguimiento(p)+' días':'Sin resolución hace '+diasPresupuestoSinSeguimiento(p)+' días, sin seguimiento programado'}">📅 ${p.proximoSeguimiento?'Seguimiento vencido':'Sin seguimiento'} (${diasPresupuestoSinSeguimiento(p)}d)</div>`:''}</td>
+      <td>${badgeEstado(p.estado)}${diasPlazoVencido(p)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${p.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencido(p)}d</div><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="reclamarPresupuestoWhatsApp('${p.id}')" title="Mandar recordatorio por WhatsApp">📲 Reclamar</button>`:''}${diasPresupuestoSinSeguimiento(p)!==null?`<div style="font-size:9px;color:var(--orange);margin-top:2px" title="${p.proximoSeguimiento?'El seguimiento programado venció hace '+diasPresupuestoSinSeguimiento(p)+' días':'Sin resolución hace '+diasPresupuestoSinSeguimiento(p)+' días, sin seguimiento programado'}">📅 ${p.proximoSeguimiento?'Seguimiento vencido':'Sin seguimiento'} (${diasPresupuestoSinSeguimiento(p)}d)</div>`:''}${correlatividadPresupuesto(p)}</td>
       <td class="td-muted">${fmtDate(p.fecha)}</td>
       <td style="font-size:10px;text-align:center;white-space:nowrap">${p.fechaEnviado?`<div style="color:var(--blue-light)">📤 ENVIADO</div><div style="font-size:9px;color:var(--muted2)">${p.fechaEnviado}</div>`:p.fechaDescarga?`<div style="color:#25d366">📄 DESCARGADO</div><div style="font-size:9px;color:var(--muted2)">${p.fechaDescarga}</div><div style="font-size:9px;margin-top:2px"><a href="#" onclick="event.preventDefault();marcarPresupuestoEnviadoManual('${p.id}')" style="color:var(--blue-light);text-decoration:underline;cursor:pointer">Marcar enviado</a></div>`:`<div style="color:var(--muted)">📝 FORMULADO</div><div style="font-size:9px;color:var(--muted2)">${fmtDate(p.fecha)}</div><div style="font-size:9px;margin-top:2px"><a href="#" onclick="event.preventDefault();marcarPresupuestoEnviadoManual('${p.id}')" style="color:var(--blue-light);text-decoration:underline;cursor:pointer">Marcar enviado</a></div>`}</td>
       <td style="font-size:9px;text-align:center;white-space:nowrap">${p.informeGuardado?`<a href="${p.informeDriveUrl||'#'}" target="_blank" style="color:#25d366;text-decoration:none" title="Guardado en Drive">✔ Drive<br><span style='color:var(--muted);font-size:8px'>${p.informeGuardado}</span></a>`:p.informeGenerado?`<span style='color:#9b59b6'>📋 ${p.informeGenerado}</span>`:'—'}</td>
@@ -4632,6 +4681,8 @@ function generarInformeTecnico(presupId) {
     '  var repuestosUsados=(document.getElementById("repuestosBox")||{}).innerText||"";',
     '  var observaciones=(document.getElementById("obsBox")||{}).innerText||"";',
     '  var horasMaquina=(document.getElementById("horasMaquina")||{}).innerText||"";',
+    '  var fechaInicioTrabajo=(document.getElementById("fechaInicioTrabajo")||{}).value||"";',
+    '  var fechaFinTrabajo=(document.getElementById("fechaFinTrabajo")||{}).value||"";',
     '',
     '  // Collect fotos with base64 images',
     '  var fotos=[];',
@@ -4682,6 +4733,8 @@ function generarInformeTecnico(presupId) {
     '    repuestos: repuestosUsados,',
     '    observaciones: observaciones,',
     '    horasMaquina: horasMaquina,',
+    '    fechaInicioTrabajo: fechaInicioTrabajo,',
+    '    fechaFinTrabajo: fechaFinTrabajo,',
     '    fotos: fotos.join(" | "),',
     '    fotosCount: fotosCount,',
     '    videos: videos.join(" | "),',
@@ -4705,6 +4758,8 @@ function generarInformeTecnico(presupId) {
     '      repuestos: repuestosUsados,',
     '      observaciones: observaciones,',
     '      horasMaquina: horasMaquina,',
+    '      fechaInicioTrabajo: fechaInicioTrabajo,',
+    '      fechaFinTrabajo: fechaFinTrabajo,',
     '      fotos: fotos.join(" | "),',
     '      fotosCount: fotosCount,',
     '      videos: videos.join(" | "),',
@@ -4732,6 +4787,8 @@ function generarInformeTecnico(presupId) {
     '      repuestos:repuestosUsados,',
     '      observaciones:observaciones,',
     '      horasMaquina:horasMaquina,',
+    '      fechaInicioTrabajo:fechaInicioTrabajo,',
+    '      fechaFinTrabajo:fechaFinTrabajo,',
     '      fotos:fotos.join(" | "),',
     '      videos:videos.join(" | ")',
     '    }',
@@ -4854,6 +4911,8 @@ function generarInformeTecnico(presupId) {
     + '<div class="campo"><label>Tipo</label><span contenteditable="true">' + maqTipo + '</span></div>'
     + '<div class="campo"><label>Fecha del informe</label><span contenteditable="true">' + fechaHoy + '</span></div>'
     + '<div class="campo"><label>Horas de la m\u00e1quina</label><span id="horasMaquina" contenteditable="true" style="color:var(--yellow);font-size:15px;font-weight:700;display:block;min-height:24px;border-bottom:1px dashed #F4B400;outline:none" data-placeholder="Ej: 3.250 hs"></span></div>'
+    + '<div class="campo"><label>Fecha de inicio del trabajo</label><input type="date" id="fechaInicioTrabajo" style="background:transparent;border:none;border-bottom:1px dashed #F4B400;color:var(--yellow);font-size:14px;font-weight:600;outline:none;padding:2px 0;width:100%"/></div>'
+    + '<div class="campo"><label>Fecha de finalizaci\u00f3n</label><input type="date" id="fechaFinTrabajo" style="background:transparent;border:none;border-bottom:1px dashed #F4B400;color:var(--yellow);font-size:14px;font-weight:600;outline:none;padding:2px 0;width:100%"/></div>'
     + '</div></div>'
     + '</div>'
 
@@ -8187,6 +8246,13 @@ function renderInformes() {
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
           <button class="btn-primary" style="font-size:11px;padding:5px 12px" onclick="verInformeDetalle(${idx})">👁 Ver detalle</button>
           ${inf.driveUrl ? `<a href="${inf.driveUrl}" target="_blank" class="btn-secondary" style="font-size:11px;padding:5px 12px;text-decoration:none">📄 Abrir en Drive</a>` : ''}
+          ${(()=>{
+            const pInf = DB.presupuestos.find(x=>parseInt(x.num)===parseInt(inf.num));
+            if(!pInf) return '';
+            const tInf = DB.trabajos.find(x=>x.presupuestoId===pInf.id);
+            return `<button class="btn-secondary" style="font-size:11px;padding:5px 10px" onclick="irAPresupuestoPorNum('${pInf.num}')">📄 Ver presupuesto</button>`
+              + (tInf ? `<button class="btn-secondary" style="font-size:11px;padding:5px 10px" onclick="irATrabajo('${tInf.id}')">🔧 Ver trabajo</button>` : '');
+          })()}
           ${ofertaInf
             ? `<div style="text-align:right">
                  <div style="font-size:10px;color:var(--yellow);margin-bottom:3px">✔ Ofrecido: ${ofertaInf.detalle||'—'} — ${ofertaInf.fecha}</div>

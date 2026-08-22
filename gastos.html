@@ -102,6 +102,13 @@
       <input type="number" id="inputKmVehiculo" placeholder="Ej: 84200" oninput="onCambioKmVehiculo(this.value)"/>
       <div style="font-size:11px;color:var(--muted);margin-top:-8px">Si lo cargás acá, el CRM actualiza solo el kilometraje del vehículo — no hace falta anotarlo aparte.</div>
     </div>
+    <div class="card" style="margin:14px 0">
+      <label>Horario de salida (opcional)</label>
+      <input type="time" id="inputHoraSalida" oninput="onCambioHoraSalidaLlegada()"/>
+      <label style="margin-top:10px">Horario de llegada / regreso (opcional)</label>
+      <input type="time" id="inputHoraLlegada" oninput="onCambioHoraSalidaLlegada()"/>
+      <div style="font-size:11px;color:var(--muted);margin-top:-8px">Desde que salís del punto de origen hasta que volvés — marca viaje + trabajo del día. Si no tenés tiempo de cargarlo, seguí registrando los gastos igual, no hace falta completarlo.</div>
+    </div>
     <div class="total-box">
       <div class="num" id="totalGeneral">$0</div>
       <div class="label">Total del registro</div>
@@ -114,7 +121,7 @@
 <div class="guardado-indicador" id="guardadoIndicador">&#10003; Guardado</div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwHUlI0tiCx9h-HnL52o9L9RsI5bRw6zsLJNZsQ5yWbjxp0L4dYwiJl1rA0duclGbqS_g/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzQkMuZRcgvTJHlz4-sECFIeqVsCeeup5LBb0rjqn1YY_rXOvTd0XQkuW3L4HoNj2reMA/exec';
 
 // ── Categorías de gasto ──────────────────────────────────────────────────
 // "Horas trabajadas" y "Horas de viaje" son las dos que usan el valor-hora
@@ -130,6 +137,8 @@ let usuarioActual = '';
 let fechaActual = '';
 let valorHoraActual = 0;
 let kmVehiculoActual = ''; // opcional — string vacío si no lo cargó, así no se manda de más
+let horaSalidaActual = '';
+let horaLlegadaActual = '';
 let items = []; // [{id, categoria, descripcion, cantidad, monto, subtotal, ticketUrl}]
 let guardarTimeout = null;
 
@@ -192,6 +201,16 @@ function cambiarSesion() {
   document.getElementById('pasoInicial').style.display = 'block';
   kmVehiculoActual = '';
   document.getElementById('inputKmVehiculo').value = '';
+  horaSalidaActual = '';
+  horaLlegadaActual = '';
+  document.getElementById('inputHoraSalida').value = '';
+  document.getElementById('inputHoraLlegada').value = '';
+}
+
+function onCambioHoraSalidaLlegada() {
+  horaSalidaActual = document.getElementById('inputHoraSalida').value || '';
+  horaLlegadaActual = document.getElementById('inputHoraLlegada').value || '';
+  programarGuardado();
 }
 
 function onCambioKmVehiculo(valor) {
@@ -201,7 +220,7 @@ function onCambioKmVehiculo(valor) {
 
 // ── Ítems ────────────────────────────────────────────────────────────────
 function agregarItem() {
-  items.push({ id: uid(), categoria: '', descripcion: '', cantidad: 1, monto: 0, ticketUrl: '' });
+  items.push({ id: uid(), categoria: '', descripcion: '', cantidad: 1, monto: 0, ticketUrl: '', hora: '' });
   renderItems();
   programarGuardado();
 }
@@ -325,6 +344,8 @@ function renderItems() {
       + '<div><label>' + (esHoras ? 'Cantidad de horas' : 'Cantidad') + '</label><input type="number" value="' + (it.cantidad||'') + '" oninput="onCambioCampo(' + jsStr(it.id) + ', \'cantidad\', this.value)"/></div>'
       + '<div><label>' + (esHoras ? 'Valor hora ($)' : 'Monto unitario ($)') + '</label><input type="number" value="' + (it.monto||'') + '" oninput="onCambioCampo(' + jsStr(it.id) + ', \'monto\', this.value)"/></div>'
       + '</div>'
+      + '<label>Hora (opcional)</label>'
+      + '<input type="time" value="' + (it.hora||'') + '" oninput="onCambioCampo(' + jsStr(it.id) + ', \'hora\', this.value)"/>'
       + '<label>Foto del ticket (opcional)</label>'
       + '<input type="file" accept="image/*" capture="environment" onchange="onFotoSeleccionada(this, ' + jsStr(it.id) + ')"/>'
       + '<div id="fotoStatus_' + it.id + '" style="font-size:11px;margin:-8px 0 14px">' + (it.ticketUrl ? '<span style="color:var(--green)">\u2705 Foto cargada</span> — <a href="' + it.ticketUrl + '" target="_blank" style="color:var(--yellow)">verla</a>' : '<span style="color:var(--muted)">Sin foto todav\u00eda</span>') + '</div>'
@@ -342,7 +363,7 @@ function armarPayloadGuardado() {
     .map(function(it){
       return {
         categoria: it.categoria, descripcion: it.descripcion,
-        cantidad: it.cantidad, monto: it.monto,
+        cantidad: it.cantidad, monto: it.monto, hora: it.hora || '',
         subtotal: (it.cantidad||0)*(it.monto||0), ticketUrl: it.ticketUrl
       };
     });
@@ -351,7 +372,8 @@ function armarPayloadGuardado() {
     row: {
       id: sesionId, fecha: fechaActual, usuario: usuarioActual,
       valorHora: valorHoraActual, total: total, itemsJson: JSON.stringify(itemsLimpios),
-      kmVehiculo: kmVehiculoActual
+      kmVehiculo: kmVehiculoActual,
+      horaSalida: horaSalidaActual, horaLlegada: horaLlegadaActual
     }
   };
 }
