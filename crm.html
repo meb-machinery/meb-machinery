@@ -1233,7 +1233,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzoxepAhyy7ga0qixCMmKsMkURgmV-utfRcafWWrL83cFQ5yZuSztIOaec-gftwO0FFrA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwp8rv2M2ZZc0ixVJmk14vUbgLurOYlB9oI7lSqlT9gpocwfzF-cENcR3hvdctNgVKpoA/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -9352,6 +9352,13 @@ function openModal(type, data={}) {
   document.getElementById('modalTitle').textContent=title;
   document.getElementById('modalBody').innerHTML=body;
   if(type==='contrato') setTimeout(toggleMonedaContrato, 0);
+  // v17.47 FIX: la sugerencia de "Presupuesto de origen" solo se disparaba
+  // con el evento onchange de Cliente/Máquina — pero al EDITAR un Trabajo
+  // que ya tenía cliente/máquina cargados de antes, esos selects no
+  // "cambian" al abrir el modal, así que nunca se evaluaba. Ahora se
+  // corre una vez al abrir, para que también sugiera en trabajos viejos
+  // que todavía no tienen presupuesto vinculado.
+  if(type==='trabajo') setTimeout(sugerirPresupuestoParaTrabajo, 0);
   document.getElementById('modalFooter').innerHTML=`
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
     <button class="btn-primary" onclick="window._onSave&&window._onSave()">GUARDAR</button>`;
