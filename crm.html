@@ -508,7 +508,9 @@ select option { background:var(--dark); }
       <button class="filter-tab" onclick="setFilter('trabajos','pendiente',this)">Pendientes</button>
       <button class="filter-tab" onclick="setFilter('trabajos','no aprobado',this)">No aprobados</button>
       <button class="filter-tab" style="border-color:var(--red);color:var(--red)" onclick="filtrarPorCobrar(this)">🔴 Por cobrar</button>
+      <button class="filter-tab" id="filtertab-trabajos-sinvincular" style="border-color:var(--orange);color:var(--orange)" onclick="setFilter('trabajos','sinvincular',this)">📄 Sin vincular <span class="nav-badge" id="badge-trabajos-sinvincular" style="margin-left:2px;background:var(--orange)">0</span></button>
     </div>
+    <div id="trabajos-aviso-vinculo" style="margin-bottom:10px"></div>
     <div class="card"><div class="table-wrap"><table>
       <thead><tr><th>Trabajo</th><th>Cliente</th><th>Máquina</th><th>Tipo</th><th>Estado</th><th>Estado máquina</th><th>Monto Cobrado</th><th>Fact. Terceros</th><th>Costos</th><th>Rentabilidad</th><th>💳 Cobro</th><th>Acciones</th></tr></thead>
       <tbody id="tabla-trabajos"></tbody>
@@ -1233,7 +1235,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwp8rv2M2ZZc0ixVJmk14vUbgLurOYlB9oI7lSqlT9gpocwfzF-cENcR3hvdctNgVKpoA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw6Ena7g5kaFuKC2r0e-FIv390z9qRaPj8Yu8Bh7-nBPryu30s3p-t4aE6RuNfqDwN0iA/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1911,7 +1913,8 @@ async function syncAll() {
         comienzoTrabajo: r.COMIENZO_TRABAJO || '', llegadaCliente: r.LLEGADA_CLIENTE || '',
         inicioComida: r.INICIO_COMIDA || '', finComida: r.FIN_COMIDA || '',
         horaFinalizacion: r.HORA_FINALIZACION || '',
-        trabajoId: String(r.TRABAJO_ID||'').trim()
+        trabajoId: String(r.TRABAJO_ID||'').trim(),
+        presupuestoId: String(r.PRESUPUESTO_ID||'').trim()
       };
     });
 
@@ -2335,7 +2338,7 @@ function updateBadges() {
   document.getElementById('badge-clientes').textContent=DB.clientes.length;
   document.getElementById('badge-maquinas').textContent=DB.maquinas.length;
   const enCurso=DB.trabajos.filter(t=>t.estado==='en curso').length;
-  document.getElementById('badge-trabajos').textContent=enCurso;
+  document.getElementById('badge-trabajos').textContent=DB.trabajos.length;
   document.getElementById('badge-presup').textContent=DB.presupuestos.length;
   const contratosActivos=DB.contratos.filter(c=>c.estado==='activo').length;
   const bc=document.getElementById('badge-contratos'); if(bc) bc.textContent=contratosActivos;
@@ -3200,8 +3203,19 @@ function renderTrabajos() {
   if(filtroPorCobrar) {
     data = data.filter(t=>t.estado==='completado' && (t.estadoCobro||'pendiente')!=='cobrado');
     filtroPorCobrar = false;
+  } else if(filters.trabajos==='sinvincular') {
+    data = data.filter(t=>!t.presupuestoId);
   } else if(filters.trabajos!=='todos') {
     data=data.filter(t=>t.estado===filters.trabajos);
+  }
+  // v17.49 — pedido de Belu: mismo criterio que los avisos de Presupuestos.
+  const sinVincular = DB.trabajos.filter(t=>!t.presupuestoId).length;
+  const bTsv = document.getElementById('badge-trabajos-sinvincular'); if(bTsv) bTsv.textContent = sinVincular;
+  const avisoVinc = document.getElementById('trabajos-aviso-vinculo');
+  if(avisoVinc) {
+    avisoVinc.innerHTML = sinVincular ? `<div style="padding:10px 14px;background:rgba(230,126,34,0.1);border-left:3px solid var(--orange);border-radius:4px;font-size:12px;color:var(--orange)">
+      ⚠️ <b>${sinVincular}</b> trabajo${sinVincular!==1?'s':''} sin presupuesto vinculado — abrilo con ✏️ y elegí uno en "Presupuesto de origen" (el CRM te sugiere el más probable solo) · mirá la pestaña "📄 Sin vincular"
+    </div>` : '';
   }
   const tbody=document.getElementById('tabla-trabajos');
   if(!data.length){tbody.innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="icon">🔧</div><p>Sin trabajos</p></div></td></tr>`;return;}
@@ -6301,10 +6315,12 @@ function renderGastos() {
       tiempos.trabajoNeto!==null ? `🔧 Trabajo neto: ${fmtMin(tiempos.trabajoNeto)}` : ''
     ].filter(Boolean).join(' · ');
     const trabajoVinc = g.trabajoId ? DB.trabajos.find(x=>x.id===g.trabajoId) : null;
+    const presupVinc = g.presupuestoId ? DB.presupuestos.find(x=>x.id===g.presupuestoId) : null;
+    const numPadVinc = presupVinc ? String(presupVinc.num||0).padStart(4,'0') : '';
     return `<tr>
       <td class="td-muted">${fmtDate(g.fecha)} <span style="font-size:10px;color:var(--muted2)">${g.hora||''}</span></td>
       <td class="td-name">${g.usuario||'—'}</td>
-      <td style="font-size:11px;max-width:320px;white-space:pre-wrap">${resumenTxt}${g.clienteVisitado?`<div style="font-size:10px;color:var(--blue-light);margin-top:4px">👤 ${g.clienteVisitado}</div>`:''}${tiemposLinea?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${tiemposLinea}</div>`:''}${trabajoVinc?`<div style="font-size:10px;color:var(--yellow);margin-top:2px;cursor:pointer" onclick="irATrabajo('${trabajoVinc.id}')" title="Ver trabajo vinculado">🔗 ${trabajoVinc.titulo}</div>`:''}</td>
+      <td style="font-size:11px;max-width:320px;white-space:pre-wrap">${resumenTxt}${g.clienteVisitado?`<div style="font-size:10px;color:var(--blue-light);margin-top:4px">👤 ${g.clienteVisitado}</div>`:''}${tiemposLinea?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${tiemposLinea}</div>`:''}${presupVinc?`<div style="font-size:10px;color:var(--blue-light);margin-top:2px;cursor:pointer" onclick="irAPresupuestoPorNum('${presupVinc.num}')" title="Ver presupuesto vinculado">📄 Presup. #${numPadVinc}</div>`:''}${trabajoVinc?`<div style="font-size:10px;color:var(--yellow);margin-top:2px;cursor:pointer" onclick="irATrabajo('${trabajoVinc.id}')" title="Ver trabajo vinculado">🔗 ${trabajoVinc.titulo}</div>`:''}</td>
       <td><span class="monto">${fmtMonto(g.total)}</span></td>
       <td>${g.confirmado ? `<span class="badge badge-green">✔ CONFIRMADO</span><div style="font-size:9px;color:var(--muted2)">${g.confirmadoPor||''} · ${g.confirmadoFecha||''}</div>` : `<span class="badge badge-orange">SIN REVISAR</span>`}</td>
       <td><div class="actions">
@@ -6312,7 +6328,7 @@ function renderGastos() {
           ? `<button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="toggleConfirmarGasto('${g.id}',true)" title="Marcar como sin revisar de nuevo">↩ Desconfirmar</button>`
           : `<button class="btn-primary" style="font-size:10px;padding:3px 7px" onclick="toggleConfirmarGasto('${g.id}',false)" title="Confirmar — cuenta para el margen real">✔ Confirmar</button>`
         }
-        <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="vincularGastoATrabajo('${g.id}')" title="${trabajoVinc?'Cambiar el trabajo vinculado':'Vincular a un Trabajo (opcional, se hace después)'}">🔗 ${trabajoVinc?'Cambiar':'Vincular'}</button>
+        <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="vincularGastoATrabajo('${g.id}')" title="${presupVinc?'Cambiar el presupuesto vinculado':'Vincular a un Presupuesto por número (opcional, se hace después)'}">🔗 ${presupVinc?'Cambiar':'Vincular'}</button>
         ${trabajoVinc && tiempos.trabajoNeto!==null ? `<button class="btn-secondary" style="font-size:10px;padding:3px 7px;background:rgba(244,180,0,0.12);border-color:var(--yellow);color:var(--yellow)" onclick="usarComoHorasTrabajadas('${g.id}',${tiempos.trabajoNeto})" title="Cargar ${fmtMin(tiempos.trabajoNeto)} como Horas trabajadas en el Trabajo vinculado">➡ Usar como horas</button>` : ''}
         <button class="btn-danger" style="font-size:10px;padding:3px 7px" onclick="eliminar('gastosEstructura','${g.id}')" title="Eliminar">✕</button>
       </div></td>
@@ -6364,28 +6380,39 @@ function calcularTiemposGasto(g) {
   return { viaje, comida, trabajoNeto };
 }
 
+// v17.49 — pedido de Belu: en vez de elegir de una lista larga de
+// Trabajos, ahora se escribe directamente el N° del Presupuesto (el dato
+// que ella ya tiene más a mano) y el CRM lo resuelve solo. Como
+// Presupuesto y Trabajo ya están unidos entre sí, vincular por Presupuesto
+// automáticamente también deja el Trabajo (y su Máquina) conectados —
+// sin que Belu tenga que buscar nada dos veces.
 async function vincularGastoATrabajo(id) {
   const g = DB.gastosEstructura.find(x=>x.id===id);
   if(!g) return;
-  const opciones = [...DB.trabajos].sort((a,b)=>(b.fechaInicio||'').localeCompare(a.fechaInicio||''))
-    .map((t,i)=>{ const cl=DB.clientes.find(c=>c.id===t.clienteId); return `${i+1}. ${t.titulo||'—'} — ${cl?cl.nombre:'—'} (${fmtDate(t.fechaInicio)})`; });
-  if(!opciones.length) { alert('Todavía no hay Trabajos cargados para vincular.'); return; }
-  const listado = opciones.map((o,i)=>o).join('\n');
-  const eleccion = prompt('¿A qué Trabajo vinculás este gasto? Escribí el número de la lista (o dejalo vacío para desvincular):\n\n'+listado, '');
+  const actual = g.presupuestoNum || '';
+  const eleccion = prompt('¿A qué presupuesto vinculás este gasto? Escribí el N° (ej: 8, o 0008) — dejalo vacío para desvincular:', actual);
   if(eleccion === null) return;
-  let trabajoId = '';
-  if(eleccion.trim()) {
-    const idx = parseInt(eleccion.trim())-1;
-    const ordenados = [...DB.trabajos].sort((a,b)=>(b.fechaInicio||'').localeCompare(a.fechaInicio||''));
-    const elegido = ordenados[idx];
-    if(!elegido) { alert('Ese número no corresponde a ningún trabajo de la lista.'); return; }
-    trabajoId = elegido.id;
+  const texto = eleccion.trim();
+  let presupuestoId = '', trabajoId = '', presupuestoNum = '';
+  if(texto) {
+    const numBuscado = parseInt(texto);
+    if(isNaN(numBuscado)) { alert('Escribí solo el número, sin letras (ej: 8).'); return; }
+    const presup = DB.presupuestos.find(p => parseInt(p.num)===numBuscado);
+    if(!presup) { alert(`No encontré ningún presupuesto con el N° ${numBuscado}.`); return; }
+    presupuestoId = presup.id;
+    presupuestoNum = String(presup.num);
+    const trabajoVinc = DB.trabajos.find(t => t.presupuestoId === presup.id);
+    if(trabajoVinc) trabajoId = trabajoVinc.id;
   }
+  g.presupuestoId = presupuestoId;
+  g.presupuestoNum = presupuestoNum;
   g.trabajoId = trabajoId;
   saveLocal();
   renderGastos();
-  await writeToSheet({ action:'vincularGastoTrabajo', id, row:{ trabajoId } });
-  showToast(trabajoId ? 'Gasto vinculado al trabajo' : 'Vínculo borrado', 'success');
+  await writeToSheet({ action:'vincularGastoTrabajo', id, row:{ trabajoId, presupuestoId } });
+  showToast(presupuestoId
+    ? `Vinculado a Presupuesto N° ${presupuestoNum}${trabajoId?' (y a su Trabajo)':' — ese presupuesto todavía no tiene un Trabajo vinculado'}`
+    : 'Vínculo borrado', 'success');
 }
 
 async function usarComoHorasTrabajadas(gastoId, minutos) {
@@ -6465,9 +6492,13 @@ function renderVehiculoPanel() {
         ${historial.map(s=>{
           const detalle = (s.items||[]).map(it=>`${it.descripcion||'—'}: ${fmtMonto(it.monto)}`).join(' · ');
           return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
-            <div style="display:flex;justify-content:space-between;gap:8px">
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
               <span>${fmtDate(s.fecha)} · ${(s.km||0).toLocaleString('es-AR')} km</span>
-              <span class="monto">${fmtMonto(s.total)}</span>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="monto">${fmtMonto(s.total)}</span>
+                <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="editarServiceVehiculo('${s.id}')" title="Editar este service">✏️</button>
+                <button class="btn-danger" style="font-size:9px;padding:2px 6px" onclick="eliminar('vehiculoServices','${s.id}')" title="Eliminar este service">✕</button>
+              </div>
             </div>
             ${detalle?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${detalle}</div>`:''}
             ${s.notas?`<div style="font-size:10px;color:var(--muted2);margin-top:2px">${s.notas}</div>`:''}
@@ -6530,6 +6561,7 @@ function abrirRegistrarService(vehiculoId) {
   const zona = document.getElementById('vehiculo-service-form');
   zona.style.display = 'block';
   zona.dataset.vehiculoId = vehiculoId;
+  delete zona.dataset.serviceId;
   const hoy = new Date();
   const hoyIso = hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0')+'-'+String(hoy.getDate()).padStart(2,'0');
   zona.innerHTML = `
@@ -6546,6 +6578,40 @@ function abrirRegistrarService(vehiculoId) {
     <input type="text" id="sv-notas" placeholder="Ej: taller, garantía, etc."/>
     <div style="display:flex;gap:8px;margin-top:10px">
       <button class="btn-primary" onclick="guardarServiceRegistrado()">Guardar</button>
+      <button class="btn-secondary" onclick="document.getElementById('vehiculo-service-form').style.display='none'">Cancelar</button>
+    </div>
+  `;
+  renderItemsService();
+}
+
+// v17.49 — pedido de Belu: poder editar un service ya cargado, no solo
+// agregar nuevos. Reusa el mismo formulario que "Registrar service
+// hecho", solo que precargado y guardando con una acción distinta.
+function editarServiceVehiculo(serviceId) {
+  const s = (DB.vehiculoServices||[]).find(x=>x.id===serviceId);
+  if(!s) return;
+  document.getElementById('vehiculo-edicion').style.display = 'none';
+  _serviceItemsTemp = (s.items && s.items.length) ? s.items.map(it=>({...it})) : [{ descripcion:'', monto:0 }];
+  const zona = document.getElementById('vehiculo-service-form');
+  zona.style.display = 'block';
+  zona.dataset.vehiculoId = s.vehiculoId;
+  zona.dataset.serviceId = serviceId;
+  const partesFecha = (s.fecha||'').split('/'); // dd/mm/aaaa -> aaaa-mm-dd
+  const fechaIso = partesFecha.length===3 ? `${partesFecha[2]}-${partesFecha[1]}-${partesFecha[0]}` : '';
+  zona.innerHTML = `
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">✏️ Editar service</div>
+    <label>Fecha</label>
+    <input type="date" id="sv-fecha" value="${fechaIso}"/>
+    <label>Km con el que se hizo</label>
+    <input type="number" id="sv-km" value="${s.km||''}"/>
+    <label style="margin-top:6px">Ítems del service</label>
+    <div id="sv-items"></div>
+    <button class="btn-secondary" style="font-size:11px;margin-top:4px" onclick="agregarItemService()">➕ Agregar ítem</button>
+    <div style="text-align:right;font-family:'Bebas Neue';font-size:18px;margin-top:8px" id="sv-total">Total: $0</div>
+    <label style="margin-top:6px">Notas (opcional)</label>
+    <input type="text" id="sv-notas" value="${s.notas||''}" placeholder="Ej: taller, garantía, etc."/>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn-primary" onclick="guardarServiceRegistrado()">Guardar cambios</button>
       <button class="btn-secondary" onclick="document.getElementById('vehiculo-service-form').style.display='none'">Cancelar</button>
     </div>
   `;
@@ -6584,6 +6650,7 @@ function actualizarTotalService() {
 async function guardarServiceRegistrado() {
   const zona = document.getElementById('vehiculo-service-form');
   const vehiculoId = zona.dataset.vehiculoId;
+  const serviceIdEdit = zona.dataset.serviceId; // presente solo si es edición
   const v = DB.vehiculos.find(x=>x.id===vehiculoId);
   if(!v) return;
   const fechaIso = document.getElementById('sv-fecha').value;
@@ -6595,8 +6662,22 @@ async function guardarServiceRegistrado() {
   const notas = document.getElementById('sv-notas').value.trim();
   const itemsLimpios = _serviceItemsTemp.filter(it=>it.descripcion || it.monto);
   const total = itemsLimpios.reduce((s,it)=>s+(Number(it.monto)||0),0);
-  const serviceId = uid();
 
+  if(serviceIdEdit) {
+    const s = (DB.vehiculoServices||[]).find(x=>x.id===serviceIdEdit);
+    if(s) { s.fecha=fecha; s.km=kmNum; s.items=itemsLimpios; s.total=total; s.notas=notas; }
+    saveLocal();
+    zona.style.display = 'none';
+    renderGastos();
+    await writeToSheet({
+      action:'editarServiceVehiculo', id: serviceIdEdit,
+      row:{ fecha, km:kmNum, itemsJson: JSON.stringify(itemsLimpios), total, notas }
+    });
+    showToast('Service actualizado', 'success');
+    return;
+  }
+
+  const serviceId = uid();
   v.kmUltimoService = kmNum;
   v.fechaUltimoService = fecha;
   if(kmNum > (v.kmActual||0)) v.kmActual = kmNum;
