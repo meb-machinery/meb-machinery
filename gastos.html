@@ -61,6 +61,14 @@
   .total-box .num{font-family:'Bebas Neue'; font-size:34px; color:var(--yellow);}
   .total-box .label{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;}
 
+  .fila-hora{display:flex; gap:8px; margin-bottom:14px;}
+  .fila-hora input[type=time]{margin-bottom:0; flex:1;}
+  .btn-marcar-ahora{
+    flex-shrink:0; background:rgba(244,180,0,0.12); border:1px solid var(--yellow); color:var(--yellow);
+    border-radius:6px; padding:0 12px; font-family:'Barlow'; font-weight:600; font-size:12px; cursor:pointer; white-space:nowrap;
+  }
+  .btn-marcar-ahora:active{background:var(--yellow); color:var(--black);}
+
   .guardado-indicador{
     position:fixed; bottom:18px; left:50%; transform:translateX(-50%) translateY(20px);
     background:var(--green); color:#052e13; font-weight:700; font-size:12.5px; padding:9px 18px;
@@ -111,20 +119,35 @@
       <div style="font-size:11px;color:var(--muted);margin:-6px 0 10px">Cargá lo que puedas — cada horario ayuda a calcular mejor cuánto tarda un viaje, la comida, y el trabajo en sí.</div>
 
       <label>Comienzo del trabajo</label>
-      <div style="font-size:10px;color:var(--muted);margin-top:-6px;margin-bottom:4px">Poné la hora desde que salís del origen (tu base), no cuando llegás al cliente.</div>
-      <input type="time" id="inputComienzoTrabajo" oninput="onCambioTiempos()"/>
+      <div style="font-size:10px;color:var(--muted);margin-top:-6px;margin-bottom:4px">Poné la hora desde que salís del origen (tu base), no cuando llegás al cliente. Tocá "Marcar ahora" en el momento justo para que quede exacta.</div>
+      <div class="fila-hora">
+        <input type="time" id="inputComienzoTrabajo" oninput="onCambioTiempos()"/>
+        <button type="button" class="btn-marcar-ahora" onclick="marcarAhora('inputComienzoTrabajo')">&#128337; Marcar ahora</button>
+      </div>
 
       <label style="margin-top:10px">Llegada al cliente</label>
-      <input type="time" id="inputLlegadaCliente" oninput="onCambioTiempos()"/>
+      <div class="fila-hora">
+        <input type="time" id="inputLlegadaCliente" oninput="onCambioTiempos()"/>
+        <button type="button" class="btn-marcar-ahora" onclick="marcarAhora('inputLlegadaCliente')">&#128337; Marcar ahora</button>
+      </div>
 
       <label style="margin-top:10px">Inicio de la comida</label>
-      <input type="time" id="inputInicioComida" oninput="onCambioTiempos()"/>
+      <div class="fila-hora">
+        <input type="time" id="inputInicioComida" oninput="onCambioTiempos()"/>
+        <button type="button" class="btn-marcar-ahora" onclick="marcarAhora('inputInicioComida')">&#128337; Marcar ahora</button>
+      </div>
 
       <label style="margin-top:10px">Fin de la comida</label>
-      <input type="time" id="inputFinComida" oninput="onCambioTiempos()"/>
+      <div class="fila-hora">
+        <input type="time" id="inputFinComida" oninput="onCambioTiempos()"/>
+        <button type="button" class="btn-marcar-ahora" onclick="marcarAhora('inputFinComida')">&#128337; Marcar ahora</button>
+      </div>
 
       <label style="margin-top:10px">Hora de finalización (de vuelta en el origen)</label>
-      <input type="time" id="inputHoraFinalizacion" oninput="onCambioTiempos()"/>
+      <div class="fila-hora">
+        <input type="time" id="inputHoraFinalizacion" oninput="onCambioTiempos()"/>
+        <button type="button" class="btn-marcar-ahora" onclick="marcarAhora('inputHoraFinalizacion')">&#128337; Marcar ahora</button>
+      </div>
     </div>
     <div class="total-box">
       <div class="num" id="totalGeneral">$0</div>
@@ -234,6 +257,34 @@ function cambiarSesion() {
   document.getElementById('inputInicioComida').value = '';
   document.getElementById('inputFinComida').value = '';
   document.getElementById('inputHoraFinalizacion').value = '';
+}
+
+// Toma la hora real del dispositivo en el momento del toque — reemplaza
+// escribir de memoria más tarde, que es lo que hacía que estos horarios
+// fueran poco confiables.
+function marcarAhora(inputId) {
+  const ahora = new Date();
+  const hh = String(ahora.getHours()).padStart(2,'0');
+  const mm = String(ahora.getMinutes()).padStart(2,'0');
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.value = hh + ':' + mm;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// Igual que marcarAhora() pero para el campo "Hora" de un ítem puntual
+// (ej. la hora exacta de un peaje o una comida), no de los checkpoints
+// generales del día.
+function marcarAhoraItem(itemId) {
+  const it = items.find(function(x){ return x.id === itemId; });
+  if (!it) return;
+  const ahora = new Date();
+  const hh = String(ahora.getHours()).padStart(2,'0');
+  const mm = String(ahora.getMinutes()).padStart(2,'0');
+  it.hora = hh + ':' + mm;
+  const el = document.getElementById('hora_' + itemId);
+  if (el) el.value = it.hora;
+  programarGuardado();
 }
 
 function onCambioTiempos() {
@@ -378,7 +429,10 @@ function renderItems() {
       + '<div><label>' + (esHoras ? 'Valor hora ($)' : 'Monto unitario ($)') + '</label><input type="number" value="' + (it.monto||'') + '" oninput="onCambioCampo(' + jsStr(it.id) + ', \'monto\', this.value)"/></div>'
       + '</div>'
       + '<label>Hora (opcional)</label>'
-      + '<input type="time" value="' + (it.hora||'') + '" oninput="onCambioCampo(' + jsStr(it.id) + ', \'hora\', this.value)"/>'
+      + '<div class="fila-hora">'
+      + '<input type="time" id="hora_' + it.id + '" value="' + (it.hora||'') + '" oninput="onCambioCampo(' + jsStr(it.id) + ', \'hora\', this.value)"/>'
+      + '<button type="button" class="btn-marcar-ahora" onclick="marcarAhoraItem(' + jsStr(it.id) + ')">&#128337; Marcar ahora</button>'
+      + '</div>'
       + '<label>Foto del ticket (opcional)</label>'
       + '<input type="file" accept="image/*" capture="environment" onchange="onFotoSeleccionada(this, ' + jsStr(it.id) + ')"/>'
       + '<div id="fotoStatus_' + it.id + '" style="font-size:11px;margin:-8px 0 14px">' + (it.ticketUrl ? '<span style="color:var(--green)">\u2705 Foto cargada</span> — <a href="' + it.ticketUrl + '" target="_blank" style="color:var(--yellow)">verla</a>' : '<span style="color:var(--muted)">Sin foto todav\u00eda</span>') + '</div>'
