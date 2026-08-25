@@ -1175,21 +1175,34 @@ select option { background:var(--dark); }
       <button class="btn-primary" onclick="openModal('terciarizado')">+ NUEVO REGISTRO</button>
     </div>
     <p style="font-size:12px;color:var(--muted);margin-top:-8px">
-      Días que Emmanuel factura como tercerizado del negocio de su socio Matías — cliente final de Matías,
-      no de MEB (por eso no ofrece contratos ni trabajos propios ahí, y estos registros no crean Cliente
-      en el sistema). Si de una visita sale una venta de Caja o Herrería, esa sí se carga como Presupuesto
-      normal — es producto propio de MEB.
+      Días que Emmanuel trabaja tercerizado para su socio Matías — cliente final de Matías, no de MEB
+      (por eso no ofrece contratos ni trabajos propios ahí, y estos registros no crean Cliente en el
+      sistema). Matías paga un monto único por el conjunto de trabajos, no por trabajo puntual — por eso
+      acá cada fila es solo el registro del trabajo hecho; tildá los que correspondan y cerrá una
+      Liquidación cuando Matías pague. Si de una visita sale una venta de Caja o Herrería, esa sí se carga
+      como Presupuesto normal — es producto propio de MEB.
     </p>
     <div id="stats-terciarizado" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px"></div>
+
+    <div class="card-title" style="margin-bottom:8px">TRABAJOS REGISTRADOS</div>
     <div class="filter-tabs">
       <button class="filter-tab active" onclick="setFilter('terc','todos',this)">Todos</button>
-      <button class="filter-tab" onclick="setFilter('terc','pendiente',this)">Pendientes de cobro</button>
-      <button class="filter-tab" onclick="setFilter('terc','cobrado',this)">Cobrados</button>
+      <button class="filter-tab" onclick="setFilter('terc','sinliquidar',this)">Sin liquidar</button>
+      <button class="filter-tab" onclick="setFilter('terc','liquidados',this)">Liquidados</button>
     </div>
+    <div id="barra-seleccion-liquidacion" style="display:none;align-items:center;gap:12px;background:rgba(244,180,0,0.08);border:1px solid var(--yellow);border-radius:8px;padding:10px 14px;margin-bottom:10px"></div>
     <div class="card">
       <div class="table-wrap"><table>
-        <thead><tr><th>Fecha</th><th>Cliente (de Matías)</th><th>Descripción</th><th>Facturado a Matías</th><th>Cobro</th><th>Caja/Herrería</th><th></th></tr></thead>
+        <thead><tr><th style="width:30px"></th><th>Fecha</th><th>Cliente (de Matías)</th><th>Descripción</th><th>Gastos del trabajo</th><th>Estado</th><th>Caja/Herrería</th><th></th></tr></thead>
         <tbody id="tabla-terciarizado"></tbody>
+      </table></div>
+    </div>
+
+    <div class="card-title" style="margin:20px 0 8px">LIQUIDACIONES CERRADAS</div>
+    <div class="card">
+      <div class="table-wrap"><table>
+        <thead><tr><th>Fecha de pago</th><th>Trabajos</th><th>Monto recibido</th><th>Gastos vinculados</th><th>Neto real</th><th>Neto / trabajo</th><th></th></tr></thead>
+        <tbody id="tabla-liquidaciones"></tbody>
       </table></div>
     </div>
   </div>
@@ -1262,7 +1275,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxpyF4EodOS3gbeWou3qRLcNapDHUJME0E5FB1ijw0aamU25R5kx6VgQyA2zrJrTc66Bw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyjD8z9Gs45uzosZbOWS_1F0kpeBH9EyJT5Nl6UcDqc3FQg-o6lXqapzXeDbPNOM88TMQ/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1409,7 +1422,7 @@ function undoLastChange() {
 let charts = {};
 
 function saveLocal() { try { localStorage.setItem('meb_crm_v2', JSON.stringify(DB)); } catch(e){} }
-function loadLocal() { try { const d=localStorage.getItem('meb_crm_v2'); if(d) DB=JSON.parse(d); if(!DB.presupCounter) DB.presupCounter=1; if(!DB.calendarioEventos) DB.calendarioEventos=[]; if(!DB.alertasRepuesto||Array.isArray(DB.alertasRepuesto)) DB.alertasRepuesto={}; if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; if(!DB.alertas) DB.alertas=[]; if(!DB.tarifario) DB.tarifario=[]; if(!DB.informes) DB.informes=[]; if(!DB.peajes) DB.peajes=[]; if(!DB.cajasHerramientas) DB.cajasHerramientas=[]; if(!DB.terciarizados) DB.terciarizados=[]; DB.trabajos.forEach(t=>{ if(!t.estadoCobro) t.estadoCobro='pendiente'; }); } catch(e){} }
+function loadLocal() { try { const d=localStorage.getItem('meb_crm_v2'); if(d) DB=JSON.parse(d); if(!DB.presupCounter) DB.presupCounter=1; if(!DB.calendarioEventos) DB.calendarioEventos=[]; if(!DB.alertasRepuesto||Array.isArray(DB.alertasRepuesto)) DB.alertasRepuesto={}; if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; if(!DB.alertas) DB.alertas=[]; if(!DB.tarifario) DB.tarifario=[]; if(!DB.informes) DB.informes=[]; if(!DB.peajes) DB.peajes=[]; if(!DB.cajasHerramientas) DB.cajasHerramientas=[]; if(!DB.terciarizados) DB.terciarizados=[]; if(!DB.terciarizadoLiquidaciones) DB.terciarizadoLiquidaciones=[]; DB.trabajos.forEach(t=>{ if(!t.estadoCobro) t.estadoCobro='pendiente'; }); } catch(e){} }
 
 // ============================================================
 // LOGIN
@@ -1586,19 +1599,20 @@ async function syncAll() {
   const _localCajas       = (DB.cajasHerramientas||[]).filter(x=>x._local);
   const _localVehiculos   = (DB.vehiculos||[]).filter(x=>x._local);
   const _localTerciarizados = (DB.terciarizados||[]).filter(x=>x._local);
+  const _localLiquidaciones = (DB.terciarizadoLiquidaciones||[]).filter(x=>x._local);
   const _alertasRepuesto  = DB.alertasRepuesto || {};
   const _presupCounter    = DB.presupCounter || 1;
   const _calendarioEventos = DB.calendarioEventos || [];
 
   try {
-    const [cl,mq,tr,pr,al,pv,ct,tf,inf,opl,pj,ch,chk,ge,vh,vs,tz] = await Promise.all([
+    const [cl,mq,tr,pr,al,pv,ct,tf,inf,opl,pj,ch,chk,ge,vh,vs,tz,tzl] = await Promise.all([
       fetchSheet('CLIENTES'), fetchSheet('MAQUINAS'),
       fetchSheet('TRABAJOS'), fetchSheet('PRESUPUESTOS'), fetchSheet('ALERTAS'),
       fetchSheet('PROVEEDORES'), fetchSheet('CONTRATOS'), fetchSheet('TARIFARIO'),
       fetchSheet('INFORMES'), fetchSheet('OPORTUNIDADES_LOG'), fetchSheet('PEAJES'),
       fetchSheet('CAJAS_HERRAMIENTAS'), fetchSheet('CHECKLIST_VISITAS'),
       fetchSheet('GASTOS_ESTRUCTURA'), fetchSheet('VEHICULOS'), fetchSheet('VEHICULO_SERVICES'),
-      fetchSheet('TERCIARIZADO')
+      fetchSheet('TERCIARIZADO'), fetchSheet('TERCIARIZADO_LIQUIDACIONES')
     ]);
 
     // ── Salvavidas: detectar encabezados rotos ──────────────────────────────
@@ -1948,10 +1962,16 @@ async function syncAll() {
       };
     });
 
-    // Terciarizado — días que Emmanuel factura como tercerizado de
-    // Matías. A propósito no lleva clienteId (el CLIENTE es texto libre,
-    // no un Cliente MEB real — ver nota completa en Code.gs v17.50).
-    const tzValida = tz.length && Object.prototype.hasOwnProperty.call(tz[0], 'MONTO_FACTURADO_MATIAS');
+    // Terciarizado — días que Emmanuel trabaja tercerizado para Matías.
+    // A propósito no lleva clienteId (el CLIENTE es texto libre, no un
+    // Cliente MEB real). Desde v17.51: el pago real es un monto único
+    // mensual de Matías por el conjunto de trabajos (no por trabajo
+    // puntual), así que acá cada fila es solo el REGISTRO del trabajo
+    // hecho — el dinero vive en TERCIARIZADO_LIQUIDACIONES, vinculado por
+    // liquidacionId. montoFacturadoMatias/estadoCobro/fechaCobro quedan
+    // por compatibilidad con filas viejas, pero ocultos por defecto en
+    // el CRM (ver openModal tipo 'terciarizado').
+    const tzValida = tz.length && Object.prototype.hasOwnProperty.call(tz[0], 'CLIENTE');
     DB.terciarizados = (tzValida ? tz : []).map(r => ({
       id: resolverIdEstable(r,'TERCIARIZADO'),
       fecha: r.FECHA || '',
@@ -1961,6 +1981,18 @@ async function syncAll() {
       estadoCobro: r.ESTADO_COBRO || 'pendiente',
       fechaCobro: r.FECHA_COBRO || '',
       vendioCajaHerreria: r.VENDIO_CAJA_HERRERIA || '',
+      notas: r.NOTAS || '',
+      liquidacionId: String(r.LIQUIDACION_ID||'').trim()
+    }));
+
+    // Liquidaciones — cada pago real que Matías le hace a Emmanuel,
+    // cubriendo un grupo de trabajos de Terciarizado (vinculados desde el
+    // otro lado por liquidacionId, no acá).
+    const tzlValida = tzl.length && Object.prototype.hasOwnProperty.call(tzl[0], 'MONTO_RECIBIDO');
+    DB.terciarizadoLiquidaciones = (tzlValida ? tzl : []).map(r => ({
+      id: resolverIdEstable(r,'TERCIARIZADO_LIQUIDACIONES'),
+      fechaPago: r.FECHA_PAGO || '',
+      montoRecibido: parseFloat(r.MONTO_RECIBIDO)||0,
       notas: r.NOTAS || ''
     }));
 
@@ -2023,6 +2055,7 @@ async function syncAll() {
     _localCajas.forEach(lc => { if(!DB.cajasHerramientas.find(x=>x.id===lc.id)) DB.cajasHerramientas.push(lc); });
     (_localVehiculos||[]).forEach(lv => { if(!DB.vehiculos.find(x=>x.id===lv.id)) DB.vehiculos.push(lv); });
     (_localTerciarizados||[]).forEach(lt => { if(!DB.terciarizados.find(x=>x.id===lt.id)) DB.terciarizados.push(lt); });
+    (_localLiquidaciones||[]).forEach(ll => { if(!DB.terciarizadoLiquidaciones.find(x=>x.id===ll.id)) DB.terciarizadoLiquidaciones.push(ll); });
 
     // Filtra cualquier borrado reciente que el Sheet todavía no reflejó
     // (gviz puede tardar en actualizar su caché tras un delete).
@@ -2038,6 +2071,7 @@ async function syncAll() {
     DB.cajasHerramientas = filtrarRecienEliminados('cajasHerramientas', DB.cajasHerramientas);
     DB.vehiculos   = filtrarRecienEliminados('vehiculos', DB.vehiculos);
     DB.terciarizados = filtrarRecienEliminados('terciarizados', DB.terciarizados);
+    DB.terciarizadoLiquidaciones = filtrarRecienEliminados('terciarizadoLiquidaciones', DB.terciarizadoLiquidaciones);
 
     // ── Reparar clienteId corruptos o vacíos ──────────────────────────────────
     DB.presupuestos.forEach(p => {
@@ -2687,61 +2721,205 @@ function renderMovilidad() {
 // ============================================================
 // TERCIARIZADO — días que Emmanuel factura como tercerizado de Matías
 // ============================================================
+// Selección en memoria de trabajos tildados para armar la próxima
+// liquidación — no se persiste (se resetea al salir de la pestaña), es
+// solo mientras Belu arma el cierre.
+let seleccionLiquidacion = new Set();
+
+function toggleSeleccionLiquidacion(id, checked) {
+  if (checked) seleccionLiquidacion.add(id); else seleccionLiquidacion.delete(id);
+  renderTerciarizado();
+}
+
+// Total de Gastos de Estructura vinculados a un conjunto de IDs de
+// Terciarizado — usado tanto para el resumen de selección como para el
+// neto real de cada Liquidación ya cerrada.
+function gastosVinculadosATerciarizados(idsSet) {
+  return (DB.gastosEstructura||[])
+    .filter(g => g.terciarizadoId && idsSet.has(g.terciarizadoId))
+    .reduce((s,g) => s + Number(g.total||0), 0);
+}
+
 function renderTerciarizado() {
   if (!DB.terciarizados) DB.terciarizados = [];
+  if (!DB.terciarizadoLiquidaciones) DB.terciarizadoLiquidaciones = [];
   const filtro = filters.terc || 'todos';
-  const q = '';
   let filtrados = DB.terciarizados;
-  if (filtro === 'pendiente') filtrados = filtrados.filter(t => (t.estadoCobro||'pendiente') !== 'cobrado');
-  if (filtro === 'cobrado') filtrados = filtrados.filter(t => t.estadoCobro === 'cobrado');
+  if (filtro === 'sinliquidar') filtrados = filtrados.filter(t => !t.liquidacionId);
+  if (filtro === 'liquidados') filtrados = filtrados.filter(t => !!t.liquidacionId);
   filtrados = [...filtrados].sort((a,b) => {
     const da = parseFechaAny(a.fecha), db_ = parseFechaAny(b.fecha);
     return (db_?db_.getTime():0) - (da?da.getTime():0);
   });
+  // La selección solo tiene sentido sobre trabajos todavía sin liquidar —
+  // si algo tildado ya quedó liquidado por otra vía, se limpia solo.
+  seleccionLiquidacion.forEach(id => { const t=DB.terciarizados.find(x=>x.id===id); if(!t || t.liquidacionId) seleccionLiquidacion.delete(id); });
 
   const tbody = document.getElementById('tabla-terciarizado');
   if (tbody) {
-    tbody.innerHTML = filtrados.length ? filtrados.map(t => `
+    tbody.innerHTML = filtrados.length ? filtrados.map(t => {
+      const liq = t.liquidacionId ? DB.terciarizadoLiquidaciones.find(l=>l.id===t.liquidacionId) : null;
+      const gastosDeEste = gastosVinculadosATerciarizados(new Set([t.id]));
+      return `
       <tr>
+        <td>${t.liquidacionId ? '' : `<input type="checkbox" ${seleccionLiquidacion.has(t.id)?'checked':''} onchange="toggleSeleccionLiquidacion('${t.id}', this.checked)"/>`}</td>
         <td class="td-muted">${fmtDate(t.fecha)}</td>
         <td class="td-name">${t.cliente||'—'}</td>
-        <td style="font-size:11px;max-width:280px">${t.descripcion||'—'}${t.notas?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${t.notas}</div>`:''}</td>
-        <td><span class="monto">${fmtMonto(t.montoFacturadoMatias)}</span></td>
-        <td>${t.estadoCobro==='cobrado'
-          ? `<span class="badge badge-green">✔ COBRADO</span>${t.fechaCobro?`<div style="font-size:9px;color:var(--muted2)">${fmtDate(t.fechaCobro)}</div>`:''}`
-          : `<span class="badge badge-orange">PENDIENTE</span>`}</td>
+        <td style="font-size:11px;max-width:260px">${t.descripcion||'—'}${t.notas?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${t.notas}</div>`:''}</td>
+        <td style="font-size:11px">${gastosDeEste>0?fmtMonto(gastosDeEste):'<span style="color:var(--muted2)">—</span>'}</td>
+        <td>${liq
+          ? `<span class="badge badge-green">✔ LIQUIDADO</span><div style="font-size:9px;color:var(--muted2)">${fmtDate(liq.fechaPago)}</div>`
+          : `<span class="badge badge-orange">SIN LIQUIDAR</span>`}</td>
         <td style="font-size:11px">${t.vendioCajaHerreria||'<span style="color:var(--muted2)">—</span>'}</td>
         <td><div class="actions">
-          <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="openModal('terciarizado', DB.terciarizados.find(x=>x.id==='${t.id}'))" title="Editar">✏️ Editar</button>
+          <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="openModal('terciarizado', DB.terciarizados.find(x=>x.id==='${t.id}'))" title="Editar">✏️</button>
           <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="imprimirTerciarizado('${t.id}')" title="Imprimir / PDF">🖨️</button>
           <button class="btn-danger" style="font-size:10px;padding:3px 7px" onclick="eliminar('terciarizados','${t.id}')" title="Eliminar">✕</button>
         </div></td>
-      </tr>`).join('') : `<tr><td colspan="7"><div class="empty-state"><div class="icon">🤝</div><p>Sin registros todavía — sumá el primero</p></div></td></tr>`;
+      </tr>`;
+    }).join('') : `<tr><td colspan="8"><div class="empty-state"><div class="icon">🤝</div><p>Sin registros todavía — sumá el primero</p></div></td></tr>`;
   }
 
-  // Stats: total facturado a Matías, cantidad de días, promedio por día,
-  // pendiente de cobro — separado a propósito de las estadísticas de
-  // MEB (Trabajos/Presupuestos), para poder comparar más adelante cuánto
-  // rinde esta vía contra generar trabajo propio.
+  // Barra de selección — aparece solo si hay algo tildado.
+  const barraEl = document.getElementById('barra-seleccion-liquidacion');
+  if (barraEl) {
+    if (seleccionLiquidacion.size > 0) {
+      const gastosSel = gastosVinculadosATerciarizados(seleccionLiquidacion);
+      barraEl.style.display = 'flex';
+      barraEl.innerHTML = `
+        <span style="font-size:12px">${seleccionLiquidacion.size} trabajo(s) tildado(s) — gastos vinculados: <b>${fmtMonto(gastosSel)}</b></span>
+        <button class="btn-primary" style="margin-left:auto" onclick="abrirCierreLiquidacion()">💰 Cerrar liquidación con estos</button>
+        <button class="btn-secondary" onclick="seleccionLiquidacion.clear(); renderTerciarizado();">Cancelar selección</button>
+      `;
+    } else {
+      barraEl.style.display = 'none';
+      barraEl.innerHTML = '';
+    }
+  }
+
+  // Panel de Liquidaciones cerradas — cada una con su neto real.
+  const liqTbody = document.getElementById('tabla-liquidaciones');
+  if (liqTbody) {
+    const liqsOrdenadas = [...DB.terciarizadoLiquidaciones].sort((a,b) => {
+      const da = parseFechaAny(a.fechaPago), db_ = parseFechaAny(b.fechaPago);
+      return (db_?db_.getTime():0) - (da?da.getTime():0);
+    });
+    liqTbody.innerHTML = liqsOrdenadas.length ? liqsOrdenadas.map(l => {
+      const trabajosDeEsta = DB.terciarizados.filter(t=>t.liquidacionId===l.id);
+      const idsSet = new Set(trabajosDeEsta.map(t=>t.id));
+      const gastosDeEsta = gastosVinculadosATerciarizados(idsSet);
+      const neto = Number(l.montoRecibido||0) - gastosDeEsta;
+      const promedioPorTrabajo = trabajosDeEsta.length ? neto/trabajosDeEsta.length : 0;
+      return `
+      <tr>
+        <td class="td-muted">${fmtDate(l.fechaPago)}</td>
+        <td>${trabajosDeEsta.length} trabajo(s)</td>
+        <td><span class="monto">${fmtMonto(l.montoRecibido)}</span></td>
+        <td style="font-size:11px">${fmtMonto(gastosDeEsta)}</td>
+        <td><b style="color:${neto>=0?'var(--green)':'var(--red)'}">${fmtMonto(neto)}</b></td>
+        <td style="font-size:11px">${fmtMonto(promedioPorTrabajo)}</td>
+        <td><div class="actions">
+          <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="verTrabajosDeLiquidacion('${l.id}')" title="Ver trabajos incluidos">👁️</button>
+          <button class="btn-danger" style="font-size:10px;padding:3px 7px" onclick="eliminarLiquidacion('${l.id}')" title="Eliminar liquidación (desvincula los trabajos, no los borra)">✕</button>
+        </div></td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="7"><div class="empty-state" style="padding:16px"><p style="font-size:12px">Sin liquidaciones cerradas todavía</p></div></td></tr>`;
+  }
+
+  // Stats generales — sobre liquidaciones ya cerradas, que es donde vive
+  // la plata real (no sobre trabajos sueltos, que no tienen monto propio).
   const statsEl = document.getElementById('stats-terciarizado');
   if (statsEl) {
-    const total = DB.terciarizados.reduce((s,t)=>s+Number(t.montoFacturadoMatias||0),0);
-    const cantidad = DB.terciarizados.length;
-    const promedio = cantidad ? total/cantidad : 0;
-    const pendiente = DB.terciarizados.filter(t=>t.estadoCobro!=='cobrado').reduce((s,t)=>s+Number(t.montoFacturadoMatias||0),0);
+    const totalRecibido = DB.terciarizadoLiquidaciones.reduce((s,l)=>s+Number(l.montoRecibido||0),0);
+    const totalGastos = DB.terciarizados.filter(t=>t.liquidacionId).length
+      ? gastosVinculadosATerciarizados(new Set(DB.terciarizados.filter(t=>t.liquidacionId).map(t=>t.id)))
+      : 0;
+    const netoTotal = totalRecibido - totalGastos;
+    const sinLiquidar = DB.terciarizados.filter(t=>!t.liquidacionId).length;
     statsEl.innerHTML = `
-      <div class="stat-card blue"><div class="stat-val">${fmtMonto(total)}</div><div class="stat-label">TOTAL FACTURADO A MATÍAS</div></div>
-      <div class="stat-card"><div class="stat-val">${cantidad}</div><div class="stat-label">DÍAS REGISTRADOS</div></div>
-      <div class="stat-card"><div class="stat-val">${fmtMonto(promedio)}</div><div class="stat-label">PROMEDIO POR DÍA</div></div>
-      <div class="stat-card orange"><div class="stat-val">${fmtMonto(pendiente)}</div><div class="stat-label">PENDIENTE DE COBRO</div></div>
+      <div class="stat-card blue"><div class="stat-val">${fmtMonto(totalRecibido)}</div><div class="stat-label">TOTAL RECIBIDO (LIQUIDACIONES)</div></div>
+      <div class="stat-card"><div class="stat-val">${fmtMonto(totalGastos)}</div><div class="stat-label">GASTOS DE ESTRUCTURA VINCULADOS</div></div>
+      <div class="stat-card ${netoTotal>=0?'green':'red'}"><div class="stat-val">${fmtMonto(netoTotal)}</div><div class="stat-label">NETO REAL</div></div>
+      <div class="stat-card orange"><div class="stat-val">${sinLiquidar}</div><div class="stat-label">TRABAJOS SIN LIQUIDAR</div></div>
     `;
   }
+}
+
+// Abre el formulario para cerrar una liquidación con los trabajos
+// actualmente tildados. No usa openModal genérico porque necesita mostrar
+// el resumen de lo seleccionado, que es dinámico.
+function abrirCierreLiquidacion() {
+  if (seleccionLiquidacion.size === 0) return;
+  const ids = [...seleccionLiquidacion];
+  const gastosSel = gastosVinculadosATerciarizados(seleccionLiquidacion);
+  document.getElementById('modalTitle').textContent = 'CERRAR LIQUIDACIÓN — ' + ids.length + ' TRABAJO(S)';
+  document.getElementById('modalBody').innerHTML = `
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+      Gastos de estructura ya vinculados a estos trabajos: <b>${fmtMonto(gastosSel)}</b> — se van a poder comparar
+      contra el monto recibido una vez guardado.
+    </p>
+    <div class="form-grid">
+      <div class="form-group"><label>Monto recibido de Matías ($ARS) *</label><input id="f-liqmonto" type="number" placeholder="Ej: 700000"/></div>
+      <div class="form-group"><label>Fecha de pago *</label><input id="f-liqfecha" type="date" value="${today()}"/></div>
+      <div class="form-group full"><label>Notas (opcional)</label><textarea id="f-liqnotas" rows="2" placeholder="Ej: liquidación de julio-agosto, pagada en 2 partes"></textarea></div>
+    </div>`;
+  document.getElementById('modalFooter').innerHTML=`
+    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+    <button class="btn-primary" onclick="window._onSave&&window._onSave()">GUARDAR</button>`;
+  window._onSave = async () => {
+    const montoRecibido = parseFloat(gv('f-liqmonto'))||0;
+    if(!montoRecibido) { showToast('Completá el monto recibido','error'); return; }
+    const fRaw = gv('f-liqfecha');
+    const fPts = fRaw.split('-');
+    const fechaPago = fPts.length===3 ? `${fPts[2]}/${fPts[1]}/${fPts[0]}` : fRaw;
+    const notas = gv('f-liqnotas');
+    const liq = { id: uid(), fechaPago, montoRecibido, notas, _local:true };
+    DB.terciarizadoLiquidaciones.push(liq);
+    ids.forEach(id => {
+      const t = DB.terciarizados.find(x=>x.id===id);
+      if(t) t.liquidacionId = liq.id;
+    });
+    saveLocal();
+    closeModal();
+    seleccionLiquidacion.clear();
+    renderTerciarizado();
+    await writeToSheet({ action:'addLiquidacionTerciarizado', row: liq });
+    for (const id of ids) {
+      const t = DB.terciarizados.find(x=>x.id===id);
+      if(t) await writeToSheet({ action:'addTerciarizado', row: t });
+    }
+    showToast('Liquidación cerrada ✔','success');
+  };
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function verTrabajosDeLiquidacion(liqId) {
+  const trabajos = DB.terciarizados.filter(t=>t.liquidacionId===liqId);
+  if(!trabajos.length) { alert('No encontré trabajos vinculados a esta liquidación.'); return; }
+  const texto = trabajos.map(t => `• ${fmtDate(t.fecha)} — ${t.cliente} — ${t.descripcion}`).join('\n');
+  alert('Trabajos incluidos en esta liquidación:\n\n' + texto);
+}
+
+// Eliminar una liquidación DESVINCULA los trabajos (vuelven a "sin
+// liquidar", no se borran) y recién ahí borra la fila de la liquidación —
+// para no dejar trabajos huérfanos apuntando a una liquidación inexistente.
+async function eliminarLiquidacion(liqId) {
+  const trabajosVinc = DB.terciarizados.filter(t=>t.liquidacionId===liqId);
+  if(!confirm(`Esta liquidación tiene ${trabajosVinc.length} trabajo(s) vinculado(s). Al eliminarla, esos trabajos vuelven a quedar "sin liquidar" (no se borran). ¿Continuar?`)) return;
+  for (const t of trabajosVinc) {
+    t.liquidacionId = '';
+    await writeToSheet({ action:'addTerciarizado', row: t });
+  }
+  saveLocal();
+  renderTerciarizado();
+  eliminar('terciarizadoLiquidaciones', liqId);
 }
 
 // Impresión simple de un registro de Terciarizado — mismo criterio que el
 // respaldo de gastos.html: ventana nueva con estilos propios, sin
 // depender de las hojas de estilo del CRM.
 function imprimirTerciarizado(id) {
+
   const t = DB.terciarizados.find(x=>x.id===id);
   if (!t) return;
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
@@ -2762,8 +2940,8 @@ function imprimirTerciarizado(id) {
       <tr><td>Fecha</td><td>${fmtDate(t.fecha)}</td></tr>
       <tr><td>Cliente (de Matías)</td><td>${t.cliente||'—'}</td></tr>
       <tr><td>Descripción</td><td>${(t.descripcion||'—').replace(/\n/g,'<br>')}</td></tr>
-      <tr><td>Monto facturado a Matías</td><td><b>${fmtMonto(t.montoFacturadoMatias)}</b></td></tr>
-      <tr><td>Estado de cobro</td><td>${t.estadoCobro==='cobrado' ? `Cobrado${t.fechaCobro?' — '+fmtDate(t.fechaCobro):''}` : 'Pendiente'}</td></tr>
+      <tr><td>Estado</td><td>${t.liquidacionId ? (()=>{ const l=DB.terciarizadoLiquidaciones.find(x=>x.id===t.liquidacionId); return l ? `Liquidado — ${fmtDate(l.fechaPago)}` : 'Liquidado'; })() : 'Sin liquidar todavía'}</td></tr>
+      ${t.montoFacturadoMatias ? `<tr><td>Monto facturado aparte</td><td><b>${fmtMonto(t.montoFacturadoMatias)}</b></td></tr>` : ''}
       <tr><td>¿Surgió venta de Caja/Herrería?</td><td>${t.vendioCajaHerreria||'—'}</td></tr>
       <tr><td>Notas</td><td>${(t.notas||'—').replace(/\n/g,'<br>')}</td></tr>
     </table>
@@ -9435,20 +9613,19 @@ function openModal(type, data={}) {
         <div style="font-size:10px;color:var(--muted);margin-top:3px">Texto libre — no crea un Cliente en el sistema, a propósito.</div>
       </div>
       <div class="form-group full"><label>Descripción del trabajo *</label><textarea id="f-tzdesc" rows="2" placeholder="Ej: Service completo 320D + regulación de válvulas">${data.descripcion||''}</textarea></div>
-      <div class="form-group"><label>Monto facturado a Matías ($ARS) *</label><input id="f-tzmonto" type="number" value="${data.montoFacturadoMatias||''}" placeholder="Ej: 250000"/></div>
-      <div class="form-group"><label>Estado de cobro</label>
-        <select id="f-tzestadocobro" onchange="document.getElementById('wrap-tzfechacobro').style.display = this.value==='cobrado' ? 'block' : 'none'">
-          <option value="pendiente" ${data.estadoCobro!=='cobrado'?'selected':''}>Pendiente</option>
-          <option value="cobrado" ${data.estadoCobro==='cobrado'?'selected':''}>Cobrado</option>
-        </select>
-      </div>
-      <div class="form-group" id="wrap-tzfechacobro" style="display:${data.estadoCobro==='cobrado'?'block':'none'}">
-        <label>Fecha de cobro</label><input id="f-tzfechacobro" type="date" value="${data.fechaCobro?(data.fechaCobro.split('/').length===3?(data.fechaCobro.split('/')[2]+'-'+data.fechaCobro.split('/')[1]+'-'+data.fechaCobro.split('/')[0]):data.fechaCobro):today()}"/>
-      </div>
       <div class="form-group full"><label>¿Surgió venta de Caja/Herrería? (opcional)</label><input id="f-tzcajaherreria" value="${data.vendioCajaHerreria||''}" placeholder="Ej: Caja 8 cajones — ver Presupuesto N° 45"/>
         <div style="font-size:10px;color:var(--muted);margin-top:3px">Solo una referencia — la venta en sí se carga aparte como Presupuesto normal, con Cliente real.</div>
       </div>
       <div class="form-group full"><label>Notas (opcional)</label><textarea id="f-tznotas" rows="2">${data.notas||''}</textarea></div>
+      <div class="form-group full" style="border-top:1px solid var(--border2);padding-top:10px;margin-top:4px">
+        <span style="font-size:11px;color:var(--muted);cursor:pointer;text-decoration:underline" onclick="document.getElementById('wrap-tzmonto-opcional').style.display = document.getElementById('wrap-tzmonto-opcional').style.display==='none' ? 'block' : 'none'">
+          ¿Este trabajo puntual se facturó aparte? (caso raro — normalmente el pago es un monto único mensual, se registra desde "Cerrar liquidación")
+        </span>
+        <div id="wrap-tzmonto-opcional" style="display:${data.montoFacturadoMatias?'block':'none'};margin-top:8px">
+          <label>Monto facturado a Matías por este trabajo puntual ($ARS)</label>
+          <input id="f-tzmonto" type="number" value="${data.montoFacturadoMatias||''}" placeholder="Ej: 250000"/>
+        </div>
+      </div>
     </div>`;
     onSave=()=>{
       const fechaRaw = gv('f-tzfecha');
@@ -9457,28 +9634,20 @@ function openModal(type, data={}) {
       const cliente = gv('f-tzcliente');
       const descripcion = gv('f-tzdesc');
       const montoFacturadoMatias = parseFloat(gv('f-tzmonto'))||0;
-      const estadoCobro = gv('f-tzestadocobro');
-      let fechaCobro = '';
-      if (estadoCobro==='cobrado') {
-        const fcRaw = gv('f-tzfechacobro');
-        const fcPts = fcRaw.split('-');
-        fechaCobro = fcPts.length===3 ? `${fcPts[2]}/${fcPts[1]}/${fcPts[0]}` : fcRaw;
-      }
       const vendioCajaHerreria = gv('f-tzcajaherreria');
       const notas = gv('f-tznotas');
       if(!cliente){ showToast('Completá el cliente','error'); return; }
       if(!descripcion){ showToast('Completá la descripción','error'); return; }
-      if(!montoFacturadoMatias){ showToast('Completá el monto facturado','error'); return; }
       if(!DB.terciarizados) DB.terciarizados=[];
       if(data.id) {
         const idx = DB.terciarizados.findIndex(x=>x.id===data.id);
-        const obj = { id:data.id, fecha, cliente, descripcion, montoFacturadoMatias, estadoCobro, fechaCobro, vendioCajaHerreria, notas };
+        const obj = { id:data.id, fecha, cliente, descripcion, montoFacturadoMatias, vendioCajaHerreria, notas, liquidacionId: data.liquidacionId||'' };
         if(idx>=0) DB.terciarizados[idx]=obj; else DB.terciarizados.push(obj);
         saveLocal(); closeModal(); renderTerciarizado();
         writeToSheet({ action:'addTerciarizado', row: obj });
         showToast('Registro actualizado ✔','success');
       } else {
-        const obj = { id:uid(), fecha, cliente, descripcion, montoFacturadoMatias, estadoCobro, fechaCobro, vendioCajaHerreria, notas, _local:true };
+        const obj = { id:uid(), fecha, cliente, descripcion, montoFacturadoMatias, vendioCajaHerreria, notas, liquidacionId:'', _local:true };
         DB.terciarizados.push(obj);
         saveLocal(); closeModal(); renderTerciarizado();
         writeToSheet({ action:'addTerciarizado', row: obj });
