@@ -1275,7 +1275,7 @@ select option { background:var(--dark); }
 // ============================================================
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyjD8z9Gs45uzosZbOWS_1F0kpeBH9EyJT5Nl6UcDqc3FQg-o6lXqapzXeDbPNOM88TMQ/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwG9nW3HOzItHCOLd5ZtvFC2A2LHfzVWKq_rxaKtJq31y6AuZSa6Q2Xoq9g4UWpQKyaYw/exec';
 const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
@@ -1762,7 +1762,8 @@ async function syncAll() {
             motivoNoAprobado:r.MOTIVO_NO_APROBADO||'',
             motivoNota:r.MOTIVO_NOTA||'',
             presupVinculadoId:r.PRESUP_VINCULADO_ID||'',
-            proximoSeguimiento:r.PROXIMO_SEGUIMIENTO||''
+            proximoSeguimiento:r.PROXIMO_SEGUIMIENTO||'',
+            excepcionPago: (function(){ try { return r.EXCEPCION_PAGO_JSON ? JSON.parse(r.EXCEPCION_PAGO_JSON) : null; } catch(e){ return null; } })()
           };
         } else {
           // Append item description from subsequent rows
@@ -3762,14 +3763,14 @@ function renderPresupuestos() {
       <td>${cl?`<div class="td-name">${cl.nombre}</div><div class="td-muted">${cl.empresa||''}</div>`:'—'}</td>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${descCorta}</td>
       <td><span class="monto">${fmtMonto((()=>{const a=p.recargoPct?p.monto*(1+p.recargoPct/100):p.monto;return Math.round(a);})())}</span>${p.montoUsd&&p.tcAlMomento?`<div style="font-size:10px;color:var(--blue-light)" title="El valor en dólares está sujeto al tipo de cambio del día de la fecha">USD ${Math.round((p.recargoPct?Math.round(p.monto*(1+p.recargoPct/100)):p.monto)/p.tcAlMomento).toLocaleString('es-AR')}</div>`:''}${p.plazoPago&&p.plazoPago!=='contado'?`<div style="font-size:9px;color:var(--orange)">A ${p.plazoPago} días (+${p.recargoPct}%)</div>`:''}</td>
-      <td>${badgeEstado(p.estado)}${diasPlazoVencido(p)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${p.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencido(p)}d</div><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="reclamarPresupuestoWhatsApp('${p.id}')" title="Mandar recordatorio por WhatsApp">📲 Reclamar</button>`:''}${diasPresupuestoSinSeguimiento(p)!==null?`<div style="font-size:9px;color:var(--orange);margin-top:2px" title="${p.proximoSeguimiento?'El seguimiento programado venció hace '+diasPresupuestoSinSeguimiento(p)+' días':'Sin resolución hace '+diasPresupuestoSinSeguimiento(p)+' días, sin seguimiento programado'}">📅 ${p.proximoSeguimiento?'Seguimiento vencido':'Sin seguimiento'} (${diasPresupuestoSinSeguimiento(p)}d)</div>`:''}${correlatividadPresupuesto(p)}</td>
+      <td>${badgeEstado(p.estado)}${diasPlazoVencido(p)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${p.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencido(p)}d</div><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="reclamarPresupuestoWhatsApp('${p.id}')" title="Mandar recordatorio por WhatsApp">📲 Reclamar</button>`:''}${diasPresupuestoSinSeguimiento(p)!==null?`<div style="font-size:9px;color:var(--orange);margin-top:2px" title="${p.proximoSeguimiento?'El seguimiento programado venció hace '+diasPresupuestoSinSeguimiento(p)+' días':'Sin resolución hace '+diasPresupuestoSinSeguimiento(p)+' días, sin seguimiento programado'}">📅 ${p.proximoSeguimiento?'Seguimiento vencido':'Sin seguimiento'} (${diasPresupuestoSinSeguimiento(p)}d)</div>`:''}${correlatividadPresupuesto(p)}${p.excepcionPago?`<div style="font-size:9px;color:#6fa8dc;margin-top:2px;cursor:pointer" onclick="openModal('excepcionPago', DB.presupuestos.find(x=>x.id==='${p.id}'))" title="${(p.excepcionPago.modalidadAcordada||'').replace(/"/g,'&quot;')}">📝 Excepción registrada</div>`:''}</td>
       <td class="td-muted">${fmtDate(p.fecha)}</td>
       <td style="font-size:10px;text-align:center;white-space:nowrap">${p.fechaEnviado?`<div style="color:var(--blue-light)">📤 ENVIADO</div><div style="font-size:9px;color:var(--muted2)">${p.fechaEnviado}</div>`:p.fechaDescarga?`<div style="color:#25d366">📄 DESCARGADO</div><div style="font-size:9px;color:var(--muted2)">${p.fechaDescarga}</div><div style="font-size:9px;margin-top:2px"><a href="#" onclick="event.preventDefault();marcarPresupuestoEnviadoManual('${p.id}')" style="color:var(--blue-light);text-decoration:underline;cursor:pointer">Marcar enviado</a></div>`:`<div style="color:var(--muted)">📝 FORMULADO</div><div style="font-size:9px;color:var(--muted2)">${fmtDate(p.fecha)}</div><div style="font-size:9px;margin-top:2px"><a href="#" onclick="event.preventDefault();marcarPresupuestoEnviadoManual('${p.id}')" style="color:var(--blue-light);text-decoration:underline;cursor:pointer">Marcar enviado</a></div>`}</td>
       <td style="font-size:9px;text-align:center;white-space:nowrap">${p.informeGuardado?`<a href="${p.informeDriveUrl||'#'}" target="_blank" style="color:#25d366;text-decoration:none" title="Guardado en Drive">✔ Drive<br><span style='color:var(--muted);font-size:8px'>${p.informeGuardado}</span></a>`:p.informeGenerado?`<span style='color:#9b59b6'>📋 ${p.informeGenerado}</span>`:'—'}</td>
       <td><div class="actions">
         <button class="btn-secondary" title="Editar" onclick="generarPresupuestoPDF('${p.id}')">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','no aprobado'])">Estado</button>
-        <button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(0,59,112,0.1);border-color:#003B70;color:#6fa8dc" onclick="registrarExcepcionPago('${p.id}')" title="Dejar constancia de un acuerdo de pago distinto al pactado (sin recargo, otro plazo, etc.)">📝 Excepción de pago</button>
+        <button class="btn-secondary" style="font-size:10px;padding:3px 8px${p.excepcionPago?';background:rgba(0,59,112,0.15);border-color:#003B70;color:#6fa8dc':''}" onclick="openModal('excepcionPago', DB.presupuestos.find(x=>x.id==='${p.id}'))" title="${p.excepcionPago?'Excepción registrada — clic para ver o editar':'Dejar constancia de un acuerdo de pago distinto al pactado'}">📝 ${p.excepcionPago?'Excepción':'Excepción de pago'}</button>
         ${p.estado==='pendiente' ? `<button class="btn-secondary" style="font-size:10px;padding:3px 8px${diasPresupuestoSinSeguimiento(p)!==null?';background:rgba(230,126,34,0.15);border-color:#e67e22;color:#e67e22':''}" onclick="guardarProximoSeguimiento('${p.id}')" title="${p.proximoSeguimiento?'Próximo seguimiento: '+p.proximoSeguimiento+' — clic para cambiarlo':'Programar próximo seguimiento'}">📅 ${p.proximoSeguimiento||'Seguimiento'}</button>${diasPresupuestoSinSeguimiento(p)!==null&&cl&&cl.telefono?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="seguirPresupuestoWhatsApp('${p.id}')" title="Mandar mensaje de seguimiento por WhatsApp">📲</button>`:''}` : ''}
         ${p.estado==='no aprobado' ? (p.motivoNoAprobado
           ? `<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('motivoNoAprobado',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Motivo cargado — clic para editar">❓ ${etiquetaMotivoNoAprobado(p.motivoNoAprobado)}</button>`
@@ -8625,7 +8626,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     // ajustar algo puntual antes de mandarlo — no es un texto fijo del
     // sistema, es el default que va a viajar salvo que se toque a mano.
     + '<div class="condiciones-pago-legal"><div class="condiciones-titulo">Condiciones de pago</div>'
-    + '<p contenteditable="true">El pago del presente presupuesto deber\u00E1 efectivizarse dentro de los d\u00EDas corridos que correspondan seg\u00FAn la modalidad de pago seleccionada por EL CLIENTE (contado / 30 / 60 / 90 d\u00EDas), contados desde la fecha de entrega del informe t\u00E9cnico correspondiente, con el recargo financiero aplicable a cada modalidad conforme se detalla en la tabla de Opciones de Pago.</p>'
+    + '<p contenteditable="true">El pago del presente presupuesto deber\u00E1 efectivizarse dentro de los 5 (cinco) d\u00EDas corridos posteriores a la entrega del informe t\u00E9cnico correspondiente en la modalidad Contado, o dentro de los 30 / 60 / 90 d\u00EDas corridos desde esa misma fecha en caso de optar por una modalidad financiada, seg\u00FAn la elecci\u00F3n de EL CLIENTE y con el recargo financiero aplicable a cada modalidad conforme se detalla en la tabla de Opciones de Pago.</p>'
     + '<p contenteditable="true">Vencido el plazo pactado sin que se hubiera efectivizado el pago total, la mora se producir\u00E1 de pleno derecho, sin necesidad de interpelaci\u00F3n judicial o extrajudicial previa (art. 886 del C\u00F3digo Civil y Comercial de la Naci\u00F3n), devengando un inter\u00E9s moratorio equivalente a la Tasa de Inter\u00E9s Moratorio (TIM) publicada por el Banco Central de la Rep\u00FAblica Argentina conforme al art. 768, inciso c), del C\u00F3digo Civil y Comercial de la Naci\u00F3n.</p>'
     + '<p contenteditable="true">Toda modificaci\u00F3n a las presentes condiciones de pago (modalidad, plazo o recargo) requerir\u00E1 acuerdo expreso y por escrito entre las partes, no siendo v\u00E1lida la mera tolerancia o pr\u00E1ctica reiterada como modificaci\u00F3n t\u00E1cita de lo aqu\u00ED pactado.</p>'
     + '</div>'
@@ -9604,6 +9605,73 @@ function openModal(type, data={}) {
       guardarMotivoNoAprobado(data.id, categoria, vinculo, nota);
     };
   }
+  else if(type==='excepcionPago') {
+    title = 'EXCEPCIÓN DE PAGO — PRESUPUESTO N° ' + (data.num||'—');
+    const ex = data.excepcionPago || null;
+    const modalidadOriginal = data.plazoPago && data.plazoPago!=='contado'
+      ? `A ${data.plazoPago} días (+${data.recargoPct||0}%)`
+      : 'Contado';
+    body=`<div class="form-grid">
+      <div class="form-group full" style="background:rgba(0,59,112,0.06);border-radius:6px;padding:10px 12px">
+        <label style="margin-bottom:2px">¿Se acordó una condición de pago distinta a la original?</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;margin-top:4px">
+          <input type="checkbox" id="f-excActiva" ${ex?'checked':''} onchange="document.getElementById('wrap-excCampos').style.display=this.checked?'block':'none'" style="width:16px;height:16px"/>
+          Sí, hay una excepción para registrar
+        </label>
+      </div>
+      <div class="form-group full" id="wrap-excCampos" style="display:${ex?'block':'none'}">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Modalidad original</label>
+            <input value="${modalidadOriginal}" disabled style="opacity:0.6"/>
+          </div>
+          <div class="form-group">
+            <label>Modalidad acordada *</label>
+            <input id="f-excAcordada" value="${ex?.modalidadAcordada||''}" placeholder="Ej: 50% ahora, 50% el 15/09, sin recargo"/>
+          </div>
+          <div class="form-group full">
+            <label>Motivo / observación</label>
+            <textarea id="f-excMotivo" rows="2" placeholder="Ej: cliente con problemas de flujo de caja este mes, es cliente recurrente">${ex?.motivo||''}</textarea>
+          </div>
+          <div class="form-group full">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+              <input type="checkbox" id="f-excConfirmado" ${ex?.confirmadoEscrito?'checked':''} style="width:16px;height:16px"/>
+              Confirmado por escrito con el cliente
+            </label>
+          </div>
+          <div class="form-group full">
+            <label>Referencia del mensaje (opcional)</label>
+            <textarea id="f-excReferencia" rows="2" placeholder="Pegá acá el texto del WhatsApp donde el cliente confirma, o una referencia (ej: 'WhatsApp 24/08 20:14')">${ex?.referenciaMensaje||''}</textarea>
+          </div>
+          ${ex?.fecha ? `<div class="form-group full" style="font-size:11px;color:var(--muted)">Registrada el ${ex.fecha}${ex.fechaEdicion?` — última edición ${ex.fechaEdicion}`:''}</div>` : ''}
+        </div>
+      </div>
+    </div>`;
+    onSave=()=>{
+      const activa = document.getElementById('f-excActiva').checked;
+      let excepcionPagoObj = null;
+      let excepcionPagoJson = '';
+      if(activa) {
+        const modalidadAcordada = gv('f-excAcordada');
+        if(!modalidadAcordada){ showToast('Completá la modalidad acordada','error'); return; }
+        excepcionPagoObj = {
+          modalidadOriginal,
+          modalidadAcordada,
+          motivo: gv('f-excMotivo'),
+          confirmadoEscrito: document.getElementById('f-excConfirmado').checked,
+          referenciaMensaje: gv('f-excReferencia'),
+          fecha: ex?.fecha || new Date().toLocaleDateString('es-AR'),
+          fechaEdicion: ex ? new Date().toLocaleDateString('es-AR') : ''
+        };
+        excepcionPagoJson = JSON.stringify(excepcionPagoObj);
+      }
+      const p = DB.presupuestos.find(x=>x.id===data.id);
+      if(p) p.excepcionPago = excepcionPagoObj;
+      saveLocal(); closeModal(); refreshCurrentPage();
+      writeToSheet({ action:'updatePresupuesto', id:data.id, row:{ excepcion_pago_json: excepcionPagoJson } });
+      showToast(activa ? 'Excepción de pago registrada ✔' : 'Excepción de pago borrada','success');
+    };
+  }
   else if(type==='cajaHerramienta') {
     title = data.id ? 'EDITAR ENTREGA' : 'REGISTRAR ENTREGA DE CAJA DE HERRAMIENTAS';
     const clOpts = clienteOptions(data.clienteId||'');
@@ -10190,26 +10258,6 @@ function guardar(tipo, obj, campoRequerido) {
       ULTIMO_CONTACTO:obj.ultimoContacto||'', NOTAS:obj.notas||''
     }});
   }
-}
-
-// Registra por escrito, dentro de las Notas del presupuesto, una excepción
-// a las condiciones de pago pactadas (otro plazo, sin recargo, etc.) — para
-// que la flexibilidad comercial de Emmanuel quede trazable en el sistema
-// en vez de depender de la memoria de alguien. No reemplaza las notas que
-// ya hubiera, las apila con fecha — así queda un historial, no solo el
-// último acuerdo.
-async function registrarExcepcionPago(id) {
-  const p = DB.presupuestos.find(x=>x.id===id);
-  if(!p) return;
-  const texto = prompt('Describí el acuerdo de pago distinto al pactado (ej: "Acepta pagar $200.000 ahora y el saldo el 15/09, sin recargo de la opción a 60 días"):', '');
-  if(texto === null || !texto.trim()) return;
-  const fechaHoy = new Date().toLocaleDateString('es-AR');
-  const linea = `[${fechaHoy}] EXCEPCIÓN DE PAGO: ${texto.trim()}`;
-  p.notas = p.notas ? (p.notas + '\n' + linea) : linea;
-  saveLocal();
-  refreshCurrentPage();
-  await writeToSheet({ action:'updatePresupuesto', id, row:{ notas: p.notas } });
-  showToast('Excepción registrada en las notas del presupuesto ✔','success');
 }
 
 function cambiarEstado(tipo, id, estados) {
