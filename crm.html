@@ -3735,7 +3735,25 @@ function renderPresupuestos() {
     });
   }
   const tbody=document.getElementById('tabla-presupuestos');
-  if(!data.length){tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="icon">📋</div><p>Sin presupuestos</p></div></td></tr>`;return;}
+  if(!data.length){
+    // Si la búsqueda es la que está tapando resultados que sí existen para
+    // el filtro activo, avisarlo explícitamente en vez de un "Sin
+    // presupuestos" genérico que hace pensar que no hay nada cuando en
+    // realidad el buscador está de por medio (confunde: el contador de la
+    // pestaña puede decir "1" mientras la tabla muestra vacío).
+    let dataSinBusqueda = DB.presupuestos;
+    if(filters.presup==='vencido') dataSinBusqueda=dataSinBusqueda.filter(p=>diasPlazoVencido(p)!==null);
+    else if(filters.presup==='seguimiento') dataSinBusqueda=dataSinBusqueda.filter(p=>diasPresupuestoSinSeguimiento(p)!==null);
+    else if(filters.presup!=='todos') dataSinBusqueda=dataSinBusqueda.filter(p=>p.estado===filters.presup);
+    if(search && dataSinBusqueda.length){
+      tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="icon">🔍</div>
+        <p>Tu búsqueda "<b>${search}</b>" no encuentra nada acá, pero hay <b>${dataSinBusqueda.length}</b> presupuesto${dataSinBusqueda.length!==1?'s':''} con este filtro</p>
+        <button class="btn-secondary" style="margin-top:8px" onclick="document.getElementById('searchPresupuestos').value='';renderPresupuestos()">Borrar búsqueda</button>
+      </div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="icon">📋</div><p>Sin presupuestos</p></div></td></tr>`;return;
+  }
   tbody.innerHTML=data.map(p=>{
     const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId))||DB.clientes.find(c=>c.nombre.toUpperCase()===(p.clienteNombreSheet||p.clienteId||'').toUpperCase());
     const descCorta=(p.descripcion||'—').split('\n')[0].split('|')[0];
@@ -3751,6 +3769,7 @@ function renderPresupuestos() {
       <td><div class="actions">
         <button class="btn-secondary" title="Editar" onclick="generarPresupuestoPDF('${p.id}')">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','no aprobado'])">Estado</button>
+        <button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(0,59,112,0.1);border-color:#003B70;color:#6fa8dc" onclick="registrarExcepcionPago('${p.id}')" title="Dejar constancia de un acuerdo de pago distinto al pactado (sin recargo, otro plazo, etc.)">📝 Excepción de pago</button>
         ${p.estado==='pendiente' ? `<button class="btn-secondary" style="font-size:10px;padding:3px 8px${diasPresupuestoSinSeguimiento(p)!==null?';background:rgba(230,126,34,0.15);border-color:#e67e22;color:#e67e22':''}" onclick="guardarProximoSeguimiento('${p.id}')" title="${p.proximoSeguimiento?'Próximo seguimiento: '+p.proximoSeguimiento+' — clic para cambiarlo':'Programar próximo seguimiento'}">📅 ${p.proximoSeguimiento||'Seguimiento'}</button>${diasPresupuestoSinSeguimiento(p)!==null&&cl&&cl.telefono?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="seguirPresupuestoWhatsApp('${p.id}')" title="Mandar mensaje de seguimiento por WhatsApp">📲</button>`:''}` : ''}
         ${p.estado==='no aprobado' ? (p.motivoNoAprobado
           ? `<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('motivoNoAprobado',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Motivo cargado — clic para editar">❓ ${etiquetaMotivoNoAprobado(p.motivoNoAprobado)}</button>`
@@ -8457,6 +8476,10 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     + '.cond-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}'
     + '.cond-item{font-size:12px;color:#555}'
     + '.cond-item::before{content:"\u2713  ";color:#F4B400;font-weight:700}'
+    + '.condiciones-pago-legal{background:#f4f8fb;border:1px solid #cfe0ec;border-left:4px solid #003B70;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:22px}'
+    + '.condiciones-pago-legal .condiciones-titulo{color:#003B70}'
+    + '.condiciones-pago-legal p{font-size:11px;color:#333;line-height:1.6;margin:0 0 8px 0}'
+    + '.condiciones-pago-legal p:last-child{margin-bottom:0}'
     + '.firmas{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:36px}'
     + '.firma-box{text-align:center}'
     + '.firma-linea{border-top:2px solid #1A1A1A;margin-bottom:8px;margin-top:8px}'
@@ -8590,10 +8613,22 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     + '<div class="condiciones"><div class="condiciones-titulo">Condiciones comerciales</div>'
     + '<div class="cond-grid">'
     + '<div class="cond-item" contenteditable="true">Validez del presupuesto: 15 d\u00EDas corridos</div>'
-    + '<div class="cond-item" contenteditable="true">Forma de pago: A convenir</div>'
+    + '<div class="cond-item" contenteditable="true">Forma de pago: Seg\u00FAn Opciones de Pago detalladas arriba</div>'
     + '<div class="cond-item" contenteditable="true">Repuestos: Originales / Alternativos seg\u00FAn disponibilidad</div>'
     + '<div class="cond-item" contenteditable="true">Tiempo estimado de trabajo: A coordinar</div>'
     + '</div></div>'
+
+    // Cláusula de plazo de pago + mora — trasladada del contrato de
+    // mantenimiento preventivo (que ya la tenía) a los presupuestos de
+    // trabajo puntual, para que el mismo respaldo legal exista en ambos
+    // documentos, no solo en uno. Queda editable por si Emmanuel necesita
+    // ajustar algo puntual antes de mandarlo — no es un texto fijo del
+    // sistema, es el default que va a viajar salvo que se toque a mano.
+    + '<div class="condiciones-pago-legal"><div class="condiciones-titulo">Condiciones de pago</div>'
+    + '<p contenteditable="true">El pago del presente presupuesto deber\u00E1 efectivizarse dentro de los d\u00EDas corridos que correspondan seg\u00FAn la modalidad de pago seleccionada por EL CLIENTE (contado / 30 / 60 / 90 d\u00EDas), contados desde la fecha de entrega del informe t\u00E9cnico correspondiente, con el recargo financiero aplicable a cada modalidad conforme se detalla en la tabla de Opciones de Pago.</p>'
+    + '<p contenteditable="true">Vencido el plazo pactado sin que se hubiera efectivizado el pago total, la mora se producir\u00E1 de pleno derecho, sin necesidad de interpelaci\u00F3n judicial o extrajudicial previa (art. 886 del C\u00F3digo Civil y Comercial de la Naci\u00F3n), devengando un inter\u00E9s moratorio equivalente a la Tasa de Inter\u00E9s Moratorio (TIM) publicada por el Banco Central de la Rep\u00FAblica Argentina conforme al art. 768, inciso c), del C\u00F3digo Civil y Comercial de la Naci\u00F3n.</p>'
+    + '<p contenteditable="true">Toda modificaci\u00F3n a las presentes condiciones de pago (modalidad, plazo o recargo) requerir\u00E1 acuerdo expreso y por escrito entre las partes, no siendo v\u00E1lida la mera tolerancia o pr\u00E1ctica reiterada como modificaci\u00F3n t\u00E1cita de lo aqu\u00ED pactado.</p>'
+    + '</div>'
 
     + '<div class="firmas">'
     + '<div class="firma-box">'
@@ -10155,6 +10190,26 @@ function guardar(tipo, obj, campoRequerido) {
       ULTIMO_CONTACTO:obj.ultimoContacto||'', NOTAS:obj.notas||''
     }});
   }
+}
+
+// Registra por escrito, dentro de las Notas del presupuesto, una excepción
+// a las condiciones de pago pactadas (otro plazo, sin recargo, etc.) — para
+// que la flexibilidad comercial de Emmanuel quede trazable en el sistema
+// en vez de depender de la memoria de alguien. No reemplaza las notas que
+// ya hubiera, las apila con fecha — así queda un historial, no solo el
+// último acuerdo.
+async function registrarExcepcionPago(id) {
+  const p = DB.presupuestos.find(x=>x.id===id);
+  if(!p) return;
+  const texto = prompt('Describí el acuerdo de pago distinto al pactado (ej: "Acepta pagar $200.000 ahora y el saldo el 15/09, sin recargo de la opción a 60 días"):', '');
+  if(texto === null || !texto.trim()) return;
+  const fechaHoy = new Date().toLocaleDateString('es-AR');
+  const linea = `[${fechaHoy}] EXCEPCIÓN DE PAGO: ${texto.trim()}`;
+  p.notas = p.notas ? (p.notas + '\n' + linea) : linea;
+  saveLocal();
+  refreshCurrentPage();
+  await writeToSheet({ action:'updatePresupuesto', id, row:{ notas: p.notas } });
+  showToast('Excepción registrada en las notas del presupuesto ✔','success');
 }
 
 function cambiarEstado(tipo, id, estados) {
