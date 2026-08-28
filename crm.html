@@ -8153,6 +8153,12 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     // en vivo, a partir del TOTAL ya calculado y del tipo de cambio cargado
     // en la ficha. Sin dólar cargado, igual muestra los montos en pesos —
     // la referencia en USD queda en "—" hasta que se complete ese campo.
+    // tramosPagoOcultos: modalidades que Emmanuel sacó con la cruz — se
+    // guarda por índice (no por texto) para no depender de comparar
+    // strings, y persiste mientras dura la sesión de armado del
+    // presupuesto (se recalcula la tabla entera cada vez que cambia un
+    // ítem, así que sin esto las opciones ocultas reaparecerían solas).
+    'var tramosPagoOcultos = [];',
     'function recalcPagos() {',
     '  var tbody = document.getElementById("tbodyPagos");',
     '  if (!tbody) return;',
@@ -8160,7 +8166,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '  var tcEl = document.getElementById("pdf-tc");',
     '  var tc = tcEl ? parse(tcEl.innerText) : 0;',
     '  if (!(total > 0)) {',
-    '    tbody.innerHTML = "<tr><td colspan=\\"3\\" style=\\"text-align:center;color:#999;font-size:11px;padding:16px\\">Carg\\u00E1 los \\u00EDtems del presupuesto para ver los plazos de pago</td></tr>";',
+    '    tbody.innerHTML = "<tr><td colspan=\\"4\\" style=\\"text-align:center;color:#999;font-size:11px;padding:16px\\">Carg\\u00E1 los \\u00EDtems del presupuesto para ver los plazos de pago</td></tr>";',
     '    return;',
     '  }',
     '  var tramos = [',
@@ -8170,14 +8176,27 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '    {label:"A 90 D\\u00CDAS", pct:REC90}',
     '  ];',
     '  var html = "";',
-    '  tramos.forEach(function(t) {',
+    '  var visibles = 0;',
+    '  tramos.forEach(function(t, idx) { if (tramosPagoOcultos.indexOf(idx) < 0) visibles++; });',
+    '  tramos.forEach(function(t, idx) {',
+    '    if (tramosPagoOcultos.indexOf(idx) >= 0) return;',
     '    var ars = Math.round(total * (1 + t.pct/100));',
     '    var usdTxt = tc > 0 ? ("USD " + Math.round(ars/tc).toLocaleString("es-AR")) : "\\u2014";',
+    '    var puedeQuitar = visibles > 1;',
     '    html += "<tr><td>" + t.label + (t.pct>0 ? (" <span style=\\"color:#999;font-size:10px\\">(+"+t.pct+"%)</span>") : "") + "</td>"',
     '      + "<td style=\\"text-align:right;font-weight:bold\\">$" + ars.toLocaleString("es-AR") + "</td>"',
-    '      + "<td style=\\"text-align:right;color:#003B70;font-size:11px\\">" + usdTxt + "</td></tr>";',
+    '      + "<td style=\\"text-align:right;color:#003B70;font-size:11px\\">" + usdTxt + "</td>"',
+    '      + "<td class=\\"no-print del-col\\">" + (puedeQuitar ? ("<button class=\\"btn-del\\" title=\\"Sacar esta opci\\u00F3n del presupuesto\\" onclick=\\"ocultarTramoPago("+idx+")\\">\\u2715</button>") : "") + "</td></tr>";',
     '  });',
     '  tbody.innerHTML = html;',
+    '}',
+    // Sacar una opción de pago no la borra del todo — solo la oculta de
+    // ESTE presupuesto puntual. Si Emmanuel borra por error la única que
+    // quedaba, recalcPagos ya no muestra la cruz en la última visible
+    // (puedeQuitar), así que siempre queda al menos una opción de pago.
+    'function ocultarTramoPago(idx) {',
+    '  tramosPagoOcultos.push(idx);',
+    '  recalcPagos();',
     '}',
     'function delRow(btn) {',
     '  btn.closest("tr").remove();',
@@ -8602,7 +8621,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     + '<span style="font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:#1A1A1A">Tipo de cambio del d\u00EDa: $<span id="pdf-tc" contenteditable="true">' + (p.tcAlMomento||'') + '</span> <button id="btnTraerTC" type="button" style="background:#1A1A1A;color:#F4B400;border:none;padding:3px 9px;border-radius:3px;cursor:pointer;font-size:10px;font-weight:700;margin-left:4px">\uD83D\uDD04 Traer</button></span>'
     + '</div>'
     + '<table>'
-    + '<thead><tr><th>Modalidad</th><th style="text-align:right">Monto ARS</th><th style="text-align:right">Referencia USD</th></tr></thead>'
+    + '<thead><tr><th>Modalidad</th><th style="text-align:right">Monto ARS</th><th style="text-align:right">Referencia USD</th><th class="no-print" style="width:28px"></th></tr></thead>'
     + '<tbody id="tbodyPagos"></tbody>'
     + '</table>'
     + '<div style="padding:9px 14px;font-size:10.5px;color:#888;background:#fafafa;border-top:1px solid #f0f0f0">El monto final para pagos a 30/60/90 d\u00EDas se actualiza al tipo de cambio vigente el d\u00EDa efectivo del pago, manteni\u00E9ndose fijo el recargo pactado en esta tabla.</div>'
