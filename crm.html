@@ -10221,6 +10221,7 @@ function guardar(tipo, obj, campoRequerido) {
   if(tipo==='trabajos') {
     writeToSheet({ action:'addTrabajo', row: {
       id:obj.id, clienteId:obj.clienteId, maquinaId:obj.maquinaId,
+      presupuestoId:obj.presupuestoId||'',
       titulo:obj.titulo||'', tipo:obj.tipo||'', estado:obj.estado||'pendiente',
       estadoMaquina:obj.estadoMaquina||'', fechaInicio:obj.fechaInicio||'', fechaFin:obj.fechaFin||'',
       montoCobrado:obj.montoCobrado||0, montoGastos:obj.montoGastos||0,
