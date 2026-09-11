@@ -4795,6 +4795,39 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
       estado:p.estado, notas:notas||p.notas||''
     }});
   }
+
+  // Auto-generar el Trabajo vinculado — pedido de Belu: antes, un
+  // Presupuesto nuevo no generaba ningún Trabajo hasta que alguien lo
+  // creara a mano (o directo en el Sheet), lo que dejaba trabajos "sin
+  // vincular" por decenas. Ahora, apenas se guarda un Presupuesto nuevo,
+  // se crea de una el Trabajo correspondiente, ya vinculado — no hace
+  // falta pasar por la pestaña "Sin vincular" nunca más para presupuestos
+  // creados de acá en adelante. Arranca en estado "pendiente" (todavía no
+  // se hizo el trabajo físico) y sin fechaInicio — eso lo carga Emmanuel
+  // cuando arranca de verdad, para no ensuciar el gráfico de Estacionalidad
+  // con la fecha de armado del presupuesto en vez de la fecha real de inicio.
+  if (esNuevoPresup && !DB.trabajos.find(t => t.presupuestoId === p.id)) {
+    const tituloTrabajo = (descripcion||'').split('\n')[0].slice(0,120) || ('Trabajo — Presupuesto N° '+String(p.num).padStart(4,'0'));
+    const trabajoAuto = {
+      id: uid(), clienteId: p.clienteId, maquinaId: p.maquinaId||'', presupuestoId: p.id,
+      titulo: tituloTrabajo, tipo:'Reparación', estado:'pendiente', estadoMaquina:'funcionando',
+      fechaInicio:'', fechaFin:'', montoCobrado:0, montoGastos:0, costoRepuesto:0,
+      precioRepuestoFacturado:0, manoObraCobrada:0, movilidad:0, repuestosDetalle:'',
+      notas:'Generado automáticamente desde el Presupuesto N° '+String(p.num).padStart(4,'0'),
+      fotoUrl:'', tcAlMomento:0, gananciaUsdEsperada:0, horasTrabajadas:0, estadoCobro:'pendiente',
+      _local:true
+    };
+    DB.trabajos.push(trabajoAuto);
+    writeToSheet({ action:'addTrabajo', row:{
+      id:trabajoAuto.id, clienteId:trabajoAuto.clienteId, maquinaId:trabajoAuto.maquinaId,
+      presupuestoId:trabajoAuto.presupuestoId, titulo:trabajoAuto.titulo, tipo:trabajoAuto.tipo,
+      estado:trabajoAuto.estado, estadoMaquina:trabajoAuto.estadoMaquina,
+      fechaInicio:'', fechaFin:'', montoCobrado:0, montoGastos:0, costoRepuesto:0,
+      precioRepuestoFacturado:0, manoObraCobrada:0, movilidad:0, repuestosDetalle:'',
+      notas:trabajoAuto.notas, fotoUrl:'', tcAlMomento:0, gananciaUsdEsperada:0, horasTrabajadas:0
+    }});
+    saveLocal();
+  }
 }
 
 // Genera el Informe Técnico en ventana nueva
@@ -10286,10 +10319,33 @@ function cambiarEstado(tipo, id, estados) {
   pushUndo('Estado '+tipo.replace('s',''));
   const i=estados.indexOf(item.estado);
   item.estado=estados[(i+1)%estados.length];
+  // Sincronizar el Trabajo vinculado con el nuevo estado del Presupuesto —
+  // pedido de Belu: si el presupuesto pasa a "no aprobado", el Trabajo
+  // generado automáticamente tiene que reflejarlo (no puede seguir
+  // apareciendo como pendiente de hacer un trabajo que el cliente
+  // rechazó). Si vuelve a "aprobado" o "pendiente", se revierte — pero
+  // SOLO si el Trabajo sigue en "pendiente" o "no aprobado": si ya
+  // avanzó a "en curso"/"completado"/"cancelado" por trabajo real hecho,
+  // no se toca, para no pisar progreso real con un cambio de estado del
+  // presupuesto.
+  let trabajoSincronizado = null;
+  if(tipo==='presupuestos') {
+    const trabajoVinc = DB.trabajos.find(t => t.presupuestoId === id);
+    if(trabajoVinc) {
+      if(item.estado === 'no aprobado' && trabajoVinc.estado !== 'completado' && trabajoVinc.estado !== 'cancelado' && trabajoVinc.estado !== 'en curso') {
+        trabajoVinc.estado = 'no aprobado';
+        trabajoSincronizado = trabajoVinc;
+      } else if(item.estado !== 'no aprobado' && trabajoVinc.estado === 'no aprobado') {
+        trabajoVinc.estado = 'pendiente';
+        trabajoSincronizado = trabajoVinc;
+      }
+    }
+  }
   saveLocal(); updateBadges(); refreshCurrentPage();
   if(tipo==='trabajos') writeToSheet({ action:'updateEstadoTrabajo', id:id, estado:item.estado });
   if(tipo==='presupuestos') writeToSheet({ action:'updateEstadoPresupuesto', id:id, estado:item.estado });
   if(tipo==='contratos') writeToSheet({ action:'updateEstadoContrato', id:id, estado:item.estado });
+  if(trabajoSincronizado) writeToSheet({ action:'updateEstadoTrabajo', id:trabajoSincronizado.id, estado:trabajoSincronizado.estado });
   // Al aterrizar justo en "no aprobado", abre directo el modal del motivo —
   // así queda cargado en el momento, en vez de tener que acordarse de
   // volver después. Si se sigue cambiando de estado (el botón cicla), no
