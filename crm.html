@@ -510,6 +510,7 @@ select option { background:var(--dark); }
       <button class="filter-tab" onclick="setFilter('trabajos','no aprobado',this)">No aprobados</button>
       <button class="filter-tab" style="border-color:var(--red);color:var(--red)" onclick="filtrarPorCobrar(this)">🔴 Por cobrar</button>
       <button class="filter-tab" id="filtertab-trabajos-sinvincular" style="border-color:var(--orange);color:var(--orange)" onclick="setFilter('trabajos','sinvincular',this)">📄 Sin vincular <span class="nav-badge" id="badge-trabajos-sinvincular" style="margin-left:2px;background:var(--orange)">0</span></button>
+      <button class="btn-secondary" style="font-size:11px;padding:4px 10px;border-color:#6fa8dc;color:#6fa8dc" onclick="vincularAutomaticoPorNumero()" title="Vincula solo cuando el número del Trabajo Y el cliente coinciden con un Presupuesto — el resto queda para revisar a mano">🔗 Vincular automático por número</button>
     </div>
     <div id="trabajos-aviso-vinculo" style="margin-bottom:10px"></div>
     <div class="card"><div class="table-wrap"><table>
@@ -7642,6 +7643,45 @@ function presupuestoOptionsParaTrabajo(selectedId='') {
 // selección que ya esté hecha — solo pre-completa si el campo está vacío,
 // y el desplegable sigue siendo 100% editable por si la sugerencia no es
 // la correcta.
+// Vinculación automática Trabajo → Presupuesto por número — pedido de
+// Belu/Emmanuel: en la mayoría de los trabajos viejos, el número que sigue
+// a la "t" del ID coincide con el N° del Presupuesto de origen (ej: t011 ↔
+// Presupuesto N°11). PERO no es 100% así — hay excepciones reales donde el
+// número coincide por casualidad con un presupuesto de OTRO cliente. Por
+// eso esta función solo vincula cuando el número Y el cliente coinciden a
+// la vez — así una coincidencia de número sola (sin cliente) queda afuera,
+// para revisar a mano desde "Sin vincular" con el criterio de
+// cliente+máquina que ya existía.
+function vincularAutomaticoPorNumero() {
+  const candidatos = DB.trabajos.filter(t => !t.presupuestoId);
+  if (!candidatos.length) { alert('No hay trabajos sin vincular ahora mismo.'); return; }
+  if (!confirm(`Esto revisa los ${candidatos.length} trabajos sin vincular y linkea automáticamente solo los que tengan el mismo número Y el mismo cliente que un Presupuesto (ej: t011 ↔ Presupuesto N°11, mismo cliente). Los que no calcen en ambas cosas quedan igual que ahora, para revisar a mano. ¿Continuar?`)) return;
+
+  let vinculados = 0, sinPatron = 0, numeroSinCliente = 0;
+  candidatos.forEach(t => {
+    const m = /^t0*(\d+)$/i.exec(String(t.id||'').trim());
+    if (!m) { sinPatron++; return; }
+    const numBuscado = parseInt(m[1]);
+    const presup = DB.presupuestos.find(p => parseInt(p.num) === numBuscado);
+    if (!presup) { sinPatron++; return; }
+    if (String(presup.clienteId) !== String(t.clienteId)) { numeroSinCliente++; return; }
+    t.presupuestoId = presup.id;
+    vinculados++;
+    writeToSheet({ action:'addTrabajo', row:{
+      id:t.id, clienteId:t.clienteId, maquinaId:t.maquinaId||'', presupuestoId:t.presupuestoId,
+      titulo:t.titulo||'', tipo:t.tipo||'', estado:t.estado||'pendiente', estadoMaquina:t.estadoMaquina||'',
+      fechaInicio:t.fechaInicio||'', fechaFin:t.fechaFin||'', montoCobrado:t.montoCobrado||0,
+      montoGastos:t.montoGastos||0, costoRepuesto:t.costoRepuesto||0,
+      precioRepuestoFacturado:t.precioRepuestoFacturado||0, manoObraCobrada:t.manoObraCobrada||0,
+      movilidad:t.movilidad||0, repuestosDetalle:t.repuestosDetalle||'', notas:t.notas||'',
+      fotoUrl:t.fotoUrl||'', tcAlMomento:t.tcAlMomento||0, gananciaUsdEsperada:t.gananciaUsdEsperada||0,
+      horasTrabajadas:t.horasTrabajadas||0
+    }});
+  });
+  saveLocal(); updateBadges(); refreshCurrentPage();
+  showToast(`${vinculados} vinculados automáticamente ✔ — ${numeroSinCliente + sinPatron} quedaron para revisar a mano (mirá "Sin vincular")`, vinculados>0?'success':'error');
+}
+
 function sugerirPresupuestoParaTrabajo() {
   const selPresup = document.getElementById('f-tpresup');
   const nota = document.getElementById('f-tpresup-sugerencia');
