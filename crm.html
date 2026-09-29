@@ -661,6 +661,8 @@ select option { background:var(--dark); }
         <span class="card-title">🧪 SIMULACIÓN DE STOCK IMPORTADO</span>
         <div style="display:flex;gap:8px">
           <button class="btn-secondary" style="font-size:11px" onclick="precargarStockSimulado()" title="Carga las 8 categorías y montos del análisis financiero (MEB_Analisis_Financiero)">📥 Cargar categorías del análisis</button>
+          <button class="btn-secondary" style="font-size:11px;border-color:#6fa8dc;color:#6fa8dc" onclick="recalcularAhorroRealStock()" title="Busca en los Presupuestos aprobados repuestos que calcen con estas categorías, y calcula el ahorro real que ya se hubiera generado">🔄 Recalcular con trabajos reales</button>
+          <select id="stock-sim-mes" style="max-width:170px;font-size:11px" onchange="recalcularAhorroRealStock()"></select>
           <button class="btn-primary" style="font-size:11px" onclick="openModal('stockSimulado')">+ NUEVA CATEGORÍA</button>
         </div>
       </div>
@@ -671,7 +673,7 @@ select option { background:var(--dark); }
       </p>
       <div id="stock-sim-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:14px;padding:0 4px"></div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Categoría</th><th>Costo total est.</th><th>% ahorro</th><th>% markup</th><th>Usadas en trabajos propios</th><th>Vendidas a terceros</th><th>Ahorro simulado</th><th>Ganancia reventa simulada</th><th></th></tr></thead>
+        <thead><tr><th>Categoría</th><th>Costo total est.</th><th>% ahorro</th><th>% markup</th><th>Usadas en trabajos propios</th><th>Vendidas a terceros</th><th>Ahorro simulado</th><th>Ganancia reventa simulada</th><th>Ahorro real (mes elegido ↑)</th><th></th></tr></thead>
         <tbody id="tabla-stock-simulado"></tbody>
       </table></div>
     </div>
@@ -2164,7 +2166,10 @@ async function syncAll() {
       tipo: r.TIPO || 'visita',
       estado: r.ESTADO || 'planificada',
       notas: r.NOTAS || '',
-      usuario: r.USUARIO || ''
+      usuario: r.USUARIO || '',
+      clienteLibre: r.CLIENTE_LIBRE || '',
+      duracionHoras: parseFloat(r.DURACION_HORAS)||0,
+      notasAcuerdos: r.NOTAS_ACUERDOS || ''
     }));
 
     // Inversiones personales de Emmanuel — GANANCIA_REAL_JSON es un mapa
@@ -3203,6 +3208,41 @@ function calSemHoy() { calSemanaBase = lunesDeEstaSemana(new Date()); renderCale
 
 function calFechaISO(d) { return d.toISOString().split('T')[0]; }
 
+// v17.56 — 9 categorías del calendario, con color e ícono fijos, para que
+// se puedan reconocer de un vistazo en la grilla y en la referencia de
+// colores. El valor (value) es lo que se guarda en TIPO — cambiar el
+// label o el color acá no rompe nada ya guardado, porque el dato real es
+// el value, no el texto que se muestra.
+const CATEGORIAS_VISITA = [
+  { value:'reunion',      label:'Reunión',                         color:'#4A90D9', icon:'🗓️' },
+  { value:'visita',       label:'Visita a cliente',                color:'#2ecc71', icon:'🔧' },
+  { value:'terciarizado', label:'Terciarizado (Matías)',           color:'#c792ea', icon:'🤝' },
+  { value:'operario',     label:'Trabajo con el operario',         color:'#e67e22', icon:'👷' },
+  { value:'proveedor',    label:'Proveedores / Retiro de repuestos', color:'#16a085', icon:'📦' },
+  { value:'gestion',      label:'Gestión administrativa',          color:'#8e6bb0', icon:'📄' },
+  { value:'vehiculo',     label:'Mantenimiento del vehículo',      color:'#d35400', icon:'🚗' },
+  { value:'libre',        label:'Libre / Día libre',               color:'#7f8c8d', icon:'☀️' },
+  { value:'otro',         label:'Otro',                            color:'#555555', icon:'📌' }
+];
+function onCambioCategoriaVisita() {
+  const tipo = gv('f-vctipo');
+  const wrapCliLibre = document.getElementById('wrap-vcclientelibre');
+  const wrapDuracion = document.getElementById('wrap-vcduracion');
+  if(!wrapCliLibre || !wrapDuracion) return;
+  // Terciarizado y Trabajo con operario son los casos donde el cliente
+  // libre y la duración importan más — se resaltan, sin ocultar el resto
+  // (siempre pueden ser útiles igual para otra categoría).
+  const destacar = (tipo==='terciarizado' || tipo==='operario');
+  wrapCliLibre.style.background = destacar ? 'rgba(199,146,234,0.08)' : '';
+  wrapCliLibre.style.borderLeft = destacar ? '3px solid #c792ea' : '';
+  wrapCliLibre.style.paddingLeft = destacar ? '8px' : '';
+  wrapDuracion.style.background = destacar ? 'rgba(199,146,234,0.08)' : '';
+  wrapDuracion.style.borderLeft = destacar ? '3px solid #c792ea' : '';
+  wrapDuracion.style.paddingLeft = destacar ? '8px' : '';
+}
+
+function catVisita(value) { return CATEGORIAS_VISITA.find(c=>c.value===value) || CATEGORIAS_VISITA[CATEGORIAS_VISITA.length-1]; }
+
 function renderCalendarioSemanal() {
   if(!DB.calendarioVisitas) DB.calendarioVisitas=[];
   const dias = [];
@@ -3228,8 +3268,6 @@ function renderCalendarioSemanal() {
     if(d) (trabajosPorFecha[d] = trabajosPorFecha[d]||[]).push(t);
   });
 
-  const colorTipo = {visita:'#7bb3e0', interno:'#9b59b6', otro:'#95a5a6'};
-
   let html = `<div style="display:grid;grid-template-columns:56px repeat(7,1fr);border:1px solid var(--border)">`;
   // Header
   html += `<div style="background:var(--dark);border-bottom:2px solid var(--border2)"></div>`;
@@ -3249,15 +3287,18 @@ function renderCalendarioSemanal() {
       const visitasHora = (visitasPorFecha[iso]||[]).filter(v => parseInt((v.horaInicio||'0').split(':')[0],10)===h);
       const trabajosHora = h===7 ? (trabajosPorFecha[iso]||[]) : []; // trabajos sin hora: mostrar una sola vez, en la primera franja
       html += `<div style="border-top:1px solid var(--border);border-left:1px solid var(--border);min-height:34px;padding:2px;cursor:pointer;position:relative" onclick="calSemNuevaVisita('${iso}',${h})" onmouseover="this.style.background='rgba(244,180,0,0.04)'" onmouseout="this.style.background='transparent'">
-        ${visitasHora.map(v=>`<div onclick="event.stopPropagation();openModal('visitaCalendario', DB.calendarioVisitas.find(x=>x.id==='${v.id}'))" style="background:${colorTipo[v.tipo]||colorTipo.visita}33;border-left:3px solid ${colorTipo[v.tipo]||colorTipo.visita};padding:2px 4px;margin-bottom:2px;border-radius:0 3px 3px 0;font-size:10px;color:var(--text);cursor:pointer" title="${(v.titulo||'').replace(/"/g,'&quot;')}">
-          <b>${v.horaInicio}${v.horaFin?'–'+v.horaFin:''}</b> ${v.titulo}${v.cliente?' · '+v.cliente:''}
-        </div>`).join('')}
+        ${visitasHora.map(v=>{const c=catVisita(v.tipo); const nombreCliente=v.cliente||v.clienteLibre; return `<div onclick="event.stopPropagation();openModal('visitaCalendario', DB.calendarioVisitas.find(x=>x.id==='${v.id}'))" style="background:${c.color}33;border-left:3px solid ${c.color};padding:2px 4px;margin-bottom:2px;border-radius:0 3px 3px 0;font-size:10px;color:var(--text);cursor:pointer" title="${(v.titulo||'').replace(/"/g,'&quot;')}">
+          <b>${v.horaInicio}${v.horaFin?'–'+v.horaFin:''}</b> ${c.icon} ${v.titulo}${nombreCliente?' · '+nombreCliente:''}${v.notasAcuerdos?' 📌':''}
+        </div>`;}).join('')}
         ${trabajosHora.map(t=>{const cl=DB.clientes.find(c=>String(c.id)===String(t.clienteId));return `<div style="background:#2ecc7122;border-left:3px solid #2ecc71;padding:2px 4px;margin-bottom:2px;border-radius:0 3px 3px 0;font-size:10px;color:var(--text)" title="Trabajo del CRM — no editable acá">🔧 ${t.titulo}${cl?' · '+cl.nombre:''}</div>`;}).join('')}
       </div>`;
     });
   });
   html += `</div>`;
-  document.getElementById('cal-sem-grid').innerHTML = html;
+  const leyenda = `<div style="display:flex;flex-wrap:wrap;gap:10px;padding:8px 4px;margin-bottom:8px;border-bottom:1px solid var(--border)">
+    ${CATEGORIAS_VISITA.map(c=>`<span style="font-size:10px;color:var(--muted);display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:${c.color};display:inline-block"></span>${c.icon} ${c.label}</span>`).join('')}
+  </div>`;
+  document.getElementById('cal-sem-grid').innerHTML = leyenda + html;
 }
 
 function calSemNuevaVisita(fechaIso, hora) {
@@ -3293,6 +3334,94 @@ const STOCK_SIMULADO_CONOCIDO = [
   ['7. Sensores y eléctricos chicos', 1, 0.2, 101445, 30, 18],
   ['8. Herramientas de taller y campo (uso propio, no reventa)', 1, 2, 101445, 30, 18]
 ];
+// Categoriza un ítem de repuesto (el nombre, tal como se escribe en el
+// presupuesto) en una de las 8 categorías del simulador — mismas reglas
+// que usamos para el análisis financiero, pero corriendo en vivo acá para
+// poder cruzar la simulación con los presupuestos reales que se van
+// aprobando. Por prioridad: primero busca combinaciones específicas
+// (sello+cilindro, sello+bomba/hidrostático) antes de caer en las
+// categorías más genéricas, para no mezclar sellos de cilindro con sellos
+// de bomba.
+function categorizarRepuestoParaStock(nombre) {
+  const s = (nombre||'').toLowerCase();
+  const tiene = (...palabras) => palabras.some(p => s.includes(p));
+  if(tiene('sello','reten','retén','junta','o-ring','oring') && tiene('cilindro'))
+    return '1. Kits de sellos de cilindros hidráulicos';
+  if(tiene('sello','reten','retén','junta','o-ring','oring') && tiene('bomba','hidrostat'))
+    return '2. Kits de sellos/retenes de bombas y motores hidrostáticos';
+  if(tiene('rodamiento','crapodina'))
+    return '3. Rodamientos (ejes, motor hidrostático, embrague)';
+  if(tiene('filtro','kit de servicio','service'))
+    return '4. Filtros y kits de servicio (250/500/1000/2000/3000 hs)';
+  if(tiene('buje','casquillo','pasador','perno','espaciador','articulaci'))
+    return '5. Bujes, casquillos, pasadores y espaciadores';
+  if(tiene('sello','reten','retén','junta','o-ring','oring'))
+    return '6. Juntas, O-rings y retenes varios';
+  if(tiene('sensor','cable','electrov','electric'))
+    return '7. Sensores y eléctricos chicos';
+  if(tiene('herramienta','crique','extractor','dado','llave'))
+    return '8. Herramientas de taller y campo (uso propio, no reventa)';
+  return null;
+}
+
+// Recorre los Presupuestos APROBADOS reales, categoriza cada ítem de
+// repuesto/material, y calcula cuánto se hubiera ahorrado ya con cada
+// categoría si el stock importado hubiera existido — separado a propósito
+// del ahorro "manual" de prueba (unidadesUsadasPropio), para no mezclar
+// una simulación con un dato real. Se recalcula bajo pedido (botón), no
+// solo, para que Belu controle cuándo se actualiza.
+function mesDePresupuesto(p) {
+  const iso = normalizarFecha(p.fecha);
+  return iso ? iso.slice(0,7) : null;
+}
+
+// Llena el desplegable de meses con los meses reales que tienen presupuestos
+// aprobados (+ el mes actual aunque todavía no tenga nada) y "Todos los
+// meses" al final. Se llama una vez al entrar a la página; conserva la
+// selección si ya había una.
+function poblarSelectorMesStock() {
+  const sel = document.getElementById('stock-sim-mes');
+  if(!sel) return;
+  const anterior = sel.value;
+  const mesActual = new Date().toISOString().slice(0,7);
+  const meses = new Set([mesActual]);
+  DB.presupuestos.filter(p=>p.estado==='aprobado').forEach(p=>{ const m=mesDePresupuesto(p); if(m) meses.add(m); });
+  const mesesOrdenados = [...meses].sort().reverse();
+  sel.innerHTML = mesesOrdenados.map(m=>`<option value="${m}">${mesLabel(m)}${m===mesActual?' (este mes)':''}</option>`).join('')
+    + `<option value="__todos__">Todos los meses (desde el inicio)</option>`;
+  sel.value = mesesOrdenados.includes(anterior) || anterior==='__todos__' ? anterior : mesActual;
+}
+
+// v17.56 — pedido de Belu: por default simula SOLO el mes elegido en el
+// desplegable (arranca en el mes actual), no todo el historial junto — la
+// empresa tiene apenas 8 meses de datos, y sumar todo de una haría parecer
+// que el ahorro es mucho más grande de lo que realmente sería mes a mes.
+// "Todos los meses" queda como opción aparte, para cuando quieran ver el
+// acumulado histórico a propósito.
+function recalcularAhorroRealStock() {
+  poblarSelectorMesStock();
+  const mesElegido = document.getElementById('stock-sim-mes')?.value || new Date().toISOString().slice(0,7);
+  const todos = mesElegido === '__todos__';
+  const montoPorCategoria = {};
+  DB.presupuestos.filter(p=>p.estado==='aprobado' && (todos || mesDePresupuesto(p)===mesElegido)).forEach(p => {
+    (p.descripcion||'').split('\n').forEach(linea => {
+      const partes = linea.split('|');
+      if(partes.length<4) return;
+      const [nombre,tipo,cant,precio] = partes;
+      if(!/repuesto|material/i.test(tipo||'')) return;
+      const cat = categorizarRepuestoParaStock(nombre);
+      if(!cat) return;
+      const monto = (parseFloat(cant)||0) * (parseFloat(precio)||0);
+      montoPorCategoria[cat] = (montoPorCategoria[cat]||0) + monto;
+    });
+  });
+  (DB.stockSimulado||[]).forEach(s => { s.montoRepuestosReales = montoPorCategoria[s.categoria] || 0; });
+  renderStockSimulado();
+  const totalDetectado = Object.values(montoPorCategoria).reduce((a,b)=>a+b,0);
+  const etiquetaMes = todos ? 'en todo el historial' : `en ${mesLabel(mesElegido)}`;
+  showToast(totalDetectado>0 ? `Encontré $${Math.round(totalDetectado).toLocaleString('es-AR')} en repuestos reales que calzan, ${etiquetaMes} ✔` : `No encontré repuestos de estas categorías ${etiquetaMes}`,'success');
+}
+
 function precargarStockSimulado() {
   if(!confirm('Esto carga las 8 categorías del análisis financiero (kits de sellos, rodamientos, filtros, etc.) con los montos que ya calculamos para $3.000.000 de stock. Si alguna ya existe, se salta. ¿Continuar?')) return;
   if(!DB.stockSimulado) DB.stockSimulado=[];
@@ -3312,11 +3441,12 @@ function precargarStockSimulado() {
 
 function renderStockSimulado() {
   if(!DB.stockSimulado) DB.stockSimulado=[];
+  if(document.getElementById('stock-sim-mes') && !document.getElementById('stock-sim-mes').options.length) poblarSelectorMesStock();
   const tbody = document.getElementById('tabla-stock-simulado');
   if(!tbody) return; // la página Repuestos todavía no se renderizó
   const data = DB.stockSimulado;
   if(!data.length) {
-    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="icon">🧪</div><p>Sin categorías cargadas — usá "Cargar categorías del análisis" o agregá una manual</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><div class="icon">🧪</div><p>Sin categorías cargadas — usá "Cargar categorías del análisis" o agregá una manual</p></div></td></tr>`;
   } else {
     tbody.innerHTML = data.map(s => {
       const costoUnitario = s.cantidadEstimada>0 ? s.costoTotalArsEstimado/s.cantidadEstimada : 0;
@@ -3336,6 +3466,7 @@ function renderStockSimulado() {
         <td><input type="number" value="${s.unidadesVendidasReventa||0}" style="max-width:70px" onchange="editarStockSimuladoCampo('${s.id}','unidadesVendidasReventa',this.value)"/></td>
         <td style="font-weight:bold;color:var(--green)">${fmtMonto(ahorroTotal)}</td>
         <td style="font-weight:bold;color:var(--yellow)">${fmtMonto(gananciaReventaTotal)}</td>
+        <td style="font-weight:bold;color:#6fa8dc">${s.montoRepuestosReales?fmtMonto(s.montoRepuestosReales*(s.ahorroPct/100)):'—'}${s.montoRepuestosReales?`<div class="td-muted" style="font-size:9px">sobre ${fmtMonto(s.montoRepuestosReales)} reales</div>`:''}</td>
         <td style="white-space:nowrap">
           <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="openModal('stockSimulado', DB.stockSimulado.find(x=>x.id==='${s.id}'))">✏️</button>
           <button class="btn-danger" style="font-size:10px;padding:3px 7px" onclick="eliminar('stockSimulado','${s.id}')">✕</button>
@@ -3345,17 +3476,21 @@ function renderStockSimulado() {
   }
   // Stats generales
   const totalInvertido = data.reduce((s,x)=>s+(x.costoTotalArsEstimado||0),0);
-  let ahorroAcum=0, gananciaAcum=0;
+  let ahorroAcum=0, gananciaAcum=0, ahorroRealAcum=0;
   data.forEach(s=>{
     const costoUnitario = s.cantidadEstimada>0 ? s.costoTotalArsEstimado/s.cantidadEstimada : 0;
     const costoLocalEquiv = s.ahorroPct<100 ? costoUnitario/(1-s.ahorroPct/100) : costoUnitario;
     ahorroAcum += (costoLocalEquiv-costoUnitario) * (s.unidadesUsadasPropio||0);
     gananciaAcum += costoUnitario * (s.markupPct/100) * (s.unidadesVendidasReventa||0);
+    ahorroRealAcum += (s.montoRepuestosReales||0) * (s.ahorroPct/100);
   });
+  const mesSel = document.getElementById('stock-sim-mes')?.value || new Date().toISOString().slice(0,7);
+  const etiquetaCorta = mesSel==='__todos__' ? 'TODO EL HISTORIAL' : mesLabel(mesSel).toUpperCase();
   document.getElementById('stock-sim-stats').innerHTML = `
     <div class="stat-card blue"><div class="stat-val">${fmtMonto(totalInvertido)}</div><div class="stat-label">STOCK TOTAL SIMULADO</div></div>
-    <div class="stat-card green"><div class="stat-val">${fmtMonto(ahorroAcum)}</div><div class="stat-label">AHORRO SIMULADO (USO PROPIO)</div></div>
+    <div class="stat-card green"><div class="stat-val">${fmtMonto(ahorroAcum)}</div><div class="stat-label">AHORRO SIMULADO (PRUEBA MANUAL)</div></div>
     <div class="stat-card"><div class="stat-val">${fmtMonto(gananciaAcum)}</div><div class="stat-label">GANANCIA SIMULADA (REVENTA)</div></div>
+    <div class="stat-card" style="border-color:#6fa8dc"><div class="stat-val" style="color:#6fa8dc">${fmtMonto(ahorroRealAcum)}</div><div class="stat-label">AHORRO REAL DETECTADO — ${etiquetaCorta}</div></div>
   `;
 }
 
@@ -10676,18 +10811,28 @@ function openModal(type, data={}) {
   }
   else if(type==='visitaCalendario') {
     title = data.id ? 'EDITAR VISITA' : 'NUEVA VISITA';
+    const catActual = catVisita(data.tipo||'visita');
     body=`<div class="form-grid">
       <div class="form-group"><label>Fecha *</label><input id="f-vcfecha" type="date" value="${data.fecha||today()}"/></div>
-      <div class="form-group"><label>Tipo</label><select id="f-vctipo">
-        <option value="visita" ${(data.tipo||'visita')==='visita'?'selected':''}>Visita a cliente</option>
-        <option value="interno" ${data.tipo==='interno'?'selected':''}>Interno (taller, compras, etc.)</option>
-        <option value="otro" ${data.tipo==='otro'?'selected':''}>Otro</option>
+      <div class="form-group"><label>Categoría</label><select id="f-vctipo" onchange="onCambioCategoriaVisita()">
+        ${CATEGORIAS_VISITA.map(c=>`<option value="${c.value}" ${catActual.value===c.value?'selected':''}>${c.icon} ${c.label}</option>`).join('')}
       </select></div>
       <div class="form-group"><label>Hora inicio *</label><input id="f-vchini" type="time" value="${data.horaInicio||'09:00'}"/></div>
       <div class="form-group"><label>Hora fin</label><input id="f-vchfin" type="time" value="${data.horaFin||''}"/></div>
-      <div class="form-group full"><label>Cliente (opcional)</label><select id="f-vccli"><option value="">Sin cliente</option>${clienteOptions(data.clienteId)}</select></div>
+      <div class="form-group full"><label>Cliente registrado (opcional)</label><select id="f-vccli"><option value="">Sin cliente / no registrado</option>${clienteOptions(data.clienteId)}</select></div>
+      <div class="form-group full" id="wrap-vcclientelibre">
+        <label>Cliente (texto libre)</label>
+        <div style="font-size:10px;color:var(--muted);margin-top:-4px;margin-bottom:4px">Para cuando el cliente final no está registrado en MEB — típico en Terciarizado (el cliente es de Matías, no de MEB).</div>
+        <input id="f-vcclientelibre" value="${(data.clienteLibre||'').replace(/"/g,'&quot;')}" placeholder="Ej: Vidogar"/>
+      </div>
       <div class="form-group full"><label>Título *</label><input id="f-vctit" value="${(data.titulo||'').replace(/"/g,'&quot;')}" placeholder="Ej: Diagnóstico 320G, Retirar repuestos, Presupuesto..."/></div>
+      <div class="form-group" id="wrap-vcduracion"><label>Duración estimada (horas)</label><input id="f-vcduracion" type="number" step="0.5" value="${data.duracionHoras||''}" placeholder="Ej: 3"/></div>
       <div class="form-group full"><label>Notas (opcional)</label><textarea id="f-vcnotas" rows="2">${data.notas||''}</textarea></div>
+      <div class="form-group full" style="background:#fffdf0;border-left:4px solid #F4B400;border-radius:0 4px 4px 0;padding:10px 12px">
+        <label style="color:#333">📌 Acuerdos / notas aparte</label>
+        <div style="font-size:10px;color:#777;margin-top:-4px;margin-bottom:4px">Para dejar anotado, por ejemplo, a qué se llegó en una reunión — separado de las notas generales.</div>
+        <textarea id="f-vcacuerdos" rows="2" style="background:#fffdf0;color:#333;border-color:#e8d68a">${data.notasAcuerdos||''}</textarea>
+      </div>
       ${data.id?`<div class="form-group full"><button class="btn-danger" style="font-size:11px" onclick="closeModal(); eliminar('calendarioVisitas','${data.id}')">🗑 Eliminar esta visita</button></div>`:''}
     </div>`;
     onSave=()=>{
@@ -10696,19 +10841,23 @@ function openModal(type, data={}) {
       const horaFin = gv('f-vchfin');
       const clienteId = gv('f-vccli');
       const cl = DB.clientes.find(c=>String(c.id)===String(clienteId));
+      const clienteLibre = gv('f-vcclientelibre');
       const titulo = gv('f-vctit');
       const tipo = gv('f-vctipo');
+      const duracionHoras = parseFloat(gv('f-vcduracion'))||0;
       const notas = gv('f-vcnotas');
+      const notasAcuerdos = gv('f-vcacuerdos');
       if(!fecha||!horaInicio){ showToast('Completá fecha y hora de inicio','error'); return; }
       if(!titulo){ showToast('Completá el título','error'); return; }
       if(!DB.calendarioVisitas) DB.calendarioVisitas=[];
-      const obj = { id:data.id||uid(), fecha, horaInicio, horaFin, clienteId, cliente:cl?cl.nombre:'', titulo, tipo, estado:data.estado||'planificada', notas, trabajoId:data.trabajoId||'', usuario:currentUser||'' };
+      const obj = { id:data.id||uid(), fecha, horaInicio, horaFin, clienteId, cliente:cl?cl.nombre:'', clienteLibre, titulo, tipo, duracionHoras, estado:data.estado||'planificada', notas, notasAcuerdos, trabajoId:data.trabajoId||'', usuario:currentUser||'' };
       if(data.id) { const idx=DB.calendarioVisitas.findIndex(x=>x.id===data.id); if(idx>=0) DB.calendarioVisitas[idx]=obj; }
       else { obj._local=true; DB.calendarioVisitas.push(obj); }
       saveLocal(); closeModal(); renderCalendarioSemanal();
       writeToSheet({ action:'addVisitaCalendario', row: obj });
       showToast(data.id?'Visita actualizada ✔':'Visita agendada ✔','success');
     };
+    setTimeout(()=>{ onCambioCategoriaVisita(); }, 50);
   }
   else if(type==='calEvento') {
     title='NUEVO EVENTO DE CALENDARIO';
