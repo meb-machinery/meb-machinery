@@ -96,7 +96,7 @@
     <p class="nota">Es una estimación con los datos que cargaste. Cada día que la máquina sigue parada es plata que no vuelve: un diagnóstico a tiempo es la forma más rápida de saber cuánto cuesta realmente ponerla a trabajar.</p>
   </div>
 
-  <div class="card resultado" id="leadBox" style="border-left-color:var(--yellow)">
+  <div class="card resultado" id="leadBox" style="border-left-color:var(--yellow)" data-clarity-mask="True">
     <h2>PEDÍ TU PRESUPUESTO SIN CARGO</h2>
     <p class="nota" style="margin:-4px 0 12px">Dejanos tus datos y Emmanuel te contacta en el día con un presupuesto de diagnóstico y reparación.</p>
     <div class="grid">
@@ -119,7 +119,7 @@
     <a class="btn wa" id="btnWA" target="_blank" rel="noopener">ESCRIBIR POR WHATSAPP</a>
   </div>
 
-  <footer>Diagnóstico y reparación de maquinaria pesada · <a href="https://wa.me/5491133923254" target="_blank" rel="noopener">+54 11 3392-3254</a> · mebmachinerysolutions.ar</footer>
+  <footer><div style="margin-bottom:8px;font-size:11px">Medimos el uso de esta página de forma anónima para mejorarla. Tus datos de contacto solo los usamos para responder tu consulta.</div>Diagnóstico y reparación de maquinaria pesada · <a href="https://wa.me/5491133923254" target="_blank" rel="noopener">+54 11 3392-3254</a> · mebmachinerysolutions.ar</footer>
 </div>
 
 <script>
@@ -127,6 +127,40 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxtclHVxfu4QetFqaqoej42ByNOOqWgdFU2U3xX_p8tlDwKca7kGGbDm7HuF1QIbtzBWw/exec';
 const WA = '5491133923254';
 const $ = id => document.getElementById(id);
+
+// ── MEDICIÓN ────────────────────────────────────────────────────────────────
+// Pegá acá tus IDs cuando los tengas (si quedan vacíos, no se carga nada):
+//   GA_ID      → Google Analytics 4, empieza con "G-"   (analytics.google.com → Administrar → Flujos de datos)
+//   CLARITY_ID → Microsoft Clarity, código corto de 10 letras/números (clarity.microsoft.com → Configuración → Resumen)
+const GA_ID = '';
+const CLARITY_ID = '';
+
+// De dónde vino la visita: ?utm_source=instagram (o web, whatsapp, qr...). Si no hay, usa el sitio de origen.
+const _qs = new URLSearchParams(location.search);
+let FUENTE = (_qs.get('utm_source') || '').toLowerCase().slice(0, 40);
+if (!FUENTE) { try { FUENTE = document.referrer ? new URL(document.referrer).hostname.replace(/^www\./, '').slice(0, 40) : 'directo'; } catch (e) { FUENTE = 'directo'; } }
+const CAMPANIA = (_qs.get('utm_campaign') || '').slice(0, 60);
+
+if (GA_ID) {
+  const s = document.createElement('script'); s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID; document.head.appendChild(s);
+  window.dataLayer = window.dataLayer || []; window.gtag = function () { dataLayer.push(arguments); };
+  gtag('js', new Date()); gtag('config', GA_ID);
+}
+if (CLARITY_ID) {
+  (function (c, l, a, r, i, t, y) { c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments); }; t = l.createElement(r); t.async = 1; t.src = 'https://www.clarity.ms/tag/' + i; y = l.getElementsByTagName(r)[0]; y.parentNode.insertBefore(t, y); })(window, document, 'clarity', 'script', CLARITY_ID);
+  try { clarity('set', 'fuente', FUENTE); } catch (e) {}
+}
+// Un solo punto para medir: manda el evento a GA4, a Clarity y al CRM (sin datos personales).
+function track(evento, datos) {
+  datos = datos || {};
+  try { if (window.gtag) gtag('event', evento, Object.assign({ fuente: FUENTE }, datos)); } catch (e) {}
+  try { if (window.clarity) clarity('event', evento); } catch (e) {}
+  try {
+    fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'eventoWeb', row: Object.assign({ evento, fuente: FUENTE, campania: CAMPANIA }, datos) }) }).catch(() => {});
+  } catch (e) {}
+}
+try { if (!sessionStorage.getItem('meb_calc_visita')) { sessionStorage.setItem('meb_calc_visita', '1'); track('visita'); } } catch (e) { track('visita'); }
 const fm = n => '$' + Math.round(n).toLocaleString('es-AR');
 let calculo = null;
 
@@ -153,6 +187,7 @@ $('btnCalc').addEventListener('click', () => {
   $('resultado').style.display = 'block';
   $('leadBox').style.display = 'block';
   $('resultado').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  track('calculo', { tipo: $('tipo').value, marca: $('marca').value, sintoma: $('sintoma').value, perdidaDia: Math.round(porDia), dias });
 });
 
 function limpiar(s, max) { return String(s || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max); }
@@ -167,13 +202,15 @@ $('btnEnviar').addEventListener('click', () => {
     nombre: limpiar($('empresa').value, 80) || nombre, contacto: nombre, telefono: tel, email: limpiar($('email').value, 80), zona,
     maquina, sintoma: $('sintoma').value,
     perdidaDia: calculo ? Math.round(calculo.porDia) : 0, dias: calculo ? calculo.dias : 0, perdidaTotal: calculo ? Math.round(calculo.total) : 0,
-    extra: limpiar($('extra').value, 300), website: $('website').value
+    extra: limpiar($('extra').value, 300), website: $('website').value, fuente: FUENTE, campania: CAMPANIA
   };
+  track('lead', { tipo: $('tipo').value, marca: $('marca').value, perdidaDia: lead.perdidaDia, dias: lead.dias });
   $('btnEnviar').disabled = true; $('btnEnviar').textContent = 'ENVIANDO...';
   fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'leadWeb', row: lead }) })
     .catch(() => {})
     .finally(() => {
       const msg = 'Hola, soy ' + nombre + ' (' + zona + '). Les escribo desde la calculadora de costo de parada. Máquina: ' + maquina + '. Problema: ' + lead.sintoma + '.' + (calculo ? ' La parada me cuesta unos ' + fm(calculo.porDia) + ' por día.' : '') + ' Quisiera un presupuesto.';
+      $('btnWA').addEventListener('click', () => track('click_whatsapp'), { once: true });
       $('btnWA').href = 'https://wa.me/' + WA + '?text=' + encodeURIComponent(msg);
       $('leadBox').style.display = 'none'; $('gracias').style.display = 'block';
       $('gracias').scrollIntoView({ behavior: 'smooth', block: 'center' });
