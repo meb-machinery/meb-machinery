@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculadora de costo de parada · MEB Machinery Solutions</title>
+<meta name="description" content="Calculá cuánto te cuesta tener una máquina parada y pedí un presupuesto de diagnóstico y reparación sin cargo.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --yellow:#F4B400; --blue:#003B70; --blue-light:#7bb3e0;
+    --bg:#0f0f0f; --card:#1a1a1a; --border:#2a2a2a; --text:#f0f0f0; --muted:#9a9a9a; --red:#e74c3c; --green:#2ecc71;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--text); font-family:'Barlow',sans-serif; line-height:1.5; min-height:100vh;}
+  .wrap{max-width:680px; margin:0 auto; padding:24px 18px 60px;}
+  header{display:flex; align-items:center; gap:12px; margin-bottom:26px;}
+  .brand-name{font-family:'Bebas Neue'; font-size:20px; letter-spacing:2px;}
+  .brand-name span{color:var(--yellow);}
+  h1{font-family:'Bebas Neue'; font-size:38px; letter-spacing:2px; line-height:1.05; margin-bottom:8px;}
+  h1 span{color:var(--yellow);}
+  .lead{color:var(--muted); font-size:15px; margin-bottom:24px;}
+  .card{background:var(--card); border:1px solid var(--border); border-left:3px solid var(--yellow); border-radius:6px; padding:18px; margin-bottom:16px;}
+  .card h2{font-family:'Bebas Neue'; font-size:20px; letter-spacing:1.5px; margin-bottom:12px;}
+  .card h2 small{font-family:'Barlow'; font-size:12px; color:var(--muted); letter-spacing:0; margin-left:6px; font-weight:400;}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .full{grid-column:1/-1;}
+  label{display:block; font-size:12px; color:var(--muted); margin-bottom:4px; letter-spacing:.3px;}
+  input,select,textarea{width:100%; background:#101010; border:1px solid #333; border-radius:5px; color:var(--text); font:inherit; font-size:15px; padding:10px 11px;}
+  input:focus,select:focus,textarea:focus{outline:none; border-color:var(--yellow);}
+  .check{display:flex; gap:8px; align-items:flex-start; font-size:13px; color:var(--muted);}
+  .check input{width:auto; margin-top:3px;}
+  .btn{display:inline-block; background:var(--yellow); color:#111; border:0; border-radius:5px; font-family:'Bebas Neue'; font-size:20px; letter-spacing:2px; padding:12px 22px; cursor:pointer; text-decoration:none; text-align:center;}
+  .btn:disabled{opacity:.5; cursor:default;}
+  .btn.ghost{background:transparent; color:var(--text); border:1px solid #444;}
+  .btn.wa{background:#25d366; color:#08331a;}
+  .resultado{display:none; border-left-color:var(--red);}
+  .big{font-family:'Bebas Neue'; font-size:54px; color:var(--red); letter-spacing:2px; line-height:1;}
+  .row{display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-top:1px solid var(--border); font-size:14px;}
+  .row b{font-weight:600;}
+  .nota{font-size:12px; color:var(--muted); margin-top:10px;}
+  .ok{display:none; border-left-color:var(--green); text-align:center; padding:26px 18px;}
+  .ok h2{color:var(--green);}
+  .hp{position:absolute; left:-9999px; width:1px; height:1px; opacity:0;}
+  .err{color:#e07a7a; font-size:13px; margin-top:8px; display:none;}
+  footer{margin-top:30px; text-align:center; font-size:12px; color:var(--muted);}
+  footer a{color:var(--yellow); text-decoration:none;}
+  @media (max-width:520px){ .grid{grid-template-columns:1fr;} h1{font-size:32px;} .big{font-size:44px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><div class="brand-name">MEB <span>MACHINERY</span> SOLUTIONS</div></header>
+  <h1>¿CUÁNTO TE CUESTA TENER LA MÁQUINA <span>PARADA?</span></h1>
+  <p class="lead">Calculalo en un minuto. Después, si querés, pedinos un presupuesto de diagnóstico y reparación <strong>sin cargo</strong>: te respondemos en el día.</p>
+
+  <form id="form" autocomplete="off" onsubmit="return false">
+    <div class="card">
+      <h2>1 · TU MÁQUINA</h2>
+      <div class="grid">
+        <div><label>Tipo de máquina</label>
+          <select id="tipo"><option>Retroexcavadora</option><option>Excavadora</option><option>Cargadora frontal</option><option>Minicargadora</option><option>Motoniveladora</option><option>Topadora</option><option>Compactador / Rodillo</option><option>Camión / Hidrogrúa</option><option>Otra</option></select></div>
+        <div><label>Marca</label>
+          <select id="marca"><option>John Deere</option><option>Caterpillar</option><option>Case</option><option>Hyundai</option><option>Komatsu</option><option>Volvo</option><option>New Holland</option><option>JCB</option><option>Otra</option></select></div>
+        <div><label>Modelo (opcional)</label><input id="modelo" maxlength="60" placeholder="Ej: 310L, 320D"></div>
+        <div><label>¿Qué le pasa?</label>
+          <select id="sintoma"><option>No arranca</option><option>Pierde potencia</option><option>Falla hidráulica / no levanta</option><option>Pierde aceite o fluidos</option><option>Recalienta</option><option>Ruido anormal</option><option>Falla eléctrica / tablero</option><option>Quiero un service preventivo</option><option>No sé, necesito un diagnóstico</option></select></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>2 · LO QUE PERDÉS POR DÍA <small>poné lo que corresponda, lo que no, dejalo en 0</small></h2>
+      <div class="grid">
+        <div><label>Lo que genera la máquina por día ($)</label><input id="ingreso" type="number" min="0" step="1000" inputmode="numeric" placeholder="Facturación o alquiler diario"></div>
+        <div><label>Personas que quedan sin trabajar</label><input id="personas" type="number" min="0" step="1" inputmode="numeric" value="0"></div>
+        <div><label>Costo diario por persona ($)</label><input id="jornal" type="number" min="0" step="1000" inputmode="numeric" placeholder="Jornal aproximado"></div>
+        <div><label>¿Alquilás una máquina de reemplazo?</label>
+          <select id="reemplazo"><option value="no">No</option><option value="si">Sí</option></select></div>
+        <div class="full" id="wrap-alq" style="display:none"><label>Costo diario del alquiler de reemplazo ($)</label><input id="alquiler" type="number" min="0" step="1000" inputmode="numeric"></div>
+        <div class="full"><label>¿Cuántos días estimás que va a estar parada?</label><input id="dias" type="number" min="1" step="1" inputmode="numeric" value="7"></div>
+      </div>
+      <div style="margin-top:14px"><button class="btn" id="btnCalc" type="button">CALCULAR</button></div>
+      <div class="err" id="errCalc"></div>
+    </div>
+  </form>
+
+  <div class="card resultado" id="resultado">
+    <h2>LO QUE TE CUESTA LA PARADA</h2>
+    <div class="big" id="rTotal">$0</div>
+    <div class="nota" id="rSub"></div>
+    <div style="margin-top:12px">
+      <div class="row"><span>Pérdida por día</span><b id="rDia"></b></div>
+      <div class="row"><span>Cada semana de demora suma</span><b id="rSem"></b></div>
+    </div>
+    <p class="nota">Es una estimación con los datos que cargaste. Cada día que la máquina sigue parada es plata que no vuelve: un diagnóstico a tiempo es la forma más rápida de saber cuánto cuesta realmente ponerla a trabajar.</p>
+  </div>
+
+  <div class="card resultado" id="leadBox" style="border-left-color:var(--yellow)">
+    <h2>PEDÍ TU PRESUPUESTO SIN CARGO</h2>
+    <p class="nota" style="margin:-4px 0 12px">Dejanos tus datos y Emmanuel te contacta en el día con un presupuesto de diagnóstico y reparación.</p>
+    <div class="grid">
+      <div><label>Tu nombre *</label><input id="nombre" maxlength="80"></div>
+      <div><label>Empresa / obra</label><input id="empresa" maxlength="80"></div>
+      <div><label>WhatsApp / teléfono *</label><input id="tel" maxlength="30" inputmode="tel" placeholder="Con código de área"></div>
+      <div><label>Localidad / zona *</label><input id="zona" maxlength="60" placeholder="Ej: Pilar, Escobar, Campana"></div>
+      <div class="full"><label>Email (opcional)</label><input id="email" type="email" maxlength="80"></div>
+      <div class="full"><label>Algo más que quieras contarnos (opcional)</label><textarea id="extra" rows="2" maxlength="300"></textarea></div>
+      <input class="hp" type="text" id="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <div class="full check"><input type="checkbox" id="ok"><label for="ok" style="margin:0">Acepto que MEB Machinery Solutions me contacte por esta consulta.</label></div>
+    </div>
+    <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap"><button class="btn" id="btnEnviar" type="button">QUIERO MI PRESUPUESTO</button></div>
+    <div class="err" id="errLead"></div>
+  </div>
+
+  <div class="card ok" id="gracias">
+    <h2>¡RECIBIMOS TU CONSULTA!</h2>
+    <p style="margin-bottom:14px">Emmanuel te contacta en el día. Si es urgente, escribinos ahora:</p>
+    <a class="btn wa" id="btnWA" target="_blank" rel="noopener">ESCRIBIR POR WHATSAPP</a>
+  </div>
+
+  <footer>Diagnóstico y reparación de maquinaria pesada · <a href="https://wa.me/5491133923254" target="_blank" rel="noopener">+54 11 3392-3254</a> · mebmachinerysolutions.ar</footer>
+</div>
+
+<script>
+// Endpoint del Apps Script del CRM — acepta esta página solo para cargar una consulta como prospecto.
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxtclHVxfu4QetFqaqoej42ByNOOqWgdFU2U3xX_p8tlDwKca7kGGbDm7HuF1QIbtzBWw/exec';
+const WA = '5491133923254';
+const $ = id => document.getElementById(id);
+const fm = n => '$' + Math.round(n).toLocaleString('es-AR');
+let calculo = null;
+
+$('reemplazo').addEventListener('change', () => { $('wrap-alq').style.display = $('reemplazo').value === 'si' ? 'block' : 'none'; });
+
+$('btnCalc').addEventListener('click', () => {
+  const ingreso = parseFloat($('ingreso').value) || 0;
+  const personas = parseInt($('personas').value) || 0;
+  const jornal = parseFloat($('jornal').value) || 0;
+  const alquila = $('reemplazo').value === 'si';
+  const alquiler = alquila ? (parseFloat($('alquiler').value) || 0) : 0;
+  const dias = Math.max(1, parseInt($('dias').value) || 1);
+  // Si alquila reemplazo, no pierde el ingreso: paga el alquiler. Si no, pierde el ingreso.
+  const porDia = personas * jornal + (alquila ? alquiler : ingreso);
+  const err = $('errCalc');
+  if (porDia <= 0) { err.textContent = 'Cargá al menos lo que genera la máquina por día, o el costo de las personas que quedan sin trabajar.'; err.style.display = 'block'; return; }
+  err.style.display = 'none';
+  const total = porDia * dias;
+  calculo = { porDia, total, dias, alquila };
+  $('rTotal').textContent = fm(total);
+  $('rSub').textContent = 'en ' + dias + (dias === 1 ? ' día' : ' días') + ' de parada' + (alquila ? ' (alquiler de reemplazo + personal)' : '');
+  $('rDia').textContent = fm(porDia);
+  $('rSem').textContent = fm(porDia * 7);
+  $('resultado').style.display = 'block';
+  $('leadBox').style.display = 'block';
+  $('resultado').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+function limpiar(s, max) { return String(s || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max); }
+
+$('btnEnviar').addEventListener('click', () => {
+  const err = $('errLead'); err.style.display = 'none';
+  const nombre = limpiar($('nombre').value, 80), tel = limpiar($('tel').value, 30), zona = limpiar($('zona').value, 60);
+  if (!nombre || !zona || tel.replace(/\D/g, '').length < 8) { err.textContent = 'Completá nombre, un teléfono válido y tu localidad.'; err.style.display = 'block'; return; }
+  if (!$('ok').checked) { err.textContent = 'Necesitamos tu aceptación para poder contactarte.'; err.style.display = 'block'; return; }
+  const maquina = [$('marca').value, limpiar($('modelo').value, 60)].filter(Boolean).join(' ') + ' (' + $('tipo').value + ')';
+  const lead = {
+    nombre: limpiar($('empresa').value, 80) || nombre, contacto: nombre, telefono: tel, email: limpiar($('email').value, 80), zona,
+    maquina, sintoma: $('sintoma').value,
+    perdidaDia: calculo ? Math.round(calculo.porDia) : 0, dias: calculo ? calculo.dias : 0, perdidaTotal: calculo ? Math.round(calculo.total) : 0,
+    extra: limpiar($('extra').value, 300), website: $('website').value
+  };
+  $('btnEnviar').disabled = true; $('btnEnviar').textContent = 'ENVIANDO...';
+  fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'leadWeb', row: lead }) })
+    .catch(() => {})
+    .finally(() => {
+      const msg = 'Hola, soy ' + nombre + ' (' + zona + '). Les escribo desde la calculadora de costo de parada. Máquina: ' + maquina + '. Problema: ' + lead.sintoma + '.' + (calculo ? ' La parada me cuesta unos ' + fm(calculo.porDia) + ' por día.' : '') + ' Quisiera un presupuesto.';
+      $('btnWA').href = 'https://wa.me/' + WA + '?text=' + encodeURIComponent(msg);
+      $('leadBox').style.display = 'none'; $('gracias').style.display = 'block';
+      $('gracias').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+});
+</script>
+</body>
+</html>
