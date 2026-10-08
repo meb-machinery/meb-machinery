@@ -12413,7 +12413,7 @@ function renderMiDiaCard() {
       <button class="btn-secondary" onclick="miDiaGenerar()" title="Genera un link nuevo y anula el anterior">Cambiar link</button>`
       : `<button class="btn-primary" onclick="miDiaGenerar()">Generar link</button>`}
     </div>
-    ${url ? gcalHtml() : ''}</div>`;
+    ${url ? gcalHtml() + avisoBeluHtml() : ''}</div>`;
 }
 function gcalHtml() {
   const on = getCfg('gcalActivo','')==='SI';
@@ -12440,6 +12440,46 @@ function gcalActivar() {
   setCfg('gcalEmail', mail); setCfg('gcalActivo','SI');
   renderMiDiaCard();
   showToast('Aviso activado. Ahora tocá “Enviar prueba” ✔','success');
+}
+function avisoBeluHtml() {
+  const on = getCfg('avisoBeluActivo','')==='SI';
+  const mail = getCfg('avisoBeluMail','');
+  const est = getCfg('avisoBeluUltimoEstado','');
+  return `<div style="flex-basis:100%;border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+    <strong>📲 Aviso para vos (Belu): faltan prospectos para una salida</strong>
+    <div class="td-muted" style="font-size:11px;margin:2px 0 8px">${on ? 'Activo: te llega un mail a <strong>'+prosEsc(mail)+'</strong> apenas se carga una visita sin prospectos en su zona, y un resumen todos los días a las 19:00 con las salidas de los próximos 3 días. En el iPhone te llega como notificación de la app Gmail.' : 'Apagado. Al activarlo, te llega un mail (notificación en el iPhone) cuando Emmanuel carga una visita y no hay prospectos para esa zona, y un resumen diario a las 19:00.'}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${on ? `<button class="btn-secondary" onclick="avisoBeluProbar()">Enviar prueba</button>
+      <button class="btn-secondary" onclick="avisoBeluActivar()">Cambiar mail</button>
+      <button class="btn-secondary" onclick="avisoBeluDesactivar()">Desactivar</button>`
+      : `<button class="btn-primary" onclick="avisoBeluActivar()">Activar aviso para mí</button>`}
+    </div>
+    ${est ? `<div class="td-muted" style="font-size:11px;margin-top:6px">Último estado: ${prosEsc(est)}</div>` : ''}
+  </div>`;
+}
+function avisoBeluActivar() {
+  const m = prompt('Tu mail de Gmail (el que tenés con notificaciones en el iPhone):', getCfg('avisoBeluMail',''));
+  if(!m) return;
+  const mail = m.trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) { showToast('Ese mail no parece válido','error'); return; }
+  setCfg('avisoBeluMail', mail); setCfg('avisoBeluActivo','SI');
+  renderMiDiaCard();
+  showToast('Activado. Tocá “Enviar prueba” ✔','success');
+}
+function avisoBeluDesactivar() {
+  if(!confirm('¿Desactivar el aviso para vos? Dejás de recibir los mails.')) return;
+  setCfg('avisoBeluActivo','NO'); renderMiDiaCard();
+}
+function avisoBeluProbar() {
+  writeToSheet({ action:'avisoBeluProbar', row:{} });
+  showToast('Prueba enviada. Revisá tu mail en un minuto.','success');
+}
+function prosAvisarAhora(i) {
+  const x = (window._prosSalidasCache||[])[i]; if(!x) return;
+  if(getCfg('gcalActivo','')!=='SI') { showToast('Primero activá el aviso en el Google Calendar de Emmanuel','error'); return; }
+  if(!confirm('¿Mandarle ahora a Emmanuel un aviso de “'+x.nombre+'”? Le llega a su Google Calendar como evento que empieza en 5 minutos, con el link a Mi día.')) return;
+  writeToSheet({ action:'gcalAvisarAhora', row:{ id:x.v.id } });
+  showToast('Aviso enviado. Mirá el “Último estado” en la tarjeta de arriba.','success');
 }
 function gcalDesactivar() {
   if(!confirm('¿Desactivar el aviso? Las visitas nuevas dejan de enviarse a su Google Calendar (las que ya se enviaron quedan).')) return;
@@ -12499,13 +12539,13 @@ function renderProspectosSalidas() {
   const fila = (x,i)=>`<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--border)">
     <div style="min-width:220px;flex:1"><strong>${prosEsc(x.nombre)}</strong> <span class="td-muted">· ${prosEsc(x.zona)} · ${fmtDate(x.v.fecha)}${x.v.horaInicio?' '+prosEsc(x.v.horaInicio):''}</span>
       <div style="font-size:12px;color:#e67e22">Hay ${x.pendientes} prospecto${x.pendientes===1?'':'s'} por visitar en la zona (conviene tener ${x.min} o más)${x.visitados?` · ya visitados antes: ${x.visitados}, no se repiten`:''}</div></div>
-    <div style="display:flex;gap:6px"><button class="btn-primary" style="font-size:12px" onclick="prosCargarParaSalida(${i})">+ Cargar prospecto</button>${x.visitados||x.pendientes?`<button class="btn-secondary" style="font-size:12px" onclick="prosVerZona(${i})">Ver los de la zona</button>`:''}</div></div>`;
+    <div style="display:flex;gap:6px"><button class="btn-primary" style="font-size:12px" onclick="prosCargarParaSalida(${i})">+ Cargar prospecto</button><button class="btn-secondary" style="font-size:12px" onclick="prosAvisarAhora(${i})" title="Le manda a Emmanuel un aviso nuevo a su Google Calendar, aunque la hora original ya haya pasado">🔔 Avisar a Emma ahora</button>${x.visitados||x.pendientes?`<button class="btn-secondary" style="font-size:12px" onclick="prosVerZona(${i})">Ver los de la zona</button>`:''}</div></div>`;
   el.innerHTML = `<div class="card" style="padding:12px 14px;margin:10px 0;border-left:3px solid ${falta.length?'#e67e22':'#2ecc71'}">
     <strong>🧭 Salidas próximas — ¿hay prospectos para pasar?</strong>
     <div class="td-muted" style="font-size:11px;margin:2px 0 6px">Para cada visita a un cliente de los próximos 14 días, se revisa si hay prospectos cargados en esa zona. Los que ya se visitaron no cuentan.</div>
     ${falta.map(x=>fila(x, lista.indexOf(x))).join('')}
     ${sinZona.length ? `<div style="padding:8px 0;border-top:1px solid var(--border);font-size:12px;color:var(--muted)">⚠️ ${sinZona.length} visita${sinZona.length===1?'':'s'} sin zona (${sinZona.slice(0,3).map(x=>prosEsc(x.nombre)).join(', ')}${sinZona.length>3?'…':''}): cargá la zona del cliente para poder sugerir prospectos.</div>` : ''}
-    ${ok.length ? `<div style="padding:8px 0;border-top:1px solid var(--border);font-size:12px;color:#2ecc71">✔ ${ok.length} salida${ok.length===1?'':'s'} con prospectos listos: ${ok.slice(0,4).map(x=>prosEsc(x.nombre)+' ('+x.pendientes+')').join(', ')}${ok.length>4?'…':''}</div>` : ''}
+    ${ok.length ? `<div style="padding:8px 0 2px;border-top:1px solid var(--border);font-size:12px;color:#2ecc71">✔ ${ok.length} salida${ok.length===1?'':'s'} con prospectos listos</div>` + ok.slice(0,6).map(x=>`<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:4px 0;font-size:12px"><span>${prosEsc(x.nombre)} <span class="td-muted">· ${prosEsc(x.zona)} · ${fmtDate(x.v.fecha)}${x.v.horaInicio?' '+prosEsc(x.v.horaInicio):''} · ${x.pendientes} prospecto${x.pendientes===1?'':'s'}</span></span><button class="btn-secondary" style="font-size:11px" onclick="prosAvisarAhora(${lista.indexOf(x)})">🔔 Avisar a Emma ahora</button></div>`).join('') + (ok.length>6?`<div class="td-muted" style="font-size:11px">… y ${ok.length-6} más</div>`:'') : ''}
   </div>`;
 }
 // ── Medición de Mi día ─────────────────────────────────────────────────────────
