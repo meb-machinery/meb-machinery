@@ -1249,6 +1249,7 @@ select option { background:var(--dark); }
       Cargá la fecha de visita, tildá cuando fue y anotá qué resultó. Al ganarlo se convierte en cliente.
     </p>
     <div id="pros-midia"></div>
+    <div id="pros-salidas"></div>
     <div class="filter-tabs">
       <button class="filter-tab active" id="prostab-lista" onclick="prosMostrarTab('lista')">📋 Lista</button>
       <button class="filter-tab" id="prostab-zonas" onclick="prosMostrarTab('zonas')">📍 Por zona</button>
@@ -1842,7 +1843,7 @@ async function syncAll() {
   const _calendarioEventos = DB.calendarioEventos || [];
 
   try {
-    const [cl,mq,tr,pr,al,pv,ct,tf,inf,opl,pj,ch,chk,ge,vh,vs,tz,tzl,gp,vc,inv,ssim,pros,cfg,pvt,sue,rsv,evw,acf] = await Promise.all([
+    const [cl,mq,tr,pr,al,pv,ct,tf,inf,opl,pj,ch,chk,ge,vh,vs,tz,tzl,gp,vc,inv,ssim,pros,cfg,pvt,sue,rsv,evw,acf,mda] = await Promise.all([
       fetchSheet('CLIENTES'), fetchSheet('MAQUINAS'),
       fetchSheet('TRABAJOS'), fetchSheet('PRESUPUESTOS'), fetchSheet('ALERTAS'),
       fetchSheet('PROVEEDORES'), fetchSheet('CONTRATOS'), fetchSheet('TARIFARIO'),
@@ -1851,7 +1852,7 @@ async function syncAll() {
       fetchSheet('GASTOS_ESTRUCTURA'), fetchSheet('VEHICULOS'), fetchSheet('VEHICULO_SERVICES'),
       fetchSheet('TERCIARIZADO'), fetchSheet('TERCIARIZADO_LIQUIDACIONES'),
       fetchSheet('GASTOS_PERSONALES'), fetchSheet('CALENDARIO_VISITAS'), fetchSheet('INVERSIONES'), fetchSheet('STOCK_SIMULADO'), fetchSheet('PROSPECTOS'),
-      fetchSheet('CONFIG'), fetchSheet('POSTVENTA'), fetchSheet('SUELDOS'), fetchSheet('REGLAS_SERVICE'), fetchSheet('EVENTOS_WEB'), fetchSheet('ACCESOS_MI_FLOTA')
+      fetchSheet('CONFIG'), fetchSheet('POSTVENTA'), fetchSheet('SUELDOS'), fetchSheet('REGLAS_SERVICE'), fetchSheet('EVENTOS_WEB'), fetchSheet('ACCESOS_MI_FLOTA'), fetchSheet('MI_DIA_ACCESOS')
     ]);
 
     // ── Salvavidas: detectar encabezados rotos ──────────────────────────────
@@ -2305,7 +2306,8 @@ async function syncAll() {
       visitado: String(r.VISITADO||'').toUpperCase()==='SI', fechaVisitaReal: r.FECHA_VISITA_REAL || '',
       resultado: r.RESULTADO || '', resultadoNotas: r.RESULTADO_NOTAS || '', proximoContacto: r.PROXIMO_CONTACTO || '',
       clienteId: String(r.CLIENTE_ID||'').trim(), visitaCalendarioId: String(r.VISITA_CALENDARIO_ID||'').trim(),
-      prioridad: r.PRIORIDAD || 'media', notas: r.NOTAS || '', fechaAlta: r.FECHA_ALTA || ''
+      prioridad: r.PRIORIDAD || 'media', notas: r.NOTAS || '', fechaAlta: r.FECHA_ALTA || '',
+      viaAlta: r.VIA_ALTA || '', viaVisita: r.VIA_VISITA || ''
     }));
 
     // Configuración (CONFIG: clave/valor) — links de reseña, topes, plazos.
@@ -2337,6 +2339,11 @@ async function syncAll() {
         fecha: String(r.FECHA||''), hora: String(r.HORA||''), evento: r.EVENTO || '', fuente: r.FUENTE || '', campania: r.CAMPANIA || '',
         tipo: r.TIPO || '', marca: r.MARCA || '', sintoma: r.SINTOMA || '', perdidaDia: parseFloat(r.PERDIDA_DIA)||0, dias: parseFloat(r.DIAS)||0
       }));
+    }
+
+    // Aperturas de Mi día (solo lectura: las escribe el script)
+    if(mda.length && Object.prototype.hasOwnProperty.call(mda[0], 'FECHA') && !Object.prototype.hasOwnProperty.call(mda[0], 'CLIENTE_ID')) {
+      DB.accesosMiDia = mda.map(r => ({ fecha:String(r.FECHA||''), hora:String(r.HORA||'') }));
     }
 
     // Accesos de los clientes a Mi Flota (solo lectura: los escribe el portal)
@@ -2804,7 +2811,7 @@ function updateTopbar() {
 
 function updateBadges() {
   { const bv=document.getElementById('badge-postventa'); if(bv){ const n=pvPendientesCount(); bv.textContent=n; bv.style.display=n?'':'none'; } }
-  { const bp=document.getElementById('badge-prospectos'); if(bp){ const n=(DB.prospectos||[]).filter(p=>prosVisitaVencida(p)||prosContactoVencido(p)||(p.origen==='web'&&p.estado==='nuevo')).length; bp.textContent=n; bp.style.display=n?'':'none'; } }
+  { const bp=document.getElementById('badge-prospectos'); if(bp){ const n=(DB.prospectos||[]).filter(p=>prosVisitaVencida(p)||prosContactoVencido(p)||(p.origen==='web'&&p.estado==='nuevo')).length + prosSalidas().filter(x=>x.falta).length; bp.textContent=n; bp.style.display=n?'':'none'; } }
   document.getElementById('badge-clientes').textContent=DB.clientes.length;
   document.getElementById('badge-maquinas').textContent=DB.maquinas.length;
   const enCurso=DB.trabajos.filter(t=>t.estado==='en curso').length;
@@ -12404,11 +12411,132 @@ function renderMiDiaCard() {
       <a class="btn-secondary" href="${url}" target="_blank" rel="noopener" style="text-decoration:none">Abrir</a>
       <button class="btn-secondary" onclick="miDiaGenerar()" title="Genera un link nuevo y anula el anterior">Cambiar link</button>`
       : `<button class="btn-primary" onclick="miDiaGenerar()">Generar link</button>`}
-    </div></div>`;
+    </div>
+    ${url ? gcalHtml() : ''}</div>`;
+}
+function gcalHtml() {
+  const on = getCfg('gcalActivo','')==='SI';
+  const mail = getCfg('gcalEmail','bellandomarcos@gmail.com');
+  const est = getCfg('gcalUltimoEstado','');
+  return `<div style="flex-basis:100%;border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+    <strong>🔔 Aviso en el Google Calendar de Emmanuel</strong>
+    <div class="td-muted" style="font-size:11px;margin:2px 0 8px">${on ? 'Activo: cada visita que cargues en el calendario le llega a <strong>'+prosEsc(mail)+'</strong> con la dirección y el link a Mi día.' : 'Apagado. Al activarlo, cada visita que cargues en el calendario del CRM le llega a su Google Calendar con sonido, la dirección y el link a Mi día.'}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${on ? `<button class="btn-secondary" onclick="gcalProbar()">Enviar prueba</button>
+      <button class="btn-secondary" onclick="gcalSyncTodo()">Enviar las visitas próximas</button>
+      <button class="btn-secondary" onclick="gcalActivar()">Cambiar mail</button>
+      <button class="btn-secondary" onclick="gcalDesactivar()">Desactivar</button>`
+      : `<button class="btn-primary" onclick="gcalActivar()">Activar aviso</button>`}
+    </div>
+    ${est ? `<div class="td-muted" style="font-size:11px;margin-top:6px">Último estado: ${prosEsc(est)}</div>` : ''}
+  </div>`;
+}
+function gcalActivar() {
+  const m = prompt('Mail de Google de Emmanuel (el que usa en el celular del trabajo):', getCfg('gcalEmail','bellandomarcos@gmail.com'));
+  if(!m) return;
+  const mail = m.trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) { showToast('Ese mail no parece válido','error'); return; }
+  setCfg('gcalEmail', mail); setCfg('gcalActivo','SI');
+  renderMiDiaCard();
+  showToast('Aviso activado. Ahora tocá “Enviar prueba” ✔','success');
+}
+function gcalDesactivar() {
+  if(!confirm('¿Desactivar el aviso? Las visitas nuevas dejan de enviarse a su Google Calendar (las que ya se enviaron quedan).')) return;
+  setCfg('gcalActivo','NO'); renderMiDiaCard();
+}
+function gcalProbar() {
+  writeToSheet({ action:'gcalProbar', row:{} });
+  showToast('Prueba enviada. Dentro de un rato actualizá el CRM y mirá el “Último estado”.','success');
+}
+function gcalSyncTodo() {
+  writeToSheet({ action:'gcalSyncTodo', row:{} });
+  showToast('Enviando las visitas próximas… actualizá el CRM en un minuto.','success');
+}
+// ── Salidas próximas: ¿hay prospectos cargados para pasar por la zona? ─────────
+function prosNorm(t){ return String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
+function prosCoincideZona(p, zona){
+  const z = prosNorm(zona); if(!z) return false;
+  const pz = prosNorm(p.zona), pd = prosNorm((p.zona||'')+' '+(p.direccion||''));
+  return pd.includes(z) || (pz && z.includes(pz));
+}
+// Visitas a clientes de los próximos 14 días y cuántos prospectos pendientes hay en su zona.
+function prosSalidas() {
+  const hoy = today();
+  const lim = new Date(Date.now()+14*86400000).toISOString().slice(0,10);
+  const min = parseInt(getCfg('prosMinSalida','3'),10) || 3;
+  const tiposOk = ['visita','reunion','terciarizado','operario'];
+  const pros = (DB.prospectos||[]).filter(p=>!p.clienteId && p.estado!=='ganado' && p.estado!=='perdido');
+  return (DB.calendarioVisitas||[])
+    .filter(v=>v.fecha>=hoy && v.fecha<=lim && v.estado!=='realizada' && v.estado!=='cancelada' && tiposOk.includes(v.tipo||'visita'))
+    .sort((a,b)=>(a.fecha+(a.horaInicio||'')).localeCompare(b.fecha+(b.horaInicio||'')))
+    .map(v=>{
+      const cli = (DB.clientes||[]).find(c=>c.id===v.clienteId);
+      const zona = (cli && cli.zona) || '';
+      const nombre = v.cliente || (cli&&cli.nombre) || v.clienteLibre || v.titulo || 'Visita';
+      const enZona = zona ? pros.filter(p=>prosCoincideZona(p,zona)) : [];
+      const pendientes = enZona.filter(p=>!p.visitado && (p.estado==='nuevo'||p.estado==='a_visitar')).length;
+      const visitados = enZona.filter(p=>p.visitado).length;
+      return { v, nombre, zona, pendientes, visitados, min, sinZona:!zona, falta: !!zona && pendientes<min };
+    });
+}
+function prosCargarParaSalida(i) {
+  const x = (window._prosSalidasCache||[])[i]; if(!x) return;
+  openModal('prospecto', { zona:x.zona });
+}
+function prosVerZona(i) {
+  const x = (window._prosSalidasCache||[])[i]; if(!x) return;
+  if(typeof prosMostrarTab==='function') prosMostrarTab('lista');
+  const b = document.getElementById('pros-buscar'); if(b) { b.value = x.zona; }
+  renderProspectos();
+}
+function renderProspectosSalidas() {
+  const el = document.getElementById('pros-salidas'); if(!el) return;
+  const lista = prosSalidas();
+  window._prosSalidasCache = lista;
+  if(!lista.length) { el.innerHTML=''; return; }
+  const falta = lista.filter(x=>x.falta), sinZona = lista.filter(x=>x.sinZona), ok = lista.filter(x=>!x.falta && !x.sinZona);
+  const fila = (x,i)=>`<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--border)">
+    <div style="min-width:220px;flex:1"><strong>${prosEsc(x.nombre)}</strong> <span class="td-muted">· ${prosEsc(x.zona)} · ${fmtDate(x.v.fecha)}${x.v.horaInicio?' '+prosEsc(x.v.horaInicio):''}</span>
+      <div style="font-size:12px;color:#e67e22">Hay ${x.pendientes} prospecto${x.pendientes===1?'':'s'} por visitar en la zona (conviene tener ${x.min} o más)${x.visitados?` · ya visitados antes: ${x.visitados}, no se repiten`:''}</div></div>
+    <div style="display:flex;gap:6px"><button class="btn-primary" style="font-size:12px" onclick="prosCargarParaSalida(${i})">+ Cargar prospecto</button>${x.visitados||x.pendientes?`<button class="btn-secondary" style="font-size:12px" onclick="prosVerZona(${i})">Ver los de la zona</button>`:''}</div></div>`;
+  el.innerHTML = `<div class="card" style="padding:12px 14px;margin:10px 0;border-left:3px solid ${falta.length?'#e67e22':'#2ecc71'}">
+    <strong>🧭 Salidas próximas — ¿hay prospectos para pasar?</strong>
+    <div class="td-muted" style="font-size:11px;margin:2px 0 6px">Para cada visita a un cliente de los próximos 14 días, se revisa si hay prospectos cargados en esa zona. Los que ya se visitaron no cuentan.</div>
+    ${falta.map(x=>fila(x, lista.indexOf(x))).join('')}
+    ${sinZona.length ? `<div style="padding:8px 0;border-top:1px solid var(--border);font-size:12px;color:var(--muted)">⚠️ ${sinZona.length} visita${sinZona.length===1?'':'s'} sin zona (${sinZona.slice(0,3).map(x=>prosEsc(x.nombre)).join(', ')}${sinZona.length>3?'…':''}): cargá la zona del cliente para poder sugerir prospectos.</div>` : ''}
+    ${ok.length ? `<div style="padding:8px 0;border-top:1px solid var(--border);font-size:12px;color:#2ecc71">✔ ${ok.length} salida${ok.length===1?'':'s'} con prospectos listos: ${ok.slice(0,4).map(x=>prosEsc(x.nombre)+' ('+x.pendientes+')').join(', ')}${ok.length>4?'…':''}</div>` : ''}
+  </div>`;
+}
+// ── Medición de Mi día ─────────────────────────────────────────────────────────
+function miDiaStatsHtml() {
+  const dias = 30, lim = new Date(Date.now()-dias*86400000).toISOString().slice(0,10);
+  const acc = (DB.accesosMiDia||[]).filter(a=>a.fecha>=lim);
+  const diasUso = new Set(acc.map(a=>a.fecha)).size;
+  const pros = DB.prospectos||[];
+  const vis = pros.filter(p=>p.viaVisita==='mi_dia' && (p.fechaVisitaReal||'')>=lim);
+  const interes = vis.filter(p=>['interesado','pidio_presupuesto'].includes(p.resultado)).length;
+  const calle = pros.filter(p=>p.viaAlta==='mi_dia' && (p.fechaAlta||'')>=lim).length;
+  const ganados = pros.filter(p=>p.estado==='ganado' && (p.viaVisita==='mi_dia'||p.viaAlta==='mi_dia')).length;
+  const sal = prosSalidas().filter(x=>!x.sinZona), cob = sal.filter(x=>!x.falta).length;
+  const pct = (a,b)=> b? Math.round(a*100/b)+'%' : '—';
+  const card = (l,v,sub,c)=>`<div class="stat-card"><div class="stat-label">${l}</div><div class="stat-val" ${c?`style="color:${c}"`:''}>${v}</div>${sub?`<div class="td-muted" style="font-size:10px;margin-top:2px">${sub}</div>`:''}</div>`;
+  return `<div class="card" style="margin-bottom:16px;border-left:3px solid #4A90D9">
+    <div class="card-title" style="margin-bottom:10px">📱 MI DÍA (SALIDAS DE EMMANUEL) — ÚLTIMOS ${dias} DÍAS</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+      ${card('Veces que lo abrió', acc.length, diasUso+' día'+(diasUso===1?'':'s')+' distintos')}
+      ${card('Prospectos visitados desde Mi día', vis.length, diasUso? (Math.round(vis.length*10/diasUso)/10)+' por día de uso':'', '#4A90D9')}
+      ${card('Con interés o pidieron presupuesto', interes, pct(interes,vis.length)+' de los visitados', '#2ecc71')}
+      ${card('Encontrados en la calle', calle, 'cargados por él desde Mi día')}
+      ${card('Convertidos en clientes', ganados, 'prospectos de Mi día ganados', '#2ecc71')}
+      ${card('Salidas próximas con prospectos listos', cob+' de '+sal.length, 'antes de que salga', cob===sal.length&&sal.length? '#2ecc71':'#e67e22')}
+    </div>
+    ${acc.length? '' : '<div class="td-muted" style="font-size:12px;margin-top:10px">Todavía no hay aperturas registradas. Aparecen cuando Emmanuel abre Mi día con el link.</div>'}
+  </div>`;
 }
 function renderProspectos() {
   if(!DB.prospectos) DB.prospectos=[];
   renderMiDiaCard();
+  renderProspectosSalidas();
   prosPoblarFiltroZona();
   const tab = _prosTab;
   if(tab==='lista') {
@@ -12539,7 +12667,7 @@ function renderProspectosStats() {
   const cab = '<thead><tr><th></th><th>Cargados</th><th>Visitados</th><th>Con interés</th><th>Ganados</th><th>Cierre s/ visitas</th></tr></thead>';
   const resumenResultados = {};
   todos.filter(p=>p.resultado).forEach(p=>{ resumenResultados[p.resultado]=(resumenResultados[p.resultado]||0)+1; });
-  cont.innerHTML = webHtml + `
+  cont.innerHTML = miDiaStatsHtml() + webHtml + `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:16px">
       ${card('Prospectos cargados',total)}
       ${card('Visitados',visitados,pct(visitados,total)+' de los cargados','#4A90D9')}
