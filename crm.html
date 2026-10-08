@@ -1248,6 +1248,7 @@ select option { background:var(--dark); }
       Empresas, obras y personas a las que Emmanuel va a presentarse: maquinaria, cajas de herramientas, repuestos o herrería.
       Cargá la fecha de visita, tildá cuando fue y anotá qué resultó. Al ganarlo se convierte en cliente.
     </p>
+    <div id="pros-midia"></div>
     <div class="filter-tabs">
       <button class="filter-tab active" id="prostab-lista" onclick="prosMostrarTab('lista')">📋 Lista</button>
       <button class="filter-tab" id="prostab-zonas" onclick="prosMostrarTab('zonas')">📍 Por zona</button>
@@ -12370,8 +12371,44 @@ function prosFilaAcciones(p) {
     ${p.estado!=='ganado'?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px" title="Convertir en cliente" onclick="convertirProspectoEnCliente('${p.id}')">➕👤</button>`:''}
     <button class="btn-danger" style="font-size:10px;padding:3px 8px" title="Eliminar" onclick="eliminarProspecto('${p.id}')">✕</button>`;
 }
+// ---- "Mi día": app privada de Emmanuel (mi-dia.html), acceso por link con clave ----
+function miDiaLink() {
+  const t = getCfg('tokenMiDia','');
+  return t ? 'https://www.mebmachinerysolutions.ar/mi-dia.html?t=' + t : '';
+}
+function miDiaGenerar() {
+  if(getCfg('tokenMiDia','') && !confirm('Ya existe un link. Si generás uno nuevo, el anterior deja de funcionar y Emmanuel tiene que usar el nuevo. ¿Continuar?')) return;
+  setCfg('tokenMiDia', generarTokenPortal());
+  renderMiDiaCard();
+  showToast('Link de Mi día generado ✔','success');
+}
+function miDiaCopiar() {
+  const url = miDiaLink(); if(!url) return;
+  if(navigator.clipboard) navigator.clipboard.writeText(url).then(()=>showToast('Link copiado ✔','success'));
+  else prompt('Copiá este link:', url);
+}
+function miDiaWhatsApp() {
+  const url = miDiaLink(); if(!url) return;
+  const msg = 'Emmanuel, este es tu acceso a "Mi día": ahí ves las visitas del día, los prospectos cerca y la ruta. Abrilo desde el celular y en Chrome tocá ⋮ → "Agregar a la pantalla principal". Es privado, no lo compartas.\n' + url;
+  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+}
+function renderMiDiaCard() {
+  const el = document.getElementById('pros-midia'); if(!el) return;
+  const url = miDiaLink();
+  el.innerHTML = `<div class="card" style="padding:12px 14px;margin:10px 0;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+    <div style="min-width:220px;flex:1"><strong>📱 Mi día — la app de Emmanuel</strong>
+      <div class="td-muted" style="font-size:11px;margin-top:2px">Link privado para su celular: ve las visitas del día, prospectos de la zona y la ruta, y marca “Fui”. ${url?'':'Todavía no se generó el link.'}</div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${url ? `<button class="btn-secondary" onclick="miDiaCopiar()">Copiar link</button>
+      <button class="btn-secondary" onclick="miDiaWhatsApp()">Enviar por WhatsApp</button>
+      <a class="btn-secondary" href="${url}" target="_blank" rel="noopener" style="text-decoration:none">Abrir</a>
+      <button class="btn-secondary" onclick="miDiaGenerar()" title="Genera un link nuevo y anula el anterior">Cambiar link</button>`
+      : `<button class="btn-primary" onclick="miDiaGenerar()">Generar link</button>`}
+    </div></div>`;
+}
 function renderProspectos() {
   if(!DB.prospectos) DB.prospectos=[];
+  renderMiDiaCard();
   prosPoblarFiltroZona();
   const tab = _prosTab;
   if(tab==='lista') {
