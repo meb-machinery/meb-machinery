@@ -282,6 +282,7 @@ select option { background:var(--dark); }
   .chart-wrap-tall { height:220px !important; }
   table { font-size:12px; }
 }
+.tiles-oscuro{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.9) saturate(.6);}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -8489,8 +8490,8 @@ function renderMapa() {
     leafletMarkers=[];
 
     leafletMap=L.map('leaflet-map',{center:[-35.5,-62.0],zoom:6});
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
-      attribution:'© OpenStreetMap © CARTO',subdomains:'abcd',maxZoom:19
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'© OpenStreetMap',maxZoom:19,className:'tiles-oscuro'
     }).addTo(leafletMap);
 
     const colorEstado={activo:'#2ecc71',prospecto:'#7bb3e0',inactivo:'#888'};
