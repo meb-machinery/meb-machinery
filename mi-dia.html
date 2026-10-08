@@ -255,7 +255,13 @@ function render(){
   const cerca = cand.filter(p=>coincideZona(p,zonas)).slice(0,6);
   html += `<h2>Si tenés tiempo, pasá por acá</h2>`;
   if(zonas.length) html += `<div class="ayuda">Zonas de tus visitas: ${zonas.map(esc).join(', ')}</div>`;
-  if(!cerca.length) html += `<div class="card vacio">No hay prospectos cargados en las zonas de este día.${cand.length?'<br>Podés buscar en otras zonas más abajo.':''}</div>`;
+  if(!cerca.length){
+    const yaEnVisitas = vs.filter(v=>v.prospectoId).length;
+    const msg = yaEnVisitas
+      ? `Los prospectos de esta zona ya están arriba, como paradas de tu día (${yaEnVisitas}).`
+      : 'No hay prospectos cargados en las zonas de este día.';
+    html += `<div class="card vacio">${msg}${cand.length?'<br>Podés buscar en otras zonas más abajo.':''}</div>`;
+  }
   cerca.forEach(p=>{ html += tarjetaProspecto(p); });
 
   // otras zonas
