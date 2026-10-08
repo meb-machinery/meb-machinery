@@ -110,6 +110,7 @@ let zonaFiltro = '';
 let enRuta = {};            // prospectoId -> true
 let ultimaCarga = '';
 let sinConexion = false;
+let _ultimoPedido = 0;
 
 /* ---------- utilidades ---------- */
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -127,7 +128,8 @@ function mapsBuscar(q){ return 'https://www.google.com/maps/search/?api=1&query=
 /* ---------- red: lectura, envíos y cola sin conexión ---------- */
 function cargar(manual){
   if(!TOKEN){ mostrarSinAcceso(); return; }
-  document.getElementById('estado').textContent = 'Actualizando…';
+  if(manual || (!D.visitas.length && !D.prospectos.length)) document.getElementById('estado').textContent = 'Actualizando…';
+  _ultimoPedido = Date.now();
   fetch(SCRIPT_URL+'?action=miDia&t='+encodeURIComponent(TOKEN))
     .then(r=>r.json())
     .then(j=>{
@@ -167,7 +169,7 @@ function aplicarColaLocal(){
     const r=p.row||{};
     if(p.action==='miDiaRegistrar'){
       if(r.tipo==='prospecto'){ const x=D.prospectos.find(z=>z.id===r.id); if(x) aplicarResultado(x,r.resultado); }
-      if(r.tipo==='visita'){ const v=D.visitas.find(z=>z.id===r.id); if(v) v.estado='realizada'; }
+      if(r.tipo==='visita' && !r.volver){ const v=D.visitas.find(z=>z.id===r.id); if(v) v.estado='realizada'; }
     }
   });
 }
@@ -325,7 +327,7 @@ function armarParadas(vs){
 function urlRuta(paradas){
   const destino = paradas[paradas.length-1];
   const medio = paradas.slice(0,-1);
-  let u = 'https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=Current+Location&destination='+encodeURIComponent(destino);
+  let u = 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination='+encodeURIComponent(destino);
   if(medio.length) u += '&waypoints='+encodeURIComponent(medio.join('|'));
   return u;
 }
@@ -339,21 +341,26 @@ function hojaFui(clave){
   if(tipo==='v'){
     const v=D.visitas.find(x=>x.id===id); if(!v) return;
     abrirHoja(`<h3>Visita hecha — ${esc(v.cliente||v.titulo)}</h3>
-      <div class="f"><label>Acuerdos o notas (opcional)</label><textarea id="h-notas" rows="3" placeholder="Qué se habló, qué quedó pendiente…"></textarea></div>
+      <div class="f"><label>Acuerdos o notas (opcional)</label><textarea id="h-notas" rows="3" placeholder="Qué se habló, qué quedó pendiente…"></textarea>
+        <div class="ayuda" style="margin-top:6px">Se guarda en la visita del calendario, en “Acuerdos / notas aparte”.</div></div>
+      <label class="sum" style="margin:0 0 12px"><input type="checkbox" id="h-volver"> Quedó pendiente, hay que volver</label>
       <div class="acts"><button class="a" type="button" id="h-cancel">Cancelar</button><button class="a p" type="button" id="h-ok">Guardar</button></div>`);
     document.getElementById('h-cancel').onclick=cerrarHoja;
     document.getElementById('h-ok').onclick=()=>{
       const notas=document.getElementById('h-notas').value.trim();
-      v.estado='realizada';
-      enviar({ action:'miDiaRegistrar', usuario:'Emmanuel (Mi día)', row:{ t:TOKEN, tipo:'visita', id:v.id, notas:notas } });
-      cerrarHoja(); render(); toast('Guardado ✔');
+      const volver=document.getElementById('h-volver').checked;
+      if(!volver) v.estado='realizada';
+      if(notas) v.acuerdos=(v.acuerdos?v.acuerdos+' · ':'')+notas;
+      enviar({ action:'miDiaRegistrar', usuario:'Emmanuel (Mi día)', row:{ t:TOKEN, tipo:'visita', id:v.id, notas:notas, volver:volver } });
+      cerrarHoja(); render(); toast(volver?'Anotado, queda pendiente ✔':'Guardado ✔');
     };
     return;
   }
   const p=D.prospectos.find(x=>x.id===id); if(!p) return;
   abrirHoja(`<h3>¿Qué resultó? — ${esc(p.nombre)}</h3>
     <div class="f"><label>Resultado</label><select id="h-res"><option value="">Elegir…</option>${RESULTADOS.map(r=>`<option value="${r[0]}">${esc(r[1])}</option>`).join('')}</select></div>
-    <div class="f"><label>Detalle (con quién hablaste, qué pidió…)</label><textarea id="h-notas" rows="3"></textarea></div>
+    <div class="f"><label>Detalle (con quién hablaste, qué pidió…)</label><textarea id="h-notas" rows="3"></textarea>
+      <div class="ayuda" style="margin-top:6px">Se guarda en el prospecto y, si tiene visita en el calendario, también en sus “Acuerdos / notas aparte”.</div></div>
     <div class="acts"><button class="a" type="button" id="h-cancel">Cancelar</button><button class="a p" type="button" id="h-ok">Guardar</button></div>`);
   document.getElementById('h-cancel').onclick=cerrarHoja;
   document.getElementById('h-ok').onclick=()=>{
@@ -377,16 +384,24 @@ function hojaNuevo(){
     <div class="f"><label>Teléfono</label><input id="n-tel" type="tel" inputmode="tel"></div>
     <div class="f"><label>Qué se le puede ofrecer</label><div class="of">${Object.keys(OFERTAS).map(k=>`<label><input type="checkbox" class="n-of" value="${k}"> ${esc(OFERTAS[k])}</label>`).join('')}</div></div>
     <div class="f"><label>Notas</label><textarea id="n-notas" rows="2" placeholder="Qué máquinas vi, con quién hablar…"></textarea></div>
+    <label class="sum" style="margin:0 0 12px"><input type="checkbox" id="n-visit"> Ya lo visité ahora (registrar la visita)</label>
+    <div class="f" id="n-resbox" style="display:none"><label>¿Qué resultó?</label><select id="n-res"><option value="">Elegir…</option>${RESULTADOS.map(r=>`<option value="${r[0]}">${esc(r[1])}</option>`).join('')}</select></div>
     <div class="acts"><button class="a" type="button" id="n-cancel">Cancelar</button><button class="a p" type="button" id="n-ok">Guardar</button></div>`);
   document.getElementById('n-cancel').onclick=cerrarHoja;
+  document.getElementById('n-visit').onchange=function(){ document.getElementById('n-resbox').style.display=this.checked?'block':'none'; };
   document.getElementById('n-ok').onclick=()=>{
     const nombre=document.getElementById('n-nombre').value.trim();
     if(!nombre){ toast('Poné un nombre'); return; }
+    const yaVisite=document.getElementById('n-visit').checked;
+    const resultado=yaVisite?document.getElementById('n-res').value:'';
+    if(yaVisite && !resultado){ toast('Elegí qué resultó'); return; }
     const row={ t:TOKEN, nombre:nombre, direccion:document.getElementById('n-dir').value.trim(), zona:document.getElementById('n-zona').value.trim(),
       contacto:document.getElementById('n-cont').value.trim(), telefono:document.getElementById('n-tel').value.trim(),
-      tipoOferta:[...document.querySelectorAll('.n-of:checked')].map(c=>c.value).join(','), notas:document.getElementById('n-notas').value.trim() };
-    D.prospectos.push({ id:'tmp'+Date.now(), nombre:row.nombre, contacto:row.contacto, telefono:row.telefono, direccion:row.direccion, zona:row.zona,
-      tipoOferta:row.tipoOferta, marcaEquipos:'', estado:'nuevo', visitado:false, fechaVisita:'', prioridad:'media', resultado:'', notas:row.notas });
+      tipoOferta:[...document.querySelectorAll('.n-of:checked')].map(c=>c.value).join(','), notas:document.getElementById('n-notas').value.trim(), resultado:resultado };
+    const nuevo={ id:'tmp'+Date.now(), nombre:row.nombre, contacto:row.contacto, telefono:row.telefono, direccion:row.direccion, zona:row.zona,
+      tipoOferta:row.tipoOferta, marcaEquipos:'', estado:'nuevo', visitado:false, fechaVisita:'', prioridad:'media', resultado:'', notas:row.notas };
+    if(resultado) aplicarResultado(nuevo, resultado);
+    D.prospectos.push(nuevo);
     enviar({ action:'miDiaNuevoProspecto', usuario:'Emmanuel (Mi día)', row:row });
     cerrarHoja(); render(); toast('Prospecto guardado ✔');
   };
@@ -434,7 +449,7 @@ document.getElementById('fab').onclick=hojaNuevo;
 document.getElementById('btnRef').onclick=()=>cargar(true);
 document.getElementById('sheetBg').addEventListener('click',e=>{ if(e.target.id==='sheetBg') cerrarHoja(); });
 window.addEventListener('online',()=>{ sinConexion=false; vaciarCola(); cargar(false); });
-document.addEventListener('visibilitychange',()=>{ if(!document.hidden && TOKEN) cargar(false); });
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden && TOKEN && Date.now()-_ultimoPedido>30000) cargar(false); });
 
 /* ---------- arranque ---------- */
 (function(){
