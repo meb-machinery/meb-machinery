@@ -2350,7 +2350,7 @@ async function syncAll() {
 
     // Accesos de los clientes a Mi Flota (solo lectura: los escribe el portal)
     if(acf.length && Object.prototype.hasOwnProperty.call(acf[0], 'CLIENTE_ID')) {
-      DB.accesosMiFlota = acf.map(r => ({ fecha:String(r.FECHA||''), hora:String(r.HORA||''), clienteId:String(r.CLIENTE_ID||'').trim(), cliente:r.CLIENTE||'' }));
+      DB.accesosMiFlota = acf.map(r => ({ fecha:String(r.FECHA||''), hora:String(r.HORA||''), clienteId:String(r.CLIENTE_ID||'').trim(), cliente:r.CLIENTE||'', evento:String(r.EVENTO||'').trim() }));
     }
 
     // Reglas de service editables
@@ -11961,7 +11961,7 @@ function pvPendientesCount() {
 // ── USO DE MI FLOTA (hoja ACCESOS_MI_FLOTA) ────────────────────────────────
 function miFlotaUsoPorCliente() {
   const porCli = {};
-  (DB.accesosMiFlota||[]).forEach(a => {
+  (DB.accesosMiFlota||[]).filter(a => !a.evento).forEach(a => {
     const o = porCli[a.clienteId] = porCli[a.clienteId] || { n:0, ultimo:'' };
     o.n++; const k = (a.fecha||'')+' '+(a.hora||''); if(k > o.ultimo) o.ultimo = k;
   });
@@ -11975,6 +11975,44 @@ function miFlotaResumenCliente(clienteId) {
 }
 function miFlotaMensajeLink(c) {
   return `Hola ${c.nombre||''} 👋 Te escribe Emmanuel de MEB Machinery Solutions. Te comparto *Mi Flota*, tu portal para ver en cualquier momento tus máquinas y el historial de trabajos que les hicimos. También podés pedir presupuestos desde ahí: https://mebmachinerysolutions.ar/mi-flota.html?t=${c.tokenPortal}`;
+}
+
+// ── ¿Les sirve Mi Flota? Panel de evaluación (mide desde que se empezó a registrar) ──
+function miFlotaEvaluacionHtml(conLink) {
+  const acc = DB.accesosMiFlota || [];
+  const aperturas = acc.filter(a => !a.evento);
+  const clics = acc.filter(a => a.evento === 'calculadora');
+  const ids = new Set(conLink.map(c => String(c.id)));
+  const desde = aperturas.length ? aperturas.map(a => a.fecha).filter(Boolean).sort()[0] : '';
+  const lim30 = new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+  const ap30 = aperturas.filter(a => (a.fecha||'') >= lim30 && ids.has(String(a.clienteId)));
+  const cli30 = new Set(ap30.map(a => String(a.clienteId)));
+  const dias = {};
+  ap30.forEach(a => { (dias[a.clienteId] = dias[a.clienteId] || new Set()).add(a.fecha); });
+  const volvieron = Object.keys(dias).filter(k => dias[k].size >= 2).length;
+  const cliTodos = new Set(aperturas.filter(a => ids.has(String(a.clienteId))).map(a => String(a.clienteId)));
+  const clicCli = new Set(clics.map(a => String(a.clienteId)));
+  const ev = (DB.eventosWeb || []).filter(e => e.fuente === 'mi_flota');
+  const n = nombre => ev.filter(e => e.evento === nombre).length;
+  const pedidos = (DB.alertas || []).filter(a => (a.titulo||'').indexOf('📩') === 0).length;
+  const pct = (a,b) => b ? Math.round(a*100/b)+'%' : '—';
+  const card = (l,v,sub,col) => `<div class="stat-card"><div class="stat-label">${l}</div><div class="stat-val" ${col?`style="color:${col}"`:''}>${v}</div>${sub?`<div class="td-muted" style="font-size:10px;margin-top:2px">${sub}</div>`:''}</div>`;
+  const ultimosClics = clics.slice().sort((a,b)=>((b.fecha||'')+(b.hora||'')).localeCompare((a.fecha||'')+(a.hora||''))).slice(0,5);
+  return `<div class="card" style="margin-bottom:14px;border-left:3px solid #4A90D9">
+    <div class="card-title" style="margin-bottom:4px">📊 ¿LES SIRVE MI FLOTA? — SE MIDE DESDE ${desde?fmtDate(desde):'que se abra por primera vez'}</div>
+    <div class="td-muted" style="font-size:11px;margin-bottom:10px">Para decidir si vale la pena seguir empujándola: mirá cuántos clientes con link la abren, si vuelven, y si usan la calculadora o piden algo desde ahí.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+      ${card('La abrieron alguna vez',cliTodos.size,pct(cliTodos.size,conLink.length)+' de '+conLink.length+' con link','#2ecc71')}
+      ${card('La abrieron (30 días)',cli30.size,pct(cli30.size,conLink.length)+' de los que tienen link','#2ecc71')}
+      ${card('Volvieron (2 días distintos)',volvieron,pct(volvieron,cli30.size)+' de los que la abrieron','#4A90D9')}
+      ${card('Tocaron la calculadora',clicCli.size,clics.length+' toque'+(clics.length===1?'':'s')+' · '+pct(clicCli.size,cliTodos.size)+' de los que abrieron','#e6b800')}
+      ${card('Calcularon (desde Mi Flota)',n('calculo'),'entraron a la calculadora: '+n('visita'),'#e67e22')}
+      ${card('Pidieron presupuesto (calculadora)',n('lead'),'','#c792ea')}
+      ${card('Pedidos desde el portal',pedidos,'presupuestos o fallas pedidos desde Mi Flota (total)')}
+    </div>
+    ${ultimosClics.length ? `<div class="td-muted" style="font-size:11px;margin-top:10px">Últimos que tocaron la calculadora: ${ultimosClics.map(a=>prosEsc(a.cliente||'?')+' ('+fmtDate(a.fecha)+' '+prosEsc(a.hora||'')+')').join(' · ')}</div>` : ''}
+    <div class="td-muted" style="font-size:10px;margin-top:8px">Cómo leerlo: si casi nadie abre el enlace, el problema es que no lo conocen (mandales el link con el botón de abajo). Si lo abren pero no vuelven ni piden nada, el portal informa pero no genera negocio. Conviene mirarlo después de 30 a 60 días de uso real.</div>
+  </div>`;
 }
 function renderMiFlotaUso() {
   const el = document.getElementById('pv-miflota'); if(!el) return;
@@ -11992,7 +12030,7 @@ function renderMiFlotaUso() {
       <td>${tel?`<a class="btn-secondary" style="font-size:10px;padding:3px 8px;text-decoration:none;border-color:#25d366;color:#25d366" target="_blank" rel="noopener" href="https://wa.me/${tel}?text=${encodeURIComponent(miFlotaMensajeLink(c))}">📲 Mandar el link</a>`:'<span class="td-muted" style="font-size:11px">sin teléfono</span>'}</td></tr>`;
   };
   const card = (l,v,c)=>`<div class="stat-card"><div class="stat-label">${l}</div><div class="stat-val" ${c?`style="color:${c}"`:''}>${v}</div></div>`;
-  el.innerHTML = `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--yellow)">
+  el.innerHTML = miFlotaEvaluacionHtml(conLink) + `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--yellow)">
     <div class="card-title" style="margin-bottom:8px">📱 USO DE MI FLOTA</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px">
       ${card('Con enlace generado',conLink.length)}${card('La usaron (30 días)',usan.length,'#2ecc71')}${card('Hace más de 30 días',inactivos.length,'#e6b800')}${card('Nunca la abrieron',nunca.length,nunca.length?'#e67e22':'')}${card('Sin enlace todavía',sinLink)}
