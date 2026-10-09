@@ -368,6 +368,14 @@ function renderFlota(data) {
     + '<a href="https://mebmachinerysolutions.ar/contratos-mantenimiento.html" target="_blank">Ver planes de mantenimiento →</a>'
     + '</div>';
 
+  // Calculadora de máquina parada: el cliente calcula cuánto le cuesta y, si quiere, pide presupuesto.
+  // El link lleva utm_source=mi_flota para ver en el CRM cuánta gente entra desde acá.
+  html += '<div class="contrato-cta">'
+    + '<strong>¿Tenés una máquina parada? Calculá cuánto te cuesta</strong>'
+    + '<p>En un minuto ves cuánta plata perdés por cada día que la máquina no trabaja. Si querés, pedís un presupuesto de diagnóstico y reparación sin cargo y te respondemos en el día.</p>'
+    + '<a href="https://www.mebmachinerysolutions.ar/calculadora.html?utm_source=mi_flota&utm_campaign=portal" target="_blank">Calcular el costo de la parada →</a>'
+    + '</div>';
+
   if (data.cajas && data.cajas.length) {
     html += '<div class="cajas-titulo">🧰 Herramientas MEB en tu poder</div>';
     data.cajas.forEach(function(cj) {
