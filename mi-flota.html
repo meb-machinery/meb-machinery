@@ -271,6 +271,15 @@ function mostrarEstadoAccion(msg, tipo) {
     '<div class="accion-status ' + tipo + '">' + escHtml(msg) + '</div>';
 }
 
+// Avisa a MEB que este cliente tocó la calculadora (sin datos de la máquina: solo "este cliente entró").
+function avisarCalculadora() {
+  try {
+    const token = new URLSearchParams(window.location.search).get('t') || '';
+    if (!token) return;
+    fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', keepalive: true, headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'miFlotaCalc', row: { token: token } }) }).catch(function(){});
+  } catch (e) {}
+}
 function enviarSolicitud() {
   const textEl = document.getElementById('accion-mensaje');
   const maqEl = document.getElementById('accion-maquina');
@@ -373,7 +382,7 @@ function renderFlota(data) {
   html += '<div class="contrato-cta">'
     + '<strong>¿Tenés una máquina parada? Calculá cuánto te cuesta</strong>'
     + '<p>En un minuto ves cuánta plata perdés por cada día que la máquina no trabaja. Si querés, pedís un presupuesto de diagnóstico y reparación sin cargo y te respondemos en el día.</p>'
-    + '<a href="https://www.mebmachinerysolutions.ar/calculadora.html?utm_source=mi_flota&utm_campaign=portal" target="_blank">Calcular el costo de la parada →</a>'
+    + '<a href="https://www.mebmachinerysolutions.ar/calculadora.html?utm_source=mi_flota&utm_campaign=portal" target="_blank" onclick="avisarCalculadora()">Calcular el costo de la parada →</a>'
     + '</div>';
 
   if (data.cajas && data.cajas.length) {
