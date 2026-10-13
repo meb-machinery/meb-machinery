@@ -397,7 +397,7 @@ select option { background:var(--dark); }
       <div class="stat-card blue"><div class="stat-val" id="s-presup">0</div><div class="stat-label">Presupuestos</div><div class="stat-icon">📋</div><div class="stat-sub" id="s-presup-sub">—</div></div>
       <div class="stat-card green"><div class="stat-val" id="s-trabajos">0</div><div class="stat-label">Trabajos activos</div><div class="stat-icon">🔧</div><div class="stat-sub" id="s-trabajos-sub">—</div></div>
       <div class="stat-card orange"><div class="stat-val" id="s-alertas">0</div><div class="stat-label">Alertas</div><div class="stat-icon">🔔</div><div class="stat-sub">Pendientes de acción</div></div>
-      <div class="stat-card red" style="cursor:pointer" onclick="showPage('trabajos');setTimeout(()=>filtrarPorCobrarAuto(),200)">
+      <div class="stat-card red" style="cursor:pointer" onclick="showPage('presupuestos')">
         <div class="stat-val" id="s-por-cobrar">$0</div>
         <div class="stat-label">💳 Por cobrar</div>
         <div class="stat-icon">⚠️</div>
@@ -3000,14 +3000,23 @@ function normEstadoCobro(v) {
 
 function renderDashboard() {
   // Por cobrar: trabajos completados con estadoCobro != cobrado y con monto
+  // v17.66 — "Por cobrar" ahora sale de los PRESUPUESTOS aprobados sin cobrar (aunque su trabajo no esté
+  // completado ni tenga monto cargado) + los trabajos completados sin presupuesto. Un presupuesto deja de
+  // contar apenas se marca cobrado (en 💰 Cobro o en 📊 Economía) o su trabajo figura cobrado.
+  const porCobrarPres = DB.presupuestos.filter(pp => {
+    if(pp.estado!=='aprobado' || pp.estadoCobro==='cobrado') return false;
+    const tt = trabajoDePresupuesto(pp);
+    return !(tt && tt.estadoCobro==='cobrado');
+  });
   const porCobrarTrabajos = DB.trabajos.filter(t=>
-    trabajoPendienteDeCobro(t) && Number(t.montoCobrado||0)>0
+    trabajoPendienteDeCobro(t) && Number(t.montoCobrado||0)>0 && !presupDeTrabajo(t)
   );
-  const montoPorCobrar = porCobrarTrabajos.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
+  const montoPorCobrar = porCobrarPres.reduce((s,pp)=>{ const tt=trabajoDePresupuesto(pp); const m = (tt&&Number(tt.montoCobrado)>0) ? Number(tt.montoCobrado) : (Number(pp.monto)||0); return s+m; },0)
+    + porCobrarTrabajos.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
   const pcEl = document.getElementById('s-por-cobrar');
   const pcSub = document.getElementById('s-por-cobrar-sub');
   if(pcEl) pcEl.textContent = fmtMonto(montoPorCobrar);
-  if(pcSub) pcSub.textContent = `${porCobrarTrabajos.length} trabajo${porCobrarTrabajos.length!==1?'s':''} completado${porCobrarTrabajos.length!==1?'s':''} sin cobrar`;
+  if(pcSub) pcSub.textContent = `${porCobrarPres.length} presupuesto${porCobrarPres.length!==1?'s':''} aprobado${porCobrarPres.length!==1?'s':''}`+(porCobrarTrabajos.length?` + ${porCobrarTrabajos.length} trabajo${porCobrarTrabajos.length!==1?'s':''} sin presupuesto`:'')+' sin cobrar';
 
   // ── GANANCIA REAL DEL MES ─────────────────────────────────────────────────
   const ahora = new Date();
