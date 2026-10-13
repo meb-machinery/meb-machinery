@@ -1905,7 +1905,7 @@ async function syncAll() {
       movilidad:parseMonto(r.MOVILIDAD),
       repuestosDetalle:r.REPUESTOS_DETALLE||'',
       notas:r.NOTAS||'', fotoUrl:r.FOTO_URL||'',
-      estadoCobro:(r.ESTADO_COBRO||'pendiente').toLowerCase().trim(),
+      estadoCobro:normEstadoCobro(r.ESTADO_COBRO),
       tcCobro:parseFloat(r.TC_COBRO)||0, montoCobradoUsd:parseFloat(r.MONTO_COBRADO_USD)||0,
       gananciaUsd:parseFloat(r.GANANCIA_USD)||0,
       tcAlMomento:parseFloat(r.TC_AL_MOMENTO)||0, gananciaUsdEsperada:parseFloat(r.GANANCIA_USD_ESPERADA)||0,
@@ -1986,7 +1986,7 @@ async function syncAll() {
             tcAlMomento:parseFloat(r.TC_AL_MOMENTO||r.TC||0)||0,
             plazoPago:r.PLAZO_PAGO||'contado',
             recargoPct:parseFloat(r.RECARGO_PCT)||0,
-            estadoCobro:r.ESTADO_COBRO||'pendiente',
+            estadoCobro:normEstadoCobro(r.ESTADO_COBRO),
             fechaCobroReal:r.FECHA_COBRO_REAL||'', tcCobro:parseFloat(r.TC_COBRO)||0,
             montoCobradoReal:parseMonto(r.MONTO_COBRADO_REAL||'0'),
             usdRecibido:parseFloat(r.USD_RECIBIDO)||0,
@@ -2080,7 +2080,7 @@ async function syncAll() {
       tcAlMomento:parseFloat(r.TC_AL_MOMENTO)||0, estado:(r.ESTADO||'activo').toLowerCase(),
       notas:r.NOTAS||'', fechaCreado:r.FECHA_CREADO||'',
       plazoPago:r.PLAZO_PAGO||'contado', recargoPct:parseFloat(r.RECARGO_PCT)||0,
-      estadoCobro:r.ESTADO_COBRO||'pendiente', fechaCobroReal:r.FECHA_COBRO_REAL||'',
+      estadoCobro:normEstadoCobro(r.ESTADO_COBRO), fechaCobroReal:r.FECHA_COBRO_REAL||'',
       tcCobro:parseFloat(r.TC_COBRO)||0, montoCobradoReal:parseMonto(r.MONTO_COBRADO_REAL||'0'),
       usdRecibido:parseFloat(r.USD_RECIBIDO)||0, diferenciaUsd:parseFloat(r.DIFERENCIA_USD)||0,
       diferenciaPct:parseFloat(r.DIFERENCIA_PCT)||0,
@@ -2967,6 +2967,15 @@ function setFilter(type,val,el) {
 // ============================================================
 // DASHBOARD
 // ============================================================
+// v17.65 — tolerante: "Cobrado", " COBRADO ", "cobrada", "pagado" → 'cobrado'; vacío/otro → 'pendiente'.
+function normEstadoCobro(v) {
+  const x = String(v==null?'':v).toLowerCase().trim();
+  if(!x) return 'pendiente';
+  if(x.indexOf('cobr')===0 || x.indexOf('pagad')===0 || x==='si' || x==='sí') return 'cobrado';
+  if(x.indexOf('parcial')===0) return 'parcial';
+  return x==='cobrado' ? 'cobrado' : 'pendiente';
+}
+
 function renderDashboard() {
   // Por cobrar: trabajos completados con estadoCobro != cobrado y con monto
   const porCobrarTrabajos = DB.trabajos.filter(t=>
