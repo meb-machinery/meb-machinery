@@ -1911,8 +1911,28 @@ async function syncAll() {
       tcAlMomento:parseFloat(r.TC_AL_MOMENTO)||0, gananciaUsdEsperada:parseFloat(r.GANANCIA_USD_ESPERADA)||0,
       diferenciaUsd:parseFloat(r.DIFERENCIA_USD)||0, diferenciaPct:parseFloat(r.DIFERENCIA_PCT)||0,
       fechaCobroReal:r.FECHA_COBRO_REAL||'',
-      horasTrabajadas:parseFloat(r.HORAS_TRABAJADAS)||0
+      horasTrabajadas:parseFloat(r.HORAS_TRABAJADAS)||0,
+      _fila:r._rowIndex
     })); else if(!DB.trabajos.length) DB.trabajos=[];
+    // v17.67 — filas duplicadas en TRABAJOS (mismo ID en dos filas): el CRM mostraba las dos, una quedaba
+    // "sin vincular" para siempre (al vincular se actualizaba solo la primera). Ahora se queda con la mejor
+    // fila de cada ID y avisa cuáles son para limpiarlas en el Sheet.
+    window._trabajosDuplicados = [];
+    (function(){
+      const grupos = {};
+      DB.trabajos.forEach(t => { (grupos[t.id] = grupos[t.id] || []).push(t); });
+      const descartar = new Set();
+      Object.keys(grupos).forEach(id => {
+        const g = grupos[id];
+        if(g.length < 2) return;
+        const score = t => (t.presupuestoId?100:0) + (t.estadoCobro==='cobrado'?20:0) + (Number(t.montoCobrado)>0?10:0)
+          + (Number(t.costoRepuesto)>0?2:0) + (Number(t.precioRepuestoFacturado)>0?2:0) + (t.fechaCobroReal?1:0);
+        const orden = g.slice().sort((a,b)=>score(b)-score(a));
+        orden.slice(1).forEach(t => descartar.add(t));
+        window._trabajosDuplicados.push({ id:id, filas:g.map(t=>t._fila).filter(Boolean) });
+      });
+      if(descartar.size) DB.trabajos = DB.trabajos.filter(t => !descartar.has(t));
+    })();
     // FIX carrera de sincronización: si un cambio de cobro se hizo hace menos
     // de 90s, se respeta lo local en vez de lo que trajo el Sheet (que puede
     // no haberlo reflejado todavía).
@@ -4617,6 +4637,11 @@ function renderTrabajos() {
     avisoVinc.innerHTML = sinVincular ? `<div style="padding:10px 14px;background:rgba(230,126,34,0.1);border-left:3px solid var(--orange);border-radius:4px;font-size:12px;color:var(--orange)">
       ⚠️ <b>${sinVincular}</b> trabajo${sinVincular!==1?'s':''} sin presupuesto vinculado — abrilo con ✏️ y elegí uno en "Presupuesto de origen" (el CRM te sugiere el más probable solo) · mirá la pestaña "📄 Sin vincular"
     </div>` : '';
+  }
+  if(avisoVinc && window._trabajosDuplicados && window._trabajosDuplicados.length) {
+    avisoVinc.innerHTML += `<div style="margin-top:8px;padding:10px 14px;background:rgba(224,122,122,0.1);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:var(--red)">
+      ⚠️ Hay trabajos <b>repetidos en el Sheet</b> (misma fila cargada dos veces): ${window._trabajosDuplicados.map(d=>`<b>${d.id}</b> (filas ${d.filas.join(' y ')})`).join(' · ')}. El CRM muestra una sola de cada una; borrá la repetida en la hoja TRABAJOS (o corré <code>limpiarDuplicadosTrabajos</code> en Apps Script).
+    </div>`;
   }
   const tbody=document.getElementById('tabla-trabajos');
   if(!data.length){tbody.innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="icon">🔧</div><p>Sin trabajos</p></div></td></tr>`;return;}
