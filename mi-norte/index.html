@@ -664,7 +664,7 @@ function vistaHoy(){
     <label class="chico" for="ig" style="display:block;margin:12px 0 6px">Tu Instagram para la imagen (opcional)</label>
     <input type="text" id="ig" placeholder="@tuusuario" value="${esc(ig)}" autocomplete="off" autocapitalize="off"></div>
   <h3>Tu carta del día</h3><div class="caja"><p class="chico" style="text-align:center">Concentrate en una pregunta y elegí una carta.</p><div class="tres" id="tres"></div><div id="tres-txt"></div></div>`;
-  if (!standalone()) h += `<div class="caja instalar"><h4>📲 Llevá Mi Norte en tu celular</h4><p>Todos los días tiene algo nuevo para vos: tu energía, la luna y la agenda de MEB. Instalala como app y abrila con un toque.</p><button class="btn" type="button" id="btn-instalar" style="margin-top:12px">Instalar Mi Norte</button></div>`;
+  if (!standalone()) h = `<div class="caja instalar"><h4>📲 Llevá Mi Norte en tu celular</h4><p>Todos los días tiene algo nuevo para vos: tu energía, la luna y la agenda de MEB. Instalala como app y abrila con un toque desde la pantalla de inicio.</p><button class="btn" type="button" id="btn-instalar" style="margin-top:12px">Instalar Mi Norte</button></div>` + h;
   return h;
 }
 
