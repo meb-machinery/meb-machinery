@@ -2987,13 +2987,23 @@ function renderDashboard() {
   // Cobrado real del mes: trabajos con estadoCobro='cobrado' y fecha en este mes
   const trabajosCobradosMes = DB.trabajos.filter(t => {
     if(t.estadoCobro !== 'cobrado') return false;
-    const raw = t.fechaFin || t.fechaInicio || '';
+    const raw = t.fechaCobroReal || t.fechaFin || t.fechaInicio || '';
     if(!raw) return false;
     const parts = raw.includes('/') ? raw.split('/').reverse() : raw.split('-');
     const d = new Date(parts[0], parseInt(parts[1]||0)-1, parts[2]||1);
     return d.getMonth()===mesActual && d.getFullYear()===anioActual;
   });
-  const cobradoMes = trabajosCobradosMes.reduce((s,t)=>s+Number(t.montoCobrado||t.manoObraCobrada||0),0);
+  // v17.64: presupuestos cobrados este mes que NO tienen trabajo vinculado (si lo tienen, ya cuentan por el trabajo)
+  const presupCobradosSinTrabajo = DB.presupuestos.filter(p => {
+    if(p.estadoCobro !== 'cobrado' || !p.fechaCobroReal) return false;
+    if(DB.trabajos.some(t => t.presupuestoId === p.id)) return false;
+    const raw = String(p.fechaCobroReal);
+    const parts = raw.includes('/') ? raw.split('/').reverse() : raw.split('-');
+    const d = new Date(parts[0], parseInt(parts[1]||0)-1, parts[2]||1);
+    return d.getMonth()===mesActual && d.getFullYear()===anioActual;
+  });
+  const cobradoMes = trabajosCobradosMes.reduce((s,t)=>s+Number(t.montoCobrado||t.manoObraCobrada||0),0)
+    + presupCobradosSinTrabajo.reduce((s,p)=>s+Number(p.montoCobradoReal||0),0);
 
   // Presupuestado del mes: presupuestos aprobados con fecha en este mes
   const presupMes = DB.presupuestos.filter(p => {
@@ -3024,7 +3034,7 @@ function renderDashboard() {
   const elGastosMes = document.getElementById('s-gastos-mes');
   const elGastosMesSub = document.getElementById('s-gastos-mes-sub');
   if(elGanancia) elGanancia.textContent = fmtMonto(cobradoMes);
-  if(elGananciaSub) elGananciaSub.textContent = `${trabajosCobradosMes.length} trabajo${trabajosCobradosMes.length!==1?'s':''} cobrados en ${nombreMes}`;
+  if(elGananciaSub) elGananciaSub.textContent = `${trabajosCobradosMes.length + presupCobradosSinTrabajo.length} cobro${(trabajosCobradosMes.length + presupCobradosSinTrabajo.length)!==1?'s':''} en ${nombreMes}`;
   if(elPresupMes) elPresupMes.textContent = fmtMonto(montoPresupMes);
   if(elPresupMesSub) elPresupMesSub.textContent = `${presupMes.length} presupuesto${presupMes.length!==1?'s':''} aprobados en ${nombreMes}`;
   if(elGastosMes) elGastosMes.textContent = fmtMonto(gastosMes);
@@ -11293,6 +11303,8 @@ function openModal(type, data={}) {
           <button type="button" class="btn-secondary" onclick="actualizarTCCobro(${usdEsperado})" style="white-space:nowrap;font-size:11px" title="Fuente: Ámbito Financiero — dólar Banco Nación (venta)">↻ En vivo</button>
         </div>
       </div>
+      <div class="form-group"><label>Repuestos cobrados al cliente (ARS)</label><input id="f-crrepfact" type="number" value="${(function(){ const t0=DB.trabajos.find(x=>x.presupuestoId===p.id); return (t0&&t0.precioRepuestoFacturado)||desgloseDePresupuesto(p).rep||''; })()}" placeholder="de la cotización"/></div>
+      <div class="form-group"><label>Gasto real en repuestos — lo que pagaste (ARS)</label><input id="f-crcostorep" type="number" value="${(function(){ const t0=DB.trabajos.find(x=>x.presupuestoId===p.id); return (t0&&t0.costoRepuesto)||''; })()}" placeholder="opcional"/></div>
       <div class="form-group full" id="cr-resultado" style="text-align:center;padding:10px;border-radius:6px;background:var(--dark);border:1px solid var(--border2)">
         Completá monto y TC para ver si ganó o perdió en dólares reales
       </div>
@@ -11311,8 +11323,10 @@ function openModal(type, data={}) {
           fecha_cobro_real:fechaCobroReal, tc_cobro:tcCobro, monto_cobrado_real:montoCobradoReal,
           usd_recibido:item.usdRecibido, diferencia_usd:item.diferenciaUsd, diferencia_pct:item.diferenciaPct
         }});
+        const nSync = sincronizarCobroPresupuestoATrabajos(item, { repFact: parseFloat(gv('f-crrepfact')), costoRep: parseFloat(gv('f-crcostorep')) });
         closeModal();
         renderPresupuestos();
+        try { updateBadges(); renderDashboard(); if(nSync) renderTrabajos(); } catch(eRd) {}
         showToast(diferenciaUsd>=0 ? `Cobro registrado — ganó USD ${item.diferenciaUsd}` : `Cobro registrado — perdió USD ${Math.abs(item.diferenciaUsd)}`, diferenciaUsd>=0?'success':'error');
       }
     };
@@ -11612,14 +11626,85 @@ async function actualizarTCTrabajo(gananciaArsT, gananciaUsdEsperada, tieneAncla
   }
 }
 
+// v17.64 — desglose del presupuesto por tipo de ítem (mano de obra / repuestos / movilidad),
+// leído de las líneas "descripción|tipo|cantidad|precio" del presupuesto.
+function desgloseDePresupuesto(p) {
+  const d = { mo:0, rep:0, mov:0 };
+  String((p && p.descripcion) || '').split('\n').forEach(linea => {
+    const pts = linea.split('|');
+    if(pts.length < 4) return;
+    const tipo = String(pts[1]||'').toLowerCase();
+    const cant = parseFloat(String(pts[2]).replace(',','.')) || 1;
+    const sub = cant * (parseMonto(pts[3]) || 0);
+    if(tipo.indexOf('mano') >= 0) d.mo += sub;
+    else if(tipo.indexOf('repuesto') >= 0) d.rep += sub;
+    else if(tipo.indexOf('traslad') >= 0 || tipo.indexOf('movil') >= 0) d.mov += sub;
+  });
+  d.mo = Math.round(d.mo); d.rep = Math.round(d.rep); d.mov = Math.round(d.mov);
+  return d;
+}
+
+// v17.64 — al registrar el cobro de un PRESUPUESTO, el TRABAJO vinculado se actualiza solo:
+// queda cobrado, con el monto real cobrado, mano de obra, repuestos cobrados al cliente,
+// movilidad y gasto real en repuestos. Así el panel y Estadísticas (que leen de Trabajos)
+// reflejan el cobro sin tener que entrar al Sheet a cambiar números a mano.
+// No pisa números que ya estaban cargados a mano en el trabajo.
+function sincronizarCobroPresupuestoATrabajos(p, extra) {
+  const trabs = DB.trabajos.filter(t => t.presupuestoId === p.id);
+  if(!trabs.length) return 0;
+  extra = extra || {};
+  const d = desgloseDePresupuesto(p);
+  trabs.forEach((t, i) => {
+    t.estadoCobro = 'cobrado';
+    t.fechaCobroReal = p.fechaCobroReal || today();
+    t.tcCobro = p.tcCobro || t.tcCobro || 0;
+    if(t.estado !== 'completado') t.estado = 'completado';
+    if(i === 0) {
+      t.montoCobrado = Number(p.montoCobradoReal) || t.montoCobrado || 0;
+      t.manoObraCobrada = Number(t.manoObraCobrada) || d.mo;
+      t.movilidad = Number(t.movilidad) || d.mov;
+      if(!isNaN(extra.repFact) && extra.repFact !== undefined) t.precioRepuestoFacturado = extra.repFact || 0;
+      else if(!Number(t.precioRepuestoFacturado)) t.precioRepuestoFacturado = d.rep;
+      if(!isNaN(extra.costoRep) && extra.costoRep !== undefined) t.costoRepuesto = extra.costoRep || 0;
+    }
+    const tc = Number(t.tcCobro) || 0;
+    if(tc > 0 && i === 0) {
+      t.montoCobradoUsd = Math.round((Number(t.montoCobrado)||0) / tc);
+      const gan = (Number(t.manoObraCobrada)||0) + (Number(t.movilidad)||0) + ((Number(t.precioRepuestoFacturado)||0) - (Number(t.costoRepuesto)||0));
+      t.gananciaUsd = Math.round(gan / tc);
+    }
+    cambiosCobroRecientes[t.id] = { estadoCobro:'cobrado', tcCobro:t.tcCobro||0, montoCobradoUsd:t.montoCobradoUsd||0, gananciaUsd:t.gananciaUsd||0, diferenciaUsd:t.diferenciaUsd||0, diferenciaPct:t.diferenciaPct||0, fechaCobroReal:t.fechaCobroReal||'', ts:Date.now() };
+    writeToSheet({ action:'addTrabajo', row:{
+      id:t.id, clienteId:t.clienteId, maquinaId:t.maquinaId, presupuestoId:t.presupuestoId||'',
+      titulo:t.titulo||'', tipo:t.tipo||'', estado:t.estado, estadoMaquina:t.estadoMaquina||'',
+      fechaInicio:t.fechaInicio||'', fechaFin:t.fechaFin||'',
+      montoCobrado:t.montoCobrado||0, montoGastos:t.montoGastos||0,
+      costoRepuesto:t.costoRepuesto||0, precioRepuestoFacturado:t.precioRepuestoFacturado||0,
+      manoObraCobrada:t.manoObraCobrada||0, movilidad:t.movilidad||0,
+      repuestosDetalle:t.repuestosDetalle||'', notas:t.notas||'', fotoUrl:t.fotoUrl||'',
+      tcAlMomento:t.tcAlMomento||0, gananciaUsdEsperada:t.gananciaUsdEsperada||0, horasTrabajadas:t.horasTrabajadas||0
+    }});
+    writeToSheet({ action:'updateCobro', id:t.id, estadoCobro:'cobrado', tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0, ganancia_usd:t.gananciaUsd||0, diferencia_usd:t.diferenciaUsd||0, diferencia_pct:t.diferenciaPct||0, fecha_cobro_real:t.fechaCobroReal||'' });
+  });
+  saveLocal();
+  return trabs.length;
+}
+
 function revertirCobroPresupuesto(id) {
   if(!confirm('¿Deshacer el cobro registrado? El presupuesto vuelve a quedar pendiente de cobro.')) return;
   const p = DB.presupuestos.find(x=>x.id===id);
   if(!p) return;
   p.estadoCobro='pendiente';
   p.fechaCobroReal=''; p.tcCobro=0; p.montoCobradoReal=0; p.usdRecibido=0; p.diferenciaUsd=0; p.diferenciaPct=0;
+  // v17.64: el trabajo vinculado vuelve a pendiente de cobro también (los montos quedan).
+  DB.trabajos.filter(t => t.presupuestoId === p.id && t.estadoCobro === 'cobrado').forEach(t => {
+    t.estadoCobro = 'pendiente'; t.fechaCobroReal = ''; t.tcCobro = 0; t.montoCobradoUsd = 0; t.gananciaUsd = 0;
+    cambiosCobroRecientes[t.id] = { estadoCobro:'pendiente', tcCobro:0, montoCobradoUsd:0, gananciaUsd:0, diferenciaUsd:t.diferenciaUsd||0, diferenciaPct:t.diferenciaPct||0, fechaCobroReal:'', ts:Date.now() };
+    writeToSheet({ action:'updateCobro', id:t.id, estadoCobro:'pendiente', tc_cobro:0, monto_cobrado_usd:0, ganancia_usd:0, fecha_cobro_real:'' });
+  });
   saveLocal();
   renderPresupuestos();
+  try { updateBadges(); renderDashboard(); } catch(eRd) {}
   writeToSheet({action:'revertirCobro', tipo:'presupuestos', id:p.id});
   showToast('Cobro deshecho — vuelve a pendiente','success');
 }
