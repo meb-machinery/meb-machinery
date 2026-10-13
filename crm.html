@@ -2967,6 +2967,28 @@ function setFilter(type,val,el) {
 // ============================================================
 // DASHBOARD
 // ============================================================
+// v17.65 — presupuesto al que pertenece un trabajo: por presupuestoId, o (trabajos viejos sin vincular)
+// por el patrón de ID tNN + mismo cliente. Evita contar como "por cobrar" un trabajo cuyo presupuesto ya está cobrado.
+function presupDeTrabajo(t) {
+  if(t.presupuestoId) { const pp = DB.presupuestos.find(x=>x.id===t.presupuestoId); if(pp) return pp; }
+  const m = /^t0*(\d+)$/i.exec(String(t.id||'').trim());
+  if(!m) return null;
+  const n = parseInt(m[1]);
+  return DB.presupuestos.find(pp => parseInt(pp.num)===n && String(pp.clienteId)===String(t.clienteId)) || null;
+}
+function trabajoPendienteDeCobro(t) {
+  if(t.estado!=='completado' || (t.estadoCobro||'pendiente')==='cobrado') return false;
+  const pp = presupDeTrabajo(t);
+  return !(pp && pp.estadoCobro==='cobrado');
+}
+// Trabajo de un presupuesto: el vinculado; si el vinculado es uno auto-generado vacío y existe uno viejo sin vincular, el viejo.
+function trabajoDePresupuesto(p) {
+  const vinc = DB.trabajos.find(x=>x.presupuestoId===p.id) || null;
+  const viejo = DB.trabajos.find(x=>!x.presupuestoId && presupDeTrabajo(x)===p) || null;
+  if(viejo && (!vinc || /^Generado (autom|desde Econom)/.test(vinc.notas||''))) return viejo;
+  return vinc;
+}
+
 // v17.65 — tolerante: "Cobrado", " COBRADO ", "cobrada", "pagado" → 'cobrado'; vacío/otro → 'pendiente'.
 function normEstadoCobro(v) {
   const x = String(v==null?'':v).toLowerCase().trim();
@@ -2979,7 +3001,7 @@ function normEstadoCobro(v) {
 function renderDashboard() {
   // Por cobrar: trabajos completados con estadoCobro != cobrado y con monto
   const porCobrarTrabajos = DB.trabajos.filter(t=>
-    t.estado==='completado' && (t.estadoCobro||'pendiente')!=='cobrado' && Number(t.montoCobrado||0)>0
+    trabajoPendienteDeCobro(t) && Number(t.montoCobrado||0)>0
   );
   const montoPorCobrar = porCobrarTrabajos.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
   const pcEl = document.getElementById('s-por-cobrar');
@@ -4122,7 +4144,7 @@ function verCliente(id) {
   const prs=DB.presupuestos.filter(p=>String(p.clienteId)===String(id)||String(p.clienteNombreSheet||'')===String(DB.clientes.find(x=>x.id===id)?.nombre||''));
   const trs=DB.trabajos.filter(t=>t.clienteId===id);
   const totalCobrado=trs.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
-  const porCobrarCliente=trs.filter(t=>t.estado==='completado'&&(t.estadoCobro||'pendiente')!=='cobrado').reduce((s,t)=>s+Number(t.montoCobrado||0),0);
+  const porCobrarCliente=trs.filter(t=>trabajoPendienteDeCobro(t)).reduce((s,t)=>s+Number(t.montoCobrado||0),0);
   // Informes técnicos de este cliente — los Informes se guardan con el
   // nombre del cliente como texto libre (no por ID), así que el match acá
   // es por nombre/empresa, tolerante a mayúsculas y espacios de sobra.
@@ -6538,7 +6560,7 @@ function renderEstadisticas() {
   // ── Estado de cobro
   const tCobrados  = DB.trabajos.filter(t=>t.estadoCobro==='cobrado');
   const tParciales = DB.trabajos.filter(t=>t.estadoCobro==='parcial');
-  const tPendComp  = DB.trabajos.filter(t=>t.estado==='completado'&&(t.estadoCobro||'pendiente')==='pendiente');
+  const tPendComp  = DB.trabajos.filter(t=>trabajoPendienteDeCobro(t)&&(t.estadoCobro||'pendiente')==='pendiente');
   const montoCobrados  = tCobrados.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
   const montoParciales = tParciales.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
   const montoPendComp  = tPendComp.reduce((s,t)=>s+Number(t.montoCobrado||0),0);
@@ -11295,7 +11317,7 @@ function openModal(type, data={}) {
   else if(type==='economiaPresupuesto') {
     const p = data;
     const d0 = desgloseDePresupuesto(p);
-    const t0 = DB.trabajos.find(x=>x.presupuestoId===p.id) || null;
+    const t0 = trabajoDePresupuesto(p);
     const cl0 = DB.clientes.find(c=>String(c.id)===String(p.clienteId));
     const fm = n => '$ '+Math.round(Number(n)||0).toLocaleString('es-AR');
     const v = (real, cot) => (Number(real)||0) ? Number(real) : (cot||'');
@@ -11327,7 +11349,8 @@ function openModal(type, data={}) {
         manoObraCobrada:n('f-ecmo'), movilidad:n('f-ecmov'), precioRepuestoFacturado:n('f-ecrepfact'),
         costoRepuesto:n('f-eccostorep'), montoCobrado:n('f-ecmonto'), montoGastos:n('f-ecgastos')
       };
-      let t = DB.trabajos.find(x=>x.presupuestoId===p.id);
+      let t = trabajoDePresupuesto(p);
+      if(t) t.presupuestoId = p.id;
       if(!t){
         t = { id:uid(), clienteId:p.clienteId, maquinaId:p.maquinaId||'', presupuestoId:p.id,
           titulo:String(p.descripcion||'').split('\n')[0].split('|')[0].slice(0,120)||('Trabajo — Presupuesto N° '+String(p.num).padStart(4,'0')),
@@ -11772,7 +11795,9 @@ function desgloseDePresupuesto(p) {
 // reflejan el cobro sin tener que entrar al Sheet a cambiar números a mano.
 // No pisa números que ya estaban cargados a mano en el trabajo.
 function sincronizarCobroPresupuestoATrabajos(p, extra) {
-  const trabs = DB.trabajos.filter(t => t.presupuestoId === p.id);
+  let trabs = DB.trabajos.filter(t => t.presupuestoId === p.id);
+  const tv = trabajoDePresupuesto(p);
+  if(tv && trabs.indexOf(tv) < 0) { tv.presupuestoId = p.id; trabs = [tv].concat(trabs.filter(x=>x!==tv)); }
   if(!trabs.length) return 0;
   extra = extra || {};
   const d = desgloseDePresupuesto(p);
