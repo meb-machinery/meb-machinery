@@ -2561,6 +2561,24 @@ function uid() { return Date.now().toString(36)+Math.random().toString(36).slice
 // igual que los presupuestos, en vez de un código al azar. Así nadie tiene que
 // entrar al Sheet a "acomodar" el ID a mano (que era lo que rompía los vínculos
 // con presupuestos y trabajos y generaba copias duplicadas).
+// v17.67 — IDs correlativos también para TRABAJOS (t008, t096, t0105…) y MÁQUINAS (m046…), igual que el resto
+// del Sheet. Antes los creados desde el CRM quedaban con un código al azar (mu5gp21yg2) y Mi Flota / los vínculos
+// no los encontraban bien. Para un trabajo generado desde un presupuesto se prefiere el mismo número (t096 ↔ #0096).
+function fmtIdTrabajo(n) { return 't' + (n < 100 ? '0' + String(n).padStart(2,'0') : '0' + n); }
+function siguienteIdTrabajo(prefNum) {
+  const usados = new Set((DB.trabajos||[]).map(t => String(t.id).toLowerCase()));
+  const pn = parseInt(prefNum, 10);
+  if(pn > 0) { const c = fmtIdTrabajo(pn); if(!usados.has(c)) return c; }
+  let max = 0;
+  (DB.trabajos||[]).forEach(t => { const m = /^t0*(\d+)$/i.exec(String(t.id)); if(m) max = Math.max(max, parseInt(m[1],10)); });
+  return fmtIdTrabajo(max + 1);
+}
+function siguienteIdMaquina() {
+  let max = 0;
+  (DB.maquinas||[]).forEach(m => { const x = /^m0*(\d+)$/i.exec(String(m.id)); if(x) max = Math.max(max, parseInt(x[1],10)); });
+  const n = max + 1;
+  return 'm' + String(n).padStart(3,'0');
+}
 function siguienteIdCliente() {
   let max = 0;
   (DB.clientes||[]).forEach(c => { const sId = String(c.id); if(/^\d{1,6}$/.test(sId)) max = Math.max(max, parseInt(sId,10)); });
@@ -5771,7 +5789,7 @@ function resolverOAutoCrearMaquina(clienteId, serie, modelo, tipo, maquinaIdPrev
   if (!serieLimpia && !modeloLimpio) return ''; // solo había horómetro suelto y no hay dónde vincularlo
 
   const nueva = {
-    id: uid(), clienteId, marca:'', modelo: modeloLimpio, serie: serieLimpia,
+    id: siguienteIdMaquina(), clienteId, marca:'', modelo: modeloLimpio, serie: serieLimpia,
     tipo: tipoLimpio, horometro: horometroLimpio, horometroFecha: horometroLimpio?(fechaPresupuesto||''):'',
     notas:'Creada automáticamente desde un presupuesto', _local:true
   };
@@ -5914,9 +5932,9 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
   // cuando arranca de verdad, para no ensuciar el gráfico de Estacionalidad
   // con la fecha de armado del presupuesto en vez de la fecha real de inicio.
   if (esNuevoPresup && !DB.trabajos.find(t => t.presupuestoId === p.id)) {
-    const tituloTrabajo = (descripcion||'').split('\n')[0].slice(0,120) || ('Trabajo — Presupuesto N° '+String(p.num).padStart(4,'0'));
+    const tituloTrabajo = (descripcion||'').split('\n')[0].split('|')[0].trim().slice(0,120) || ('Trabajo — Presupuesto N° '+String(p.num).padStart(4,'0'));
     const trabajoAuto = {
-      id: uid(), clienteId: p.clienteId, maquinaId: p.maquinaId||'', presupuestoId: p.id,
+      id: siguienteIdTrabajo(p.num), clienteId: p.clienteId, maquinaId: p.maquinaId||'', presupuestoId: p.id,
       titulo: tituloTrabajo, tipo:'Reparación', estado:'pendiente', estadoMaquina:'funcionando',
       fechaInicio:'', fechaFin:'', montoCobrado:0, montoGastos:0, costoRepuesto:0,
       precioRepuestoFacturado:0, manoObraCobrada:0, movilidad:0, repuestosDetalle:'',
@@ -10279,7 +10297,7 @@ function openModal(type, data={}) {
     onSave=()=>{
       const horometroNuevo = gv('f-mhorometro');
       const horometroFecha = (horometroNuevo && horometroNuevo !== (data.horometro||'')) ? today() : (data.horometroFecha||'');
-      guardar('maquinas',{id:data.id||uid(),clienteId:gv('f-mcli'),marca:gv('f-marca'),modelo:gv('f-modelo'),serie:gv('f-serie'),tipo:gv('f-tipo'),horometro:horometroNuevo,horometroFecha,notas:gv('f-mnotas')},'marca');
+      guardar('maquinas',{id:data.id||siguienteIdMaquina(),clienteId:gv('f-mcli'),marca:gv('f-marca'),modelo:gv('f-modelo'),serie:gv('f-serie'),tipo:gv('f-tipo'),horometro:horometroNuevo,horometroFecha,notas:gv('f-mnotas')},'marca');
     };
   }
 
@@ -10355,7 +10373,7 @@ function openModal(type, data={}) {
       // esperado corresponde exactamente a lo que Emmanuel ve como ganancia.
       const gananciaArsAlGuardar = (manoObraV+movilidadV+(precioRepV-costoRepV)) || (montoCobradoV-costoRepV-montoGastosV);
       const gananciaUsdEsperadaCalc = tcMomento>0 ? Math.round(gananciaArsAlGuardar/tcMomento) : (data.gananciaUsdEsperada||0);
-      guardar('trabajos',{id:data.id||uid(),titulo:gv('f-ttit'),clienteId:gv('f-tcli'),maquinaId:gv('f-tmaq'),presupuestoId:gv('f-tpresup'),tipo:gv('f-ttipo'),estado:gv('f-testado'),estadoMaquina:gv('f-tmaqestado'),fechaInicio:gv('f-tfecha'),fechaFin:gv('f-tfechafin'),montoCobrado:montoCobradoV,montoGastos:montoGastosV,costoRepuesto:costoRepV,precioRepuestoFacturado:precioRepV,manoObraCobrada:manoObraV,movilidad:movilidadV,repuestosDetalle:gv('f-trepdetalle'),fotoUrl:gv('f-tfoto'),notas:gv('f-tnotas'),tcAlMomento:tcMomento||data.tcAlMomento||0,gananciaUsdEsperada:gananciaUsdEsperadaCalc,horasTrabajadas:parseFloat(gv('f-thoras'))||0},'titulo');
+      guardar('trabajos',{id:data.id||siguienteIdTrabajo(),titulo:gv('f-ttit'),clienteId:gv('f-tcli'),maquinaId:gv('f-tmaq'),presupuestoId:gv('f-tpresup'),tipo:gv('f-ttipo'),estado:gv('f-testado'),estadoMaquina:gv('f-tmaqestado'),fechaInicio:gv('f-tfecha'),fechaFin:gv('f-tfechafin'),montoCobrado:montoCobradoV,montoGastos:montoGastosV,costoRepuesto:costoRepV,precioRepuestoFacturado:precioRepV,manoObraCobrada:manoObraV,movilidad:movilidadV,repuestosDetalle:gv('f-trepdetalle'),fotoUrl:gv('f-tfoto'),notas:gv('f-tnotas'),tcAlMomento:tcMomento||data.tcAlMomento||0,gananciaUsdEsperada:gananciaUsdEsperadaCalc,horasTrabajadas:parseFloat(gv('f-thoras'))||0},'titulo');
     };
     setTimeout(()=>compararPisoTarifario(), 50);
   }
@@ -11440,7 +11458,7 @@ function openModal(type, data={}) {
       let t = trabajoDePresupuesto(p);
       if(t) t.presupuestoId = p.id;
       if(!t){
-        t = { id:uid(), clienteId:p.clienteId, maquinaId:p.maquinaId||'', presupuestoId:p.id,
+        t = { id:siguienteIdTrabajo(p.num), clienteId:p.clienteId, maquinaId:p.maquinaId||'', presupuestoId:p.id,
           titulo:String(p.descripcion||'').split('\n')[0].split('|')[0].slice(0,120)||('Trabajo — Presupuesto N° '+String(p.num).padStart(4,'0')),
           tipo:'Reparación', estado:'pendiente', estadoMaquina:'funcionando', fechaInicio:'', fechaFin:'',
           repuestosDetalle:'', notas:'Generado desde Economía real del Presupuesto N° '+String(p.num).padStart(4,'0'),
