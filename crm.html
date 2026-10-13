@@ -11304,6 +11304,12 @@ function openModal(type, data={}) {
       <div class="form-group"><label>Repuestos: lo que PAGASTE realmente (ARS)</label><input id="f-eccostorep" type="number" value="${(t0&&t0.costoRepuesto)||''}" placeholder="lo que te costaron a vos" oninput="calcularEconomiaPresup()"/></div>
       <div class="form-group"><label>Total realmente cobrado / facturado (ARS)</label><input id="f-ecmonto" type="number" value="${v(t0&&t0.montoCobrado,p.montoCobradoReal||'')}" placeholder="${Math.round(Number(p.monto)||0)}" oninput="calcularEconomiaPresup()"/></div>
       <div class="form-group"><label>Otros gastos (ARS)</label><input id="f-ecgastos" type="number" value="${(t0&&t0.montoGastos)||''}" placeholder="combustible, viáticos…" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group"><label>Estado del cobro</label><select id="f-ecestado" onchange="document.getElementById('ec-cobro-extra').style.display=this.value==='cobrado'?'contents':'none'"><option value="pendiente"${p.estadoCobro==='cobrado'||(t0&&t0.estadoCobro==='cobrado')?'':' selected'}>Pendiente de cobro</option><option value="cobrado"${p.estadoCobro==='cobrado'||(t0&&t0.estadoCobro==='cobrado')?' selected':''}>Cobrado ✔</option></select></div>
+      <div id="ec-cobro-extra" style="display:${p.estadoCobro==='cobrado'||(t0&&t0.estadoCobro==='cobrado')?'contents':'none'}">
+        <div class="form-group"><label>Fecha de cobro</label><input id="f-ecfecha" type="date" value="${p.fechaCobroReal||(t0&&t0.fechaCobroReal)||today()}"/></div>
+        <div class="form-group"><label>Dólar del día del cobro (opcional)</label><input id="f-ectc" type="number" value="${p.tcCobro||(t0&&t0.tcCobro)||''}" placeholder="para ver la ganancia en USD"/></div>
+      </div>
+      <div class="form-group full" style="font-size:11px;color:var(--muted)">🔒 Esta pestaña es solo interna: nada de esto aparece en el PDF ni en el informe que ve el cliente.</div>
       <div class="form-group full" id="ec-resultado" style="padding:12px;border-radius:6px;background:var(--dark);border:1px solid var(--border2);font-size:13px"></div>
     </div>`;
     onSave=()=>{
@@ -11322,7 +11328,34 @@ function openModal(type, data={}) {
         DB.trabajos.push(t);
       }
       pushUndo('Economía real presupuesto');
+      const estCobro = gv('f-ecestado')||'pendiente';
+      const fechaC = gv('f-ecfecha')||today();
+      const tcC = parseFloat(gv('f-ectc'))||0;
+      const presup = DB.presupuestos.find(x=>x.id===p.id);
+      if(estCobro==='cobrado' && !campos.montoCobrado) campos.montoCobrado = campos.manoObraCobrada + campos.movilidad + campos.precioRepuestoFacturado;
       Object.assign(t, campos);
+      let revertido = false;
+      if(estCobro==='cobrado'){
+        t.estadoCobro='cobrado'; t.fechaCobroReal=fechaC;
+        if(t.estado!=='completado') t.estado='completado';
+        const tcUse = tcC || Number(presup&&presup.tcCobro) || Number(t.tcCobro) || 0;
+        t.tcCobro = tcUse;
+        if(presup){
+          const usdEsp = (Number(presup.montoUsd)||0) * (1 + (Number(presup.recargoPct)||0)/100);
+          const usdRec = tcUse>0 ? t.montoCobrado/tcUse : 0;
+          const difUsd = (tcUse>0 && usdEsp>0) ? usdRec-usdEsp : 0;
+          const difPct = usdEsp>0 ? difUsd/usdEsp*100 : 0;
+          Object.assign(presup,{estadoCobro:'cobrado',fechaCobroReal:fechaC,tcCobro:tcUse,montoCobradoReal:t.montoCobrado,usdRecibido:Math.round(usdRec),diferenciaUsd:Math.round(difUsd),diferenciaPct:Math.round(difPct*10)/10});
+          if(presup.estado!=='aprobado'){ presup.estado='aprobado'; writeToSheet({ action:'updateEstadoPresupuesto', id:presup.id, estado:'aprobado' }); }
+          writeToSheet({ action:'registrarCobroPresupuesto', id:presup.id, row:{ fecha_cobro_real:fechaC, tc_cobro:tcUse, monto_cobrado_real:t.montoCobrado, usd_recibido:presup.usdRecibido, diferencia_usd:presup.diferenciaUsd, diferencia_pct:presup.diferenciaPct }});
+        }
+      } else if(presup && presup.estadoCobro==='cobrado') {
+        presup.estadoCobro='pendiente'; presup.fechaCobroReal=''; presup.tcCobro=0; presup.montoCobradoReal=0; presup.usdRecibido=0; presup.diferenciaUsd=0; presup.diferenciaPct=0;
+        t.estadoCobro='pendiente'; t.fechaCobroReal=''; t.tcCobro=0; t.montoCobradoUsd=0; t.gananciaUsd=0;
+        cambiosCobroRecientes[t.id] = { estadoCobro:'pendiente', tcCobro:0, montoCobradoUsd:0, gananciaUsd:0, diferenciaUsd:0, diferenciaPct:0, fechaCobroReal:'', ts:Date.now() };
+        writeToSheet({action:'revertirCobro', tipo:'presupuestos', id:presup.id});
+        revertido = true;
+      }
       const tc = Number(t.tcCobro)||0;
       if(t.estadoCobro==='cobrado' && tc>0){
         t.montoCobradoUsd = Math.round(t.montoCobrado/tc);
@@ -11339,8 +11372,8 @@ function openModal(type, data={}) {
         repuestosDetalle:t.repuestosDetalle||'', notas:t.notas||'', fotoUrl:t.fotoUrl||'',
         tcAlMomento:t.tcAlMomento||0, gananciaUsdEsperada:t.gananciaUsdEsperada||0, horasTrabajadas:t.horasTrabajadas||0
       }});
-      if(t.estadoCobro==='cobrado'){
-        writeToSheet({ action:'updateCobro', id:t.id, estadoCobro:'cobrado', tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0, ganancia_usd:t.gananciaUsd||0, diferencia_usd:t.diferenciaUsd||0, diferencia_pct:t.diferenciaPct||0, fecha_cobro_real:t.fechaCobroReal||'' });
+      if(t.estadoCobro==='cobrado' || revertido){
+        writeToSheet({ action:'updateCobro', id:t.id, estadoCobro:t.estadoCobro, tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0, ganancia_usd:t.gananciaUsd||0, diferencia_usd:t.diferenciaUsd||0, diferencia_pct:t.diferenciaPct||0, fecha_cobro_real:t.fechaCobroReal||'' });
       }
       saveLocal(); closeModal();
       try { renderPresupuestos(); updateBadges(); renderDashboard(); renderTrabajos(); } catch(eE) {}
