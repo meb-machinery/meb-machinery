@@ -2650,8 +2650,53 @@ function irATrabajo(trabajoId) {
   }, 100);
 }
 // Devuelve el HTML de los badges de correlatividad para una fila de Trabajo.
+// v17.67 — número del trabajo (t008 → T0008), igual criterio que los presupuestos (#0008).
+function numeroTrabajo(t) {
+  const m = /^t0*(\d+)$/i.exec(String((t&&t.id)||'').trim());
+  return m ? parseInt(m[1],10) : null;
+}
+function badgeNumeroTrabajo(t) {
+  const n = numeroTrabajo(t);
+  return n!==null
+    ? `<span style="font-family:'Bebas Neue';color:var(--yellow);font-size:13px;margin-right:6px" title="N° de trabajo (ID ${t.id})">T${String(n).padStart(4,'0')}</span>`
+    : `<span style="font-size:9px;color:var(--muted);margin-right:6px" title="Trabajo creado desde el CRM (ID ${t.id})">s/n°</span>`;
+}
+// Vincula un trabajo a un presupuesto con un clic y lo guarda en el Sheet.
+function vincularTrabajoAPresupuesto(tid, pid) {
+  const t = DB.trabajos.find(x=>x.id===tid), p = DB.presupuestos.find(x=>x.id===pid);
+  if(!t || !p) return;
+  const clT = DB.clientes.find(c=>String(c.id)===String(t.clienteId)), clP = DB.clientes.find(c=>String(c.id)===String(p.clienteId));
+  const nT = numeroTrabajo(t);
+  const msg = `¿Vincular el trabajo T${String(nT||0).padStart(4,'0')} "${t.titulo}" (${clT?clT.nombre:'sin cliente'}) con el Presupuesto #${String(p.num).padStart(4,'0')} (${clP?clP.nombre:'sin cliente'})?`
+    + (String(t.clienteId)!==String(p.clienteId) ? '\n\n⚠ OJO: los clientes no coinciden.' : '');
+  if(!confirm(msg)) return;
+  pushUndo('Vincular trabajo');
+  t.presupuestoId = p.id;
+  if(!t.clienteId) t.clienteId = p.clienteId;
+  writeToSheet({ action:'addTrabajo', row:{
+    id:t.id, clienteId:t.clienteId, maquinaId:t.maquinaId||'', presupuestoId:t.presupuestoId,
+    titulo:t.titulo||'', tipo:t.tipo||'', estado:t.estado||'pendiente', estadoMaquina:t.estadoMaquina||'',
+    fechaInicio:t.fechaInicio||'', fechaFin:t.fechaFin||'', montoCobrado:t.montoCobrado||0,
+    montoGastos:t.montoGastos||0, costoRepuesto:t.costoRepuesto||0,
+    precioRepuestoFacturado:t.precioRepuestoFacturado||0, manoObraCobrada:t.manoObraCobrada||0,
+    movilidad:t.movilidad||0, repuestosDetalle:t.repuestosDetalle||'', notas:t.notas||'',
+    fotoUrl:t.fotoUrl||'', tcAlMomento:t.tcAlMomento||0, gananciaUsdEsperada:t.gananciaUsdEsperada||0,
+    horasTrabajadas:t.horasTrabajadas||0
+  }});
+  saveLocal(); updateBadges(); refreshCurrentPage();
+  try { renderDashboard(); } catch(e) {}
+  showToast('Trabajo vinculado ✔','success');
+}
 function correlatividadTrabajo(t) {
-  if(!t.presupuestoId) return '';
+  if(!t.presupuestoId) {
+    const n = numeroTrabajo(t);
+    const cand = n!==null ? DB.presupuestos.filter(x=>parseInt(x.num,10)===n) : [];
+    if(cand.length===1) {
+      const pc = cand[0];
+      return `<div style="margin-top:3px"><button class="btn-secondary" style="font-size:10px;padding:2px 8px;background:rgba(244,180,0,0.12);border-color:var(--yellow);color:var(--yellow)" onclick="vincularTrabajoAPresupuesto('${t.id}','${pc.id}')" title="Vincular con el Presupuesto N° ${String(pc.num).padStart(4,'0')}">🔗 Vincular con Presup. #${String(pc.num).padStart(4,'0')}</button></div>`;
+    }
+    return `<div style="font-size:9px;color:var(--orange);margin-top:2px">⚠ sin presupuesto — usá ✏️ para elegirlo</div>`;
+  }
   const p = DB.presupuestos.find(x=>x.id===t.presupuestoId);
   if(!p) return '';
   const numPad = String(p.num||0).padStart(4,'0');
@@ -4589,7 +4634,7 @@ function renderTrabajos() {
     const margen=montoCobrado>0?Math.round(ganancia/montoCobrado*100):(factTerceros>0?Math.round(ganancia/factTerceros*100):0);
     const margenColor=margen>=30?'var(--green)':margen>=10?'var(--yellow)':'var(--red)';
     return `<tr>
-      <td id="trabajo-row-${t.id}"><div class="td-name">${t.titulo}</div><div class="td-muted">${fmtDate(t.fechaInicio)}${t.horasTrabajadas?` · ⏱ ${t.horasTrabajadas}h`:''}</div>${correlatividadTrabajo(t)}</td>
+      <td id="trabajo-row-${t.id}"><div class="td-name">${badgeNumeroTrabajo(t)}${t.titulo}</div><div class="td-muted">${fmtDate(t.fechaInicio)}${t.horasTrabajadas?` · ⏱ ${t.horasTrabajadas}h`:''}</div>${correlatividadTrabajo(t)}</td>
       <td>${cl?cl.nombre:'—'}</td>
       <td>${mq?`${mq.marca} ${mq.modelo}`:'—'}</td>
       <td><span class="badge badge-blue">${t.tipo||'—'}</span></td>
