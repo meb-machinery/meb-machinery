@@ -70,6 +70,8 @@ nav.tabs button[aria-selected=true]{color:var(--oro2);background:rgba(226,190,11
 /* cartas */
 .carta{width:132px;aspect-ratio:3/5;flex:none;filter:drop-shadow(0 8px 20px rgba(0,0,0,.45))}
 .carta svg{width:100%;height:100%;display:block}
+.cwrap{position:relative;width:100%;height:100%}
+.cwrap img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:9px;border:2px solid var(--oro);background:#16206A}
 .hero{display:flex;gap:16px;align-items:center}
 .hero .txt small{color:var(--suave);font-size:13px;text-transform:uppercase;letter-spacing:.08em}
 .hero .txt h4{font:700 21px/1.2 'Cinzel',serif;color:var(--oro2);margin:2px 0 6px}
@@ -593,6 +595,12 @@ function cartaSVG(n, dorso = false){
     <text x="60" y="176" text-anchor="middle" font-family="Cinzel,serif" font-size="${fs}" font-weight="700" fill="#F6DE9C" letter-spacing=".5">${esc(nom)}</text></svg>`;
 }
 
+
+/* ---------- imágenes reales (carpeta cartas/) con la carta diseñada de respaldo ---------- */
+const CARTA_ARCH = ['00_Fool','01_Magician','02_High_Priestess','03_Empress','04_Emperor','05_Hierophant','06_Lovers','07_Chariot','08_Strength','09_Hermit','10_Wheel_of_Fortune','11_Justice','12_Hanged_Man','13_Death','14_Temperance','15_Devil','16_Tower','17_Star','18_Moon','19_Sun','20_Judgement','21_World'];
+const cartaImg = n => 'cartas/RWS_Tarot_' + CARTA_ARCH[n] + '.jpg';
+const cartaHTML = n => `<div class="cwrap">${cartaSVG(n)}<img src="${cartaImg(n)}" alt="${esc(ARCANOS[n].n)}" loading="lazy" decoding="async" onerror="this.remove()"></div>`;
+
 /* ---------- vistas ---------- */
 let TAB = 'hoy';
 const VISTAS = { hoy: vistaHoy, vos: vistaVos, agenda: vistaAgenda, meb: vistaMeb };
@@ -612,7 +620,7 @@ function saludo(){
 
 function bloqueArcano(n, lugar, titulo){
   const a = ARCANOS[n], id = 'x' + lugar + n;
-  return `<div class="caja"><div class="arc"><div class="carta">${cartaSVG(n)}</div><div>
+  return `<div class="caja"><div class="arc"><div class="carta">${cartaHTML(n)}</div><div>
     <small>${titulo}</small><h4>${ROMANOS[n]} · ${a.n}</h4><p><b class="oro">${a.clave}.</b> ${a.esencia}</p>
     <button class="vermas" type="button" aria-expanded="false" aria-controls="${id}" data-vermas="${id}">Ver más ▾</button></div></div>
     <div class="expande" id="${id}">
@@ -641,7 +649,7 @@ function vistaHoy(){
   const ig = leer('ig') || '';
   let h = `<h2>${fechaLarga(d).replace(/^./, c => c.toUpperCase())}</h2>
   <div class="caja hoy-carta-wrap">
-    <div class="hero"><div class="carta">${cartaSVG(n)}</div><div class="txt"><small>Tu energía de hoy</small><h4>${a.n}</h4><p><b class="oro">${a.clave}.</b> ${a.aplicar[d.getDate() % 3]}</p></div></div>
+    <div class="hero"><div class="carta">${cartaHTML(n)}</div><div class="txt"><small>Tu energía de hoy</small><h4>${a.n}</h4><p><b class="oro">${a.clave}.</b> ${a.aplicar[d.getDate() % 3]}</p></div></div>
     <p class="afirm">“${a.afirm}”</p>
     <ul class="datos">
       <li><b class="ic">✺</b><div><span>Colores y cristal del día</span><span class="punto" style="background:${sem.colores[0]}"></span> <span class="punto" style="background:${sem.colores[1]}"></span> ${sem.color} · ${sem.cristal}</div></li>
@@ -666,7 +674,7 @@ function tresDelDia(){ const r = rng('norte' + fechaISO(HOY)), set = []; while (
 function armarTres(){
   const cont = $('#tres'); if (!cont) return;
   const cartas = tresDelDia(), elegida = leer('tres:' + fechaISO(HOY));
-  cont.innerHTML = cartas.map((n, i) => `<button type="button" data-i="${i}" aria-label="Carta ${i + 1}"><div class="dorso">${cartaSVG(i, true)}</div><div class="cara">${cartaSVG(n)}</div></button>`).join('');
+  cont.innerHTML = cartas.map((n, i) => `<button type="button" data-i="${i}" aria-label="Carta ${i + 1}"><div class="dorso">${cartaSVG(i, true)}</div><div class="cara">${cartaHTML(n)}</div></button>`).join('');
   const revelar = (i, anim) => {
     cont.querySelectorAll('button').forEach((b, j) => { b.disabled = true; if (j == i) b.classList.add('vuelta'); else b.classList.add('apagada'); if (!anim) b.style.transition = 'none'; });
     const a = ARCANOS[cartas[i]];
@@ -864,6 +872,9 @@ function cieloCanvas(x, W, H){
   const r = rng('cielo'); for (let i = 0; i < 420; i++) { x.globalAlpha = .3 + r() * .7; x.fillStyle = r() < .15 ? '#F6DE9C' : '#E3E8FF'; x.beginPath(); x.arc(r() * W, r() * H, r() * 2.2 + .4, 0, 6.283); x.fill(); } x.globalAlpha = 1;
 }
 function cartaCanvas(x, n, X, Y, w){
+  return new Promise(res => { const real = new Image(); real.onload = () => { const h = w * 5 / 3; x.save(); x.beginPath(); x.roundRect ? x.roundRect(X, Y, w, h, 22) : x.rect(X, Y, w, h); x.clip(); const r = Math.max(w / real.width, h / real.height), iw = real.width * r, ih = real.height * r; x.drawImage(real, X + (w - iw) / 2, Y + (h - ih) / 2, iw, ih); x.restore(); x.strokeStyle = '#E2BE6E'; x.lineWidth = 6; x.beginPath(); x.roundRect ? x.roundRect(X, Y, w, h, 22) : x.rect(X, Y, w, h); x.stroke(); res(); }; real.onerror = () => cartaSVGCanvas(x, n, X, Y, w).then(res); real.src = cartaImg(n); });
+}
+function cartaSVGCanvas(x, n, X, Y, w){
   return new Promise(res => { const img = new Image(); img.onload = () => { x.drawImage(img, X, Y, w, w * 5 / 3); res(); }; img.onerror = res;
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(cartaSVG(n).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" width="360" height="600" ')); });
 }
