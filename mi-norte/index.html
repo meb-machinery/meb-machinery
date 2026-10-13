@@ -1,0 +1,957 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Mi Norte</title>
+<meta name="description" content="El espacio personal de Emmanuel: su energía del día, sus arcanos, su numerología, la luna y MEB.">
+<meta name="theme-color" content="#0A0F33">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icono-192.png">
+<link rel="apple-touch-icon" href="icono-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mi Norte">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Cormorant+Garamond:ital,wght@0,500;1,500&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --fondo:#070B26; --fondo2:#140F3D; --panel:rgba(22,28,82,.58); --panel2:rgba(36,30,96,.55);
+  --borde:rgba(226,190,110,.28); --oro:#E2BE6E; --oro2:#F6DE9C; --oro-osc:#A9843C;
+  --texto:#ECE9FF; --suave:#B8B5DD; --violeta:#8B78F0; --azul:#4F7BEA; --bien:#7FD6A4; --mal:#F08A8A;
+  --r:18px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--fondo);color:var(--texto);font:16px/1.55 'Nunito Sans',system-ui,sans-serif;min-height:100vh;overflow-x:hidden;padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+#cielo{position:fixed;inset:0;z-index:0;pointer-events:none}
+.nebulosa{position:fixed;inset:0;z-index:0;pointer-events:none;background:
+  radial-gradient(60% 40% at 15% 10%,rgba(79,123,234,.30),transparent 70%),
+  radial-gradient(55% 45% at 90% 35%,rgba(139,120,240,.28),transparent 70%),
+  radial-gradient(70% 50% at 40% 100%,rgba(48,38,140,.45),transparent 70%),
+  linear-gradient(180deg,#060A24 0%,#0C1240 45%,#1A1250 100%)}
+main{position:relative;z-index:1;max-width:560px;margin:0 auto;padding:0 16px}
+header{position:relative;z-index:1;text-align:center;padding:calc(26px + env(safe-area-inset-top)) 16px 6px}
+.simbolo{width:96px;height:96px;margin:0 auto 8px;filter:drop-shadow(0 0 14px rgba(226,190,110,.45))}
+.simbolo .rueda{transform-origin:50% 50%;animation:girar 40s linear infinite}
+.simbolo .orbita{transform-origin:50% 50%;animation:girar 9s linear infinite reverse}
+@keyframes girar{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.simbolo .rueda,.simbolo .orbita{animation:none}}
+h1{font:700 30px/1.1 'Cinzel',serif;letter-spacing:.12em;color:var(--oro2);text-shadow:0 0 18px rgba(226,190,110,.35)}
+.sub{color:var(--suave);font-size:14px;margin-top:4px}
+h2{font:700 19px/1.25 'Cinzel',serif;color:var(--oro2);letter-spacing:.06em;margin:26px 0 10px;text-align:center}
+h3{font:700 16px/1.3 'Cinzel',serif;color:var(--oro);letter-spacing:.05em;margin:22px 0 10px}
+h4{font-weight:700;font-size:16px;color:var(--texto)}
+.caja{background:var(--panel);border:1px solid var(--borde);border-radius:var(--r);padding:16px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);margin-bottom:12px}
+.caja p+p{margin-top:8px}
+.oro{color:var(--oro2)}
+.chico,.ag-ayuda{font-size:13px;color:var(--suave)}
+.ag-ayuda{margin-top:10px}
+.afirm{font:italic 500 21px/1.35 'Cormorant Garamond',serif;color:var(--oro2);text-align:center;margin:14px 6px 4px}
+.btn{text-decoration:none;text-align:center;display:inline-flex;align-items:center;justify-content:center;gap:8px;font:700 15px 'Nunito Sans',sans-serif;color:#1A1232;background:linear-gradient(180deg,var(--oro2),var(--oro));border:0;border-radius:999px;padding:12px 20px;cursor:pointer;min-height:46px;box-shadow:0 4px 18px rgba(226,190,110,.25)}
+.btn.sec{background:transparent;color:var(--oro2);border:1px solid var(--borde);box-shadow:none}
+.btn.ancho{width:100%}
+.btn:active{transform:scale(.98)}
+.fila-btn{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.fila-btn .btn{flex:1 1 140px;font-size:14px;padding:10px 14px}
+input[type=text]{width:100%;background:rgba(10,14,50,.6);color:var(--texto);border:1px solid var(--borde);border-radius:12px;padding:11px 12px;font:15px 'Nunito Sans',sans-serif}
+input[type=text]:focus{outline:2px solid var(--oro);outline-offset:1px}
+:focus-visible{outline:2px solid var(--oro2);outline-offset:2px}
+
+/* navegación */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:rgba(8,11,40,.88);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--borde);display:flex;justify-content:center;padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+nav.tabs button{flex:1;max-width:130px;background:none;border:0;color:var(--suave);font:600 12px 'Nunito Sans',sans-serif;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border-radius:12px;cursor:pointer;min-height:52px}
+nav.tabs button span{font-size:20px;line-height:1}
+nav.tabs button[aria-selected=true]{color:var(--oro2);background:rgba(226,190,110,.10)}
+
+/* cartas */
+.carta{width:132px;aspect-ratio:3/5;flex:none;filter:drop-shadow(0 8px 20px rgba(0,0,0,.45))}
+.carta svg{width:100%;height:100%;display:block}
+.hero{display:flex;gap:16px;align-items:center}
+.hero .txt small{color:var(--suave);font-size:13px;text-transform:uppercase;letter-spacing:.08em}
+.hero .txt h4{font:700 21px/1.2 'Cinzel',serif;color:var(--oro2);margin:2px 0 6px}
+.constel{position:absolute;opacity:.55;pointer-events:none}
+.hoy-carta-wrap{position:relative}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:5px 11px;font-size:13px}
+.punto{width:12px;height:12px;border-radius:50%;display:inline-block;border:1px solid rgba(255,255,255,.4)}
+.datos{list-style:none;margin-top:12px;display:grid;gap:10px}
+.datos li{display:flex;gap:10px;align-items:flex-start}
+.datos li b.ic{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:rgba(226,190,110,.12);color:var(--oro2);font-size:15px}
+.datos li .punto{display:inline-block;vertical-align:-1px;margin-right:2px}
+.datos li span:not(.punto){display:block;font-size:12px;color:var(--suave);text-transform:uppercase;letter-spacing:.06em}
+
+/* tres cartas */
+.tres{display:flex;gap:10px;justify-content:center;perspective:900px;margin-top:6px}
+.tres button{background:none;border:0;padding:0;cursor:pointer;width:30%;max-width:120px;aspect-ratio:3/5;position:relative;transform-style:preserve-3d;transition:transform .9s cubic-bezier(.3,.7,.2,1)}
+.tres button .cara,.tres button .dorso{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.tres button .cara{transform:rotateY(180deg)}
+.tres button.vuelta{transform:rotateY(180deg)}
+.tres button.apagada{opacity:.35}
+.tres button:not([disabled]):hover{transform:translateY(-4px)}
+.tres svg{width:100%;height:100%}
+
+/* arcanos personales */
+.arc{display:flex;gap:14px;align-items:flex-start}
+.arc .carta{width:92px}
+.arc small{color:var(--suave);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.arc h4{font:700 18px 'Cinzel',serif;color:var(--oro2);margin:2px 0 4px}
+.vermas{background:none;border:0;color:var(--oro);font:700 14px 'Nunito Sans',sans-serif;cursor:pointer;padding:8px 0 0;display:inline-flex;gap:6px;align-items:center}
+.expande{display:none;margin-top:12px;border-top:1px solid var(--borde);padding-top:12px;font-size:15px}
+.expande.abierto{display:block}
+.expande ul{margin:6px 0 0 18px}
+.expande ul li{margin-bottom:4px}
+.expande .et{color:var(--oro);font-weight:700}
+
+/* numerología */
+.num-grande{display:flex;gap:14px;align-items:center}
+.num-grande b,.num-lista b{font:700 30px/1 'Cinzel',serif;color:var(--oro2);min-width:58px;height:58px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--borde);background:radial-gradient(circle,rgba(226,190,110,.18),transparent 70%);flex:none}
+.num-lista{list-style:none;display:grid;gap:12px;margin-top:14px}
+.num-lista li{display:flex;gap:12px;align-items:center}
+.num-lista b{font-size:20px;min-width:44px;height:44px}
+.num-lista span{display:block;font-size:12px;color:var(--suave);text-transform:uppercase;letter-spacing:.06em}
+.nombre-item+.nombre-item{margin-top:12px}
+.nombre-item h4{font:700 17px 'Cinzel',serif;color:var(--oro2)}
+
+/* carta natal */
+.trio{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
+.trio>div{text-align:center;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:10px 4px}
+.trio .gl{font-size:26px;background:none;border:0;padding:0;color:var(--oro2);line-height:1.2}
+.trio small{display:block;color:var(--suave);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.trio strong{font-size:14px}
+.planetas{list-style:none;margin-top:10px;font-size:14px}
+.planetas li{padding:7px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+.planetas li:last-child{border:0}
+.planetas b{color:var(--oro2)}
+
+/* agenda */
+.luna-caja{display:flex;gap:14px;align-items:center}
+.luna-dibujo{width:64px;height:64px;border-radius:50%;flex:none;background:#1a1f52;box-shadow:inset -18px 0 0 0 #E8E2C4,0 0 18px rgba(232,226,196,.25)}
+.luna-dibujo.llena{background:#EFE7C8;box-shadow:0 0 26px rgba(239,231,200,.55)}
+.luna-dibujo.nueva{background:#141842;box-shadow:inset 0 0 0 1px rgba(232,226,196,.35)}
+.filtros{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none;margin:0 -2px}
+.filtros::-webkit-scrollbar{display:none}
+.filtros button{flex:none;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);color:var(--texto);border-radius:999px;padding:7px 13px;font:600 13px 'Nunito Sans',sans-serif;cursor:pointer}
+.filtros button[aria-pressed=true]{background:var(--oro);color:#1A1232;border-color:var(--oro)}
+.ag-cab{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.ag-cab h4{font:700 17px 'Cinzel',serif;color:var(--oro2);text-transform:capitalize}
+.ag-cab button{background:rgba(255,255,255,.07);border:1px solid var(--borde);color:var(--oro2);width:40px;height:40px;border-radius:50%;font-size:18px;cursor:pointer}
+.ag-cab button:disabled{opacity:.3}
+.grilla{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.grilla .dn{text-align:center;font-size:11px;color:var(--suave);padding-bottom:2px}
+.grilla button{aspect-ratio:1;background:rgba(255,255,255,.04);border:1px solid transparent;border-radius:10px;color:var(--texto);font:600 14px 'Nunito Sans',sans-serif;cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0}
+.grilla button .mk{font-size:11px;line-height:1;color:var(--oro2);min-height:11px}
+.grilla button.hoy{border-color:var(--oro)}
+.grilla button.sel{background:rgba(226,190,110,.22);border-color:var(--oro2)}
+.grilla button.bueno::after,.grilla button.evitar::after{content:'';position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%}
+.grilla button.bueno::after{background:var(--bien)}
+.grilla button.evitar::after{background:var(--mal)}
+.leyenda{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--suave);margin-top:10px}
+.det{margin-top:14px}
+.det h4.dia{font:700 18px 'Cinzel',serif;color:var(--oro2)}
+.det h4.dia::first-letter{text-transform:uppercase}
+.rec{list-style:none;margin-top:10px;display:grid;gap:8px}
+.rec li{background:rgba(255,255,255,.04);border-radius:12px;padding:10px 12px;border-left:3px solid var(--suave);font-size:14.5px}
+.rec li.bueno{border-left-color:var(--bien)}
+.rec li.evitar{border-left-color:var(--mal)}
+.rec li b{display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--oro)}
+.evento{background:rgba(139,120,240,.14);border:1px solid rgba(139,120,240,.35);border-radius:12px;padding:10px 12px;margin-top:8px;font-size:14.5px}
+.ritual{margin-top:12px;background:linear-gradient(160deg,rgba(226,190,110,.12),rgba(139,120,240,.10));border:1px solid var(--borde);border-radius:14px;padding:14px}
+.ritual h5{font:700 15px 'Cinzel',serif;color:var(--oro2);margin-bottom:6px}
+.ritual ol,.ritual ul{margin:6px 0 0 20px;font-size:14.5px}
+.ritual .seg{font-size:12.5px;color:var(--suave);margin-top:8px}
+
+/* MEB */
+.cruce{list-style:none;display:grid;gap:10px;margin-top:8px}
+.cruce li{background:rgba(255,255,255,.04);border-radius:12px;padding:11px 12px;font-size:15px;border-left:3px solid var(--oro)}
+.pendiente{border:1px dashed var(--borde);border-radius:14px;padding:14px;color:var(--suave);font-size:14.5px;text-align:center}
+
+/* instalar y modal */
+.instalar{text-align:center}
+.instalar h4{font:700 17px 'Cinzel',serif;color:var(--oro2);margin-bottom:6px}
+.modal{position:fixed;inset:0;z-index:50;background:rgba(3,5,20,.75);display:none;align-items:flex-end;justify-content:center;padding:16px}
+.modal.abierto{display:flex}
+.modal .caja{max-width:480px;width:100%;margin-bottom:calc(10px + env(safe-area-inset-bottom));background:#121752}
+.modal ol{margin:10px 0 0 20px;display:grid;gap:8px}
+.oculto{display:none!important}
+.pie{text-align:center;font-size:12px;color:var(--suave);margin:28px 0 10px}
+.vista{animation:aparecer .35s ease}
+@keyframes aparecer{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (max-width:380px){.carta{width:112px}.hero{gap:12px}.arc .carta{width:78px}}
+</style>
+</head>
+<body>
+<div class="nebulosa"></div>
+<canvas id="cielo" aria-hidden="true"></canvas>
+<header>
+  <svg class="simbolo" viewBox="0 0 120 120" aria-hidden="true">
+    <defs>
+      <linearGradient id="go" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F8E3A6"/><stop offset=".5" stop-color="#E2BE6E"/><stop offset="1" stop-color="#A9843C"/></linearGradient>
+      <radialGradient id="halo"><stop offset="0" stop-color="#4F7BEA" stop-opacity=".55"/><stop offset="1" stop-color="#4F7BEA" stop-opacity="0"/></radialGradient>
+    </defs>
+    <circle cx="60" cy="60" r="58" fill="url(#halo)"/>
+    <g class="rueda" id="rueda"></g>
+    <g class="orbita"><circle cx="60" cy="13" r="2.6" fill="#F8E3A6"/><circle cx="60" cy="107" r="1.6" fill="#F8E3A6" opacity=".7"/></g>
+    <path d="M70 40a22 22 0 1 0 0 40a18 18 0 1 1 0-40z" fill="url(#go)"/>
+    <path d="M78 52l1.6 4.2 4.4 .2-3.5 2.7 1.3 4.3-3.8-2.5-3.8 2.5 1.3-4.3-3.5-2.7 4.4-.2z" fill="#F8E3A6"/>
+  </svg>
+  <h1>MI NORTE</h1>
+  <p class="sub" id="saludo"></p>
+</header>
+<main id="app"><div id="vista" class="vista"></div><p class="pie">Mi Norte · hecho con cariño para Emmanuel ✦</p></main>
+<nav class="tabs" role="tablist" aria-label="Secciones">
+  <button role="tab" data-tab="hoy" aria-selected="true"><span>✧</span>Hoy</button>
+  <button role="tab" data-tab="vos" aria-selected="false"><span>✦</span>Vos</button>
+  <button role="tab" data-tab="agenda" aria-selected="false"><span>☾</span>Agenda</button>
+  <button role="tab" data-tab="meb" aria-selected="false"><span>⚙</span>Vos y MEB</button>
+</nav>
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-t"><div class="caja"><h3 id="modal-t" style="margin-top:0">Instalar Mi Norte</h3><div id="modal-c"></div><button class="btn ancho" style="margin-top:16px" type="button" data-cerrar>Entendido</button></div></div>
+<script>const EFEM = {"d0":"2026-10-01","dias":[[2,72,0],[2,61,0],[3,49,0],[3,38,0],[4,27,0],[4,18,0],[5,10,0],[5,5,0],[6,1,0],[6,0,0],[6,1,1],[7,4,1],[7,9,1],[8,15,1],[8,23,1],[9,31,1],[9,40,1],[9,50,1],[10,59,1],[10,69,1],[11,77,1],[11,85,1],[11,92,1],[0,97,1],[0,99,1],[1,100,0],[1,97,0],[2,92,0],[2,84,0],[3,75,0],[3,64,0],[4,53,0],[4,42,0],[5,31,0],[5,22,0],[6,14,0],[6,7,0],[6,3,0],[7,1,0],[7,0,1],[8,2,1],[8,5,1],[8,10,1],[9,17,1],[9,24,1],[10,33,1],[10,42,1],[10,51,1],[11,61,1],[11,71,1],[0,80,1],[0,88,1],[1,94,1],[1,98,1],[2,100,0],[2,98,0],[3,94,0],[3,87,0],[4,78,0],[4,68,0],[5,57,0],[5,46,0],[5,36,0],[6,26,0],[6,18,0],[7,11,0],[7,6,0],[7,2,0],[8,0,0],[8,0,1],[9,2,1],[9,6,1],[9,11,1],[10,18,1],[10,26,1],[11,34,1],[11,44,1],[0,54,1],[0,64,1],[0,74,1],[1,83,1],[1,91,1],[2,97,1],[2,100,1],[3,99,0],[3,96,0],[4,90,0],[4,82,0],[5,73,0],[5,62,0],[6,52,0],[6,42,0],[7,32,0],[7,23,0],[7,15,0],[8,9,0],[8,5,0],[9,1,0],[9,0,0],[9,1,1],[10,3,1],[10,7,1],[11,12,1],[11,19,1],[11,28,1],[0,37,1],[0,48,1],[1,58,1],[1,69,1],[2,79,1],[2,88,1],[3,95,1],[3,99,1],[4,100,0],[4,98,0],[5,94,0],[5,87,0],[6,78,0],[6,69,0],[6,59,0],[7,48,0],[7,39,0],[8,30,0],[8,21,0],[8,14,0],[9,8,0],[9,4,0],[10,1,0],[10,0,0],[10,1,1],[11,4,1],[11,8,1],[0,15,1],[0,23,1],[1,32,1],[1,42,1],[1,53,1],[2,64,1],[2,75,1],[3,85,1],[3,92,1],[4,97,1],[4,100,1],[5,99,0],[5,96,0],[6,91,0],[6,83,0],[7,75,0],[7,66,0],[8,56,0],[8,46,0],[8,37,0],[9,28,0],[9,20,0],[10,13,0],[10,7,0],[10,3,0],[11,1,0],[11,0,1],[0,2,1],[0,5,1],[0,11,1],[1,19,1],[1,28,1],[2,38,1],[2,49,1],[3,61,1],[3,72,1],[4,82,1],[4,90,1],[5,96,1],[5,99,1],[6,100,0],[6,98,0],[7,94,0],[7,88,0],[7,81,0],[8,72,0],[8,63,0],[9,54,0],[9,45,0],[9,35,0],[10,27,0],[10,19,0],[11,12,0],[11,6,0],[11,2,0],[0,0,0],[0,1,1],[1,3,1],[1,8,1],[2,16,1],[2,25,1],[3,35,1],[3,46,1],[4,58,1],[4,69,1],[5,79,1],[5,87,1],[5,94,1],[6,98,1],[6,100,1],[7,99,0],[7,97,0],[8,92,0],[8,86,0],[9,79,0],[9,71,0],[9,62,0],[10,52,0],[10,43,0],[10,33,0],[11,25,0],[11,16,0],[0,10,0],[0,4,0],[1,1,0],[1,0,1],[2,2,1],[2,6,1],[3,13,1],[3,22,1],[3,32,1],[4,44,1],[4,55,1],[5,66,1],[5,76,1],[6,85,1],[6,91,1],[7,96,1],[7,99,1],[8,100,0],[8,98,0],[8,95,0],[9,90,0],[9,84,0],[10,77,0],[10,68,0],[10,59,0],[11,50,0],[11,40,0],[0,30,0],[0,21,0],[0,13,0],[1,7,0],[1,2,0],[2,0,0],[2,1,1],[3,5,1],[3,11,1],[4,20,1],[4,30,1],[5,41,1],[5,52,1],[6,63,1],[6,73,1],[7,82,1],[7,89,1],[7,94,1],[8,98,1],[8,100,1],[9,100,0],[9,98,0],[9,94,0],[10,89,0],[10,82,0],[11,74,0],[11,65,0],[11,56,0],[0,46,0],[0,36,0],[1,26,0],[1,17,0],[2,9,0],[2,3,0],[3,0,0],[3,0,1],[4,3,1],[4,9,1],[5,17,1],[5,27,1],[6,38,1],[6,48,1],[6,59,1],[7,69,1],[7,78,1],[8,86,1],[8,92,1],[9,96,1],[9,99,1],[9,100,1],[10,99,0],[10,97,0],[11,92,0],[11,86,0],[11,79,0],[0,71,0],[0,61,0],[1,51,0],[1,40,0],[1,30,0],[2,20,0],[2,11,0],[3,5,0],[3,1,0],[4,0,1],[4,2,1],[5,7,1],[5,15,1],[6,24,1],[6,34,1],[7,44,1],[7,54,1],[8,64,1],[8,73,1],[8,81,1],[9,88,1],[9,94,1],[10,97,1],[10,100,1],[10,100,0],[11,98,0],[11,95,0],[0,90,0],[0,83,0],[0,75,0],[1,66,0],[1,55,0],[2,44,0],[2,33,0],[3,23,0],[3,14,0],[4,7,0],[4,2,0],[5,0,0],[5,1,1],[6,5,1],[6,12,1],[7,20,1],[7,29,1],[8,39,1],[8,49,1],[8,58,1],[9,68,1],[9,76,1],[10,84,1],[10,90,1],[10,95,1],[11,98,1],[11,100,1],[0,99,0],[0,97,0],[0,93,0],[1,87,0],[1,79,0],[2,69,0],[2,59,0],[3,48,0],[3,37,0],[4,26,0],[4,16,0],[5,9,0],[5,3,0],[5,0,0],[6,1,1],[6,3,1],[7,8,1],[7,15,1],[8,23,1],[8,32,1],[9,42,1],[9,51,1],[9,61,1],[10,70,1],[10,78,1],[11,85,1],[11,91,1],[11,96,1],[0,99,1],[0,100,0],[1,99,0],[1,95,0],[2,90,0],[2,82,0],[2,73,0],[3,63,0],[3,51,0],[4,40,0],[4,29,0],[5,19,0],[5,11,0],[6,5,0],[6,1,0],[7,0,1],[7,2,1],[8,5,1],[8,11,1],[8,17,1],[9,25,1],[9,34,1],[10,43,1],[10,53,1],[10,62,1],[11,71,1],[11,79,1],[0,87,1],[0,93,1],[1,97,1],[1,99,1],[1,100,0],[2,97,0],[2,92,0],[3,85,0],[3,76,0],[4,66,0],[4,55,0],[5,43,0],[5,32,0],[6,22,0],[6,14,0],[7,7,0],[7,3,0],[7,0,0],[8,0,1],[8,2,1],[9,6,1],[9,12,1],[10,19,1],[10,27,1],[10,35,1],[11,44,1],[11,54,1],[0,63,1],[0,73,1],[0,81,1],[1,89,1],[1,95,1],[2,98,1],[2,100,1],[3,99,0],[3,95,0],[4,88,0],[4,80,0],[5,70,0],[5,59,0],[6,47,0],[6,37,0],[6,26,0],[7,18,0],[7,10,0],[8,5,0],[8,2,0],[9,0,0],[9,1,1],[9,3,1],[10,7,1],[10,13,1],[11,20,1],[11,28,1],[11,36,1],[0,46,1],[0,56,1],[1,65,1],[1,75,1],[2,84,1],[2,91,1],[2,97,1],[3,100,1],[3,100,0],[4,97,0],[4,91,0],[5,83,0],[5,74,0],[6,63,0],[6,52,0],[7,41,0],[7,31,0],[8,22,0],[8,14,0],[8,8,0],[9,4,0],[9,1,0],[10,0,0],[10,1,1],[10,4,1],[11,8,1],[11,14,1],[0,21,1],[0,29,1],[0,38,1],[1,48,1],[1,59,1],[2,69,1],[2,79,1],[3,87,1],[3,94,1],[4,98,1],[4,100,1],[5,98,0],[5,94,0],[6,87,0],[6,78,0],[7,68,0],[7,58,0],[8,47,0],[8,37,0],[8,28,0],[9,19,0],[9,12,0],[10,7,0],[10,3,0],[10,1,0],[11,0,1],[11,1,1],[0,4,1],[0,9,1],[0,15,1],[1,23,1],[1,32,1],[2,42,1],[2,53,1],[3,64,1],[3,74,1],[3,84,1],[4,91,1],[4,97,1],[5,100,1],[5,99,0],[6,96,0],[6,90,0],[7,83,0],[7,74,0],[8,64,0],[8,54,0],[9,44,0],[9,34,0],[10,25,0],[10,18,0],[10,11,0],[11,6,0],[11,2,0],[11,0,0],[0,0,1],[0,2,1],[1,6,1],[1,11,1],[2,19,1],[2,27,1],[2,37,1],[3,48,1],[3,59,1],[4,70,1],[4,80,1],[5,89,1],[5,95,1],[6,99,1],[6,100,0],[7,98,0],[7,93,0],[8,87,0],[8,79,0],[9,70,0],[9,60,0],[9,51,0],[10,41,0],[10,32,0],[11,24,0],[11,16,0],[11,10,0],[0,5,0],[0,2,0],[1,0,0],[1,1,1],[1,4,1],[2,8,1],[2,15,1],[3,24,1],[3,34,1],[4,45,1],[4,56,1],[5,67,1],[5,78,1],[6,87,1],[6,93,1],[7,98,1],[7,100,1],[7,99,0],[8,96,0],[8,91,0],[9,84,0],[9,76,0],[10,67,0],[10,58,0],[10,48,0],[11,39,0],[11,30,0],[0,22,0],[0,14,0],[0,8,0],[1,3,0],[1,1,0],[2,0,1],[2,2,1],[3,6,1],[3,13,1],[4,21,1],[4,31,1],[5,42,1],[5,54,1],[5,65,1],[6,75,1],[6,84,1],[7,92,1],[7,97,1],[8,99,1],[8,100,0],[9,98,0],[9,94,0],[10,88,0],[10,82,0],[10,74,0],[11,65,0],[11,55,0],[11,46,0],[0,36,0],[0,27,0],[1,19,0],[1,12,0],[2,6,0],[2,2,0],[2,0,0],[3,1,1],[3,5,1],[4,11,1],[4,19,1],[5,29,1],[5,40,1],[6,51,1],[6,63,1],[7,73,1],[7,82,1],[8,90,1],[8,95,1],[9,99,1],[9,100,1],[9,99,0],[10,97,0],[10,92,0],[11,86,0],[11,79,0],[11,71,0],[0,62,0],[0,53,0],[1,43,0],[1,33,0],[1,24,0],[2,15,0],[2,8,0],[3,3,0],[3,0,0],[4,0,1],[4,3,1],[5,9,1],[5,17,1],[6,27,1],[6,38,1],[7,49,1],[7,60,1],[8,70,1],[8,79,1],[8,87,1],[9,93,1],[9,97,1],[10,100,1],[10,100,0],[10,98,0],[11,95,0],[11,90,0],[0,84,0],[0,77,0],[0,68,0],[1,59,0],[1,49,0],[2,39,0],[2,29,0],[3,19,0],[3,11,0],[4,5,0],[4,1,0],[5,0,1],[5,2,1],[6,7,1],[6,15,1],[7,24,1],[7,34,1],[7,45,1],[8,56,1],[8,66,1],[9,75,1],[9,83,1],[10,90,1],[10,95,1],[10,98,1],[11,100,1],[11,100,0],[0,97,0],[0,94,0],[0,88,0],[1,82,0],[1,73,0],[2,64,0],[2,54,0],[2,44,0],[3,33,0],[3,23,0],[4,14,0],[4,7,0],[5,2,0],[5,0,0],[6,1,1],[6,5,1],[7,12,1],[7,21,1],[8,30,1],[8,41,1],[9,51,1],[9,61,1],[9,70,1],[10,79,1],[10,86,1],[11,92,1],[11,96,1],[11,99,1],[0,100,1],[0,99,0],[1,96,0],[1,92,0],[1,86,0],[2,78,0],[2,69,0],[3,59,0],[3,49,0],[4,38,0],[4,27,0],[5,17,0],[5,9,0],[6,4,0],[6,1,0],[7,1,1],[7,3,1],[8,9,1],[8,16,1],[8,25,1],[9,34,1],[9,44,1],[10,54,1],[10,64,1],[11,73,1],[11,80,1],[11,87,1],[0,93,1],[0,97,1],[1,99,1],[1,100,0],[1,98,0],[2,95,0],[2,90,0],[3,83,0],[3,74,0],[4,64,0],[4,53,0],[4,42,0],[5,31,0],[5,21,0],[6,12,0],[6,5,0],[7,1,0],[7,0,1],[8,2,1],[8,6,1],[9,12,1],[9,19,1],[10,28,1],[10,37,1],[10,46,1],[11,56,1],[11,65,1],[0,74,1],[0,82,1],[0,88,1],[1,94,1],[1,98,1],[2,100,1],[2,100,0],[3,97,0],[3,93,0],[3,86,0],[4,78,0],[4,68,0],[5,57,0],[5,46,0],[6,34,0],[6,24,0],[7,15,0],[7,8,0],[8,3,0],[8,0,0],[9,0,1],[9,3,1],[9,7,1],[10,13,1],[10,21,1],[11,29,1],[11,38,1],[11,47,1],[0,57,1],[0,66,1],[1,75,1],[1,83,1],[2,90,1],[2,95,1],[2,99,1],[3,100,1]],"lun":[["2026-01-03T07:02","llena",3,""],["2026-01-10T12:48","menguante",6,""],["2026-01-18T16:51","nueva",9,""],["2026-01-26T01:47","creciente",1,""],["2026-02-01T19:09","llena",4,""],["2026-02-09T09:43","menguante",7,""],["2026-02-17T09:01","nueva",10,"solar"],["2026-02-24T09:27","creciente",2,""],["2026-03-03T08:37","llena",5,"lunar"],["2026-03-11T06:38","menguante",8,""],["2026-03-18T22:23","nueva",11,""],["2026-03-25T16:17","creciente",3,""],["2026-04-01T23:11","llena",6,""],["2026-04-10T01:51","menguante",9,""],["2026-04-17T08:51","nueva",0,""],["2026-04-23T23:31","creciente",4,""],["2026-05-01T14:23","llena",7,""],["2026-05-09T18:10","menguante",10,""],["2026-05-16T17:00","nueva",1,""],["2026-05-23T08:10","creciente",5,""],["2026-05-31T05:45","llena",8,""],["2026-06-08T07:00","menguante",11,""],["2026-06-14T23:54","nueva",2,""],["2026-06-21T18:55","creciente",6,""],["2026-06-29T20:56","llena",9,""],["2026-07-07T16:28","menguante",0,""],["2026-07-14T06:43","nueva",3,""],["2026-07-21T08:05","creciente",6,""],["2026-07-29T11:35","llena",10,""],["2026-08-05T23:21","menguante",1,""],["2026-08-12T14:36","nueva",4,"solar"],["2026-08-19T23:46","creciente",7,""],["2026-08-28T01:18","llena",11,"lunar"],["2026-09-04T04:51","menguante",2,""],["2026-09-11T00:26","nueva",5,""],["2026-09-18T17:43","creciente",8,""],["2026-09-26T13:48","llena",0,""],["2026-10-03T10:24","menguante",3,""],["2026-10-10T12:50","nueva",6,""],["2026-10-18T13:12","creciente",9,""],["2026-10-26T01:11","llena",1,""],["2026-11-01T17:28","menguante",4,""],["2026-11-09T04:02","nueva",7,""],["2026-11-17T08:47","creciente",10,""],["2026-11-24T11:53","llena",2,""],["2026-12-01T03:08","menguante",5,""],["2026-12-08T21:51","nueva",8,""],["2026-12-17T02:42","creciente",11,""],["2026-12-23T22:28","llena",3,""],["2026-12-30T15:59","menguante",6,""],["2027-01-07T17:24","nueva",9,""],["2027-01-15T17:34","creciente",0,""],["2027-01-22T09:17","llena",4,""],["2027-01-29T07:55","menguante",7,""],["2027-02-06T12:56","nueva",10,"solar"],["2027-02-14T04:58","creciente",1,""],["2027-02-20T20:23","llena",5,"lunar"],["2027-02-28T02:16","menguante",8,""],["2027-03-08T06:29","nueva",11,""],["2027-03-15T13:25","creciente",2,""],["2027-03-22T07:43","llena",6,""],["2027-03-29T21:53","menguante",9,""],["2027-04-06T20:51","nueva",0,""],["2027-04-13T19:56","creciente",3,""],["2027-04-20T19:27","llena",7,""],["2027-04-28T17:17","menguante",10,""],["2027-05-06T07:58","nueva",1,""],["2027-05-13T01:43","creciente",4,""],["2027-05-20T07:58","llena",7,""],["2027-05-28T10:57","menguante",11,""],["2027-06-04T16:40","nueva",2,""],["2027-06-11T07:56","creciente",5,""],["2027-06-18T21:44","llena",8,""],["2027-06-27T01:54","menguante",0,""],["2027-07-04T00:01","nueva",3,""],["2027-07-10T15:38","creciente",6,""],["2027-07-18T12:44","llena",9,"lunar"],["2027-07-26T13:54","menguante",1,""],["2027-08-02T07:05","nueva",4,"solar"],["2027-08-09T01:54","creciente",7,""],["2027-08-17T04:28","llena",10,"lunar"],["2027-08-24T23:27","menguante",2,""],["2027-08-31T14:41","nueva",5,""],["2027-09-07T15:31","creciente",8,""],["2027-09-15T20:03","llena",11,""],["2027-09-23T07:20","menguante",3,""],["2027-09-29T23:35","nueva",6,""],["2027-10-07T08:47","creciente",9,""],["2027-10-15T10:46","llena",0,""],["2027-10-22T14:29","menguante",3,""],["2027-10-29T10:36","nueva",7,""],["2027-11-06T04:59","creciente",10,""],["2027-11-14T00:25","llena",1,""],["2027-11-20T21:48","menguante",4,""],["2027-11-28T00:24","nueva",8,""],["2027-12-06T02:22","creciente",11,""],["2027-12-13T13:08","llena",2,""],["2027-12-20T06:10","menguante",5,""],["2027-12-27T17:12","nueva",9,""],["2028-01-04T22:40","creciente",0,""],["2028-01-12T01:02","llena",3,"lunar"],["2028-01-18T16:25","menguante",6,""],["2028-01-26T12:12","nueva",10,"solar"],["2028-02-03T16:10","creciente",1,""],["2028-02-10T12:03","llena",4,""],["2028-02-17T05:07","menguante",7,""],["2028-02-25T07:37","nueva",11,""],["2028-03-04T06:02","creciente",2,""],["2028-03-10T22:05","llena",5,""],["2028-03-17T20:22","menguante",8,""],["2028-03-26T01:31","nueva",0,""],["2028-04-02T16:15","creciente",3,""],["2028-04-09T07:26","llena",6,""],["2028-04-16T13:36","menguante",9,""],["2028-04-24T16:46","nueva",1,""],["2028-05-01T23:25","creciente",4,""],["2028-05-08T16:48","llena",7,""],["2028-05-16T07:43","menguante",10,""],["2028-05-24T05:16","nueva",2,""],["2028-05-31T04:36","creciente",5,""],["2028-06-07T03:08","llena",8,""],["2028-06-15T01:27","menguante",11,""],["2028-06-22T15:27","nueva",3,""],["2028-06-29T09:10","creciente",6,""],["2028-07-06T15:10","llena",9,"lunar"],["2028-07-14T17:56","menguante",0,""],["2028-07-22T00:01","nueva",3,"solar"],["2028-07-28T14:40","creciente",7,""],["2028-08-05T05:09","llena",10,""],["2028-08-13T08:45","menguante",1,""],["2028-08-20T07:43","nueva",4,""],["2028-08-26T22:35","creciente",8,""],["2028-09-03T20:47","llena",11,""],["2028-09-11T21:45","menguante",2,""],["2028-09-18T15:23","nueva",5,""],["2028-09-25T10:09","creciente",9,""],["2028-10-03T13:24","llena",0,""],["2028-10-11T08:56","menguante",3,""],["2028-10-17T23:56","nueva",6,""],["2028-10-25T01:53","creciente",10,""],["2028-11-02T06:17","llena",1,""],["2028-11-09T18:25","menguante",4,""],["2028-11-16T10:17","nueva",7,""],["2028-11-23T21:14","creciente",11,""],["2028-12-01T22:40","llena",2,""],["2028-12-09T02:38","menguante",5,""],["2028-12-15T23:06","nueva",8,""],["2028-12-23T18:44","creciente",0,""],["2028-12-31T13:48","llena",3,"lunar"]],"ret":[["Mercurio","2026-02-26T09:00","2026-03-20T21:00",11,11],["Mercurio","2026-06-29T15:00","2026-07-23T21:00",3,3],["Mercurio","2026-10-24T09:00","2026-11-13T15:00",7,7],["Mercurio","2027-02-09T15:00","2027-03-03T15:00",11,10],["Mercurio","2027-06-10T15:00","2027-07-04T21:00",3,2],["Mercurio","2027-10-07T15:00","2027-10-28T15:00",7,6],["Mercurio","2028-01-24T09:00","2028-02-14T15:00",10,10],["Mercurio","2028-05-21T09:00","2028-06-14T03:00",2,2],["Mercurio","2028-09-19T15:00","2028-10-11T09:00",6,6],["Venus","2026-10-03T09:00","2026-11-14T03:00",7,6],["Venus","2028-05-10T21:00","2028-06-22T21:00",2,2],["Marte","2027-01-10T15:00","2027-04-01T15:00",5,4],["Júpiter","2026-12-12T21:00","2027-04-13T03:00",4,4],["Júpiter","2028-01-12T09:00","2028-05-13T21:00",5,5],["Saturno","2026-07-26T15:00","2026-12-10T21:00",0,0],["Saturno","2027-08-09T15:00","2027-12-24T03:00",0,0],["Saturno","2028-08-22T21:00",null,1,null]],"ing":[["2026-01-19T22:59",10],["2026-02-18T12:59",11],["2026-03-20T11:59",0],["2026-04-19T22:59",1],["2026-05-20T21:59",2],["2026-06-21T05:59",3],["2026-07-22T16:59",4],["2026-08-22T23:59",5],["2026-09-22T21:59",6],["2026-10-23T06:59",7],["2026-11-22T04:59",8],["2026-12-21T17:59",9],["2027-01-20T04:59",10],["2027-02-18T18:59",11],["2027-03-20T17:59",0],["2027-04-20T04:59",1],["2027-05-21T03:59",2],["2027-06-21T11:59",3],["2027-07-22T22:59",4],["2027-08-23T05:59",5],["2027-09-23T02:59",6],["2027-10-23T12:59",7],["2027-11-22T10:59",8],["2027-12-21T23:59",9],["2028-01-20T10:59",10],["2028-02-19T00:59",11],["2028-03-19T23:59",0],["2028-04-19T10:59",1],["2028-05-20T09:59",2],["2028-06-20T16:59",3],["2028-07-22T03:59",4],["2028-08-22T10:59",5],["2028-09-22T08:59",6],["2028-10-22T18:59",7],["2028-11-21T15:59",8],["2028-12-21T05:59",9]]};</script>
+<script>/* ============ MI NORTE · datos ============ */
+const PERSONA = {
+  nombre: 'Emmanuel',
+  completo: 'MARCOS EMMANUEL BELLANDO',
+  nacimiento: '1991-11-26', hora: '06:00', lugar: 'San Miguel, Buenos Aires',
+};
+// ⚙ Cuando tengan la fecha de nacimiento de MEB, completala acá con formato 'AAAA-MM-DD'
+const MEB_NACIMIENTO = '2025-11-28';
+const MEB = { nombre: 'MEB MACHINERY SOLUTIONS', siglas: 'MEB', hora: '06:00', lugar: 'Presidente Derqui, Pilar' };
+const IG = { usuario: '@meb_machinerysolutions', nacimiento: '2026-08-08', hora: '08:00', lugar: 'Santa Rosa, La Pampa' };
+
+/* Cartas natales calculadas con efemérides (ver nota al pie de la app).
+   Formato: [signo 0-11, grado dentro del signo] */
+const CARTAS = {
+  emma: { Sol:[8,3.6], Luna:[4,3.2], Mercurio:[8,23.8], Venus:[6,18.6], Marte:[7,28.0], 'Júpiter':[5,12.8], Saturno:[10,2.4], Ascendente:[7,21.5], 'Medio Cielo':[4,3.7] },
+  ig:   { Sol:[4,15.9], Luna:[2,17.3], Mercurio:[3,28.1], Venus:[6,1.7], Marte:[2,28.1], 'Júpiter':[4,8.6], Saturno:[0,14.6], Ascendente:[4,11.9], 'Medio Cielo':[1,29.9] },
+  meb:  { Sol:[8,6.4], Luna:[11,7.4], Mercurio:[7,20.9], Venus:[7,26.9], Marte:[8,17.4], 'Júpiter':[3,24.7], Saturno:[11,25.2], Ascendente:[8,11.5], 'Medio Cielo':[4,21.3] } // 28/11/2025 06:00, Presidente Derqui
+};
+
+const SIGNOS_N = ['Aries','Tauro','Géminis','Cáncer','Leo','Virgo','Libra','Escorpio','Sagitario','Capricornio','Acuario','Piscis'];
+const GLIFOS = ['♈︎','♉︎','♊︎','♋︎','♌︎','♍︎','♎︎','♏︎','♐︎','♑︎','♒︎','♓︎'];
+const ELEM = ['fuego','tierra','aire','agua'];
+const SIGNOS = [
+ { clave:'iniciativa, coraje, arranque', area:'tus proyectos personales y tu energía', clima:'Ánimo impulsivo y con ganas de hacer: todo se quiere ya.', fav:['empezar trabajos','entrenar','tomar decisiones rápidas'], ojo:'la impaciencia y las discusiones',
+   sol:'Tu esencia es pionera: arrancás lo que otros no se animan.', luna:'Sentís fuerte y rápido; necesitás moverte para estar bien.', asc:'Te ven directo, enérgico y resolutivo.' },
+ { clave:'constancia, materia, disfrute', area:'la plata, los recursos y lo material', clima:'Ánimo tranquilo y práctico: se busca seguridad y comodidad.', fav:['comprar herramientas o materiales','cocinar','trabajos que piden paciencia'], ojo:'la terquedad y gastar de más por gusto',
+   sol:'Tu esencia construye despacio y para que dure.', luna:'Te calma lo concreto: la rutina, la comida, tus cosas.', asc:'Te ven sereno, confiable y de pocas vueltas.' },
+ { clave:'ingenio, palabra, movimiento', area:'la comunicación, los papeles y los trámites cortos', clima:'Ánimo curioso y charlatán: mucha idea, poca quietud.', fav:['llamadas y mensajes','aprender algo','trámites rápidos'], ojo:'dispersarte en mil cosas',
+   sol:'Tu esencia aprende, conecta y comunica.', luna:'Te ordena hablar y entender lo que sentís.', asc:'Te ven ágil, simpático y despierto.' },
+ { clave:'cuidado, hogar, raíces', area:'la casa y la familia', clima:'Ánimo sensible y hogareño: se busca refugio.', fav:['estar en casa','cocinar para los tuyos','ordenar el hogar'], ojo:'tomarte todo a pecho',
+   sol:'Tu esencia protege y cuida a los suyos.', luna:'Necesitás un nido y gente de confianza cerca.', asc:'Te ven cálido, protector y reservado al principio.' },
+ { clave:'brillo, liderazgo, corazón', area:'tu forma de mostrarte y lo que creás', clima:'Ánimo expansivo y generoso: dan ganas de lucirse.', fav:['mostrar tu trabajo','publicar','liderar un equipo'], ojo:'el orgullo herido',
+   sol:'Tu esencia brilla y da calor a su alrededor.', luna:'Necesitás reconocimiento y que valoren lo que hacés; das con el corazón abierto.', asc:'Te ven seguro, noble y con presencia.' },
+ { clave:'precisión, método, servicio', area:'el trabajo diario, la salud y los detalles', clima:'Ánimo ordenado y exigente: el detalle importa.', fav:['diagnósticos y reparaciones finas','ordenar el taller','cortar el pelo para que dure'], ojo:'la autocrítica excesiva',
+   sol:'Tu esencia perfecciona y resuelve.', luna:'Te calma tener todo bajo control y funcionando.', asc:'Te ven prolijo, observador y servicial.' },
+ { clave:'equilibrio, acuerdos, vínculo', area:'los socios, clientes y la pareja', clima:'Ánimo amable y diplomático: se busca armonía.', fav:['negociar','firmar acuerdos','encuentros con clientes'], ojo:'la indecisión',
+   sol:'Tu esencia une, equilibra y busca lo justo.', luna:'Necesitás paz y compañía para estar bien.', asc:'Te ven educado, agradable y conciliador.' },
+ { clave:'intensidad, profundidad, transformación', area:'lo compartido, las deudas y lo oculto', clima:'Ánimo intenso y reservado: se siente todo a fondo.', fav:['investigar fallas','cobrar deudas','cortar lo que no va más'], ojo:'los celos y la desconfianza',
+   sol:'Tu esencia va al fondo de las cosas y se transforma.', luna:'Sentís con intensidad y guardás mucho para vos.', asc:'Te ven magnético, intenso y difícil de leer: das la impresión de que llegás al fondo de cualquier problema.' },
+ { clave:'expansión, viajes, sentido', area:'los viajes, los estudios y las grandes metas', clima:'Ánimo optimista y aventurero: ganas de ir más lejos.', fav:['viajar','capacitarte','planear a lo grande'], ojo:'prometer más de lo que se puede',
+   sol:'Tu esencia es la del explorador: optimista, libre, con hambre de horizonte y de aprender. Necesitás un propósito grande que te mueva.', luna:'Necesitás libertad y aire para sentirte bien.', asc:'Te ven alegre, franco y aventurero.' },
+ { clave:'estructura, metas, responsabilidad', area:'la carrera, la empresa y la autoridad', clima:'Ánimo serio y enfocado: se trabaja para el largo plazo.', fav:['planificar la empresa','trámites formales','trabajos pesados'], ojo:'la rigidez y el exceso de trabajo',
+   sol:'Tu esencia construye a largo plazo con disciplina.', luna:'Te da seguridad tener un plan y cumplirlo.', asc:'Te ven responsable, maduro y profesional.' },
+ { clave:'innovación, libertad, comunidad', area:'los amigos, las redes y lo nuevo', clima:'Ánimo inquieto e innovador: dan ganas de cambiar algo.', fav:['probar tecnología nueva','redes y grupos','ideas originales'], ojo:'la rebeldía sin causa',
+   sol:'Tu esencia inventa y piensa distinto.', luna:'Necesitás espacio propio y sentirte libre.', asc:'Te ven original, amistoso e independiente.' },
+ { clave:'intuición, sensibilidad, fe', area:'el descanso, la intuición y lo espiritual', clima:'Ánimo soñador y sensible: se necesita descanso.', fav:['descansar','meditar','rituales'], ojo:'la confusión y el cansancio',
+   sol:'Tu esencia es sensible, intuitiva y compasiva.', luna:'Absorbés el clima de los demás; necesitás silencio.', asc:'Te ven dulce, receptivo y algo misterioso.' },
+];
+const PLANETAS = {
+  Sol:'tu esencia y tu propósito', Luna:'tus emociones y lo que te da seguridad', Mercurio:'tu forma de pensar y comunicar',
+  Venus:'cómo te vinculás y qué valorás', Marte:'tu fuerza, tu acción y tu forma de pelear', 'Júpiter':'dónde crecés y tenés suerte',
+  Saturno:'dónde madurás con esfuerzo', Ascendente:'cómo te ven y cómo arrancás las cosas', 'Medio Cielo':'tu vocación y tu imagen pública'
+};
+
+/* ========= ARCANOS MAYORES ========= */
+const ROMANOS = ['0','I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV','XV','XVI','XVII','XVIII','XIX','XX','XXI'];
+const SIMB = ['✧','☿','☽','♀','♈︎','♉︎','♊︎','♋︎','♌︎','♍︎','♃','♎︎','▽','♏︎','♐︎','♑︎','♂','♒︎','♓︎','☉','△','♄'];
+const ARCANOS = [
+ { n:'El Loco', clave:'Confiar y dar el salto', esencia:'El comienzo absoluto, la libertad de quien todavía no sabe y por eso se anima.', luz:'Espontaneidad, frescura, fe en el camino.', sombra:'Imprudencia, saltar sin mirar, dispersión.',
+   aplicar:['Animate a probar una forma nueva de hacer algo que siempre hacés igual.','Antes de un salto grande, revisá lo básico: un plan mínimo no le quita magia.','Dejá espacio para improvisar: no todo tiene que estar resuelto para arrancar.'],
+   pregunta:'¿Qué harías si no tuvieras miedo de equivocarte?', afirm:'Confío en el camino aunque todavía no vea el final.', color:'amarillo claro', cristal:'cuarzo cristal' },
+ { n:'El Mago', clave:'Tenés todas las herramientas', esencia:'La voluntad que transforma ideas en hechos. Las herramientas están sobre la mesa: solo hay que usarlas.', luz:'Habilidad, ingenio, iniciativa, capacidad de hacer.', sombra:'Manipulación, dispersar el talento, mucho anuncio y poca obra.',
+   aplicar:['Hacé un inventario de lo que ya sabés hacer: es más de lo que creés.','Elegí una sola idea y llevala a la práctica hoy.','Comunicá con claridad lo que ofrecés: el talento que no se muestra no se ve.'],
+   pregunta:'¿Qué herramienta tenés a mano y todavía no estás usando?', afirm:'Tengo lo que necesito para crear lo que quiero.', color:'amarillo', cristal:'citrino' },
+ { n:'La Sacerdotisa', clave:'Escuchá tu intuición', esencia:'El saber silencioso. Lo que se conoce por dentro antes de poder explicarlo.', luz:'Intuición, discreción, sabiduría interior.', sombra:'Guardarse todo, pasividad, desconfiar de uno mismo.',
+   aplicar:['Antes de decidir, tomate un rato en silencio.','Anotá esa corazonada sobre un cliente o un trabajo y fijate después si acertaste.','No todo hay que contarlo: algunos proyectos crecen mejor en privado.'],
+   pregunta:'¿Qué ya sabés por dentro y todavía no te animás a admitir?', afirm:'Mi intuición es una guía confiable.', color:'plateado', cristal:'piedra luna' },
+ { n:'La Emperatriz', clave:'Crear y hacer crecer', esencia:'La fuerza que hace florecer: creatividad, abundancia y cuidado de lo que se cultiva. Es la energía de la obra que da frutos.', luz:'Creatividad, fertilidad de ideas, abundancia, generosidad.', sombra:'Exceso, descuidarse por cuidar a otros, estancarse en la comodidad.',
+   aplicar:['Cuidá lo que ya construiste: un cliente bien atendido trae a otros.','Date tiempo para crear algo con las manos sin que tenga que ser útil.','Disfrutá los frutos: celebrar lo logrado también es parte del trabajo.'],
+   pregunta:'¿Qué estás sembrando hoy que querés cosechar dentro de un año?', afirm:'Todo lo que cuido con amor crece y da frutos.', color:'verde', cristal:'cuarzo verde (aventurina)' },
+ { n:'El Emperador', clave:'Orden, estructura y mando', esencia:'La autoridad que construye bases firmes. Poner reglas, ordenar y sostener.', luz:'Liderazgo, responsabilidad, estabilidad, protección.', sombra:'Rigidez, control excesivo, terquedad.',
+   aplicar:['Poné por escrito un procedimiento que hoy está solo en tu cabeza.','Definí límites claros con clientes: plazos, señas y condiciones.','Liderar también es delegar: soltá una tarea que otro puede hacer.'],
+   pregunta:'¿Qué parte de tu vida necesita más estructura?', afirm:'Construyo bases firmes para todo lo que hago.', color:'rojo', cristal:'jaspe rojo' },
+ { n:'El Hierofante', clave:'Aprender y enseñar', esencia:'El maestro y la tradición. El conocimiento que se transmite de persona a persona.', luz:'Enseñanza, valores, oficio, confianza.', sombra:'Dogmatismo, hacer las cosas "porque siempre fue así".',
+   aplicar:['Enseñá algo que sabés: compartir el oficio te vuelve referente.','Buscá un mentor o una capacitación que te lleve al siguiente nivel.','Revisá qué costumbre heredaste y si todavía te sirve.'],
+   pregunta:'¿Qué sabés que vale la pena transmitir?', afirm:'Mi conocimiento es valioso y lo comparto con generosidad.', color:'azul profundo', cristal:'lapislázuli' },
+ { n:'Los Enamorados', clave:'Elegir con el corazón', esencia:'La elección. Unir lo que pensás con lo que sentís y decidir en coherencia.', luz:'Amor, alianzas, decisiones alineadas, valores.', sombra:'Indecisión, dudar entre dos caminos, elegir para conformar.',
+   aplicar:['Ante una decisión, preguntate cuál opción se siente coherente con quién sos.','Cuidá tus alianzas: socios, clientes y pareja son elecciones diarias.','Elegir algo es soltar otra cosa: está bien.'],
+   pregunta:'¿Qué elección venís postergando?', afirm:'Elijo con el corazón y la cabeza en la misma dirección.', color:'rosa', cristal:'cuarzo rosa' },
+ { n:'El Carro', clave:'Avanzar con dirección', esencia:'La voluntad en movimiento. Dominar fuerzas opuestas y llevarlas hacia una meta.', luz:'Determinación, logro, control, viajes.', sombra:'Avanzar a cualquier costo, querer controlarlo todo.',
+   aplicar:['Fijá una meta concreta para esta semana y mantené el rumbo.','En la ruta, revisá el vehículo antes de exigirlo: cuidá lo que te lleva.','Cuando dos cosas tiran para lados distintos, decidí quién maneja.'],
+   pregunta:'¿Hacia dónde estás manejando tu vida hoy?', afirm:'Avanzo con firmeza hacia mis metas.', color:'blanco', cristal:'ónix' },
+ { n:'La Fuerza', clave:'Fuerza con suavidad', esencia:'El coraje sereno. Domar lo salvaje con paciencia y no con violencia.', luz:'Valentía, paciencia, confianza, energía vital.', sombra:'Reprimirse, perder la paciencia, imponerse.',
+   aplicar:['Ante un cliente difícil, la calma es tu mejor herramienta.','Usá tu fuerza física con cuidado: el cuerpo también es una máquina que hay que mantener.','Confiá en tu capacidad sin necesidad de demostrarla.'],
+   pregunta:'¿Dónde podrías usar más paciencia y menos fuerza?', afirm:'Mi fuerza es serena y constante.', color:'dorado', cristal:'ojo de tigre' },
+ { n:'El Ermitaño', clave:'Buscar la luz propia', esencia:'La pausa para mirar hacia adentro. La sabiduría que llega con el silencio y la experiencia.', luz:'Introspección, experiencia, prudencia, maestría.', sombra:'Aislarse, desconfiar de todos, quedarse solo.',
+   aplicar:['Reservate un momento a solas esta semana para pensar con calma.','Estudiá a fondo un tema técnico: la profundidad te diferencia.','Pedí ayuda cuando haga falta: retirarse no es aislarse.'],
+   pregunta:'¿Qué necesitás escuchar de vos mismo?', afirm:'En el silencio encuentro mis respuestas.', color:'gris azulado', cristal:'amatista' },
+ { n:'La Rueda de la Fortuna', clave:'Todo gira', esencia:'Los ciclos y los cambios de suerte. Lo que sube baja y lo que baja vuelve a subir.', luz:'Oportunidades, cambios favorables, buena racha.', sombra:'Sentirse a merced de la suerte, resistirse al cambio.',
+   aplicar:['Aprovechá la racha buena para ahorrar y sembrar.','En la mala racha, recordá que también pasa: sostené la rutina.','Estate atento a oportunidades inesperadas: llegan cuando la rueda gira.'],
+   pregunta:'¿Qué ciclo de tu vida se está cerrando y cuál se está abriendo?', afirm:'Fluyo con los ciclos y aprovecho cada vuelta.', color:'violeta', cristal:'pirita' },
+ { n:'La Justicia', clave:'Equilibrio y verdad', esencia:'Causa y efecto. Lo justo, lo claro, la responsabilidad sobre lo que se hace.', luz:'Equidad, claridad, contratos, decisiones correctas.', sombra:'Juzgar con dureza, frialdad, rigidez.',
+   aplicar:['Poné todo por escrito: presupuestos, acuerdos y condiciones.','Cobrá lo justo por tu trabajo: ni de más ni de menos.','Revisá si estás siendo justo con vos también.'],
+   pregunta:'¿Dónde necesitás poner las cosas en equilibrio?', afirm:'Actúo con claridad y recibo lo justo.', color:'verde oscuro', cristal:'jade' },
+ { n:'El Colgado', clave:'Cambiar la mirada', esencia:'La pausa obligada que enseña a ver desde otro ángulo.', luz:'Paciencia, nuevas perspectivas, entrega.', sombra:'Estancamiento, sacrificarse de más, sentirse atrapado.',
+   aplicar:['Si un problema no sale, miralo al revés: cambiá el orden del diagnóstico.','Aceptá la espera que no podés cambiar y usala para preparar.','Preguntate si estás dando más de lo que corresponde.'],
+   pregunta:'¿Qué cambiaría si miraras esta situación desde otro lugar?', afirm:'La pausa también es avance.', color:'celeste', cristal:'aguamarina' },
+ { n:'La Muerte', clave:'Terminar para renacer', esencia:'La transformación profunda. Lo que se cierra deja lugar a lo nuevo.', luz:'Renovación, cierre de ciclos, limpieza.', sombra:'Aferrarse a lo que terminó, miedo al cambio.',
+   aplicar:['Soltá una herramienta, un hábito o un cliente que ya no suma.','Hacé limpieza: taller, celular, papeles.','Aceptá que cerrar una etapa no es fracasar.'],
+   pregunta:'¿Qué ya terminó y todavía no soltaste?', afirm:'Suelto lo viejo y le abro paso a lo nuevo.', color:'negro', cristal:'obsidiana' },
+ { n:'La Templanza', clave:'La medida justa', esencia:'La mezcla equilibrada. Integrar opuestos con paciencia y armonía.', luz:'Equilibrio, salud, moderación, sanación.', sombra:'Exceso, impaciencia, desequilibrio.',
+   aplicar:['Equilibrá trabajo y descanso: una máquina sin pausa se recalienta.','Combiná lo técnico con lo humano en el trato con clientes.','Probá de a poco antes de cambiar todo de golpe.'],
+   pregunta:'¿Qué parte de tu vida está en exceso y cuál en falta?', afirm:'Encuentro la medida justa en todo lo que hago.', color:'azul celeste', cristal:'sodalita' },
+ { n:'El Diablo', clave:'Mirar lo que te ata', esencia:'Los apegos, los deseos y las ataduras. También la potencia material y la ambición.', luz:'Ambición, magnetismo, fuerza material.', sombra:'Dependencias, excesos, miedo.',
+   aplicar:['Identificá un hábito que te quita energía y ponele un límite.','Usá la ambición a tu favor: proponete una meta económica concreta.','Revisá contratos y deudas: que nada te ate sin que lo sepas.'],
+   pregunta:'¿Qué te ata y podrías soltar si quisieras?', afirm:'Soy libre de elegir lo que me hace bien.', color:'bordó', cristal:'granate' },
+ { n:'La Torre', clave:'Lo que se cae, libera', esencia:'El derrumbe repentino de lo que no estaba firme. Una sacudida que trae verdad.', luz:'Liberación, revelación, oportunidad de reconstruir mejor.', sombra:'Caos, resistencia, miedo al cambio.',
+   aplicar:['Si algo se rompe, aprovechá para reconstruirlo mejor.','Revisá estructuras: máquinas, finanzas, acuerdos. Mejor prevenir que reparar.','Decí la verdad aunque sacuda: lo que se sostiene con mentiras se cae igual.'],
+   pregunta:'¿Qué estructura de tu vida está pidiendo renovarse?', afirm:'De cada sacudida salgo más fuerte y más claro.', color:'rojo intenso', cristal:'hematita' },
+ { n:'La Estrella', clave:'Esperanza y guía', esencia:'La calma después de la tormenta. La fe en el futuro y la inspiración.', luz:'Esperanza, inspiración, generosidad, propósito.', sombra:'Idealizar, esperar sin actuar.',
+   aplicar:['Escribí una visión de cómo querés que esté MEB en un año.','Compartí lo que sabés sin esperar nada a cambio.','Cuidá tu energía: descansá para volver a brillar.'],
+   pregunta:'¿Qué te inspira a seguir?', afirm:'Confío en mi futuro y sigo mi estrella.', color:'turquesa', cristal:'turquesa' },
+ { n:'La Luna', clave:'Atravesar la niebla', esencia:'Lo incierto, los sueños y los miedos. El camino que se recorre con poca luz.', luz:'Imaginación, intuición, sensibilidad.', sombra:'Confusión, engaños, miedos.',
+   aplicar:['No tomes decisiones grandes con información incompleta.','Revisá dos veces lo que no está claro: presupuestos, mensajes, acuerdos.','Prestale atención a tus sueños: a veces traen respuestas.'],
+   pregunta:'¿Qué miedo está ocupando el lugar de tu intuición?', afirm:'Atravieso la incertidumbre con calma y confianza.', color:'plateado', cristal:'labradorita' },
+ { n:'El Sol', clave:'Claridad y éxito', esencia:'La luz plena. Alegría, vitalidad y logros a la vista.', luz:'Éxito, claridad, alegría, reconocimiento.', sombra:'Exceso de confianza, arrogancia.',
+   aplicar:['Mostrá tus trabajos: es momento de que te vean.','Celebrá un logro con los tuyos.','Aprovechá la claridad para tomar decisiones importantes.'],
+   pregunta:'¿Qué parte de vos merece salir más a la luz?', afirm:'Brillo con mi propia luz y celebro mis logros.', color:'dorado', cristal:'piedra sol' },
+ { n:'El Juicio', clave:'Despertar y renacer', esencia:'El llamado. Evaluar lo vivido, perdonar y renacer a un nivel más alto.', luz:'Renovación, vocación, segundas oportunidades.', sombra:'Autoexigencia, vivir en el pasado.',
+   aplicar:['Hacé un balance de lo que construiste: mirá cuánto avanzaste.','Escuchá el llamado: ¿qué paso grande venís postergando?','Dale una segunda oportunidad a una idea que dejaste.'],
+   pregunta:'¿Qué te está llamando a dar el próximo paso?', afirm:'Respondo al llamado de mi propósito.', color:'naranja', cristal:'cornalina' },
+ { n:'El Mundo', clave:'Ciclo cumplido', esencia:'La realización. Todo encaja y un ciclo se completa con éxito.', luz:'Logro, plenitud, expansión, viajes.', sombra:'Miedo a terminar, no reconocer lo logrado.',
+   aplicar:['Terminá lo que empezaste antes de abrir algo nuevo.','Pensá en grande: tu trabajo puede llegar más lejos.','Reconocé tu camino: llegar acá costó.'],
+   pregunta:'¿Qué ciclo estás por completar?', afirm:'Celebro lo logrado y me abro a un nuevo nivel.', color:'índigo', cristal:'cuarzo ahumado' },
+];
+const LUGAR_ARCANO = {
+  nac:'Tu arcano de nacimiento es tu energía de fondo: lo que venís a desarrollar en esta vida.',
+  anio:'Es la energía que te acompaña este año, desde el 1° de enero.',
+  pasado:'Es lo que trabajaste el año pasado: su aprendizaje sigue en vos.',
+  prox:'Es lo que se viene: ya podés ir preparándote.',
+  dia:'Es el tono de hoy: tomalo como un consejo.',
+  meb:'Es la energía de fondo de MEB: lo que la empresa vino a construir.',
+};
+
+/* ========= NUMEROLOGÍA ========= */
+const NUM_TXT = {
+ 1:['El líder','Independencia, iniciativa y fuerza para empezar. Vino a abrir camino propio.'],
+ 2:['El socio','Cooperación, diplomacia y sensibilidad. Brilla en equipo y en los vínculos.'],
+ 3:['El creador','Creatividad, comunicación y alegría. Tiene facilidad para expresarse y entusiasmar a otros: vino a crear y a mostrar lo que crea.'],
+ 4:['El constructor','Orden, trabajo y constancia. Construye bases sólidas paso a paso.'],
+ 5:['El aventurero','Libertad, cambio y movimiento. Aprende viajando y probando.'],
+ 6:['El protector','Responsabilidad, familia y servicio. Cuida a los suyos y busca armonía.'],
+ 7:['El investigador','Análisis, profundidad y sabiduría. Necesita entender cómo funcionan las cosas.'],
+ 8:['El emprendedor','Poder material, gestión y ambición. Vino a construir prosperidad y a manejar recursos.'],
+ 9:['El sabio','Generosidad, cierre de ciclos y mirada amplia. Inspira y sirve a muchos.'],
+ 11:['Número maestro de la inspiración','Intuición altísima, visión y capacidad de iluminar a otros. Pide confiar en la propia luz.'],
+ 22:['Número maestro del constructor','Capacidad de concretar grandes obras que perduran. Une visión y práctica.'],
+ 33:['Número maestro del amor','Servicio, guía y amor en acción. Enseña desde el corazón.'],
+};
+const ANIO_PERS = {
+ 1:'Año de comienzos: sembrar, iniciar proyectos y tomar la iniciativa.',
+ 2:'Año de paciencia y alianzas: cultivar vínculos y esperar que madure lo sembrado.',
+ 3:'Año de expresión: mostrarte, comunicar, crear y disfrutar.',
+ 4:'Año de trabajo y bases: orden, esfuerzo y estructura.',
+ 5:'Año de cambios: movimiento, viajes y nuevas experiencias.',
+ 6:'Año de responsabilidad: hogar, familia y compromisos.',
+ 7:'Año de introspección: estudiar, perfeccionarte y mirar hacia adentro.',
+ 8:'Año de cosecha material: logros, dinero, poder y gestión. Momento de crecer en lo económico.',
+ 9:'Año de cierre: terminar ciclos y soltar para empezar limpio.',
+};
+const DIA_PERS = {1:'arrancar algo',2:'colaborar y escuchar',3:'comunicar y mostrarte',4:'trabajar ordenado',5:'moverte y cambiar la rutina',6:'cuidar a los tuyos',7:'pensar y analizar',8:'ocuparte de la plata y los negocios',9:'cerrar pendientes'};
+
+/* ========= NOMBRE ========= */
+const NOMBRE_SIG = [
+ { n:'Marcos', t:'Del latín <i>Marcus</i>, vinculado a <b>Marte</b>, el dios de la fuerza y también de los campos y la siembra. Se traduce como <b>"consagrado a Marte"</b>: el guerrero que protege y trabaja la tierra. Habla de coraje, determinación y capacidad de enfrentar lo difícil.' },
+ { n:'Emmanuel', t:'Del hebreo <i>Immanu-El</i>: <b>"Dios con nosotros"</b>. Es un nombre de presencia y compañía: la persona que está cuando hace falta, que sostiene y da confianza. Es el nombre que elegiste usar, y es el que la gente asocia con tu trabajo.' },
+ { n:'Bellando', t:'Apellido de origen <b>italiano</b>, muy presente en el <b>Piamonte</b>, en el norte de Italia. Se lo relaciona con la raíz <i>bello</i> y con nombres medievales de esa familia de palabras, asociados a lo bueno y lo valioso. (El origen exacto de los apellidos varía según cada familia).' },
+];
+const MEB_SIG = [
+ { n:'MEB', t:'Son tus iniciales: <b>M</b>arcos <b>E</b>mmanuel <b>B</b>ellando. La empresa lleva tu nombre adentro, y eso en numerología no es un detalle (mirá el cruce más abajo).' },
+ { n:'Machinery', t:'Del latín <i>machina</i>, que viene del griego <i>mēkhanḗ</i>: <b>"ingenio, artificio, recurso"</b>. Antes que "máquina", la palabra quería decir <b>la capacidad de inventar una salida</b>.' },
+ { n:'Solutions', t:'Del latín <i>solutio</i>, de <i>solvere</i>: <b>"desatar, aflojar, liberar"</b>. Resolver es, literalmente, desatar un nudo.' },
+];
+
+/* ========= DÍAS DE LA SEMANA ========= */
+const DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+const DIAS_C = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const SEMANA = [
+ { planeta:'Sol', color:'dorado o amarillo', colores:['#E9B949','#F6D365'], cristal:'citrino', favorece:'mostrarte, recargar energía y compartir con los tuyos' },
+ { planeta:'Luna', color:'blanco o plateado', colores:['#E8ECF5','#B8C2D9'], cristal:'piedra luna', favorece:'el hogar, la intuición y empezar la semana sin apuro' },
+ { planeta:'Marte', color:'rojo', colores:['#C7413A','#E0704F'], cristal:'hematita', favorece:'el trabajo pesado, entrenar y encarar lo que venías evitando' },
+ { planeta:'Mercurio', color:'amarillo o naranja', colores:['#F0A23B','#F5CB5C'], cristal:'ágata', favorece:'llamadas, presupuestos, trámites y negociaciones' },
+ { planeta:'Júpiter', color:'azul o violeta', colores:['#3F5BD8','#7A5CE0'], cristal:'lapislázuli', favorece:'crecer: pedir, expandir, capacitarte y pensar en grande' },
+ { planeta:'Venus', color:'verde o rosa', colores:['#4FAF7A','#E79AB8'], cristal:'cuarzo rosa', favorece:'los vínculos, los acuerdos amables y el disfrute' },
+ { planeta:'Saturno', color:'negro o azul oscuro', colores:['#1F2240','#4A4E6B'], cristal:'turmalina negra', favorece:'ordenar, cerrar pendientes y hacer mantenimiento' },
+];
+const SEGURIDAD = 'Nunca dejes velas encendidas sin supervisión. Apoyalas sobre un plato o base que no se queme, lejos de cortinas, papeles y del alcance de chicos y mascotas.';
+const RITUALES = [
+ { t:'Ritual del Sol: confianza para mostrarte', mat:['1 vela dorada o amarilla','hojas de laurel','un citrino (opcional)','un papel y lapicera'],
+   pasos:['Escribí en el papel un logro tuyo de esta semana, por chico que sea.','Encendé la vela y poné el laurel alrededor.','Leé en voz alta lo que escribiste y decí: "Merezco ser visto por lo que hago bien".','Guardá el laurel en la billetera o en la guantera hasta el próximo domingo.'] },
+ { t:'Ritual de la Luna: calma para empezar la semana', mat:['1 vela blanca','un vaso de agua','sal gruesa','una piedra luna (opcional)'],
+   pasos:['Poné una pizca de sal en el vaso de agua y la piedra al lado.','Encendé la vela y respirá profundo cinco veces.','Pensá tres cosas que querés que salgan bien esta semana.','Tirá el agua en la tierra (una planta o el patio) al día siguiente.'] },
+ { t:'Ritual de Marte: coraje y protección para el trabajo', mat:['1 vela roja','romero seco o fresco','una hematita u ojo de tigre (opcional)','una herramienta que uses mucho'],
+   pasos:['Poné la herramienta frente a la vela con el romero encima.','Encendé la vela y pedí fuerza, foco y protección en cada trabajo.','Pasá la herramienta por el humo del romero (quemado en un plato, con cuidado).','Llevá una ramita de romero en la camioneta esta semana.'] },
+ { t:'Ritual de Mercurio: palabra clara para negociar', mat:['1 vela amarilla o naranja','hojas de menta','un papel con el nombre del cliente o del trámite'],
+   pasos:['Escribí lo que querés lograr con esa conversación o ese trámite.','Encendé la vela con la menta al lado.','Leé tu objetivo y decí: "Mis palabras abren caminos".','Doblá el papel y guardalo con tus presupuestos hasta que se resuelva.'] },
+ { t:'Ritual de Júpiter: prosperidad para MEB', mat:['1 vela azul o violeta','canela en rama','una moneda','una pirita o lapislázuli (opcional)','una tarjeta o el logo de MEB'],
+   pasos:['Poné la tarjeta de MEB con la moneda y la canela encima.','Encendé la vela y visualizá el trabajo creciendo: clientes, viajes, equipo.','Decí: "MEB crece con trabajo bien hecho y clientes que vuelven".','Guardá la moneda en la caja o en la billetera del negocio.'] },
+ { t:'Ritual de Venus: vínculos que suman', mat:['1 vela verde o rosa','pétalos de rosa o una flor','un cuarzo rosa (opcional)'],
+   pasos:['Pensá en las personas que te acompañan: pareja, familia, clientes que confían.','Encendé la vela con los pétalos alrededor.','Agradecé a cada una por su nombre.','Hacé hoy un gesto concreto: un mensaje, un agradecimiento, un mimo.'] },
+ { t:'Ritual de Saturno: orden y limpieza', mat:['1 vela negra o azul oscuro','sal gruesa','una turmalina negra u obsidiana (opcional)','un trapo'],
+   pasos:['Ordená y limpiá tu caja de herramientas o tu lugar de trabajo.','Poné un puñado de sal en un plato y la vela en el centro.','Encendéla y nombrá algo que querés cerrar o dejar atrás.','Al día siguiente tirá la sal lejos de casa.'] },
+];
+const RITUAL_LUNA = {
+  nueva:{ t:'Ritual de Luna Nueva: sembrar intenciones', mat:['1 vela blanca','papel y lapicera','semillas (las que tengas)'],
+    pasos:['Escribí tres intenciones para este ciclo: una para vos, una para MEB y una para los tuyos.','Encendé la vela y leelas en voz alta.','Plantá las semillas en una maceta pensando en tus intenciones.','Guardá el papel hasta la próxima Luna llena.'] },
+  llena:{ t:'Ritual de Luna Llena: gratitud y carga', mat:['1 vela blanca o plateada','un vaso de agua','tus cristales o una herramienta especial'],
+    pasos:['Leé las intenciones de la Luna nueva y marcá lo que se cumplió.','Encendé la vela y agradecé en voz alta.','Dejá el agua, los cristales o la herramienta a la luz de la Luna toda la noche (en un lugar seguro, sin la vela).','Al día siguiente regá una planta con esa agua.'] },
+};
+</script>
+<script>/* ============ MI NORTE · app ============ */
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const guardar = (k, v) => { try { localStorage.setItem('minorte:' + k, v); } catch (e) {} };
+const leer = k => { try { return localStorage.getItem('minorte:' + k); } catch (e) { return null; } };
+
+/* ---------- símbolo: rueda dentada dorada ---------- */
+(function rueda(){
+  const g = document.getElementById('rueda'); let d = '';
+  const N = 16, R1 = 44, R2 = 50, cx = 60, cy = 60;
+  for (let i = 0; i < N; i++) {
+    const a = i / N * Math.PI * 2, w = Math.PI / N * .55;
+    const p = (r, t) => (cx + r * Math.cos(t)).toFixed(2) + ' ' + (cy + r * Math.sin(t)).toFixed(2);
+    d += (i ? 'L' : 'M') + p(R1, a - w * 1.4) + 'L' + p(R2, a - w) + 'L' + p(R2, a + w) + 'L' + p(R1, a + w * 1.4);
+    d += 'A' + R1 + ' ' + R1 + ' 0 0 1 ' + p(R1, a + Math.PI * 2 / N - w * 1.4);
+  }
+  g.innerHTML = `<path d="${d}Z" fill="none" stroke="url(#go)" stroke-width="2.4" stroke-linejoin="round"/>
+    <circle cx="60" cy="60" r="38" fill="none" stroke="url(#go)" stroke-width="1" stroke-dasharray="2 4"/>
+    ${[0,90,180,270].map(r => `<path transform="rotate(${r} 60 60)" d="M60 4l2 6h-4z" fill="#F8E3A6"/>`).join('')}`;
+})();
+
+/* ---------- cielo azul estrellado ---------- */
+(function cielo(){
+  const c = document.getElementById('cielo'), x = c.getContext('2d');
+  let W, H, est = [], fugaz = null; const quieto = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function tam(){ const dpr = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight; c.width = W * dpr; c.height = H * dpr; c.style.width = W + 'px'; c.style.height = H + 'px'; x.setTransform(dpr,0,0,dpr,0,0);
+    est = Array.from({length: Math.round(W * H / 2600)}, () => ({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.3 + .2, f: Math.random() * 6.28, v: .4 + Math.random() * 1.6, o: Math.random() < .12 })); }
+  function dibujar(t){
+    x.clearRect(0,0,W,H);
+    for (const s of est) {
+      const a = .35 + .65 * Math.abs(Math.sin(s.f + t / 1000 * s.v * (quieto ? 0 : 1)));
+      x.globalAlpha = a; x.fillStyle = s.o ? '#F6DE9C' : '#DDE4FF';
+      x.beginPath(); x.arc(s.x, s.y, s.r, 0, 6.283); x.fill();
+      if (s.r > 1.2) { x.globalAlpha = a * .35; x.fillRect(s.x - s.r * 3, s.y - .3, s.r * 6, .6); x.fillRect(s.x - .3, s.y - s.r * 3, .6, s.r * 6); }
+    }
+    if (!quieto) {
+      if (!fugaz && Math.random() < .002) fugaz = { x: Math.random() * W * .7 + W * .3, y: Math.random() * H * .4, l: 0 };
+      if (fugaz) { fugaz.l += 1; const k = fugaz.l * 9; x.globalAlpha = Math.max(0, 1 - fugaz.l / 40); x.strokeStyle = '#F6DE9C'; x.lineWidth = 1.4;
+        x.beginPath(); x.moveTo(fugaz.x - k, fugaz.y + k * .5); x.lineTo(fugaz.x - k + 60, fugaz.y + k * .5 - 30); x.stroke(); if (fugaz.l > 40) fugaz = null; }
+    }
+    x.globalAlpha = 1;
+    if (!quieto) requestAnimationFrame(dibujar);
+  }
+  tam(); addEventListener('resize', tam); requestAnimationFrame(dibujar);
+})();
+
+/* ---------- utilidades de fecha ---------- */
+const HOY = new Date(); HOY.setHours(12,0,0,0);
+const fechaISO = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+const deISO = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d, 12); };
+const fechaLarga = d => DIAS[d.getDay()] + ' ' + d.getDate() + ' de ' + MESES[d.getMonth()];
+const mismoDia = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+/* ---------- numerología ---------- */
+const sumaDig = s => String(s).replace(/\D/g,'').split('').reduce((a, b) => a + +b, 0);
+function reducir(n, maestros = true){ while (n > 9 && !(maestros && (n === 11 || n === 22 || n === 33))) n = sumaDig(n); return n; }
+function arcano(n){ while (n > 22) n = sumaDig(n); return n === 22 ? 0 : n; }
+const fechaDig = (d, m, y) => sumaDig(String(d).padStart(2,'0') + String(m).padStart(2,'0') + y);
+const LETRA = {A:1,J:1,S:1,B:2,K:2,T:2,C:3,L:3,U:3,D:4,M:4,V:4,E:5,N:5,W:5,F:6,O:6,X:6,G:7,P:7,Y:7,H:8,Q:8,Z:8,I:9,R:9};
+function numNombre(nombre){
+  const t = nombre.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/Ñ/g,'N');
+  let tot = 0, voc = 0;
+  for (const ch of t) if (LETRA[ch]) { tot += LETRA[ch]; if ('AEIOU'.includes(ch)) voc += LETRA[ch]; }
+  return { expresion: reducir(tot), alma: reducir(voc), personalidad: reducir(tot - voc), crudo: tot };
+}
+const [NY, NM, ND] = PERSONA.nacimiento.split('-').map(Number);
+const A = {
+  nac: arcano(fechaDig(ND, NM, NY)),
+  anio: y => arcano(fechaDig(ND, NM, y)),
+  dia: d => arcano(sumaDig(fechaISO(d)) + ND + NM),
+};
+const NUM = {
+  camino: reducir(fechaDig(ND, NM, NY)),
+  anio: y => reducir(fechaDig(ND, NM, y), false),
+  mes: d => reducir(reducir(fechaDig(ND, NM, d.getFullYear()), false) + d.getMonth() + 1, false),
+  dia: d => reducir(reducir(reducir(fechaDig(ND, NM, d.getFullYear()), false) + d.getMonth() + 1, false) + d.getDate(), false),
+  nombre: numNombre(PERSONA.completo),
+};
+
+/* ---------- efemérides ---------- */
+const D0 = deISO(EFEM.d0);
+function lunaDe(d){
+  const i = Math.round((d - D0) / 864e5), x = EFEM.dias[i];
+  if (!x) return null;
+  const [s, p, crece] = x;
+  const fase = p <= 3 ? 'nueva' : p >= 97 ? 'llena' : crece ? 'creciente' : 'menguante';
+  return { signo: s, ilum: p, crece: !!crece, fase };
+}
+const LUN = EFEM.lun.map(([f, t, s, e]) => ({ f: new Date(f + ':00-03:00'), t, s, e }));
+const RET = EFEM.ret.map(([p, a, b, s1, s2]) => ({ p, ini: new Date(a + ':00-03:00'), fin: b ? new Date(b + ':00-03:00') : null, s1, s2 }));
+const ING = EFEM.ing.map(([f, s]) => ({ f: new Date(f + ':00-03:00'), s }));
+const retroActivos = d => { const t = new Date(d); t.setHours(12); return RET.filter(r => r.ini <= t && (!r.fin || t < r.fin)); };
+const eventosDia = d => ({
+  lun: LUN.filter(l => mismoDia(l.f, d)),
+  retIni: RET.filter(r => mismoDia(r.ini, d)), retFin: RET.filter(r => r.fin && mismoDia(r.fin, d)),
+  ing: ING.filter(i => mismoDia(i.f, d)),
+});
+const hora = d => String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+const LUN_N = { nueva:'Luna nueva', llena:'Luna llena', creciente:'Cuarto creciente', menguante:'Cuarto menguante' };
+const LUN_IC = { nueva:'●', llena:'○', creciente:'◐', menguante:'◑' };
+const RETRO_TIP = {
+  Mercurio:'revisá dos veces presupuestos, mensajes y papeles; confirmá turnos y reservas. Bueno para retomar contacto con clientes viejos y reparar equipos de comunicación.',
+  Venus:'no es el mejor momento para cambiar precios ni hacer grandes compras por gusto; bueno para revisar acuerdos y vínculos.',
+  Marte:'revisá la camioneta y las herramientas antes de exigirlas; evitá peleas y decisiones impulsivas. Bueno para terminar trabajos pendientes.',
+  'Júpiter':'momento de crecer hacia adentro: capacitarte y consolidar antes de expandir.',
+  Saturno:'revisá estructuras: contratos, responsabilidades y la organización del trabajo.',
+};
+
+/* ---------- recomendaciones por día ---------- */
+const FILTROS = [['todo','Todo'],['meb','MEB'],['papeles','Papeles'],['viajes','Viajes'],['hogar','Hogar'],['cuerpo','Cuerpo'],['rituales','Rituales']];
+function recomendaciones(d){
+  const lu = lunaDe(d); if (!lu) return null;
+  const el = ELEM[lu.signo % 4], s = lu.signo, rx = retroActivos(d).map(r => r.p), dow = d.getDay();
+  const R = {};
+  // MEB
+  let meb = { nueva:['neutro','Planificá y fijá metas para el ciclo. Todavía no lances nada nuevo.'],
+    creciente:['bueno','Buen momento para presentar presupuestos, publicar trabajos y salir a buscar clientes.'],
+    llena:['bueno','Ideal para cerrar acuerdos, cobrar y mostrar trabajos terminados.'],
+    menguante:['neutro','Momento de mantenimiento: ordenar el taller, el stock y cobrar lo pendiente.'] }[lu.fase].slice();
+  meb[1] += ' ' + { tierra:'La Luna en tierra favorece los diagnósticos finos, las cotizaciones y el trabajo de precisión.', fuego:'La Luna en fuego favorece mostrarte y vender.', aire:'La Luna en aire favorece negociar, llamar y reunirte.', agua:'La Luna en agua favorece cuidar a los clientes de siempre.' }[el];
+  if (dow === 4) meb[1] += ' Jueves de Júpiter: pensá en grande.';
+  if (rx.includes('Mercurio')) { if (meb[0] === 'bueno') meb[0] = 'neutro'; meb[1] += ' Con Mercurio retrógrado, revisá dos veces cada presupuesto y cada factura.'; }
+  R.meb = meb;
+  // papeles
+  if (rx.includes('Mercurio')) R.papeles = ['evitar','Mercurio retrógrado: si podés, posponé firmas y trámites importantes. Si no, leé todo dos veces y guardá copias.'];
+  else if ([2,5,6,9].includes(s) && lu.fase !== 'menguante') R.papeles = ['bueno','Buen día para trámites, contratos y papeles: la Luna en ' + SIGNOS_N[s] + ' ayuda a la claridad.'];
+  else R.papeles = ['neutro','Día común para papeles. Mejor dejar las firmas importantes para un día marcado en verde.'];
+  // viajes
+  if (rx.includes('Mercurio')) R.viajes = ['evitar','Mercurio retrógrado: confirmá reservas, rutas y documentos. Salí con margen.'];
+  else if ([2,8,10].includes(s) || dow === 3) R.viajes = ['bueno','Buen día para viajar o visitar clientes lejos.'];
+  else R.viajes = ['neutro','Sin contraindicaciones especiales para viajar.'];
+  if (rx.includes('Marte')) R.viajes[1] += ' Marte retrógrado: revisá la camioneta antes de salir.';
+  // hogar
+  if (lu.fase === 'menguante') R.hogar = ['bueno','Ideal para limpiar, ordenar y deshacerte de lo que no usás.'];
+  else if (lu.fase === 'creciente' && [1,3,6].includes(s)) R.hogar = ['bueno','Buen momento para comprar o renovar algo para la casa.'];
+  else R.hogar = ['neutro','Día tranquilo para la casa.'];
+  // cuerpo
+  const pelo = lu.fase === 'creciente' ? 'Si te cortás el pelo, crece más rápido.' : lu.fase === 'menguante' ? 'Si te cortás el pelo, el corte dura más.' : '';
+  if (lu.fase === 'llena') R.cuerpo = ['evitar','Según la tradición, la Luna llena no es buen momento para tratamientos estéticos o intervenciones. Sí para cuidarte y descansar.'];
+  else if ([4,5].includes(s)) R.cuerpo = ['bueno','La Luna en ' + SIGNOS_N[s] + ' es la preferida de la tradición para el pelo. ' + pelo];
+  else if (s === 0 || dow === 2) R.cuerpo = ['bueno','Buen día para entrenar fuerte y descargar energía. ' + pelo];
+  else R.cuerpo = ['neutro', (pelo || 'Día neutro para el cuidado personal.') + ' Escuchá al cuerpo: también es una máquina que necesita mantenimiento.'];
+  // rituales
+  R.rituales = lu.fase === 'nueva' || lu.fase === 'llena' ? ['bueno','Día de lunación: ideal para el ritual de ' + LUN_N[lu.fase] + '.'] : ['neutro','Ritual del día de ' + SEMANA[dow].planeta + ' disponible.'];
+  return { lu, R, rx };
+}
+
+/* ---------- carta (dibujo SVG) ---------- */
+function cartaSVG(n, dorso = false){
+  if (dorso) return `<svg viewBox="0 0 120 200" role="img" aria-label="Carta boca abajo"><defs><linearGradient id="db${n}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1B2470"/><stop offset="1" stop-color="#2A1A66"/></linearGradient></defs>
+    <rect x="1" y="1" width="118" height="198" rx="10" fill="url(#db${n})" stroke="#E2BE6E" stroke-width="2"/><rect x="7" y="7" width="106" height="186" rx="6" fill="none" stroke="#E2BE6E" stroke-opacity=".5"/>
+    <g fill="none" stroke="#E2BE6E" stroke-opacity=".8"><circle cx="60" cy="100" r="26"/><circle cx="60" cy="100" r="16"/><path d="M60 62v76M22 100h76M33 73l54 54M87 73l-54 54" stroke-opacity=".35"/></g>
+    <path d="M66 88a13 13 0 1 0 0 24a10 10 0 1 1 0-24z" fill="#E2BE6E"/>
+    ${[[24,30],[94,40],[30,170],[90,160],[60,22],[60,178]].map(([x,y]) => `<circle cx="${x}" cy="${y}" r="1.4" fill="#F6DE9C"/>`).join('')}</svg>`;
+  const a = ARCANOS[n], uid = 'c' + n + Math.random().toString(36).slice(2,6);
+  const est = Array.from({length: 14}, (_, i) => { const r = ((n + 3) * (i + 7) * 97) % 1000 / 1000, q = ((n + 5) * (i + 3) * 53) % 1000 / 1000; return `<circle cx="${14 + r * 92}" cy="${36 + q * 112}" r="${.6 + (i % 3) * .4}" fill="#F6DE9C" opacity="${.4 + (i % 4) * .15}"/>`; }).join('');
+  const nom = a.n.toUpperCase(), fs = nom.length > 16 ? 8.6 : nom.length > 12 ? 9.6 : 10.6;
+  return `<svg viewBox="0 0 120 200" role="img" aria-label="${esc(a.n)}"><defs>
+    <linearGradient id="f${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16206A"/><stop offset=".6" stop-color="#22186A"/><stop offset="1" stop-color="#0E1240"/></linearGradient>
+    <radialGradient id="h${uid}"><stop offset="0" stop-color="#F6DE9C" stop-opacity=".35"/><stop offset="1" stop-color="#F6DE9C" stop-opacity="0"/></radialGradient></defs>
+    <rect x="1" y="1" width="118" height="198" rx="10" fill="url(#f${uid})" stroke="#E2BE6E" stroke-width="2"/>
+    <rect x="6.5" y="6.5" width="107" height="187" rx="6" fill="none" stroke="#E2BE6E" stroke-opacity=".55"/>${est}
+    <text x="60" y="27" text-anchor="middle" font-family="Cinzel,serif" font-size="13" font-weight="700" fill="#F6DE9C">${ROMANOS[n]}</text>
+    <circle cx="60" cy="96" r="40" fill="url(#h${uid})"/>
+    <g stroke="#E2BE6E" stroke-opacity=".55">${Array.from({length:12},(_,i)=>{const t=i/12*6.283;return `<line x1="${60+31*Math.cos(t)}" y1="${96+31*Math.sin(t)}" x2="${60+38*Math.cos(t)}" y2="${96+38*Math.sin(t)}"/>`}).join('')}</g>
+    <circle cx="60" cy="96" r="27" fill="#0E1446" stroke="#E2BE6E" stroke-width="1.5"/>
+    <text x="60" y="107" text-anchor="middle" font-family="'Segoe UI Symbol','Noto Sans Symbols','Apple Symbols',serif" font-size="30" fill="#F6DE9C">${SIMB[n]}</text>
+    <line x1="22" y1="158" x2="98" y2="158" stroke="#E2BE6E" stroke-opacity=".6"/>
+    <text x="60" y="176" text-anchor="middle" font-family="Cinzel,serif" font-size="${fs}" font-weight="700" fill="#F6DE9C" letter-spacing=".5">${esc(nom)}</text></svg>`;
+}
+
+/* ---------- vistas ---------- */
+let TAB = 'hoy';
+const VISTAS = { hoy: vistaHoy, vos: vistaVos, agenda: vistaAgenda, meb: vistaMeb };
+function mostrar(t){
+  TAB = t; document.querySelectorAll('nav.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
+  const v = $('#vista'); v.classList.remove('vista'); void v.offsetWidth; v.classList.add('vista');
+  v.innerHTML = VISTAS[t](); if (t === 'agenda') pintarAgenda(); if (t === 'hoy') armarTres();
+  scrollTo(0, 0);
+  guardar('tab', t);
+}
+document.querySelector('nav.tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) mostrar(b.dataset.tab); });
+
+function saludo(){
+  const h = new Date().getHours();
+  $('#saludo').textContent = (h < 6 ? 'Buenas noches' : h < 13 ? 'Buen día' : h < 20 ? 'Buenas tardes' : 'Buenas noches') + ', ' + PERSONA.nombre + ' ✦';
+}
+
+function bloqueArcano(n, lugar, titulo){
+  const a = ARCANOS[n], id = 'x' + lugar + n;
+  return `<div class="caja"><div class="arc"><div class="carta">${cartaSVG(n)}</div><div>
+    <small>${titulo}</small><h4>${ROMANOS[n]} · ${a.n}</h4><p><b class="oro">${a.clave}.</b> ${a.esencia}</p>
+    <button class="vermas" type="button" aria-expanded="false" aria-controls="${id}" data-vermas="${id}">Ver más ▾</button></div></div>
+    <div class="expande" id="${id}">
+      <p>${LUGAR_ARCANO[lugar]}</p>
+      <p style="margin-top:8px"><span class="et">Su luz:</span> ${a.luz}<br><span class="et">Su sombra:</span> ${a.sombra}</p>
+      <p style="margin-top:8px" class="et">Cómo aplicarlo en tu vida</p><ul>${a.aplicar.map(x => `<li>${x}</li>`).join('')}</ul>
+      <p style="margin-top:8px"><span class="et">Para pensar:</span> ${a.pregunta}</p>
+      <p class="afirm">“${a.afirm}”</p>
+      <div class="chips"><span class="chip">Color: ${a.color}</span><span class="chip">Cristal: ${a.cristal}</span></div>
+    </div></div>`;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-vermas]'); if (!b) return;
+  const x = document.getElementById(b.dataset.vermas), ab = !x.classList.contains('abierto');
+  x.classList.toggle('abierto', ab); b.setAttribute('aria-expanded', ab); b.textContent = ab ? 'Ver menos ▴' : 'Ver más ▾';
+});
+
+function consejoMeb(d){
+  const r = recomendaciones(d); if (!r) return '';
+  let t = r.R.meb[1];
+  return t;
+}
+
+function vistaHoy(){
+  const d = HOY, n = A.dia(d), a = ARCANOS[n], sem = SEMANA[d.getDay()], lu = lunaDe(d), dp = NUM.dia(d);
+  const ig = leer('ig') || '';
+  let h = `<h2>${fechaLarga(d).replace(/^./, c => c.toUpperCase())}</h2>
+  <div class="caja hoy-carta-wrap">
+    <div class="hero"><div class="carta">${cartaSVG(n)}</div><div class="txt"><small>Tu energía de hoy</small><h4>${a.n}</h4><p><b class="oro">${a.clave}.</b> ${a.aplicar[d.getDate() % 3]}</p></div></div>
+    <p class="afirm">“${a.afirm}”</p>
+    <ul class="datos">
+      <li><b class="ic">✺</b><div><span>Colores y cristal del día</span><span class="punto" style="background:${sem.colores[0]}"></span> <span class="punto" style="background:${sem.colores[1]}"></span> ${sem.color} · ${sem.cristal}</div></li>
+      <li><b class="ic">${dp}</b><div><span>Tu día personal</span>Día ${dp}: bueno para ${DIA_PERS[dp]}.</div></li>
+      ${lu ? `<li><b class="ic">☾</b><div><span>La Luna hoy</span>${LUN_N[lu.fase] === 'Luna nueva' || LUN_N[lu.fase] === 'Luna llena' ? LUN_N[lu.fase] : 'Luna ' + lu.fase} en ${SIGNOS_N[lu.signo]} (${lu.ilum}% iluminada). ${SIGNOS[lu.signo].clima}</div></li>` : ''}
+      <li><b class="ic">☉</b><div><span>Hoy es día de ${sem.planeta}</span>Favorece ${sem.favorece}.</div></li>
+    </ul>
+  </div>
+  <div class="caja"><h3 style="margin-top:0">⚙ Para MEB hoy</h3><p>${consejoMeb(d)}</p>
+    ${retroActivos(d).length ? `<p class="chico" style="margin-top:8px">En curso: ${retroActivos(d).map(r => r.p + ' retrógrado').join(', ')}.</p>` : ''}</div>
+  <div class="caja"><button class="btn ancho" type="button" id="btn-compartir">✨ Compartir mi energía de hoy</button>
+    <label class="chico" for="ig" style="display:block;margin:12px 0 6px">Tu Instagram para la imagen (opcional)</label>
+    <input type="text" id="ig" placeholder="@tuusuario" value="${esc(ig)}" autocomplete="off" autocapitalize="off"></div>
+  <h3>Tu carta del día</h3><div class="caja"><p class="chico" style="text-align:center">Concentrate en una pregunta y elegí una carta.</p><div class="tres" id="tres"></div><div id="tres-txt"></div></div>`;
+  if (!standalone()) h += `<div class="caja instalar"><h4>📲 Llevá Mi Norte en tu celular</h4><p>Todos los días tiene algo nuevo para vos: tu energía, la luna y la agenda de MEB. Instalala como app y abrila con un toque.</p><button class="btn" type="button" id="btn-instalar" style="margin-top:12px">Instalar Mi Norte</button></div>`;
+  return h;
+}
+
+/* tres cartas: una tirada por día */
+function rng(seed){ let s = 0; for (const c of seed) s = (s * 31 + c.charCodeAt(0)) >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
+function tresDelDia(){ const r = rng('norte' + fechaISO(HOY)), set = []; while (set.length < 3) { const k = Math.floor(r() * 22); if (!set.includes(k)) set.push(k); } return set; }
+function armarTres(){
+  const cont = $('#tres'); if (!cont) return;
+  const cartas = tresDelDia(), elegida = leer('tres:' + fechaISO(HOY));
+  cont.innerHTML = cartas.map((n, i) => `<button type="button" data-i="${i}" aria-label="Carta ${i + 1}"><div class="dorso">${cartaSVG(i, true)}</div><div class="cara">${cartaSVG(n)}</div></button>`).join('');
+  const revelar = (i, anim) => {
+    cont.querySelectorAll('button').forEach((b, j) => { b.disabled = true; if (j == i) b.classList.add('vuelta'); else b.classList.add('apagada'); if (!anim) b.style.transition = 'none'; });
+    const a = ARCANOS[cartas[i]];
+    $('#tres-txt').innerHTML = `<h4 style="font:700 18px Cinzel,serif;color:var(--oro2);text-align:center;margin-top:14px">${a.n}</h4><p style="margin-top:6px">${a.esencia} ${a.aplicar[0]}</p><p style="margin-top:8px"><span class="et oro">Para pensar:</span> ${a.pregunta}</p><p class="chico" style="text-align:center;margin-top:10px">Mañana te esperan tres cartas nuevas.</p>`;
+  };
+  if (elegida !== null) revelar(+elegida, false);
+  cont.addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; guardar('tres:' + fechaISO(HOY), b.dataset.i); revelar(+b.dataset.i, true); });
+}
+
+function vistaVos(){
+  const y = HOY.getFullYear(), nn = NUM.nombre, c = CARTAS.emma;
+  let h = `<h2>Tus arcanos</h2>`;
+  h += bloqueArcano(A.nac, 'nac', 'Arcano de nacimiento');
+  h += bloqueArcano(A.anio(y), 'anio', 'Tu arcano del año ' + y);
+  h += bloqueArcano(A.anio(y - 1), 'pasado', 'Tu arcano del año pasado (' + (y - 1) + ')');
+  h += bloqueArcano(A.anio(y + 1), 'prox', 'Tu próximo arcano (' + (y + 1) + ')');
+  h += `<h2>Tu carta natal</h2><div class="caja">${trioHTML(c)}
+    <p style="margin-top:12px"><b class="oro">Sol en ${SIGNOS_N[c.Sol[0]]}:</b> ${SIGNOS[c.Sol[0]].sol}</p>
+    <p><b class="oro">Luna en ${SIGNOS_N[c.Luna[0]]}:</b> ${SIGNOS[c.Luna[0]].luna}</p>
+    <p><b class="oro">Ascendente en ${SIGNOS_N[c.Ascendente[0]]}:</b> ${SIGNOS[c.Ascendente[0]].asc}</p>
+    <p style="margin-top:10px">Tu Luna y tu Medio Cielo están juntos en Leo: lo que te hace sentir bien (que valoren tu trabajo) es también tu vocación pública. Te realizás cuando lo que hacés se ve.</p>
+    <button class="vermas" type="button" aria-expanded="false" aria-controls="xplan" data-vermas="xplan">Ver más ▾</button>
+    <div class="expande" id="xplan">${planetasHTML(c)}</div>
+    <p class="ag-ayuda">Nacido el 26/11/1991 a las 6:00 en San Miguel, Buenos Aires (ese día regía el horario de verano, UTC−2). Posiciones calculadas con efemérides astronómicas.</p></div>`;
+  h += `<h2>Tu nombre</h2><div class="caja">${NOMBRE_SIG.map(x => `<div class="nombre-item"><h4>${x.n}</h4><p>${x.t}</p></div>`).join('')}
+    <h3>La numerología de tu nombre</h3>${numNombreHTML(nn)}<p class="ag-ayuda">Calculado con Marcos Emmanuel Bellando, según la numerología pitagórica.</p></div>`;
+  h += `<h2>Tu numerología</h2><div class="caja"><div class="num-grande"><b>${NUM.camino}</b><div><small class="chico">TU NÚMERO DE CAMINO DE VIDA</small><h4>${NUM_TXT[NUM.camino][0]}</h4><p>${NUM_TXT[NUM.camino][1]}</p></div></div>
+    <ul class="num-lista"><li><b>${NUM.anio(y)}</b><div><span>Tu año personal ${y}</span>${ANIO_PERS[NUM.anio(y)]}</div></li>
+    <li><b>${NUM.anio(y + 1)}</b><div><span>Tu año personal ${y + 1}</span>${ANIO_PERS[NUM.anio(y + 1)]}</div></li>
+    <li><b>${NUM.mes(HOY)}</b><div><span>Tu mes personal</span>Energía de ${NUM_TXT[NUM.mes(HOY)][0].toLowerCase()}.</div></li></ul>
+    <p class="ag-ayuda">El camino de vida suma todos los números de tu fecha de nacimiento. El año personal se renueva cada 1° de enero.</p></div>`;
+  return h;
+}
+function trioHTML(c){
+  return `<div class="trio">${[['Sol','☉'],['Luna','☽'],['Ascendente','↑']].map(([k, g]) => `<div><small>${k}</small><div class="gl">${GLIFOS[c[k][0]]}</div><strong>${SIGNOS_N[c[k][0]]}</strong></div>`).join('')}</div>`;
+}
+function planetasHTML(c){
+  return `<ul class="planetas">${Object.keys(c).map(k => `<li><b>${k} en ${SIGNOS_N[c[k][0]]} ${Math.floor(c[k][1])}°</b> · ${PLANETAS[k]}: ${SIGNOS[c[k][0]].clave}.</li>`).join('')}</ul>`;
+}
+function numNombreHTML(nn){
+  return `<ul class="num-lista">
+    <li><b>${nn.expresion}</b><div><span>Número de expresión</span>${NUM_TXT[nn.expresion][0]}: los talentos y la forma de mostrarse.</div></li>
+    <li><b>${nn.alma}</b><div><span>Número del alma</span>${NUM_TXT[nn.alma][0]}: lo que el corazón desea en lo profundo.</div></li>
+    <li><b>${nn.personalidad}</b><div><span>Número de personalidad</span>${NUM_TXT[nn.personalidad][0]}: la primera impresión que deja.</div></li></ul>`;
+}
+
+/* ---------- agenda ---------- */
+let AG = null, FILTRO = leer('filtro') || 'todo';
+function vistaAgenda(){
+  let h = '';
+  const prox = LUN.find(l => l.f >= new Date(HOY.getTime() - 12 * 36e5) && (l.t === 'nueva' || l.t === 'llena'));
+  if (prox) {
+    const g = SIGNOS[prox.s], esHoy = mismoDia(prox.f, HOY);
+    h += `<h2>La luna de estos días</h2><div class="caja"><div class="luna-caja"><div class="luna-dibujo ${prox.t}" aria-hidden="true"></div><div>
+      <small class="chico">${esHoy ? 'Hoy' : fechaLarga(prox.f)} · ${hora(prox.f)} h</small>
+      <h4 style="font:700 18px Cinzel,serif;color:var(--oro2)">${LUN_N[prox.t]} en ${SIGNOS_N[prox.s]}${prox.e ? ' · eclipse ' + prox.e : ''}</h4>
+      <p>${prox.t === 'llena' ? 'Ilumina ' + g.area + ': tiempo de culminar, cobrar y soltar lo que ya no suma.' : 'Abre un ciclo nuevo en ' + g.area + ': tiempo de sembrar intenciones y planificar.'}</p></div></div>
+      <p style="margin-top:10px"><b class="oro">Buen momento para:</b> ${g.fav.join(', ')}.<br><b class="oro">Cuidado con:</b> ${g.ojo}.</p></div>`;
+  }
+  const act = retroActivos(HOY), proximos = RET.filter(r => r.ini > HOY && r.ini - HOY < 45 * 864e5);
+  if (act.length || proximos.length) {
+    h += `<h3>El cielo ahora</h3><div class="caja">${act.map(r => `<p><b class="oro">${r.p} retrógrado</b> hasta el ${r.fin ? fechaLarga(r.fin) : '—'}: ${RETRO_TIP[r.p]}</p>`).join('')}
+      ${proximos.map(r => `<p><b class="oro">${r.p} se pone retrógrado</b> el ${fechaLarga(r.ini)} (en ${SIGNOS_N[r.s1]}) hasta el ${fechaLarga(r.fin)}.</p>`).join('')}</div>`;
+  }
+  h += `<h2>Tu agenda mágica</h2><div class="filtros" role="group" aria-label="Filtrar">${FILTROS.map(([k, t]) => `<button type="button" data-f="${k}" aria-pressed="${k === FILTRO}">${t}</button>`).join('')}</div>
+    <div class="caja"><div id="agenda"></div></div><div id="det"></div>
+    <p class="ag-ayuda">Posiciones calculadas con efemérides astronómicas (horario de Argentina). Las recomendaciones siguen la astrología tradicional: tomalas como guía, no como regla.</p>`;
+  return h;
+}
+document.addEventListener('click', e => {
+  const f = e.target.closest('[data-f]'); if (f) { FILTRO = f.dataset.f; guardar('filtro', FILTRO); document.querySelectorAll('[data-f]').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === FILTRO)); pintarAgenda(); return; }
+  const n = e.target.closest('[data-mes]'); if (n) { AG.m += +n.dataset.mes; if (AG.m < 0) { AG.m = 11; AG.y--; } if (AG.m > 11) { AG.m = 0; AG.y++; } AG.sel = null; pintarAgenda(); return; }
+  const d = e.target.closest('[data-dia]'); if (d) { AG.sel = +d.dataset.dia; pintarAgenda(); setTimeout(() => $('#det') && $('#det').scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }
+});
+function pintarAgenda(){
+  const cont = $('#agenda'); if (!cont) return;
+  AG = AG || { y: HOY.getFullYear(), m: HOY.getMonth(), sel: HOY.getDate() };
+  const pri = new Date(AG.y, AG.m, 1, 12), dias = new Date(AG.y, AG.m + 1, 0).getDate();
+  const minM = D0.getFullYear() * 12 + D0.getMonth(), maxM = 2028 * 12 + 11, cur = AG.y * 12 + AG.m;
+  let h = `<div class="ag-cab"><button type="button" data-mes="-1" aria-label="Mes anterior" ${cur <= minM ? 'disabled' : ''}>‹</button><h4>${MESES[AG.m]} ${AG.y}</h4><button type="button" data-mes="1" aria-label="Mes siguiente" ${cur >= maxM ? 'disabled' : ''}>›</button></div>
+    <div class="grilla">${DIAS_C.map(x => `<div class="dn">${x}</div>`).join('')}${'<div></div>'.repeat(pri.getDay())}`;
+  for (let i = 1; i <= dias; i++) {
+    const d = new Date(AG.y, AG.m, i, 12), ev = eventosDia(d), r = recomendaciones(d);
+    let mk = ev.lun.length ? (ev.lun[0].e ? '✹' : LUN_IC[ev.lun[0].t]) : ev.retIni.length ? '℞' : ev.ing.length ? GLIFOS[ev.ing[0].s] : '';
+    let cls = mismoDia(d, HOY) ? ' hoy' : ''; if (AG.sel === i) cls += ' sel';
+    if (r && FILTRO !== 'todo') { const niv = r.R[FILTRO][0]; if (niv !== 'neutro') cls += ' ' + niv; }
+    h += `<button type="button" class="${cls.trim()}" data-dia="${i}" aria-label="${fechaLarga(d)}"><span>${i}</span><span class="mk">${mk}</span></button>`;
+  }
+  h += `</div><div class="leyenda"><span>● nueva</span><span>◐ creciente</span><span>○ llena</span><span>◑ menguante</span><span>✹ eclipse</span><span>℞ retrógrado</span>${FILTRO !== 'todo' ? '<span style="color:var(--bien)">● buen día</span><span style="color:var(--mal)">● mejor evitar</span>' : ''}</div>`;
+  cont.innerHTML = h;
+  $('#det').innerHTML = AG.sel ? detalleDia(new Date(AG.y, AG.m, AG.sel, 12)) : '';
+}
+function ritualDe(d, lu){ return lu && (lu.fase === 'nueva' || lu.fase === 'llena') ? RITUAL_LUNA[lu.fase] : RITUALES[d.getDay()]; }
+function detalleDia(d){
+  const r = recomendaciones(d); if (!r) return `<div class="caja">No hay datos para este día.</div>`;
+  const { lu, R } = r, ev = eventosDia(d), sem = SEMANA[d.getDay()], rit = ritualDe(d, lu);
+  let h = `<div class="caja det"><h4 class="dia">${fechaLarga(d)}</h4>
+    <p style="margin-top:6px"><b class="oro">${lu.fase === 'nueva' || lu.fase === 'llena' ? LUN_N[lu.fase] : 'Luna ' + lu.fase} en ${SIGNOS_N[lu.signo]}</b> (${lu.ilum}%). ${SIGNOS[lu.signo].clima}</p>
+    <p><b class="oro">Día de ${sem.planeta}:</b> vela ${sem.color}, cristal ${sem.cristal}. Favorece ${sem.favorece}.</p>`;
+  ev.lun.forEach(l => { h += `<div class="evento">${LUN_IC[l.t]} <b>${LUN_N[l.t]} en ${SIGNOS_N[l.s]}</b> a las ${hora(l.f)} h.${l.e ? ` <b>Eclipse ${l.e}.</b> Los eclipses aceleran cambios: observá, no fuerces inicios ni rituales de siembra este día.` : ''}</div>`; });
+  ev.ing.forEach(i => { h += `<div class="evento">☉ El Sol entra en <b>${SIGNOS_N[i.s]}</b>: empieza la temporada de ${SIGNOS[i.s].clave}.</div>`; });
+  ev.retIni.forEach(x => { h += `<div class="evento">℞ <b>${x.p} se pone retrógrado</b> en ${SIGNOS_N[x.s1]}: ${RETRO_TIP[x.p]}</div>`; });
+  ev.retFin.forEach(x => { h += `<div class="evento">✓ <b>${x.p} retoma su marcha directa.</b> Lo que se trabó en estas semanas empieza a destrabarse.</div>`; });
+  const cats = FILTRO === 'todo' ? FILTROS.slice(1).filter(([k]) => k !== 'rituales') : FILTROS.filter(([k]) => k === FILTRO && k !== 'rituales');
+  if (cats.length) h += `<ul class="rec">${cats.map(([k, t]) => `<li class="${R[k][0]}"><b>${t}</b>${R[k][1]}</li>`).join('')}</ul>`;
+  if (FILTRO === 'todo' || FILTRO === 'rituales') h += `<div class="ritual"><h5>🕯️ ${rit.t}</h5><p class="chico">Materiales:</p><ul>${rit.mat.map(m => `<li>${m}</li>`).join('')}</ul><p class="chico" style="margin-top:6px">Pasos:</p><ol>${rit.pasos.map(p => `<li>${p}</li>`).join('')}</ol><p class="seg">⚠ ${SEGURIDAD}</p></div>`;
+  h += `<div class="fila-btn"><a class="btn sec" href="${linkGoogle(d)}" target="_blank" rel="noopener">📅 Google Calendar</a><button class="btn sec" type="button" data-ics="${fechaISO(d)}">⏰ Calendario del celular</button><button class="btn" type="button" data-compdia="${fechaISO(d)}">✨ Compartir este día</button></div></div>`;
+  return h;
+}
+function resumenDia(d){
+  const r = recomendaciones(d), lu = r.lu;
+  return `Luna ${lu.fase} en ${SIGNOS_N[lu.signo]}. ${SIGNOS[lu.signo].clima}\nMEB: ${r.R.meb[1]}\nPapeles: ${r.R.papeles[1]}\nViajes: ${r.R.viajes[1]}\nRitual: ${ritualDe(d, lu).t}`;
+}
+function linkGoogle(d){
+  const a = fechaISO(d).replace(/-/g, ''), b = fechaISO(new Date(d.getTime() + 864e5)).replace(/-/g, '');
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent('✦ Mi Norte: ' + fechaLarga(d)) + '&dates=' + a + '/' + b + '&details=' + encodeURIComponent(resumenDia(d));
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-ics]'); if (!b) return;
+  const d = deISO(b.dataset.ics), a = b.dataset.ics.replace(/-/g, ''), f = fechaISO(new Date(d.getTime() + 864e5)).replace(/-/g, '');
+  const txt = resumenDia(d).replace(/\n/g, '\\n').replace(/,/g, '\\,');
+  const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Mi Norte//ES','BEGIN:VEVENT','UID:' + a + '@minorte','DTSTAMP:' + new Date().toISOString().replace(/[-:]/g,'').slice(0,15) + 'Z','DTSTART;VALUE=DATE:' + a,'DTEND;VALUE=DATE:' + f,'SUMMARY:✦ Mi Norte: ' + fechaLarga(d),'DESCRIPTION:' + txt,'BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:Mañana: ' + fechaLarga(d),'TRIGGER:-PT3H','END:VALARM','END:VEVENT','END:VCALENDAR'].join('\r\n');
+  const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' })), l = document.createElement('a');
+  l.href = url; l.download = 'mi-norte-' + b.dataset.ics + '.ics'; document.body.appendChild(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+});
+
+/* ---------- vos y MEB ---------- */
+function cruceCartas(a, b, nomB, saltar = () => false){
+  const claves = ['Sol','Luna','Ascendente','Medio Cielo','Venus','Júpiter','Marte'], out = [];
+  for (const k1 of ['Sol','Luna','Ascendente','Medio Cielo','Venus']) for (const k2 of claves) {
+    if (!a[k1] || !b[k2]) continue;
+    const s1 = a[k1][0], s2 = b[k2][0], dif = (s2 - s1 + 12) % 12;
+    let tipo = null;
+    if (dif === 0) tipo = ['☌','en el mismo signo: se potencian mutuamente'];
+    else if (dif === 4 || dif === 8) tipo = ['△','en armonía (mismo elemento): fluyen juntos'];
+    else if (dif === 6) tipo = ['☍','en signos opuestos: se complementan y se equilibran'];
+    if (tipo && !saltar(s1, s2)) out.push({ k1, peso: (dif === 0 ? 3 : dif === 6 ? 1 : 2) + (['Sol','Luna','Ascendente','Medio Cielo'].includes(k1) ? 1 : 0) + (['Sol','Ascendente'].includes(k2) ? 1 : 0), t: `<b>Tu ${k1} en ${SIGNOS_N[s1]}</b> y <b>${({Luna:'la ',Sol:'el ',Ascendente:'el ','Medio Cielo':'el '})[k2] || ''}${k2} de ${nomB} en ${SIGNOS_N[s2]}</b> ${tipo[0]} ${tipo[1]}.` });
+  }
+  const vistos = new Set();
+  return out.sort((x, y) => y.peso - x.peso).filter(x => { if (vistos.has(x.k1)) return false; vistos.add(x.k1); return true; }).slice(0, 4);
+}
+function vistaMeb(){
+  const mebN = numNombre(MEB.nombre), sig = numNombre(MEB.siglas), yo = NUM.nombre;
+  const [iy, im, id] = IG.nacimiento.split('-').map(Number), igCamino = reducir(fechaDig(id, im, iy)), igArc = arcano(fechaDig(id, im, iy));
+  let h = `<h2>Vos y MEB</h2><div class="caja"><p>MEB nació de tus iniciales: <b class="oro">M</b>arcos <b class="oro">E</b>mmanuel <b class="oro">B</b>ellando. La empresa lleva tu nombre adentro, así que su energía y la tuya están conectadas desde el origen. Acá se cruzan tu carta, tu nombre y tus números con los de MEB y su Instagram.</p></div>`;
+  h += `<h3>El nombre de MEB</h3><div class="caja">${MEB_SIG.map(x => `<div class="nombre-item"><h4>${x.n}</h4><p>${x.t}</p></div>`).join('')}
+    <p style="margin-top:12px">Leído completo: <b class="oro">el ingenio que desata los nudos.</b> Eso es exactamente lo que hacés frente a una máquina parada.</p></div>`;
+  h += `<h3>La numerología de MEB</h3><div class="caja"><div class="num-grande"><b>${sig.expresion}</b><div><small class="chico">LAS SIGLAS “MEB”</small><h4>${NUM_TXT[sig.expresion][0]}</h4><p>${NUM_TXT[sig.expresion][1]}</p></div></div>
+    <h3>MEB Machinery Solutions</h3>${numNombreHTML(mebN)}<p style="margin-top:10px">${NUM_TXT[mebN.expresion][1]}</p></div>`;
+  // carta MEB
+  h += `<h3>El nacimiento de MEB</h3>`;
+  if (MEB_NACIMIENTO) {
+    const [my, mm, md] = MEB_NACIMIENTO.split('-').map(Number), mc = reducir(fechaDig(md, mm, my)), ma = arcano(fechaDig(md, mm, my));
+    h += bloqueArcano(ma, 'meb', 'Arcano de nacimiento de MEB');
+    h += `<div class="caja"><div class="num-grande"><b>${mc}</b><div><small class="chico">CAMINO DE VIDA DE MEB</small><h4>${NUM_TXT[mc][0]}</h4><p>${NUM_TXT[mc][1]}</p></div></div>
+      ${CARTAS.meb ? trioHTML(CARTAS.meb) + `<button class="vermas" type="button" data-vermas="xmeb" aria-expanded="false" aria-controls="xmeb">Ver más ▾</button><div class="expande" id="xmeb">${planetasHTML(CARTAS.meb)}</div>` : ''}
+      <p style="margin-top:12px">Sol y Ascendente en <b class="oro">Sagitario</b>: una empresa nacida para recorrer caminos, llegar lejos y crecer aprendiendo. La Luna en <b class="oro">Piscis</b> le da sensibilidad para leer lo que el cliente necesita, y el Medio Cielo en <b class="oro">Leo</b>, una imagen pública con presencia.</p>
+      <p class="ag-ayuda">Nació el ${md}/${mm}/${my} a las ${MEB.hora} en ${MEB.lugar}, apenas salido el Sol. Posiciones calculadas con efemérides astronómicas.</p></div>`;
+  } else h += `<div class="pendiente">Nació en ${MEB.lugar} a las ${MEB.hora}. Falta cargar el día de nacimiento para calcular su carta, su arcano y su camino de vida.</div>`;
+  // Instagram
+  const ci = CARTAS.ig;
+  h += `<h3>Su Instagram</h3><div class="caja"><p><b class="oro">${IG.usuario}</b> nació el 8/8/2026 a las 8:00 en ${IG.lugar}.</p>${trioHTML(ci)}
+    <p style="margin-top:12px">Sol, Ascendente y Júpiter en <b class="oro">Leo</b>: una cuenta nacida para mostrarse, con presencia y brillo propio. La Luna en Géminis le da ritmo, variedad y conversación.</p>
+    <ul class="num-lista"><li><b>${igCamino}</b><div><span>Camino de vida de la cuenta</span>${NUM_TXT[igCamino][0]}: ${NUM_TXT[igCamino][1]}</div></li>
+    <li><b>${ROMANOS[igArc]}</b><div><span>Arcano de nacimiento</span>${ARCANOS[igArc].n}: ${ARCANOS[igArc].clave.toLowerCase()}.</div></li></ul>
+    <button class="vermas" type="button" data-vermas="xig" aria-expanded="false" aria-controls="xig">Ver más ▾</button><div class="expande" id="xig">${planetasHTML(ci)}</div></div>`;
+  // cruce
+  const cr = cruceCartas(CARTAS.emma, ci, 'Instagram', (s1, s2) => s1 === 4 && s2 === 4).concat(CARTAS.meb ? cruceCartas(CARTAS.emma, CARTAS.meb, 'MEB') : []);
+  const items = [];
+  if (yo.expresion === sig.expresion) items.push(`<b>Tu número de expresión es ${yo.expresion} y las siglas MEB también suman ${sig.expresion}.</b> No es casualidad que la empresa lleve tus iniciales: vibra con tu misma energía de ${NUM_TXT[sig.expresion][0].toLowerCase()}.`);
+  const suma = reducir(NUM.camino + mebN.expresion);
+  items.push(`<b>Tu camino de vida (${NUM.camino}) + el nombre de MEB (${mebN.expresion}) = ${suma}${suma === yo.expresion ? ', el mismo número maestro de tu nombre' : ''}.</b> Vos ponés la energía de ${NUM_TXT[NUM.camino][0].toLowerCase()}; MEB pone la de ${NUM_TXT[mebN.expresion][0].toLowerCase()}. Juntos suman ${NUM_TXT[suma][0].toLowerCase()}.`);
+  if (igCamino === mebN.expresion) items.push(`<b>El Instagram nació en un día ${igCamino}, el mismo número del nombre de MEB.</b> La cuenta está alineada con la empresa: es su vidriera natural.`);
+  if (MEB_NACIMIENTO && CARTAS.meb) {
+    const [my, mm, md] = MEB_NACIMIENTO.split('-').map(Number), mc = reducir(fechaDig(md, mm, my)), ma = arcano(fechaDig(md, mm, my));
+    items.unshift(`<b>MEB nació dos días después de tu cumpleaños, con el Sol en Sagitario como vos.</b> No es solo tu empresa: es tu mismo Sol, tu misma esencia de explorador puesta a trabajar.`);
+    if (mc === NUM.camino) items.push(`<b>MEB tiene tu mismo camino de vida: ${mc}.</b> Los dos comparten la energía de ${NUM_TXT[mc][0].toLowerCase()}: lo que vos creás, MEB lo muestra al mundo.`);
+    items.push(`<b>El Mercurio de MEB está casi exacto sobre tu Ascendente en Escorpio.</b> La forma de comunicar de la empresa es tu propia forma de presentarte: directa, profunda, de llegar al fondo del problema.`);
+    items.push(`<b>El Medio Cielo de MEB está en Leo, igual que tu Luna y tu Medio Cielo.</b> La imagen pública de MEB y tu vocación hablan el mismo idioma.`);
+    if (ma === A.anio(HOY.getFullYear() + 1)) items.push(`<b>El arcano de nacimiento de MEB es ${ARCANOS[ma].n}, y es también tu arcano de ${HOY.getFullYear() + 1}.</b> El año que viene vas a vivir en primera persona la energía de tu empresa: ${ARCANOS[ma].clave.toLowerCase()}.`);
+  }
+  items.push(`<b>Tu alma es ${yo.alma}.</b> ${NUM_TXT[yo.alma][1]} Cuando enseñás tu oficio y cuidás a tus clientes, estás alimentando lo que tu corazón vino a hacer.`);
+  items.push(`<b>Tu Luna y tu Medio Cielo en Leo reciben al Sol, al Ascendente y a Júpiter del Instagram, también en Leo.</b> La cuenta activa justo tu zona de vocación e imagen pública: mostrar tu trabajo ahí te nutre a vos, no solo a la empresa.`);
+  h += `<h3>El cruce</h3><div class="caja"><ul class="cruce">${items.map(x => `<li>${x}</li>`).join('')}</ul>
+    ${cr.length ? `<p class="et oro" style="margin-top:14px">Conexiones entre tu carta y la del Instagram${CARTAS.meb ? ' y la de MEB' : ''}</p><ul class="cruce">${cr.map(x => `<li>${x.t}</li>`).join('')}</ul>` : ''}</div>`;
+  h += `<h3>MEB este año</h3><div class="caja"><p>Vos estás en <b class="oro">año personal ${NUM.anio(HOY.getFullYear())}</b>: ${ANIO_PERS[NUM.anio(HOY.getFullYear())]} El año que viene pasás al <b class="oro">${NUM.anio(HOY.getFullYear() + 1)}</b>: ${ANIO_PERS[NUM.anio(HOY.getFullYear() + 1)]}</p>
+    <p>Tu arcano de ${HOY.getFullYear() + 1} es <b class="oro">${ARCANOS[A.anio(HOY.getFullYear() + 1)].n}</b>: ${ARCANOS[A.anio(HOY.getFullYear() + 1)].clave.toLowerCase()}. Es la energía con la que vas a llevar a MEB el próximo año.</p></div>`;
+  return h;
+}
+
+/* ---------- compartir como imagen ---------- */
+function cieloCanvas(x, W, H){
+  const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#060A24'); g.addColorStop(.5, '#0E1546'); g.addColorStop(1, '#1D1458'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  [[.2,.12,'rgba(79,123,234,.35)'],[.85,.4,'rgba(139,120,240,.32)'],[.4,.95,'rgba(60,45,160,.45)']].forEach(([a, b, c]) => { const r = x.createRadialGradient(W*a, H*b, 0, W*a, H*b, W*.7); r.addColorStop(0, c); r.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = r; x.fillRect(0, 0, W, H); });
+  const r = rng('cielo'); for (let i = 0; i < 420; i++) { x.globalAlpha = .3 + r() * .7; x.fillStyle = r() < .15 ? '#F6DE9C' : '#E3E8FF'; x.beginPath(); x.arc(r() * W, r() * H, r() * 2.2 + .4, 0, 6.283); x.fill(); } x.globalAlpha = 1;
+}
+function cartaCanvas(x, n, X, Y, w){
+  return new Promise(res => { const img = new Image(); img.onload = () => { x.drawImage(img, X, Y, w, w * 5 / 3); res(); }; img.onerror = res;
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(cartaSVG(n).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" width="360" height="600" ')); });
+}
+function envolver(x, t, X, Y, maxW, lh){
+  const pal = t.split(' '); let l = '', y = Y;
+  for (const p of pal) { const prueba = l ? l + ' ' + p : p; if (x.measureText(prueba).width > maxW && l) { x.fillText(l, X, y); l = p; y += lh; } else l = prueba; }
+  if (l) x.fillText(l, X, y); return y + lh;
+}
+function rueditaCanvas(x, cx, cy, R){
+  x.save(); x.strokeStyle = '#E2BE6E'; x.lineWidth = 3; x.beginPath();
+  for (let i = 0; i < 16; i++) { const a = i / 16 * 6.283; x.moveTo(cx + R * .88 * Math.cos(a), cy + R * .88 * Math.sin(a)); x.lineTo(cx + R * Math.cos(a), cy + R * Math.sin(a)); }
+  x.stroke(); x.beginPath(); x.arc(cx, cy, R * .88, 0, 6.283); x.stroke();
+  x.fillStyle = '#E2BE6E'; x.beginPath(); x.arc(cx, cy, R * .55, 0, 6.283); x.fill(); x.globalCompositeOperation = 'destination-out'; x.beginPath(); x.arc(cx + R * .22, cy - R * .1, R * .48, 0, 6.283); x.fill(); x.restore();
+}
+async function imagenHoy(){
+  try { await document.fonts.ready; } catch (e) {}
+  const W = 1080, H = 1920, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+  cieloCanvas(x, W, H);
+  const d = HOY, n = A.dia(d), a = ARCANOS[n], sem = SEMANA[d.getDay()], lu = lunaDe(d), ig = (leer('ig') || '').trim();
+  rueditaCanvas(x, W / 2, 170, 60);
+  x.textAlign = 'center'; x.fillStyle = '#F6DE9C'; x.font = '700 64px Cinzel, serif'; x.fillText('MI NORTE', W / 2, 300);
+  x.fillStyle = '#C9C6EE'; x.font = '600 36px "Nunito Sans", sans-serif'; x.fillText('Mi energía de hoy · ' + fechaLarga(d), W / 2, 360);
+  await cartaCanvas(x, n, W / 2 - 200, 420, 400);
+  x.fillStyle = '#F6DE9C'; x.font = '700 60px Cinzel, serif'; x.fillText(a.n, W / 2, 1150);
+  x.fillStyle = '#ECE9FF'; x.font = '600 40px "Nunito Sans", sans-serif'; let y = envolver(x, a.clave + '. ' + a.aplicar[d.getDate() % 3], W / 2, 1225, 880, 54);
+  x.fillStyle = '#F6DE9C'; x.font = 'italic 500 52px "Cormorant Garamond", serif'; y = envolver(x, '“' + a.afirm + '”', W / 2, y + 30, 860, 62);
+  x.fillStyle = '#C9C6EE'; x.font = '600 34px "Nunito Sans", sans-serif';
+  y = envolver(x, `Colores: ${sem.color} · Cristal: ${sem.cristal}`, W / 2, y + 30, 900, 46);
+  if (lu) envolver(x, `Luna ${lu.fase} en ${SIGNOS_N[lu.signo]}`, W / 2, y, 900, 46);
+  x.strokeStyle = 'rgba(226,190,110,.5)'; x.beginPath(); x.moveTo(240, 1770); x.lineTo(840, 1770); x.stroke();
+  x.fillStyle = '#F6DE9C'; x.font = '700 38px Cinzel, serif'; x.fillText(ig ? (ig.startsWith('@') ? ig : '@' + ig) : 'Mi Norte ✦', W / 2, 1835);
+  return c;
+}
+async function imagenDia(d){
+  try { await document.fonts.ready; } catch (e) {}
+  const W = 1080, H = 1920, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+  cieloCanvas(x, W, H); const r = recomendaciones(d), lu = r.lu, rit = ritualDe(d, lu), sem = SEMANA[d.getDay()];
+  rueditaCanvas(x, W / 2, 170, 60);
+  x.textAlign = 'center'; x.fillStyle = '#F6DE9C'; x.font = '700 60px Cinzel, serif'; x.fillText(fechaLarga(d).toUpperCase(), W / 2, 320);
+  x.fillStyle = '#ECE9FF'; x.font = '600 42px "Nunito Sans", sans-serif';
+  let y = envolver(x, `Luna ${lu.fase} en ${SIGNOS_N[lu.signo]} · día de ${sem.planeta}`, W / 2, 400, 900, 54);
+  x.fillStyle = '#C9C6EE'; x.font = '600 36px "Nunito Sans", sans-serif'; y = envolver(x, SIGNOS[lu.signo].clima, W / 2, y + 10, 900, 48);
+  x.textAlign = 'left';
+  for (const [k, t] of FILTROS.slice(1, 5)) {
+    x.fillStyle = r.R[k][0] === 'bueno' ? '#7FD6A4' : r.R[k][0] === 'evitar' ? '#F08A8A' : '#E2BE6E'; x.font = '700 38px Cinzel, serif'; x.fillText(t.toUpperCase(), 110, y + 70); y += 70;
+    x.fillStyle = '#ECE9FF'; x.font = '600 36px "Nunito Sans", sans-serif'; y = envolver(x, r.R[k][1], 110, y + 52, 860, 48);
+  }
+  x.textAlign = 'center'; x.fillStyle = '#F6DE9C'; x.font = '700 38px Cinzel, serif'; y = envolver(x, '🕯️ ' + rit.t, W / 2, y + 90, 900, 52);
+  x.fillStyle = '#F6DE9C'; x.font = '700 38px Cinzel, serif'; x.fillText('Mi Norte ✦', W / 2, 1835);
+  return c;
+}
+async function compartirCanvas(c, nombre, texto){
+  const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+  const f = new File([blob], nombre, { type: 'image/png' });
+  if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], text: texto }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+  const u = URL.createObjectURL(blob), l = document.createElement('a'); l.href = u; l.download = nombre; document.body.appendChild(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000);
+}
+document.addEventListener('click', async e => {
+  if (e.target.closest('#btn-compartir')) { const b = e.target.closest('#btn-compartir'); b.disabled = true; b.textContent = 'Armando tu imagen…'; try { await compartirCanvas(await imagenHoy(), 'mi-energia-' + fechaISO(HOY) + '.png', 'Mi energía de hoy ✦'); } finally { b.disabled = false; b.textContent = '✨ Compartir mi energía de hoy'; } return; }
+  const cd = e.target.closest('[data-compdia]'); if (cd) { cd.disabled = true; try { await compartirCanvas(await imagenDia(deISO(cd.dataset.compdia)), 'mi-norte-' + cd.dataset.compdia + '.png', 'Mi día ✦'); } finally { cd.disabled = false; } }
+});
+document.addEventListener('input', e => { if (e.target.id === 'ig') guardar('ig', e.target.value.trim()); });
+
+/* ---------- instalar ---------- */
+let INSTALAR = null;
+function standalone(){ return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); INSTALAR = e; });
+addEventListener('appinstalled', () => { const c = $('#btn-instalar'); if (c) c.closest('.instalar').remove(); });
+const ICON_COMPARTIR = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-4px"><path d="M8 7l4-4 4 4M12 3v13"/><path d="M6 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/></svg>';
+function guiaInstalar(){
+  const ua = navigator.userAgent, ios = /iphone|ipad|ipod/i.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document);
+  const interno = /Instagram|FBAN|FBAV|WhatsApp|Line\//i.test(ua), chromeIos = /CriOS/i.test(ua);
+  let pasos;
+  if (interno) pasos = `<li>Estás dentro de ${/Instagram/i.test(ua) ? 'Instagram' : /WhatsApp/i.test(ua) ? 'WhatsApp' : 'otra app'}, que no permite instalar.</li><li>Tocá los <b>tres puntitos</b> (arriba a la derecha) y elegí <b>"Abrir en ${ios ? 'Safari' : 'el navegador'}"</b>.</li><li>Ahí volvé a tocar <b>"Instalar Mi Norte"</b>.</li>`;
+  else if (ios) pasos = `<li>Tocá el botón <b>Compartir</b> ${ICON_COMPARTIR} ${chromeIos ? '(arriba a la derecha, al lado de la dirección)' : '(en la barra de abajo de Safari; si no la ves, tocá la dirección o deslizá hacia arriba)'}.</li><li>Deslizá y tocá <b>"Agregar a pantalla de inicio"</b>.</li><li>Tocá <b>"Agregar"</b>. ¡Listo! Mi Norte queda con su ícono dorado.</li>`;
+  else pasos = `<li>Tocá el menú del navegador <b>⋮</b> (arriba a la derecha).</li><li>Elegí <b>"Instalar app"</b> o <b>"Agregar a pantalla principal"</b>.</li><li>Confirmá. ¡Listo! Mi Norte queda con su ícono dorado y se abre como una app.</li>`;
+  $('#modal-c').innerHTML = `<ol>${pasos}</ol>`; $('#modal').classList.add('abierto'); $('#modal [data-cerrar]').focus();
+}
+document.addEventListener('click', e => {
+  if (e.target.closest('#btn-instalar')) { if (INSTALAR) { INSTALAR.prompt(); INSTALAR.userChoice.then(r => { if (r.outcome === 'accepted') { const c = $('#btn-instalar'); if (c) c.closest('.instalar').remove(); } }); INSTALAR = null; } else guiaInstalar(); return; }
+  if (e.target.closest('[data-cerrar]') || e.target.id === 'modal') $('#modal').classList.remove('abierto');
+});
+addEventListener('keydown', e => { if (e.key === 'Escape') $('#modal').classList.remove('abierto'); });
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+
+/* ---------- arranque ---------- */
+saludo();
+mostrar('hoy');
+</script>
+</body>
+</html>
