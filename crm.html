@@ -2410,8 +2410,19 @@ async function syncAll() {
     // a partir del máximo real leído del Sheet — ver comentario del FIX)
     DB.calendarioEventos = DB.calendarioEventos.length ? DB.calendarioEventos : _calendarioEventos;
     // Re-merge locally created items not yet confirmed in Sheet
-    _localClientes.forEach(lc => { if(!DB.clientes.find(x=>x.id===lc.id)) DB.clientes.push(lc); });
-    _localPresupuestos.forEach(lp => { if(!DB.presupuestos.find(x=>x.id===lp.id)) DB.presupuestos.push(lp); });
+    // v17.64: si el ID de una fila cambió en el Sheet (alguien lo editó a mano), la copia
+    // local con el ID viejo NO se vuelve a agregar: era lo que generaba duplicados "solos".
+    _localClientes.forEach(lc => {
+      if(DB.clientes.find(x=>x.id===lc.id)) return;
+      if(DB.clientes.find(x=>String(x.nombre||'').trim().toUpperCase()===String(lc.nombre||'').trim().toUpperCase())) return;
+      DB.clientes.push(lc);
+    });
+    _localPresupuestos.forEach(lp => {
+      if(DB.presupuestos.find(x=>x.id===lp.id)) return;
+      // misma copia con otro ID: mismo N° y mismo monto que uno que ya trajo el Sheet
+      if(lp.num && DB.presupuestos.find(x=>String(x.num)===String(lp.num) && Math.abs((Number(x.monto)||0)-(Number(lp.monto)||0))<1)) return;
+      DB.presupuestos.push(lp);
+    });
 
     // FIX v17.7: el N° de presupuesto siguiente se recalcula siempre desde
     // los datos reales (Sheet + cualquier presupuesto local todavía no
@@ -2526,6 +2537,15 @@ async function syncAll() {
 // UTILS
 // ============================================================
 function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+// v17.64 — los clientes nuevos reciben el SIGUIENTE NÚMERO (mayor ID numérico + 1),
+// igual que los presupuestos, en vez de un código al azar. Así nadie tiene que
+// entrar al Sheet a "acomodar" el ID a mano (que era lo que rompía los vínculos
+// con presupuestos y trabajos y generaba copias duplicadas).
+function siguienteIdCliente() {
+  let max = 0;
+  (DB.clientes||[]).forEach(c => { const sId = String(c.id); if(/^\d{1,6}$/.test(sId)) max = Math.max(max, parseInt(sId,10)); });
+  return String(max + 1);
+}
 
 // Token para el portal público del cliente ("Mi flota"). A diferencia de
 // uid() (que combina timestamp + Math.random, adivinable si alguien insiste),
@@ -5653,7 +5673,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
         clienteIdFinal = existente.id;
       } else {
         const nuevoCliente = {
-          id: uid(), nombre: nombreLimpio,
+          id: siguienteIdCliente(), nombre: nombreLimpio,
           empresa: (cliEmpresa||'').trim() || nombreLimpio,
           zona: (cliZona||'').trim(), telefono: (cliTelefono||'').trim(),
           email: (cliEmail||'').trim(), estado:'activo', notas:'', _local:true
@@ -10111,7 +10131,7 @@ function openModal(type, data={}) {
           return;
         }
       }
-      guardar('clientes',{id:data.id||uid(),nombre:nombreForm,empresa:gv('f-empresa'),telefono:gv('f-telefono'),email:gv('f-email'),zona:gv('f-zona'),estado:gv('f-estado'),ultimoContacto:gv('f-contacto'),notas:gv('f-notas')},'nombre');
+      guardar('clientes',{id:data.id||siguienteIdCliente(),nombre:nombreForm,empresa:gv('f-empresa'),telefono:gv('f-telefono'),email:gv('f-email'),zona:gv('f-zona'),estado:gv('f-estado'),ultimoContacto:gv('f-contacto'),notas:gv('f-notas')},'nombre');
     };
   }
 
@@ -10495,7 +10515,7 @@ function openModal(type, data={}) {
           clienteIdFinal = yaExiste.id;
           showToast('Ya existía "'+nomNuevo+'" — usando ese cliente, no se creó uno nuevo','success');
         } else {
-          const nuevoCliente = {id:uid(),nombre:nomNuevo.trim().toUpperCase(),empresa:nomNuevo.trim(),telefono:telNuevo.trim(),email:'',zona:'',estado:'activo',notas:'',_local:true};
+          const nuevoCliente = {id:siguienteIdCliente(),nombre:nomNuevo.trim().toUpperCase(),empresa:nomNuevo.trim(),telefono:telNuevo.trim(),email:'',zona:'',estado:'activo',notas:'',_local:true};
           DB.clientes.push(nuevoCliente);
           saveLocal();
           writeToSheet({action:'addCliente',row:nuevoCliente});
@@ -12864,7 +12884,7 @@ function convertirProspectoEnCliente(id) {
   let cli = existente;
   if(!cli) {
     if(!confirm('Se va a crear el cliente "'+p.nombre+'" con estos datos y el prospecto pasa a GANADO. ¿Seguimos?')) return;
-    cli = { id:uid(), nombre:p.nombre, empresa:p.nombre, zona:p.zona||'', telefono:p.telefono||'', email:p.email||'', estado:'activo',
+    cli = { id:siguienteIdCliente(), nombre:p.nombre, empresa:p.nombre, zona:p.zona||'', telefono:p.telefono||'', email:p.email||'', estado:'activo',
             notas:'Origen: prospección ('+prosLabelOrigen(p.origen)+')'+(p.notas?' — '+p.notas:''), _local:true };
     DB.clientes.push(cli);
     writeToSheet({ action:'addCliente', row: cli });
