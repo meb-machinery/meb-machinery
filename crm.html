@@ -4354,7 +4354,15 @@ function renderMaquinas() {
 // ============================================================
 // ESTADO DE COBRO
 // ============================================================
+function fmtFechaCobro(f) {
+  const x = String(f||'').trim();
+  if(!x) return '';
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(x);
+  return m ? `${m[3].padStart(2,'0')}/${m[2].padStart(2,'0')}/${m[1]}` : x.split('T')[0];
+}
 function badgeCobro(estado, id) {
+  const _tf = DB.trabajos.find(x=>x.id===id);
+  const _fecha = (estado==='cobrado' && _tf) ? fmtFechaCobro(_tf.fechaCobroReal) : '';
   const map = {
     cobrado:   { cls:'badge-cobro-cobrado',  icon:'✅', label:'Cobrado' },
     parcial:   { cls:'badge-cobro-parcial',  icon:'🟡', label:'Parcial' },
@@ -4365,6 +4373,7 @@ function badgeCobro(estado, id) {
   const botonEditar = estado==='cobrado' ? `<button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="editarCobroTrabajo('${id}')" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button>` : '';
   return `<div id="${divId}" style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">
     <span id="cobro-badge-${id}" class="badge ${e.cls}">${e.icon} ${e.label}</span>
+    ${_fecha?`<span style="font-size:10px;color:var(--muted)" title="Fecha de cobro">📅 ${_fecha}</span>`:''}
     <select onchange="cambiarCobro('${id}',this.value,'${divId}')" style="font-size:10px;background:var(--dark);border:1px solid var(--border2);color:var(--muted);border-radius:3px;padding:2px 4px;cursor:pointer">
       <option value="pendiente" ${estado==='pendiente'?'selected':''}>🔴 Pendiente</option>
       <option value="parcial"   ${estado==='parcial'  ?'selected':''}>🟡 Parcial</option>
@@ -4802,9 +4811,9 @@ function renderPresupuestos() {
           ? `<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('motivoNoAprobado',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Motivo cargado — clic para editar">❓ ${etiquetaMotivoNoAprobado(p.motivoNoAprobado)}</button>`
           : `<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(224,122,122,0.15);border-color:#e07a7a;color:#e07a7a" onclick="openModal('motivoNoAprobado',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Falta cargar el motivo">❓ Falta motivo</button>`
         ) : ''}
-        ${p.estado!=='no aprobado'?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(244,180,0,0.12);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('economiaPresupuesto',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Cargar lo REAL de este trabajo: cobrado, repuestos cobrados y repuestos pagados → ganancia">📊 Economía</button>`:''}
+        ${p.estado!=='no aprobado'?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(244,180,0,0.12);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('economiaPresupuesto',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Cargar lo REAL de este trabajo: cobrado, repuestos cobrados y repuestos pagados → ganancia">📊 Economía${p.estadoCobro==='cobrado'?' ✔':''}</button>`:''}
         ${p.estado==='aprobado'&&p.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Registrar cobro real">💰 Cobro</button>`:''}
-        ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroPresupuesto('${p.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`:''}
+        ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span>${p.fechaCobroReal?` <span style="font-size:10px;color:var(--muted);white-space:nowrap" title="Fecha de cobro">📅 ${fmtFechaCobro(p.fechaCobroReal)}</span>`:''} <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroPresupuesto('${p.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`:''}
         <button class="btn-secondary" style="${p.comprobantePago?'background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366':''}" onclick="adjuntarComprobante('presupuestos','${p.id}')" title="${p.comprobantePago?'Comprobante cargado — clic para cambiarlo':'Adjuntar comprobante de pago (captura, ticket)'}">${p.comprobantePago?'📎✔':'📎'}</button>
         <button class="btn-secondary" onclick="duplicarPresupuesto('${p.id}')" title="Duplicar">⧉</button>
         <button class="btn-secondary" onclick="generarPresupuestoPDF('${p.id}')">📄 PDF</button>
