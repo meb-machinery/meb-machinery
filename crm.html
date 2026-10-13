@@ -4762,6 +4762,7 @@ function renderPresupuestos() {
           ? `<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('motivoNoAprobado',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Motivo cargado — clic para editar">❓ ${etiquetaMotivoNoAprobado(p.motivoNoAprobado)}</button>`
           : `<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(224,122,122,0.15);border-color:#e07a7a;color:#e07a7a" onclick="openModal('motivoNoAprobado',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Falta cargar el motivo">❓ Falta motivo</button>`
         ) : ''}
+        ${p.estado!=='no aprobado'?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(244,180,0,0.12);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('economiaPresupuesto',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Cargar lo REAL de este trabajo: cobrado, repuestos cobrados y repuestos pagados → ganancia">📊 Economía</button>`:''}
         ${p.estado==='aprobado'&&p.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Registrar cobro real">💰 Cobro</button>`:''}
         ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroPresupuesto('${p.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`:''}
         <button class="btn-secondary" style="${p.comprobantePago?'background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366':''}" onclick="adjuntarComprobante('presupuestos','${p.id}')" title="${p.comprobantePago?'Comprobante cargado — clic para cambiarlo':'Adjuntar comprobante de pago (captura, ticket)'}">${p.comprobantePago?'📎✔':'📎'}</button>
@@ -11282,6 +11283,72 @@ function openModal(type, data={}) {
     };
   }
 
+  else if(type==='economiaPresupuesto') {
+    const p = data;
+    const d0 = desgloseDePresupuesto(p);
+    const t0 = DB.trabajos.find(x=>x.presupuestoId===p.id) || null;
+    const cl0 = DB.clientes.find(c=>String(c.id)===String(p.clienteId));
+    const fm = n => '$ '+Math.round(Number(n)||0).toLocaleString('es-AR');
+    const v = (real, cot) => (Number(real)||0) ? Number(real) : (cot||'');
+    title='ECONOMÍA REAL — Presupuesto N°'+String(p.num||p.id).padStart(4,'0');
+    body=`<div class="form-grid">
+      <div class="form-group full" style="background:var(--dark);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--muted)">
+        Cliente: <b style="color:var(--text)">${cl0?cl0.nombre:(p.clienteNombreSheet||'—')}</b> ·
+        Total cotizado: <b style="color:var(--blue-light)">${fm(p.monto)}</b> ·
+        Trabajo vinculado: <b>${t0?'sí':'se crea al guardar'}</b><br>
+        Cargá acá lo que pasó en la realidad. Se guarda en el Trabajo y en el Sheet solo — no hace falta entrar al Sheet.
+      </div>
+      <div class="form-group"><label>Mano de obra cobrada (ARS) <span style="color:var(--muted)">· cotizado ${fm(d0.mo)}</span></label><input id="f-ecmo" type="number" value="${v(t0&&t0.manoObraCobrada,d0.mo)}" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group"><label>Movilidad cobrada (ARS) <span style="color:var(--muted)">· cotizado ${fm(d0.mov)}</span></label><input id="f-ecmov" type="number" value="${v(t0&&t0.movilidad,d0.mov)}" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group"><label>Repuestos cobrados al cliente (ARS) <span style="color:var(--muted)">· cotizado ${fm(d0.rep)}</span></label><input id="f-ecrepfact" type="number" value="${v(t0&&t0.precioRepuestoFacturado,d0.rep)}" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group"><label>Repuestos: lo que PAGASTE realmente (ARS)</label><input id="f-eccostorep" type="number" value="${(t0&&t0.costoRepuesto)||''}" placeholder="lo que te costaron a vos" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group"><label>Total realmente cobrado / facturado (ARS)</label><input id="f-ecmonto" type="number" value="${v(t0&&t0.montoCobrado,p.montoCobradoReal||'')}" placeholder="${Math.round(Number(p.monto)||0)}" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group"><label>Otros gastos (ARS)</label><input id="f-ecgastos" type="number" value="${(t0&&t0.montoGastos)||''}" placeholder="combustible, viáticos…" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group full" id="ec-resultado" style="padding:12px;border-radius:6px;background:var(--dark);border:1px solid var(--border2);font-size:13px"></div>
+    </div>`;
+    onSave=()=>{
+      const n = id => parseFloat(gv(id))||0;
+      const campos = {
+        manoObraCobrada:n('f-ecmo'), movilidad:n('f-ecmov'), precioRepuestoFacturado:n('f-ecrepfact'),
+        costoRepuesto:n('f-eccostorep'), montoCobrado:n('f-ecmonto'), montoGastos:n('f-ecgastos')
+      };
+      let t = DB.trabajos.find(x=>x.presupuestoId===p.id);
+      if(!t){
+        t = { id:uid(), clienteId:p.clienteId, maquinaId:p.maquinaId||'', presupuestoId:p.id,
+          titulo:String(p.descripcion||'').split('\n')[0].split('|')[0].slice(0,120)||('Trabajo — Presupuesto N° '+String(p.num).padStart(4,'0')),
+          tipo:'Reparación', estado:'pendiente', estadoMaquina:'funcionando', fechaInicio:'', fechaFin:'',
+          repuestosDetalle:'', notas:'Generado desde Economía real del Presupuesto N° '+String(p.num).padStart(4,'0'),
+          fotoUrl:'', tcAlMomento:0, gananciaUsdEsperada:0, horasTrabajadas:0, estadoCobro:'pendiente', _local:true };
+        DB.trabajos.push(t);
+      }
+      pushUndo('Economía real presupuesto');
+      Object.assign(t, campos);
+      const tc = Number(t.tcCobro)||0;
+      if(t.estadoCobro==='cobrado' && tc>0){
+        t.montoCobradoUsd = Math.round(t.montoCobrado/tc);
+        t.gananciaUsd = Math.round((t.manoObraCobrada + t.movilidad + (t.precioRepuestoFacturado - t.costoRepuesto))/tc);
+        cambiosCobroRecientes[t.id] = { estadoCobro:'cobrado', tcCobro:tc, montoCobradoUsd:t.montoCobradoUsd, gananciaUsd:t.gananciaUsd, diferenciaUsd:t.diferenciaUsd||0, diferenciaPct:t.diferenciaPct||0, fechaCobroReal:t.fechaCobroReal||'', ts:Date.now() };
+      }
+      writeToSheet({ action:'addTrabajo', row:{
+        id:t.id, clienteId:t.clienteId, maquinaId:t.maquinaId, presupuestoId:t.presupuestoId||'',
+        titulo:t.titulo||'', tipo:t.tipo||'', estado:t.estado||'pendiente', estadoMaquina:t.estadoMaquina||'',
+        fechaInicio:t.fechaInicio||'', fechaFin:t.fechaFin||'',
+        montoCobrado:t.montoCobrado||0, montoGastos:t.montoGastos||0,
+        costoRepuesto:t.costoRepuesto||0, precioRepuestoFacturado:t.precioRepuestoFacturado||0,
+        manoObraCobrada:t.manoObraCobrada||0, movilidad:t.movilidad||0,
+        repuestosDetalle:t.repuestosDetalle||'', notas:t.notas||'', fotoUrl:t.fotoUrl||'',
+        tcAlMomento:t.tcAlMomento||0, gananciaUsdEsperada:t.gananciaUsdEsperada||0, horasTrabajadas:t.horasTrabajadas||0
+      }});
+      if(t.estadoCobro==='cobrado'){
+        writeToSheet({ action:'updateCobro', id:t.id, estadoCobro:'cobrado', tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0, ganancia_usd:t.gananciaUsd||0, diferencia_usd:t.diferenciaUsd||0, diferencia_pct:t.diferenciaPct||0, fecha_cobro_real:t.fechaCobroReal||'' });
+      }
+      saveLocal(); closeModal();
+      try { renderPresupuestos(); updateBadges(); renderDashboard(); renderTrabajos(); } catch(eE) {}
+      showToast('Economía real guardada','success');
+    };
+    setTimeout(()=>{ try{ calcularEconomiaPresup(); }catch(e){} }, 50);
+  }
+
   else if(type==='cobroReal') {
     const p = data;
     // REDISEÑO: p.montoUsd es el ancla pura de contado — el esperado para
@@ -11624,6 +11691,19 @@ async function actualizarTCTrabajo(gananciaArsT, gananciaUsdEsperada, tieneAncla
   } catch(e) {
     showToast('No se pudo traer el dólar en vivo — cargalo a mano', 'error');
   }
+}
+
+function calcularEconomiaPresup() {
+  const n = id => { const e=document.getElementById(id); return e ? (parseFloat(e.value)||0) : 0; };
+  const mo=n('f-ecmo'), mov=n('f-ecmov'), rf=n('f-ecrepfact'), cr=n('f-eccostorep'), gas=n('f-ecgastos');
+  const margenRep = rf - cr;
+  const gan = mo + mov + margenRep;
+  const fm = x => (x<0?'-':'')+'$ '+Math.abs(Math.round(x)).toLocaleString('es-AR');
+  const el = document.getElementById('ec-resultado'); if(!el) return;
+  const col = x => x>=0 ? 'var(--green)' : 'var(--red)';
+  el.innerHTML = `Ganancia en repuestos (cobrado − pagado): <b style="color:${col(margenRep)}">${fm(margenRep)}</b><br>`
+    + `Ganancia del trabajo (mano de obra + movilidad + repuestos): <b style="color:${col(gan)}">${fm(gan)}</b>`
+    + (gas>0 ? `<br>Después de otros gastos: <b style="color:${col(gan-gas)}">${fm(gan-gas)}</b>` : '');
 }
 
 // v17.64 — desglose del presupuesto por tipo de ítem (mano de obra / repuestos / movilidad),
