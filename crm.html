@@ -2148,6 +2148,20 @@ async function syncAll() {
       guardadoPor: r.GUARDADO_POR || '',
       fechaGuardado: r.GUARDADO || r.FECHA_GUARDADO || ''
     }));
+    // v17.65 — informes repetidos en el Sheet (mismo N° y cliente): se muestra uno solo, el que tiene link a Drive.
+    (function(){
+      const vistos = {};
+      const out = [];
+      DB.informes.forEach(inf => {
+        const n = String(inf.num||'').replace(/\D/g,'').replace(/^0+/,'');
+        if(!n) { out.push(inf); return; }
+        const k = n + '|' + String(inf.cliente||'').trim().toUpperCase();
+        if(vistos[k] === undefined) { vistos[k] = out.length; out.push(inf); return; }
+        const previo = out[vistos[k]];
+        if(!previo.driveUrl && inf.driveUrl) out[vistos[k]] = inf;
+      });
+      DB.informes = out;
+    })();
 
     DB.oportunidadesLog = (opl.length ? opl : []).map(r => ({
       id: r.ID || uid(),
