@@ -52,6 +52,13 @@
   .zonas::-webkit-scrollbar{display:none}
   .z{flex:0 0 auto;font-size:13px;background:var(--card);border:1px solid var(--line);color:var(--mut);border-radius:999px;padding:6px 12px}
   .z.on{color:#111;background:var(--y);border-color:var(--y);font-weight:700}
+  .chip.f{color:#111;background:var(--y);border-color:var(--y);font-weight:700}
+  .chip.pas{color:var(--mut);border-style:dashed}
+  details.arch{margin-top:22px;border:1px solid var(--line);border-radius:12px;background:var(--card);padding:0 12px}
+  details.arch summary{list-style:none;cursor:pointer;padding:14px 2px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+  details.arch summary::-webkit-details-marker{display:none}
+  details.arch[open] summary{color:var(--y)}
+  details.arch .card{opacity:.85}
   label.sum{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:14px}
   label.sum input{width:20px;height:20px;accent-color:#F4B400}
   .fab{position:fixed;right:16px;bottom:calc(82px + env(safe-area-inset-bottom));background:var(--y);color:#111;border:0;border-radius:999px;padding:15px 20px;font-size:16px;font-weight:800;box-shadow:0 6px 20px rgba(0,0,0,.5);z-index:8}
@@ -225,10 +232,29 @@ function zonasDelDia(f){
   return [...z];
 }
 function esLeadWeb(p){ return p.origen==='web' && !p.visitado && (p.estado==='nuevo'||p.estado==='a_visitar'); }
+function pendiente(p){ return !esLeadWeb(p) && !p.visitado && (p.estado==='nuevo'||p.estado==='a_visitar'); }
+// prospecto con fecha de visita que ya pasó (y no se registró): se guarda aparte, no ocupa la lista principal
+function yaPaso(p){ return !!p.fechaVisita && p.fechaVisita < (D.hoy || hoyLocal()); }
+// orden: primero los que tienen visita más cercana (mañana antes que pasado), después los sin fecha (por prioridad)
+function ordenProsp(a,b){
+  const fa=a.fechaVisita||'9999', fb=b.fechaVisita||'9999';
+  if(fa!==fb) return fa<fb?-1:1;
+  return (PRIO[a.prioridad]??1)-(PRIO[b.prioridad]??1) || a.nombre.localeCompare(b.nombre);
+}
 function candidatos(f){
   const idsEnVisitas = new Set(visitasDelDia(f).map(v=>v.prospectoId).filter(Boolean));
-  return D.prospectos.filter(p=>!idsEnVisitas.has(p.id) && !esLeadWeb(p) && !p.visitado && (p.estado==='nuevo'||p.estado==='a_visitar'))
-    .sort((a,b)=>(PRIO[a.prioridad]??1)-(PRIO[b.prioridad]??1) || a.nombre.localeCompare(b.nombre));
+  return D.prospectos.filter(p=>!idsEnVisitas.has(p.id) && pendiente(p) && !yaPaso(p)).sort(ordenProsp);
+}
+function archivados(){
+  return D.prospectos.filter(p=>pendiente(p) && yaPaso(p))
+    .sort((a,b)=>String(b.fechaVisita).localeCompare(String(a.fechaVisita)));
+}
+function chipFecha(p){
+  if(!p.fechaVisita) return '';
+  const hoy = D.hoy || hoyLocal();
+  if(p.fechaVisita < hoy) return `<span class="chip pas">Pasó · ${esc(fechaCorta(p.fechaVisita))}</span>`;
+  const lab = p.fechaVisita===hoy ? 'Hoy' : (p.fechaVisita===sumarDias(hoy,1) ? 'Mañana' : fechaCorta(p.fechaVisita));
+  return `<span class="chip f">📅 ${esc(lab)}</span>`;
 }
 function coincideZona(p, zonas){
   const pz = norm(p.zona+' '+p.direccion);
@@ -245,7 +271,11 @@ function render(){
   const app=document.getElementById('app');
   const hoy = D.hoy || hoyLocal();
   const dias = diasDisponibles();
-  if(!diaSel || !dias.includes(diaSel)) diaSel = dias.includes(hoy)?hoy:dias[0];
+  if(!diaSel || !dias.includes(diaSel)){
+    // abre en hoy si hay visitas pendientes; si no, en el próximo día que tenga una visita por hacer
+    const conPend = f => visitasDelDia(f).some(v=>v.estado!=='realizada');
+    diaSel = conPend(hoy) ? hoy : (dias.find(f=>f>hoy && conPend(f)) || (dias.includes(hoy)?hoy:dias[0]));
+  }
   document.getElementById('fecha').textContent = fechaLarga(hoy);
   document.getElementById('estado').textContent = (sinConexion?'Sin conexión · ':'')+'Actualizado '+ultimaCarga;
   document.getElementById('fab').style.display = (vista==='dia')?'block':'none';
@@ -296,6 +326,14 @@ function render(){
     const lista = zonaFiltro ? resto.filter(p=>(p.zona||'Sin zona')===zonaFiltro) : [];
     if(!zonaFiltro) html += `<div class="ayuda">Tocá una zona para ver sus prospectos.</div>`;
     lista.forEach(p=>{ html += tarjetaProspecto(p); });
+  }
+
+  // visitas pasadas: quedan guardadas acá abajo (cerradas), por si hay que registrar cómo le fue
+  const arch = archivados();
+  if(arch.length){
+    html += `<details class="arch"><summary>🗂 Visitas pasadas guardadas (${arch.length})</summary>
+      <div class="ayuda">Prospectos con fecha de visita que ya pasó. Si fuiste, tocá “✔ Fui” y contá cómo te fue; si no, Belu les pone fecha nueva.</div>
+      ${arch.map(tarjetaProspecto).join('')}</details>`;
   }
   html += `<div class="inst" id="inst"></div>`;
   app.innerHTML = html;
@@ -449,7 +487,7 @@ function tarjetaProspecto(p){
     <div class="tit">${esc(p.nombre)}</div>
     <div class="sub">${esc(p.contacto||'')}${p.contacto&&p.zona?' · ':''}${esc(p.zona||'')}</div>
     ${p.direccion?`<div class="sub" style="margin-top:4px">📍 ${esc(p.direccion)}</div>`:''}
-    <div class="chips">${chipsProspecto(p)}</div>
+    <div class="chips">${chipFecha(p)}${chipsProspecto(p)}</div>
     ${p.notas?`<div class="nota">${esc(p.notas)}</div>`:''}
     ${p.resultado&&!p.visitado?`<div class="sub" style="margin-top:6px">Última vez: ${esc((RESULTADOS.find(r=>r[0]===p.resultado)||[,p.resultado])[1])}</div>`:''}
     <div class="acts">
