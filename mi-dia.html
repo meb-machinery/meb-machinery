@@ -84,6 +84,24 @@
   .paso{display:flex;gap:10px;margin:8px 0;font-size:14px}
   .paso b{flex:0 0 24px;height:24px;border-radius:50%;background:var(--y);color:#111;text-align:center;line-height:24px;font-size:13px}
   .web-card{border-left:4px solid var(--ok)}
+  .parte{margin-top:10px;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:0 10px}
+  .parte summary{list-style:none;cursor:pointer;padding:10px 2px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--y);display:flex;justify-content:space-between;gap:8px}
+  .parte summary::-webkit-details-marker{display:none}
+  .parte summary>span:first-child{white-space:nowrap}
+  .parte summary .res{text-align:right;color:var(--mut);font-weight:600;letter-spacing:0;text-transform:none;font-size:12px}
+  .pt{padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+  .pt .lab{font-size:12px;color:var(--mut);margin-bottom:3px}
+  .pt .it{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:2px 0}
+  .pt .it b{white-space:nowrap}
+  .pt.cob .lab{color:var(--bad)}
+  .pt.cob .tot{color:var(--bad);font-weight:800;font-size:17px}
+  .mq{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0}
+  .mq .n{font-weight:700;font-size:14px}
+  .mq .h{font-size:12px;color:var(--mut);margin-top:1px}
+  .mq .h b{color:var(--y)}
+  .mini{flex:0 0 auto;background:var(--bg);border:1px solid var(--line);color:var(--tx);border-radius:8px;padding:7px 10px;font-size:13px;font-weight:600;font-family:inherit}
+  .foto-btn{display:block;width:100%;text-align:center;background:var(--bg);border:1px dashed var(--y);color:var(--y);border-radius:12px;padding:16px;font-size:15px;font-weight:700}
+  .foto-prev{display:block;width:100%;max-height:240px;object-fit:contain;border-radius:10px;margin-top:8px;background:#000}
   .inst{background:var(--card2);border:1px dashed var(--line);border-radius:12px;padding:10px 12px;font-size:12px;color:var(--mut);margin-top:10px;display:none}
 </style>
 </head>
@@ -129,7 +147,7 @@ const RESULTADOS = [
 ];
 const PRIO = { alta:0, media:1, baja:2 };
 
-let D = { hoy:'', visitas:[], prospectos:[], web:{}, links:{} };
+let D = { hoy:'', visitas:[], prospectos:[], web:{}, links:{}, fichas:{} };
 let vista = 'dia';
 let diaSel = '';
 let zonaFiltro = '';
@@ -160,7 +178,7 @@ function cargar(manual){
     .then(r=>r.json())
     .then(j=>{
       if(!j.ok){ if(!D.visitas.length && !D.prospectos.length) mostrarSinAcceso(); else toast('No se pudo actualizar'); return; }
-      D = { hoy:j.hoy, visitas:j.visitas||[], prospectos:j.prospectos||[], web:j.web||{}, links:j.links||{} };
+      D = { hoy:j.hoy, visitas:j.visitas||[], prospectos:j.prospectos||[], web:j.web||{}, links:j.links||{}, fichas:j.fichas||{} };
       sinConexion = false;
       ultimaCarga = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
       ls(LS_DATA, JSON.stringify({ d:D, t:ultimaCarga, dia:hoyLocal() }));
@@ -171,23 +189,33 @@ function cargar(manual){
     .catch(()=>{
       sinConexion = true;
       const g = ls(LS_DATA);
-      if(g){ try{ const o=JSON.parse(g); D=o.d; ultimaCarga=o.t+' (guardado)'; aplicarColaLocal(); render(); }catch(e){} }
+      if(g){ try{ const o=JSON.parse(g); D=o.d; if(!D.fichas) D.fichas={}; ultimaCarga=o.t+' (guardado)'; aplicarColaLocal(); render(); }catch(e){} }
       else document.getElementById('app').innerHTML='<div class="msg-grande"><b>Sin conexión</b>Abrila de nuevo cuando tengas señal.</div>';
       document.getElementById('estado').textContent='Sin conexión';
     });
 }
 function leerCola(){ try{ return JSON.parse(ls(LS_Q)||'[]'); }catch(e){ return []; } }
+function guardarCola(c){ try{ localStorage.setItem(LS_Q, JSON.stringify(c)); return true; }catch(e){ return false; } }
+function postear(p){ return fetch(SCRIPT_URL,{ method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(p) }); }
 function enviar(payload){
-  const cola = leerCola(); cola.push(payload); ls(LS_Q, JSON.stringify(cola));
+  const cola = leerCola(); cola.push(payload);
+  if(!guardarCola(cola)){
+    // v17.68: el celular no tiene lugar para guardar una copia (fotos grandes): se manda directo
+    postear(payload).then(()=>{ if(!sinConexion) setTimeout(()=>cargar(false),1500); })
+      .catch(()=>toast('No se pudo enviar: probá de nuevo con señal'));
+    return;
+  }
   vaciarCola();
 }
+let _enviando = false;
 function vaciarCola(){
+  if(_enviando) return;
   const cola = leerCola();
   if(!cola.length) return;
-  const p = cola[0];
-  fetch(SCRIPT_URL,{ method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(p) })
-    .then(()=>{ const c=leerCola(); c.shift(); ls(LS_Q, JSON.stringify(c)); if(c.length) vaciarCola(); else if(!sinConexion) setTimeout(()=>cargar(false),1500); })
-    .catch(()=>{ /* queda en la cola; se reintenta al volver la señal */ });
+  _enviando = true;
+  postear(cola[0])
+    .then(()=>{ _enviando=false; const c=leerCola(); c.shift(); guardarCola(c); if(c.length) vaciarCola(); else if(!sinConexion) setTimeout(()=>cargar(false),1500); })
+    .catch(()=>{ _enviando=false; /* queda en la cola; se reintenta al volver la señal */ });
 }
 // Los cambios que todavía no se enviaron se reflejan igual en pantalla.
 function aplicarColaLocal(){
@@ -197,6 +225,7 @@ function aplicarColaLocal(){
       if(r.tipo==='prospecto'){ const x=D.prospectos.find(z=>z.id===r.id); if(x) aplicarResultado(x,r.resultado); }
       if(r.tipo==='visita' && !r.volver){ const v=D.visitas.find(z=>z.id===r.id); if(v) v.estado='realizada'; }
     }
+    if(p.action==='miDiaHorometro') aplicarHorometroLocal(r);
   });
 }
 function aplicarResultado(p, resultado){
@@ -468,11 +497,169 @@ function tarjetaVisita(v){
     ${(v.notas&&!p)?`<div class="nota">${esc(v.notas)}</div>`:''}
     ${v.acuerdos?`<div class="nota">📝 ${esc(v.acuerdos)}</div>`:''}
     ${p?`<div class="chips">${chipsProspecto(p)}</div>`:''}
+    ${(!p && v.clienteId) ? htmlParte(v, hecha) : ''}
     <div class="acts">
       ${dir?`<a class="a p" target="_blank" rel="noopener" href="${esc(mapsBuscar(dir))}">📍 Cómo llegar</a>`:''}
       ${tel?`<a class="a" href="tel:${esc(soloDigitos(tel))}">📞 Llamar</a><a class="a" target="_blank" rel="noopener" href="https://wa.me/${esc(telWA(tel))}">💬</a>`:''}
+      ${(!p && v.clienteId)?`<button class="a" type="button" data-hor="${esc(v.id)}|">⏱ Horómetro</button>`:''}
       ${hecha?`<span class="a ok">✔ Hecha</span>`:`<button class="a ok" type="button" data-fui="${p?'p:'+esc(p.id):'v:'+esc(v.id)}">✔ Fui</button>`}
     </div></div>`;
+}
+
+/* ---------- v17.68: parte de salida (qué resolver con este cliente en esta misma salida) ---------- */
+function fmtHs(n){ return Math.round(Number(n)||0).toLocaleString('es-AR')+' hs'; }
+function fmtDM(iso){ if(!iso) return ''; const p=String(iso).split('-'); return p.length===3 ? p[2]+'/'+p[1] : iso; }
+function fichaDe(v){ return (D.fichas||{})[v.clienteId] || null; }
+function htmlParte(v, hecha){
+  const f = fichaDe(v);
+  if(!f) return '';
+  const partes = [];
+  const resumen = [];
+  if(f.porCobrar>0){
+    resumen.push('💰 '+plata(f.porCobrar));
+    partes.push(`<div class="pt cob"><div class="lab">💰 Por cobrar</div><div class="tot">${plata(f.porCobrar)}</div>
+      ${(f.cobros||[]).slice(0,4).map(c=>`<div class="it"><span>${esc(c.txt)}</span><b>${plata(c.monto)}</b></div>`).join('')}
+      ${(f.cobros||[]).length>4?`<div class="it" style="color:var(--mut)">+${f.cobros.length-4} más</div>`:''}</div>`);
+  }
+  if((f.pendientes||[]).length){
+    resumen.push('📄 '+f.pendientes.length);
+    partes.push(`<div class="pt"><div class="lab">📄 Presupuestos sin respuesta — preguntá si los aprueba</div>
+      ${f.pendientes.map(x=>`<div class="it"><span>#${esc(x.num)}${x.dias!=null?` · hace ${x.dias} días`:''}</span><b>${x.monto?plata(x.monto):''}</b></div>`).join('')}</div>`);
+  }
+  const mqs = f.maquinas||[];
+  if(mqs.length){
+    partes.push(`<div class="pt"><div class="lab">⚙️ Máquinas — cargá el horómetro de cada una</div>
+      ${mqs.map(m=>{
+        const h=m.hor;
+        let linea='Sin lectura de horómetro todavía';
+        if(h){
+          linea=`Última: <b>${fmtHs(h.horas)}</b> (${esc(fmtDM(h.fecha))}) · service a las ${fmtHs(h.proxService)}`;
+          if(h.faltan<=50) linea+=` · <b>faltan ${fmtHs(h.faltan)}</b>`;
+          else linea+=` · faltan ${fmtHs(h.faltan)}`;
+          if(h.hsSemana) linea+=` · ~${fmtHs(h.hsSemana)}/semana${h.fechaEstimada?` (≈ ${esc(fmtDM(h.fechaEstimada))})`:''}`;
+        }
+        return `<div class="mq"><div><div class="n">${esc(m.nombre)}${m.contrato?' <span class="chip y" style="font-size:11px">contrato</span>':''}</div>
+          <div class="h">${esc(m.tipo||'')}${m.tipo&&m.serie?' · ':''}${m.serie?'Serie '+esc(m.serie):''}${m.tipo||m.serie?'<br>':''}${linea}</div></div>
+          <button class="mini" type="button" data-hor="${esc(v.id)}|${esc(m.id)}">⏱</button></div>`;
+      }).join('')}</div>`);
+  }
+  if(f.candidatoContrato){
+    resumen.push('🛠 contrato');
+    const link = (D.links&&D.links.contratos)||'https://www.mebmachinerysolutions.ar/contratos-mantenimiento.html';
+    const txt = `Hola! Te paso los planes de mantenimiento preventivo de MEB: servicio cada 250 hs, filtros e historial técnico de cada máquina. Así evitás que se te paren en plena obra 👇\n${link}`;
+    partes.push(`<div class="pt"><div class="lab">🛠 Candidato a contrato de mantenimiento</div>
+      <div style="font-size:13px">${mqs.length} ${mqs.length===1?'máquina':'máquinas'} · ${f.trabajos} ${f.trabajos===1?'trabajo':'trabajos'} y ningún contrato. Buen momento para ofrecerlo.</div>
+      ${f.telefono?`<div class="acts" style="margin-top:8px"><a class="a" target="_blank" rel="noopener" href="https://wa.me/${esc(telWA(f.telefono))}?text=${encodeURIComponent(txt)}">💬 Mandarle los planes</a></div>`:''}</div>`);
+  }
+  if(v.zona){
+    const n = candidatos(v.fecha).filter(p=>coincideZona(p,[v.zona])).length;
+    if(n) partes.push(`<div class="pt"><div class="lab">🧭 Prospectos</div><div style="font-size:13px">${n} en ${esc(v.zona)} — están más abajo, en “Si tenés tiempo”.</div></div>`);
+  }
+  if(!partes.length) return '';
+  return `<details class="parte" ${hecha?'':'open'}><summary><span>📋 Parte de salida</span><span class="res">${esc(resumen.join(' · '))}</span></summary>${partes.join('')}</details>`;
+}
+
+/* ---------- v17.68: horómetro (foto + horas + notas) ---------- */
+let _fotoHor = '';
+function comprimirFoto(file){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file);
+    const img=new Image();
+    img.onload=()=>{
+      const dibujar=max=>{
+        let w=img.naturalWidth, h=img.naturalHeight;
+        if(Math.max(w,h)>max){ const k=max/Math.max(w,h); w=Math.round(w*k); h=Math.round(h*k); }
+        const c=document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        let q=0.78, d=c.toDataURL('image/jpeg',q);
+        while(d.length>600000 && q>0.45){ q-=0.1; d=c.toDataURL('image/jpeg',q); }
+        return d;
+      };
+      let d=dibujar(1600);
+      if(d.length>600000) d=dibujar(1100);
+      URL.revokeObjectURL(url);
+      res(d);
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('foto')); };
+    img.src=url;
+  });
+}
+function hojaHorometro(visitaId, maquinaId){
+  const v=D.visitas.find(x=>x.id===visitaId); if(!v) return;
+  const f=fichaDe(v)||{maquinas:[]};
+  const mqs=f.maquinas||[];
+  _fotoHor='';
+  const sel = maquinaId || (mqs.length===1?mqs[0].id:'');
+  abrirHoja(`<h3>⏱ Horómetro — ${esc(v.cliente||v.titulo||'')}</h3>
+    <div class="f"><label>Máquina</label><select id="hr-maq">
+      ${mqs.length>1||!mqs.length?'<option value="">Elegir…</option>':''}
+      ${mqs.map(m=>`<option value="${esc(m.id)}" ${m.id===sel?'selected':''}>${esc(m.nombre)}${m.serie?' · '+esc(m.serie):''}</option>`).join('')}
+      <option value="__otra">Otra máquina (no está en la lista)</option></select></div>
+    <div class="f" id="hr-otra-box" style="display:none"><label>¿Cuál? (marca, modelo, serie si la ves)</label><input id="hr-otra" placeholder="Ej: CAT 416E, serie ..."></div>
+    <div class="f"><label>Foto del horómetro</label>
+      <label class="foto-btn" for="hr-foto" id="hr-foto-lab">📷 Sacar foto</label>
+      <input id="hr-foto" type="file" accept="image/*" capture="environment" style="display:none">
+      <img id="hr-prev" class="foto-prev" style="display:none" alt="Foto del horómetro">
+      <div class="ayuda" style="margin-top:6px">Se guarda en Drive, en la carpeta del cliente. Es opcional: si no hay buena luz, alcanza con el número.</div></div>
+    <div class="f"><label>Horas que marca *</label><input id="hr-horas" inputmode="decimal" autocomplete="off" placeholder="Ej: 3250">
+      <div class="ayuda" id="hr-ult" style="margin-top:6px"></div></div>
+    <div class="f"><label>Notas (opcional)</label><textarea id="hr-notas" rows="3" placeholder="Pérdidas, ruidos, qué pidió el cliente, qué hay que llevar la próxima…"></textarea></div>
+    <div class="acts"><button class="a" type="button" id="hr-cancel">Cancelar</button><button class="a p" type="button" id="hr-ok">Guardar</button></div>`);
+  const elMaq=document.getElementById('hr-maq');
+  const mostrarUlt=()=>{
+    const m=mqs.find(x=>x.id===elMaq.value);
+    document.getElementById('hr-otra-box').style.display = elMaq.value==='__otra'?'block':'none';
+    document.getElementById('hr-ult').textContent = (m&&m.hor) ? `Última lectura: ${fmtHs(m.hor.horas)} (${fmtDM(m.hor.fecha)})` : '';
+  };
+  elMaq.onchange=mostrarUlt; mostrarUlt();
+  document.getElementById('hr-foto').onchange=function(){
+    const file=this.files&&this.files[0]; if(!file) return;
+    const lab=document.getElementById('hr-foto-lab'); lab.textContent='Preparando foto…';
+    comprimirFoto(file).then(d=>{
+      _fotoHor=d;
+      const im=document.getElementById('hr-prev'); im.src=d; im.style.display='block';
+      lab.textContent='📷 Cambiar foto';
+    }).catch(()=>{ lab.textContent='📷 Sacar foto'; toast('No se pudo leer la foto, probá de nuevo'); });
+  };
+  document.getElementById('hr-cancel').onclick=()=>{ _fotoHor=''; cerrarHoja(); };
+  document.getElementById('hr-ok').onclick=()=>{
+    const maqVal=elMaq.value;
+    if(!maqVal){ toast('Elegí la máquina'); return; }
+    const otra=document.getElementById('hr-otra').value.trim();
+    if(maqVal==='__otra' && !otra){ toast('Escribí qué máquina es'); return; }
+    const txtH=document.getElementById('hr-horas').value.trim();
+    const horas=leerHoras(txtH);
+    if(!(horas>=0)){ toast('Poné las horas que marca'); return; }
+    const m=mqs.find(x=>x.id===maqVal);
+    if(m&&m.hor&&horas<m.hor.horas && !confirm(`La lectura anterior era ${fmtHs(m.hor.horas)}. ¿Seguro que ahora marca ${fmtHs(horas)}?`)) return;
+    const notas=document.getElementById('hr-notas').value.trim();
+    const row={ t:TOKEN, id:'hr'+Date.now().toString(36)+Math.floor(Math.random()*1296).toString(36), visitaId:v.id, clienteId:v.clienteId, clienteNombre:v.cliente||'',
+      maquinaId: maqVal==='__otra'?'':maqVal, maquinaTexto: maqVal==='__otra'?otra:(m?m.nombre:''), horas:horas, notas:notas, fotoBase64:_fotoHor,
+      titulo:'Horómetro '+(maqVal==='__otra'?otra:(m?m.nombre:''))+' '+horas+' hs' };
+    aplicarHorometroLocal(row);
+    _fotoHor='';
+    enviar({ action:'miDiaHorometro', usuario:'Emmanuel (Mi día)', row:row });
+    cerrarHoja(); render(); toast(row.fotoBase64?'Horómetro y foto guardados ✔':'Horómetro guardado ✔');
+  };
+}
+// "3250", "3.250", "3250,5" o "3250.5" → número
+function leerHoras(t){
+  let s=String(t||'').toLowerCase().replace(/horas|hs?|\s/g,'');
+  if(!s) return NaN;
+  if(s.indexOf(',')>=0) s=s.replace(/\./g,'').replace(',','.');
+  else if(/^\d{1,3}(\.\d{3})+$/.test(s)) s=s.replace(/\./g,'');
+  if(!/^\d+(\.\d+)?$/.test(s)) return NaN;
+  return parseFloat(s);
+}
+// Refleja en pantalla la lectura recién cargada (aunque todavía no haya señal)
+function aplicarHorometroLocal(r){
+  if(!r || !r.maquinaId) return;
+  const f=(D.fichas||{})[r.clienteId]; if(!f) return;
+  const m=(f.maquinas||[]).find(x=>x.id===r.maquinaId); if(!m) return;
+  const hoy=D.hoy||hoyLocal();
+  if(m.hor && m.hor.fecha===hoy && m.hor.horas===r.horas) return;
+  const prox=(Math.floor(r.horas/250)+1)*250;
+  m.hor={ horas:r.horas, fecha:hoy, proxService:prox, faltan:Math.round(prox-r.horas), hsSemana:(m.hor&&m.hor.hsSemana)||0, fechaEstimada:'' };
 }
 function chipsProspecto(p){
   const c=[];
@@ -524,8 +711,10 @@ function hojaFui(clave){
       <div class="f"><label>Acuerdos o notas (opcional)</label><textarea id="h-notas" rows="3" placeholder="Qué se habló, qué quedó pendiente…"></textarea>
         <div class="ayuda" style="margin-top:6px">Se guarda en la visita del calendario, en “Acuerdos / notas aparte”.</div></div>
       <label class="sum" style="margin:0 0 12px"><input type="checkbox" id="h-volver"> Quedó pendiente, hay que volver</label>
+      ${v.clienteId?`<div class="ayuda" style="margin:-4px 0 12px">¿Anotaste el horómetro? <a href="#" id="h-hor" style="color:var(--y)">⏱ Cargarlo ahora</a></div>`:''}
       <div class="acts"><button class="a" type="button" id="h-cancel">Cancelar</button><button class="a p" type="button" id="h-ok">Guardar</button></div>`);
     document.getElementById('h-cancel').onclick=cerrarHoja;
+    const hh=document.getElementById('h-hor'); if(hh) hh.onclick=ev=>{ ev.preventDefault(); hojaHorometro(v.id,''); };
     document.getElementById('h-ok').onclick=()=>{
       const notas=document.getElementById('h-notas').value.trim();
       const volver=document.getElementById('h-volver').checked;
@@ -612,6 +801,7 @@ function prepararInstalacion(){
 
 /* ---------- eventos ---------- */
 document.addEventListener('click',e=>{
+  const hb=e.target.closest('[data-hor]'); if(hb){ const [vid,mid]=hb.dataset.hor.split('|'); hojaHorometro(vid,mid||''); return; }
   const t=e.target.closest('[data-dia],[data-zona],[data-fui]'); if(!t) return;
   if(t.dataset.dia){ diaSel=t.dataset.dia; zonaFiltro=''; render(); }
   else if(t.dataset.zona){ zonaFiltro = (zonaFiltro===t.dataset.zona)?'':t.dataset.zona; render(); }
@@ -645,7 +835,7 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden && TOKEN 
 /* ---------- arranque ---------- */
 (function(){
   const g=ls(LS_DATA);
-  if(g){ try{ const o=JSON.parse(g); if(o.dia===hoyLocal()){ D=o.d; ultimaCarga=o.t+' (guardado)'; aplicarColaLocal(); render(); } }catch(e){} }
+  if(g){ try{ const o=JSON.parse(g); if(o.dia===hoyLocal()){ D=o.d; if(!D.fichas) D.fichas={}; ultimaCarga=o.t+' (guardado)'; aplicarColaLocal(); render(); } }catch(e){} }
   const h=(location.hash||'').replace('#','');
   if(h==='gastos'||h==='compartir') setVista(h);
   cargar(false);
