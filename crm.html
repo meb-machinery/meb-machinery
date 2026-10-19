@@ -9655,6 +9655,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '  var tc = tcEl ? parse(tcEl.innerText) : 0;',
     '  if (!(total > 0)) {',
     '    tbody.innerHTML = "<tr><td colspan=\\"4\\" style=\\"text-align:center;color:#999;font-size:11px;padding:16px\\">Carg\\u00E1 los \\u00EDtems del presupuesto para ver los plazos de pago</td></tr>";',
+    '    var fe0 = document.getElementById("tElegidaRow"); if (fe0) fe0.innerHTML = "";',
     '    return;',
     '  }',
     '  var tramos = [',
@@ -9678,6 +9679,16 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '      + "<td class=\\"no-print del-col\\" style=\\"white-space:nowrap\\">" + "<button class=\\"btn-del\\" style=\\"color:" + (elegida?"#F4B400":"#999") + "\\" title=\\"Marcar como el plazo que eligi\\u00F3 el cliente\\" onmousedown=\\"event.preventDefault();elegirTramoPago(\\x27"+t.key+"\\x27)\\">\\u2605</button>" + (puedeQuitar ? ("<button class=\\"btn-del\\" title=\\"Sacar esta opci\\u00F3n del presupuesto\\" onmousedown=\\"event.preventDefault();ocultarTramoPago("+idx+")\\">\\u2715</button>") : "") + "</td></tr>";',
     '  });',
     '  tbody.innerHTML = html;',
+    '  var filaEl = document.getElementById("tElegidaRow");',
+    '  if (filaEl) {',
+    '    var tEl = null; tramos.forEach(function(t){ if (t.key === PLAZO_ELEGIDO && t.key !== "contado") tEl = t; });',
+    '    if (tEl) {',
+    '      var arsEl = Math.round(total * (1 + tEl.pct/100));',
+    '      filaEl.innerHTML = "<div style=\\"margin-top:10px;padding:10px 12px;background:#FFF3CC;border:2px solid #F4B400;border-radius:6px\\">"',
+    '        + "<div style=\\"font-size:11px;font-weight:700;color:#003B70;letter-spacing:1px;text-transform:uppercase\\">Total a pagar \\u2014 opci\\u00F3n elegida: " + tEl.label.toLowerCase() + " (+" + tEl.pct + "%)</div>"',
+    '        + "<div style=\\"font-size:24px;font-weight:900;color:#1A1A1A;margin-top:2px;text-align:right\\">$" + arsEl.toLocaleString("es-AR") + "</div></div>";',
+    '    } else filaEl.innerHTML = "";',
+    '  }',
     '}',
     // Sacar una opción de pago no la borra del todo — solo la oculta de
     // ESTE presupuesto puntual. Si Emmanuel borra por error la única que
@@ -10111,12 +10122,9 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     // guardado el presupuesto en ese momento. Si en el CRM se edita y se
     // cambia el plazo, la próxima vez que se genere este PDF va a traer el
     // plazo nuevo automáticamente (lee directo de p.plazoPago/p.recargoPct).
-    + (p.plazoPago && p.plazoPago!=='contado' ? (
-      '<div class="total-row" style="margin-top:8px;padding-top:8px;border-top:2px dashed #F4B400">'
-      + '<span style="color:#003B70;font-weight:bold">Plazo acordado: A ' + p.plazoPago + ' d\u00EDas (+' + (p.recargoPct||0) + '%)</span>'
-      + '<span style="font-weight:bold;color:#F4B400">$' + Math.round((p.monto||0)*(1+(p.recargoPct||0)/100)).toLocaleString('es-AR') + '</span>'
-      + '</div>'
-    ) : '')
+    // v17.70 — el plazo elegido se muestra abajo del TOTAL, en vivo: cambia apenas se
+    // marca la ★ en Opciones de pago (lo arma recalcPagos). Antes era una línea fija y chica.
+    + '<div id="tElegidaRow"></div>'
     + '</div></div>'
 
     // v17.69 — "La calculadora como argumento de venta": cuánto le cuesta al cliente
