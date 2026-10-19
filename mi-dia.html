@@ -449,7 +449,7 @@ function setVista(v){
   document.getElementById('fab').style.display = (v==='dia' && TOKEN)?'block':'none';
   if(v==='gastos'){
     const c=document.getElementById('vGastos');
-    if(!c.firstChild) c.innerHTML='<iframe src="gastos.html" title="Gastos" allow="clipboard-write"></iframe>';
+    if(!c.firstChild) c.innerHTML='<iframe src="gastos.html'+(TOKEN?'?t='+encodeURIComponent(TOKEN):'')+'" title="Gastos" allow="clipboard-write"></iframe>';
   }
   if(v==='compartir') renderCompartir();
   window.scrollTo(0,0);

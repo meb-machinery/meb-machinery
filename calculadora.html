@@ -93,11 +93,15 @@
       <div class="row"><span>Cada semana de demora suma</span><b id="rSem"></b></div>
     </div>
     <p class="nota">Es una estimación con los datos que cargaste. Cada día que la máquina sigue parada es plata que no vuelve: un diagnóstico a tiempo es la forma más rápida de saber cuánto cuesta realmente ponerla a trabajar.</p>
+    <div style="margin-top:16px">
+      <a class="btn wa" id="btnDiag" target="_blank" rel="noopener" style="display:block">📲 RECIBÍ EL DIAGNÓSTICO PROBABLE POR WHATSAPP</a>
+      <p class="nota" style="margin-top:8px;text-align:center">Se abre WhatsApp con tu consulta ya escrita: solo tocás enviar y Emmanuel te responde en el día.</p>
+    </div>
   </div>
 
   <div class="card resultado" id="leadBox" style="border-left-color:var(--yellow)" data-clarity-mask="True">
-    <h2>PEDÍ TU PRESUPUESTO SIN CARGO</h2>
-    <p class="nota" style="margin:-4px 0 12px">Dejanos tus datos y Emmanuel te contacta en el día con un presupuesto de diagnóstico y reparación.</p>
+    <h2>¿PREFERÍS QUE TE LLAMEMOS?</h2>
+    <p class="nota" style="margin:-4px 0 12px">Dejanos tus datos y Emmanuel te contacta en el día con un presupuesto de diagnóstico y reparación sin cargo.</p>
     <div class="grid">
       <div><label>Tu nombre *</label><input id="nombre" maxlength="80"></div>
       <div><label>Empresa / obra</label><input id="empresa" maxlength="80"></div>
@@ -136,16 +140,26 @@ const CLARITY_ID = 'xjv9p2iav7';
 
 // De dónde vino la visita: ?utm_source=instagram (o web, whatsapp, qr...). Si no hay, usa el sitio de origen.
 const _qs = new URLSearchParams(location.search);
+// MODO PRUEBA: abrir una vez con ?prueba=1 deja ESTE navegador marcado (se saca con ?prueba=0).
+// Lo que se haga en modo prueba no cuenta en las estadísticas, no carga prospectos ni manda avisos.
+try { if (_qs.get('prueba') === '1') localStorage.setItem('meb_prueba', '1'); if (_qs.get('prueba') === '0') localStorage.removeItem('meb_prueba'); } catch (e) {}
+let PRUEBA = false; try { PRUEBA = localStorage.getItem('meb_prueba') === '1'; } catch (e) {}
+if (PRUEBA) document.addEventListener('DOMContentLoaded', () => {
+  const b = document.createElement('div');
+  b.textContent = 'MODO PRUEBA — esto no cuenta en las estadísticas ni carga prospectos (para salir: ?prueba=0)';
+  b.style.cssText = 'position:sticky;top:0;z-index:50;background:#e74c3c;color:#fff;text-align:center;font-size:12px;font-weight:700;padding:6px 10px;letter-spacing:.5px';
+  document.body.prepend(b);
+});
 let FUENTE = (_qs.get('utm_source') || '').toLowerCase().slice(0, 40);
 if (!FUENTE) { try { FUENTE = document.referrer ? new URL(document.referrer).hostname.replace(/^www\./, '').slice(0, 40) : 'directo'; } catch (e) { FUENTE = 'directo'; } }
 const CAMPANIA = (_qs.get('utm_campaign') || '').slice(0, 60);
 
-if (GA_ID) {
+if (GA_ID && !PRUEBA) {
   const s = document.createElement('script'); s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID; document.head.appendChild(s);
   window.dataLayer = window.dataLayer || []; window.gtag = function () { dataLayer.push(arguments); };
   gtag('js', new Date()); gtag('config', GA_ID);
 }
-if (CLARITY_ID) {
+if (CLARITY_ID && !PRUEBA) {
   (function (c, l, a, r, i, t, y) { c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments); }; t = l.createElement(r); t.async = 1; t.src = 'https://www.clarity.ms/tag/' + i; y = l.getElementsByTagName(r)[0]; y.parentNode.insertBefore(t, y); })(window, document, 'clarity', 'script', CLARITY_ID);
   try { clarity('set', 'fuente', FUENTE); } catch (e) {}
 }
@@ -156,7 +170,7 @@ function track(evento, datos) {
   try { if (window.clarity) clarity('event', evento); } catch (e) {}
   try {
     fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'eventoWeb', row: Object.assign({ evento, fuente: FUENTE, campania: CAMPANIA }, datos) }) }).catch(() => {});
+      body: JSON.stringify({ action: 'eventoWeb', row: Object.assign({ evento, fuente: FUENTE, campania: CAMPANIA }, datos, PRUEBA ? { prueba: true } : {}) }) }).catch(() => {});
   } catch (e) {}
 }
 try { if (!sessionStorage.getItem('meb_calc_visita')) { sessionStorage.setItem('meb_calc_visita', '1'); track('visita'); } } catch (e) { track('visita'); }
@@ -185,6 +199,12 @@ $('btnCalc').addEventListener('click', () => {
   $('rSem').textContent = fm(porDia * 7);
   $('resultado').style.display = 'block';
   $('leadBox').style.display = 'block';
+  // Botón de WhatsApp con la consulta armada — capta el contacto sin que parezca un formulario
+  const maqTxt = [$('marca').value, limpiar($('modelo').value, 60)].filter(Boolean).join(' ') + ' (' + $('tipo').value.toLowerCase() + ')';
+  const msgDiag = (PRUEBA ? '[PRUEBA] ' : '') + 'Hola MEB! Usé la calculadora: tengo una ' + maqTxt + ' parada. Le pasa: ' + $('sintoma').value.toLowerCase() +
+    '. Calculé que me cuesta ' + fm(porDia) + ' por día (' + fm(total) + ' en ' + dias + (dias === 1 ? ' día' : ' días') + '). ¿Me pasan el diagnóstico probable y qué haría falta para ponerla a trabajar?';
+  $('btnDiag').href = 'https://wa.me/' + WA + '?text=' + encodeURIComponent(msgDiag);
+  $('btnDiag').onclick = () => track('click_whatsapp', { tipo: $('tipo').value, marca: $('marca').value, sintoma: $('sintoma').value, perdidaDia: Math.round(porDia), dias });
   $('resultado').scrollIntoView({ behavior: 'smooth', block: 'start' });
   track('calculo', { tipo: $('tipo').value, marca: $('marca').value, sintoma: $('sintoma').value, perdidaDia: Math.round(porDia), dias });
 });
@@ -203,6 +223,7 @@ $('btnEnviar').addEventListener('click', () => {
     perdidaDia: calculo ? Math.round(calculo.porDia) : 0, dias: calculo ? calculo.dias : 0, perdidaTotal: calculo ? Math.round(calculo.total) : 0,
     extra: limpiar($('extra').value, 300), website: $('website').value, fuente: FUENTE, campania: CAMPANIA
   };
+  if (PRUEBA) lead.prueba = true;
   track('lead', { tipo: $('tipo').value, marca: $('marca').value, perdidaDia: lead.perdidaDia, dias: lead.dias });
   $('btnEnviar').disabled = true; $('btnEnviar').textContent = 'ENVIANDO...';
   fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'leadWeb', row: lead }) })

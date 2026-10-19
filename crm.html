@@ -791,6 +791,11 @@ select option { background:var(--dark); }
       <p style="font-size:11px;color:var(--muted);margin:0 12px 10px">Antes de esto, "No aprobados" era un solo número que mezclaba pérdidas reales con duplicados (dos presupuestos para el mismo trabajo, uno con repuestos originales y otro con genéricos) — ahora se ve separado.</p>
       <div id="motivos-no-aprobacion-lista" style="padding:0 12px 14px"></div>
     </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header"><span class="card-title">📋 INFORMES TÉCNICOS — ¿QUÉ PRESUPUESTOS APROBADOS NO TIENEN?</span></div>
+      <p style="font-size:11px;color:var(--muted);margin:0 12px 10px">De los presupuestos aprobados: cuántos tienen informe, cuántos no y por qué (lo que se carga con "🚫 No tengo informe").</p>
+      <div id="informes-cobertura" style="padding:0 12px 14px"></div>
+    </div>
     <!-- Rentabilidad real: margen por Tipo de trabajo y por Cliente, sobre lo ya cobrado -->
     <div class="card" style="margin-bottom:12px">
       <div class="card-header"><span class="card-title">💹 RENTABILIDAD REAL</span></div>
@@ -2026,6 +2031,7 @@ async function syncAll() {
             checklistId:r.CHECKLIST_ID||'',
             motivoNoAprobado:r.MOTIVO_NO_APROBADO||'',
             informeAlertaOk:String(r.INFORME_ALERTA_OK||'').toUpperCase()==='SI',
+            informeFaltanteMotivo:r.INFORME_FALTANTE_MOTIVO||'', informeFaltanteNota:r.INFORME_FALTANTE_NOTA||'',
             costoParadaDia:parseMonto(r.COSTO_PARADA_DIA||'0'),
             opcionesPagoOcultas:String(r.OPCIONES_PAGO_OCULTAS||'').split(',').map(x=>parseInt(x,10)).filter(n=>n>=0&&n<=3),
             motivoNota:r.MOTIVO_NOTA||'',
@@ -4930,12 +4936,28 @@ function presupuestoSinInforme(p) {
   if(dias < 0 || dias > DIAS_ALERTA_SIN_INFORME) return false;
   return !tieneInformePresupuesto(p);
 }
+// v17.70 — "No tengo informe": en vez de solo sacar el aviso, se registra la causa
+// (cliente externo, se perdió, no corresponde, otro) + una nota. Se ve en Estadísticas.
+const MOTIVOS_SIN_INFORME = {
+  cliente_externo: 'Cliente externo (no lleva informe)',
+  perdido: 'Se perdió (celular viejo / archivo)',
+  no_corresponde: 'No corresponde (trabajo chico, venta, etc.)',
+  otro: 'Otro'
+};
+function etiquetaSinInforme(k) { return MOTIVOS_SIN_INFORME[k] || (k ? k : 'Sin causa cargada'); }
 function descartarAlertaInforme(id) {
   const p = DB.presupuestos.find(x=>x.id===id); if(!p) return;
-  if(!confirm('¿Sacar el aviso de "sin informe" del Presupuesto N° '+String(p.num).padStart(4,'0')+'? (por ejemplo, si el informe ya se hizo por otro lado o no hacía falta)')) return;
-  p.informeAlertaOk = true;
-  writeToSheet({ action:'updatePresupuesto', id:p.id, row:{ informe_alerta_ok:'SI' } });
-  saveLocal(); renderPresupuestos(); showToast('Aviso quitado ✔','success');
+  openModal('sinInforme', p);
+}
+function guardarSinInforme(id, motivo, nota) {
+  const p = DB.presupuestos.find(x=>x.id===id); if(!p) return;
+  p.informeAlertaOk = !!motivo;
+  p.informeFaltanteMotivo = motivo || '';
+  p.informeFaltanteNota = nota || '';
+  writeToSheet({ action:'updatePresupuesto', id:p.id, row:{ informe_alerta_ok: motivo?'SI':'', informe_faltante_motivo: motivo||'', informe_faltante_nota: nota||'' } });
+  saveLocal(); closeModal(); renderPresupuestos();
+  try { renderInformesCobertura(); } catch(e) {}
+  showToast(motivo ? 'Causa guardada ✔' : 'Se quitó la causa — vuelve a avisar', 'success');
 }
 function presupuestoSinMotivo(p) { return p && p.estado==='no aprobado' && !p.motivoNoAprobado; }
 // Para inputs type="date": cualquier fecha guardada → "yyyy-mm-dd" ('' si no se entiende)
@@ -5050,7 +5072,9 @@ function renderPresupuestos() {
       <td>${badgeEstado(p.estado)}${diasPlazoVencido(p)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${p.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencido(p)}d</div><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="reclamarPresupuestoWhatsApp('${p.id}')" title="Mandar recordatorio por WhatsApp">📲 Reclamar</button>`:''}${diasPresupuestoSinSeguimiento(p)!==null?`<div style="font-size:9px;color:var(--orange);margin-top:2px" title="${p.proximoSeguimiento?'El seguimiento programado venció hace '+diasPresupuestoSinSeguimiento(p)+' días':'Sin resolución hace '+diasPresupuestoSinSeguimiento(p)+' días, sin seguimiento programado'}">📅 ${p.proximoSeguimiento?'Seguimiento vencido':'Sin seguimiento'} (${diasPresupuestoSinSeguimiento(p)}d)</div>`:''}${correlatividadPresupuesto(p)}${p.excepcionPago?`<div style="font-size:9px;color:#6fa8dc;margin-top:2px;cursor:pointer" onclick="openModal('excepcionPago', DB.presupuestos.find(x=>x.id==='${p.id}'))" title="${(p.excepcionPago.modalidadAcordada||'').replace(/"/g,'&quot;')}">📝 Excepción registrada</div>`:''}</td>
       <td class="td-muted">${fmtDate(p.fecha)}</td>
       <td style="font-size:10px;text-align:center;white-space:nowrap">${p.fechaEnviado?`<div style="color:var(--blue-light)">📤 ENVIADO</div><div style="font-size:9px;color:var(--muted2)">${p.fechaEnviado}</div>`:p.fechaDescarga?`<div style="color:#25d366">📄 DESCARGADO</div><div style="font-size:9px;color:var(--muted2)">${p.fechaDescarga}</div><div style="font-size:9px;margin-top:2px"><a href="#" onclick="event.preventDefault();marcarPresupuestoEnviadoManual('${p.id}')" style="color:var(--blue-light);text-decoration:underline;cursor:pointer">Marcar enviado</a></div>`:`<div style="color:var(--muted)">📝 FORMULADO</div><div style="font-size:9px;color:var(--muted2)">${fmtDate(p.fecha)}</div><div style="font-size:9px;margin-top:2px"><a href="#" onclick="event.preventDefault();marcarPresupuestoEnviadoManual('${p.id}')" style="color:var(--blue-light);text-decoration:underline;cursor:pointer">Marcar enviado</a></div>`}</td>
-      <td style="font-size:9px;text-align:center;white-space:nowrap">${p.informeGuardado?`<a href="${p.informeDriveUrl||'#'}" target="_blank" style="color:#25d366;text-decoration:none" title="Guardado en Drive">✔ Drive<br><span style='color:var(--muted);font-size:8px'>${p.informeGuardado}</span></a>`:p.informeGenerado?`<span style='color:#9b59b6'>📋 ${p.informeGenerado}</span>`:(presupuestoSinInforme(p)?`<span style="color:#c39bd3;font-weight:700">⚠️ Sin informe</span><br><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px" onclick="generarInformeTecnico('${p.id}')" title="Armar el informe técnico de este presupuesto">📋 Hacer</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px" onclick="descartarAlertaInforme('${p.id}')" title="Sacar este aviso (el informe ya se hizo por otro lado o no hacía falta)">✕ Ya está</button>`:'—')}</td>
+      <td style="font-size:9px;text-align:center;white-space:nowrap">${p.informeGuardado?`<a href="${p.informeDriveUrl||'#'}" target="_blank" style="color:#25d366;text-decoration:none" title="Guardado en Drive">✔ Drive<br><span style='color:var(--muted);font-size:8px'>${p.informeGuardado}</span></a>`:p.informeGenerado?`<span style='color:#9b59b6'>📋 ${p.informeGenerado}</span>`:(presupuestoSinInforme(p)?`<span style="color:#c39bd3;font-weight:700">⚠️ Sin informe</span><br><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px" onclick="generarInformeTecnico('${p.id}')" title="Armar el informe técnico de este presupuesto">📋 Hacer</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px" onclick="descartarAlertaInforme('${p.id}')" title="No hay informe (cliente externo, se perdió, etc.): cargá la causa">🚫 No tengo</button>`
+  :(p.informeFaltanteMotivo||p.informeAlertaOk)?`<span style="color:var(--muted);cursor:pointer" onclick="descartarAlertaInforme('${p.id}')" title="${(p.informeFaltanteNota||'Tocá para editar').replace(/"/g,'&quot;')}">🚫 ${etiquetaSinInforme(p.informeFaltanteMotivo).split(' (')[0]}</span>`
+  :(p.estado==='aprobado'?`<span class="td-muted">—</span><br><a href="#" style="font-size:8px;color:var(--muted)" onclick="event.preventDefault();descartarAlertaInforme('${p.id}')" title="Registrar por qué no tiene informe">🚫 no tengo</a>`:'—'))}</td>
       <td><div class="actions">
         <button class="btn-secondary" title="Editar" onclick="generarPresupuestoPDF('${p.id}')">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','no aprobado'])">Estado</button>
@@ -7321,6 +7345,7 @@ function renderEstadisticas() {
   renderPorCobrarPlazos();
   renderProyeccionMes();
   renderMotivosNoAprobacion();
+  try { renderInformesCobertura(); } catch(eIc) {}
   renderRentabilidadReal();
   renderEstacionalidadYTiempos();
 }
@@ -7465,6 +7490,30 @@ function renderMotivosNoAprobacion() {
     </div>`;
   }
   cont.innerHTML = html;
+}
+
+function renderInformesCobertura() {
+  const cont = document.getElementById('informes-cobertura'); if(!cont) return;
+  const aprob = DB.presupuestos.filter(p=>p.estado==='aprobado');
+  if(!aprob.length){ cont.innerHTML = '<div class="empty-state"><p>Todavía no hay presupuestos aprobados</p></div>'; return; }
+  const con = aprob.filter(tieneInformePresupuesto);
+  const sin = aprob.filter(p=>!tieneInformePresupuesto(p));
+  const explicados = sin.filter(p=>p.informeFaltanteMotivo || p.informeAlertaOk);
+  const pendientes = sin.filter(p=>!(p.informeFaltanteMotivo || p.informeAlertaOk));
+  const sumM = arr => arr.reduce((a,p)=>a+(Number(p.monto)||0),0);
+  const g = {};
+  explicados.forEach(p=>{ const k=p.informeFaltanteMotivo||''; g[k]=g[k]||[]; g[k].push(p); });
+  const pct = n => Math.round(n*100/aprob.length)+'%';
+  cont.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
+      <div class="stat-card green"><div class="stat-val">${con.length}</div><div class="stat-label">CON INFORME · ${pct(con.length)}</div></div>
+      <div class="stat-card"><div class="stat-val">${explicados.length}</div><div class="stat-label">SIN INFORME, CON CAUSA · ${pct(explicados.length)}</div></div>
+      <div class="stat-card red"><div class="stat-val">${pendientes.length}</div><div class="stat-label">SIN INFORME NI CAUSA · ${pct(pendientes.length)}</div></div>
+    </div>
+    ${Object.keys(g).length?`<div class="table-wrap"><table><thead><tr><th>Causa</th><th style="text-align:center">Cantidad</th><th style="text-align:right">Monto</th><th>Presupuestos</th></tr></thead><tbody>
+      ${Object.keys(g).sort((a,b)=>g[b].length-g[a].length).map(k=>`<tr><td>${etiquetaSinInforme(k)}</td><td style="text-align:center">${g[k].length}</td><td style="text-align:right">${fmtMonto(sumM(g[k]))}</td>
+        <td style="font-size:11px">${g[k].map(p=>`<span style="cursor:pointer;color:var(--blue-light)" title="${(p.informeFaltanteNota||'').replace(/"/g,'&quot;')}" onclick="irAPresupuestoPorNum('${p.num}')">#${String(p.num).padStart(4,'0')}</span>`).join(' ')}</td></tr>`).join('')}
+    </tbody></table></div>`:''}
+    ${pendientes.length?`<div style="margin-top:10px;padding:9px 14px;background:rgba(155,89,182,0.08);border-left:3px solid #9b59b6;border-radius:4px;font-size:12px;color:#c39bd3">${pendientes.length} aprobado${pendientes.length!==1?'s':''} sin informe y sin causa (${fmtMonto(sumM(pendientes))}). En Presupuestos, usá "🚫 no tengo" en cada uno para dejar la causa.</div>`:''}`;
 }
 
 async function renderRentabilidadReal() {
@@ -11046,6 +11095,22 @@ function openModal(type, data={}) {
         writeToSheet({ action:'addPeaje', row: obj });
         showToast('Peaje guardado ✔','success');
       }
+    };
+  }
+  else if(type==='sinInforme') {
+    title = 'NO TENGO INFORME — PRESUPUESTO N° ' + String(data.num||'—').padStart(4,'0');
+    body=`<div class="form-grid">
+      <div class="form-group full" style="font-size:12px;color:var(--muted)">Contá por qué este presupuesto no tiene informe técnico. Deja de avisar y queda contado en Estadísticas → Informes técnicos.</div>
+      <div class="form-group full"><label>Causa *</label>
+        <select id="f-siMotivo"><option value="">Elegir...</option>${Object.keys(MOTIVOS_SIN_INFORME).map(k=>`<option value="${k}" ${data.informeFaltanteMotivo===k?'selected':''}>${MOTIVOS_SIN_INFORME[k]}</option>`).join('')}</select></div>
+      <div class="form-group full"><label>Notas (qué pasó, si se puede recuperar, a quién se le hizo…)</label>
+        <textarea id="f-siNota" rows="3" placeholder="Ej: el informe estaba en el celular viejo de Emmanuel; quedaron solo las fotos en el Drive">${(data.informeFaltanteNota||'').replace(/</g,'&lt;')}</textarea></div>
+      ${(data.informeFaltanteMotivo||data.informeAlertaOk)?`<div class="form-group full"><button type="button" class="btn-secondary" style="font-size:11px" onclick="guardarSinInforme('${data.id}','','')">↩ Quitar la causa (que vuelva a avisar)</button></div>`:''}
+    </div>`;
+    onSave=()=>{
+      const motivo = gv('f-siMotivo');
+      if(!motivo){ showToast('Elegí la causa','error'); return; }
+      guardarSinInforme(data.id, motivo, gv('f-siNota'));
     };
   }
   else if(type==='motivoNoAprobado') {

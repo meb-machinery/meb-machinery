@@ -114,6 +114,11 @@
       <label>Cliente visitado (opcional)</label>
       <input type="text" id="inputClienteVisitado" placeholder="Ej: Bordigoni" oninput="onCambioTiempos()"/>
     </div>
+    <div class="card" style="margin:14px 0;display:none" id="cardPresupuesto">
+      <label>¿De qué trabajo es este gasto? (opcional)</label>
+      <select id="selPresupuesto" onchange="onCambioPresupuesto(this.value)"><option value="">— No sé / ninguno —</option></select>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">Elegí el presupuesto y el gasto queda sumado a ese trabajo (Belu lo ve en 📊 Economía). Si no sabés, dejalo así: se puede vincular después desde el CRM.</div>
+    </div>
     <div class="card" style="margin:14px 0">
       <label>⏱ Tiempos del día (todo opcional)</label>
       <div style="font-size:11px;color:var(--muted);margin:-6px 0 10px">Cargá lo que puedas — cada horario ayuda a calcular mejor cuánto tarda un viaje, la comida, y el trabajo en sí.</div>
@@ -221,6 +226,12 @@ let inicioTrabajo2Actual = '';
 let finTrabajo2Actual = '';
 let inicioViajeVueltaActual = '';
 let items = []; // [{id, categoria, descripcion, cantidad, monto, subtotal, ticketUrl}]
+// v17.69 — vínculo opcional a un presupuesto. Solo cuando la página se abre desde
+// Mi día (trae la clave ?t=): ahí se puede pedir la lista de presupuestos.
+const TOKEN_MIDIA = (new URLSearchParams(location.search).get('t') || '').trim();
+let presupuestoIdActual = '';
+let presupuestoTocado = false;   // solo se manda si se eligió algo (así no pisa un vínculo hecho desde el CRM)
+let listaPresupuestos = [];
 let guardarTimeout = null;
 
 function escHtml(s) {
@@ -276,6 +287,33 @@ function empezarGasto() {
   agregarItem(); // arranca con un ítem vacío, listo para completar
 }
 
+function cargarPresupuestos() {
+  if (!TOKEN_MIDIA) return;
+  fetch(SCRIPT_URL + '?action=gastosPresupuestos&t=' + encodeURIComponent(TOKEN_MIDIA))
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (!j || !j.ok || !(j.presupuestos||[]).length) return;
+      listaPresupuestos = j.presupuestos;
+      const sel = document.getElementById('selPresupuesto');
+      sel.innerHTML = '<option value="">— No sé / ninguno —</option>' + listaPresupuestos.map(function(p){
+        const f = (p.fecha||'').split('-').reverse().slice(0,2).join('/');
+        return '<option value="' + escHtml(p.id) + '">#' + escHtml(String(p.num||'').padStart(4,'0')) + ' · ' + escHtml(p.cliente) + (p.desc ? ' · ' + escHtml(p.desc) : '') + (f ? ' (' + f + ')' : '') + '</option>';
+      }).join('');
+      sel.value = presupuestoIdActual || '';
+      document.getElementById('cardPresupuesto').style.display = 'block';
+    })
+    .catch(function(){ /* sin señal: queda oculto, se vincula después desde el CRM */ });
+}
+function onCambioPresupuesto(valor) {
+  presupuestoIdActual = valor || '';
+  presupuestoTocado = true;
+  const p = listaPresupuestos.find(function(x){ return x.id === valor; });
+  const inp = document.getElementById('inputClienteVisitado');
+  if (p && !inp.value.trim()) { inp.value = p.cliente; onCambioTiempos(); }
+  programarGuardado();
+}
+cargarPresupuestos();
+
 function cambiarSesion() {
   if (!confirm('Si empez\u00e1s un registro nuevo ahora, este queda guardado tal cual est\u00e1. \u00bfSeguimos?')) return;
   document.getElementById('zonaGastos').style.display = 'none';
@@ -283,6 +321,8 @@ function cambiarSesion() {
   kmVehiculoActual = '';
   document.getElementById('inputKmVehiculo').value = '';
   clienteVisitadoActual = '';
+  presupuestoIdActual = ''; presupuestoTocado = false;
+  if (document.getElementById('selPresupuesto')) document.getElementById('selPresupuesto').value = '';
   comienzoTrabajoActual = '';
   llegadaClienteActual = '';
   inicioComidaActual = '';
@@ -526,7 +566,7 @@ function armarPayloadGuardado() {
         subtotal: (it.cantidad||0)*(it.monto||0), ticketUrl: it.ticketUrl
       };
     });
-  return {
+  const payload = {
     action: 'guardarGasto',
     row: {
       id: sesionId, fecha: fechaActual, usuario: usuarioActual,
@@ -541,6 +581,8 @@ function armarPayloadGuardado() {
       inicioViajeVuelta: inicioViajeVueltaActual
     }
   };
+  if (presupuestoTocado) payload.row.presupuestoId = presupuestoIdActual;
+  return payload;
 }
 
 function programarGuardado() {
