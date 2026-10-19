@@ -543,6 +543,8 @@ select option { background:var(--dark); }
         <button class="filter-tab" onclick="setFilter('presup','no aprobado',this)">No aprobados</button>
         <button class="filter-tab" id="filtertab-presup-vencido" style="border-color:var(--red);color:var(--red)" onclick="setFilter('presup','vencido',this)">⏰ Vencidos <span class="nav-badge red" id="badge-presup-vencidos" style="margin-left:2px">0</span></button>
         <button class="filter-tab" id="filtertab-presup-seguimiento" style="border-color:var(--orange);color:var(--orange)" onclick="setFilter('presup','seguimiento',this)">📅 Seguimiento <span class="nav-badge" id="badge-presup-seguimiento" style="margin-left:2px;background:var(--orange)">0</span></button>
+        <button class="filter-tab" id="filtertab-presup-sininforme" style="border-color:#9b59b6;color:#9b59b6" onclick="setFilter('presup','sininforme',this)">📋 Sin informe <span class="nav-badge" id="badge-presup-sininforme" style="margin-left:2px;background:#9b59b6">0</span></button>
+        <button class="filter-tab" id="filtertab-presup-sinmotivo" style="border-color:#e07a7a;color:#e07a7a" onclick="setFilter('presup','sinmotivo',this)">❓ Sin motivo <span class="nav-badge red" id="badge-presup-sinmotivo" style="margin-left:2px">0</span></button>
       </div>
       <div style="display:flex;align-items:center;gap:16px">
         <div class="search-bar" style="flex:1;margin-bottom:0"><span>🔍</span><input type="text" placeholder="Buscar número, cliente, descripción..." id="searchPresupuestos" oninput="renderPresupuestos()"></div>
@@ -1268,9 +1270,10 @@ select option { background:var(--dark); }
           <option value="__pendientes__">Pendientes de visitar</option><option value="__vencidas__">Visitas vencidas</option>
           <option value="nuevo">Nuevo</option><option value="a_visitar">A visitar</option><option value="visitado">Visitado</option>
           <option value="en_negociacion">En negociación</option><option value="ganado">Ganado</option><option value="perdido">Perdido</option></select>
+        <select id="pros-f-orden" onchange="renderProspectos()" style="max-width:190px" title="Puntaje: flota, marca (John Deere suma), cercanía a salidas y clientes, y cómo llegó"><option value="puntaje">Orden: ⭐ puntaje</option><option value="fecha">Orden: fecha de visita</option></select>
       </div>
       <div class="card"><div class="table-wrap"><table>
-        <thead><tr><th title="¿Se fue?">Fue</th><th>Prospecto</th><th>Zona</th><th>Oferta</th><th>Visita</th><th>Estado</th><th>Resultado</th><th></th></tr></thead>
+        <thead><tr><th title="¿Se fue?">Fue</th><th title="Puntaje 0–100: pasá el mouse por el número para ver de dónde sale">⭐</th><th>Prospecto</th><th>Zona</th><th>Oferta</th><th>Visita</th><th>Estado</th><th>Resultado</th><th></th></tr></thead>
         <tbody id="tabla-prospectos"></tbody>
       </table></div></div>
     </div>
@@ -2022,6 +2025,9 @@ async function syncAll() {
             informeDriveUrl:r.INFORME_DRIVE_URL||r.LINK_DRIVE||r.INFORME_DRIVE_URL_||'',
             checklistId:r.CHECKLIST_ID||'',
             motivoNoAprobado:r.MOTIVO_NO_APROBADO||'',
+            informeAlertaOk:String(r.INFORME_ALERTA_OK||'').toUpperCase()==='SI',
+            costoParadaDia:parseMonto(r.COSTO_PARADA_DIA||'0'),
+            opcionesPagoOcultas:String(r.OPCIONES_PAGO_OCULTAS||'').split(',').map(x=>parseInt(x,10)).filter(n=>n>=0&&n<=3),
             motivoNota:r.MOTIVO_NOTA||'',
             presupVinculadoId:r.PRESUP_VINCULADO_ID||'',
             proximoSeguimiento:r.PROXIMO_SEGUIMIENTO||'',
@@ -2343,7 +2349,8 @@ async function syncAll() {
       resultado: r.RESULTADO || '', resultadoNotas: r.RESULTADO_NOTAS || '', proximoContacto: r.PROXIMO_CONTACTO || '',
       clienteId: String(r.CLIENTE_ID||'').trim(), visitaCalendarioId: String(r.VISITA_CALENDARIO_ID||'').trim(),
       prioridad: r.PRIORIDAD || 'media', notas: r.NOTAS || '', fechaAlta: r.FECHA_ALTA || '',
-      viaAlta: r.VIA_ALTA || '', viaVisita: r.VIA_VISITA || ''
+      viaAlta: r.VIA_ALTA || '', viaVisita: r.VIA_VISITA || '',
+      flotaEstimada: parseInt(r.FLOTA_ESTIMADA,10)||0, referidoPor: r.REFERIDO_POR || ''
     }));
 
     // Configuración (CONFIG: clave/valor) — links de reseña, topes, plazos.
@@ -2371,7 +2378,8 @@ async function syncAll() {
 
     // Eventos de la calculadora web (solo lectura: los escribe la propia página)
     if(evw.length && Object.prototype.hasOwnProperty.call(evw[0], 'EVENTO')) {
-      DB.eventosWeb = evw.map(r => ({
+      // v17.69 — los eventos marcados como prueba no cuentan
+      DB.eventosWeb = evw.filter(r => String(r.PRUEBA||'').toUpperCase()!=='SI').map(r => ({
         fecha: String(r.FECHA||''), hora: String(r.HORA||''), evento: r.EVENTO || '', fuente: r.FUENTE || '', campania: r.CAMPANIA || '',
         tipo: r.TIPO || '', marca: r.MARCA || '', sintoma: r.SINTOMA || '', perdidaDia: parseFloat(r.PERDIDA_DIA)||0, dias: parseFloat(r.DIAS)||0
       }));
@@ -4903,6 +4911,40 @@ function toggleDetalleChecklist(idBase) {
   if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
+// v17.69 — Presupuestos aprobados de los últimos 2 meses que todavía no tienen
+// informe técnico (ni generado, ni guardado en Drive, ni un Informe con su
+// mismo N°). Se puede descartar uno por uno ("✕ Ya está") — queda guardado
+// en el Sheet (INFORME_ALERTA_OK) y no vuelve a avisar.
+const DIAS_ALERTA_SIN_INFORME = 60;
+function tieneInformePresupuesto(p) {
+  if(p.informeGenerado || p.informeGuardado || p.informeDriveUrl) return true;
+  const n = parseInt(p.num,10);
+  if(!n) return false;
+  return (DB.informes||[]).some(i => parseInt(String(i.num||'').replace(/\D/g,''),10) === n);
+}
+function presupuestoSinInforme(p) {
+  if(!p || p.estado!=='aprobado' || p.informeAlertaOk) return false;
+  const f = parseFechaAny(p.fecha);
+  if(!f) return false;
+  const dias = Math.floor((Date.now() - f.getTime())/86400000);
+  if(dias < 0 || dias > DIAS_ALERTA_SIN_INFORME) return false;
+  return !tieneInformePresupuesto(p);
+}
+function descartarAlertaInforme(id) {
+  const p = DB.presupuestos.find(x=>x.id===id); if(!p) return;
+  if(!confirm('¿Sacar el aviso de "sin informe" del Presupuesto N° '+String(p.num).padStart(4,'0')+'? (por ejemplo, si el informe ya se hizo por otro lado o no hacía falta)')) return;
+  p.informeAlertaOk = true;
+  writeToSheet({ action:'updatePresupuesto', id:p.id, row:{ informe_alerta_ok:'SI' } });
+  saveLocal(); renderPresupuestos(); showToast('Aviso quitado ✔','success');
+}
+function presupuestoSinMotivo(p) { return p && p.estado==='no aprobado' && !p.motivoNoAprobado; }
+// Para inputs type="date": cualquier fecha guardada → "yyyy-mm-dd" ('' si no se entiende)
+function isoParaInput(v) {
+  const f = _fechaFlexible(v);
+  if(!f) return '';
+  return f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0')+'-'+String(f.getDate()).padStart(2,'0');
+}
+
 function renderPresupuestos() {
   // Resumen siempre visible (no depende del filtro activo ni del buscador) —
   // responde de un vistazo "cuántos no aprobados hay y cuánta plata es".
@@ -4923,11 +4965,15 @@ function renderPresupuestos() {
     const bpv = document.getElementById('badge-presup-vencidos'); if(bpv) bpv.textContent = vencidos.length;
     const sinSeguimiento = DB.presupuestos.filter(p=>diasPresupuestoSinSeguimiento(p)!==null);
     const bps = document.getElementById('badge-presup-seguimiento'); if(bps) bps.textContent = sinSeguimiento.length;
+    const sinInforme = DB.presupuestos.filter(presupuestoSinInforme);
+    const bsi = document.getElementById('badge-presup-sininforme'); if(bsi) bsi.textContent = sinInforme.length;
+    const bsm = document.getElementById('badge-presup-sinmotivo'); if(bsm) bsm.textContent = sinMotivo;
     resumenEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
       <div class="stat-card orange"><div class="stat-val">${pend.length}</div><div class="stat-label">PENDIENTES · ${fmtMonto(sum(pend))}</div></div>
       <div class="stat-card green"><div class="stat-val">${aprob.length}</div><div class="stat-label">APROBADOS · ${fmtMonto(sum(aprob))}</div></div>
       <div class="stat-card red"><div class="stat-val">${noAprob.length}</div><div class="stat-label">NO APROBADOS · ${fmtMonto(sum(noAprob))}</div></div>
     </div>
+    ${sinInforme.length ? `<div style="margin-top:8px;padding:8px 12px;background:rgba(155,89,182,0.12);border:1px solid #9b59b6;border-radius:6px;font-size:12px;color:#c39bd3;cursor:pointer" onclick="setFilter('presup','sininforme',document.getElementById('filtertab-presup-sininforme'))">📋 <b>${sinInforme.length}</b> presupuesto${sinInforme.length!==1?'s':''} aprobado${sinInforme.length!==1?'s':''} de los últimos 2 meses <b>sin informe técnico</b> — tocá para verlos (si alguno ya no hace falta, sacale el aviso con "✕ Ya está")</div>` : ''}
     ${vencidos.length ? `<div style="margin-top:8px;padding:8px 12px;background:rgba(231,76,60,0.12);border:1px solid var(--red);border-radius:6px;font-size:12px;color:var(--red)">⏰ <b>${vencidos.length}</b> presupuesto${vencidos.length!==1?'s':''} aprobado${vencidos.length!==1?'s':''} sin cobrar, con el plazo de pago vencido · ${fmtMonto(sum(vencidos))} — mirá la pestaña "⏰ Vencidos"</div>` : ''}
     ${noAprob.length ? `<div style="font-size:11px;color:var(--muted);margin-top:8px;padding:8px 12px;background:var(--card);border-radius:6px">
       De esos ${noAprob.length}: <b style="color:#e07a7a">${noAprobReales.length} son pérdida real</b> (precio, fondos, comunicación, etc.)
@@ -4938,6 +4984,8 @@ function renderPresupuestos() {
   let data=DB.presupuestos;
   if(filters.presup==='vencido') data=data.filter(p=>diasPlazoVencido(p)!==null);
   else if(filters.presup==='seguimiento') data=data.filter(p=>diasPresupuestoSinSeguimiento(p)!==null);
+  else if(filters.presup==='sininforme') data=data.filter(presupuestoSinInforme);
+  else if(filters.presup==='sinmotivo') data=data.filter(presupuestoSinMotivo);
   else if(filters.presup!=='todos') data=data.filter(p=>p.estado===filters.presup);
   // Orden elegible — antes era fijo por N°, y como los N° vienen del Sheet
   // sin garantía de ser secuenciales prolijos, quedaban "desparramados".
@@ -4978,6 +5026,8 @@ function renderPresupuestos() {
     let dataSinBusqueda = DB.presupuestos;
     if(filters.presup==='vencido') dataSinBusqueda=dataSinBusqueda.filter(p=>diasPlazoVencido(p)!==null);
     else if(filters.presup==='seguimiento') dataSinBusqueda=dataSinBusqueda.filter(p=>diasPresupuestoSinSeguimiento(p)!==null);
+    else if(filters.presup==='sininforme') dataSinBusqueda=dataSinBusqueda.filter(presupuestoSinInforme);
+    else if(filters.presup==='sinmotivo') dataSinBusqueda=dataSinBusqueda.filter(presupuestoSinMotivo);
     else if(filters.presup!=='todos') dataSinBusqueda=dataSinBusqueda.filter(p=>p.estado===filters.presup);
     if(search && dataSinBusqueda.length){
       tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="icon">🔍</div>
@@ -4991,7 +5041,8 @@ function renderPresupuestos() {
   tbody.innerHTML=data.map(p=>{
     const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId))||DB.clientes.find(c=>c.nombre.toUpperCase()===(p.clienteNombreSheet||p.clienteId||'').toUpperCase());
     const descCorta=(p.descripcion||'—').split('\n')[0].split('|')[0];
-    return `<tr>
+    const _sinMot = presupuestoSinMotivo(p);
+    return `<tr${_sinMot?' style="background:rgba(224,122,122,0.10);box-shadow:inset 4px 0 0 #e07a7a" title="No aprobado sin motivo cargado — usá el botón ❓ Falta motivo"':''}>
       <td><span style="font-family:'Bebas Neue';color:var(--yellow);font-size:15px">#${String(p.num||0).padStart(4,'0')}</span></td>
       <td>${cl?`<div class="td-name">${cl.nombre}</div><div class="td-muted">${cl.empresa||''}</div>`:'—'}</td>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${descCorta}</td>
@@ -4999,7 +5050,7 @@ function renderPresupuestos() {
       <td>${badgeEstado(p.estado)}${diasPlazoVencido(p)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${p.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencido(p)}d</div><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="reclamarPresupuestoWhatsApp('${p.id}')" title="Mandar recordatorio por WhatsApp">📲 Reclamar</button>`:''}${diasPresupuestoSinSeguimiento(p)!==null?`<div style="font-size:9px;color:var(--orange);margin-top:2px" title="${p.proximoSeguimiento?'El seguimiento programado venció hace '+diasPresupuestoSinSeguimiento(p)+' días':'Sin resolución hace '+diasPresupuestoSinSeguimiento(p)+' días, sin seguimiento programado'}">📅 ${p.proximoSeguimiento?'Seguimiento vencido':'Sin seguimiento'} (${diasPresupuestoSinSeguimiento(p)}d)</div>`:''}${correlatividadPresupuesto(p)}${p.excepcionPago?`<div style="font-size:9px;color:#6fa8dc;margin-top:2px;cursor:pointer" onclick="openModal('excepcionPago', DB.presupuestos.find(x=>x.id==='${p.id}'))" title="${(p.excepcionPago.modalidadAcordada||'').replace(/"/g,'&quot;')}">📝 Excepción registrada</div>`:''}</td>
       <td class="td-muted">${fmtDate(p.fecha)}</td>
       <td style="font-size:10px;text-align:center;white-space:nowrap">${p.fechaEnviado?`<div style="color:var(--blue-light)">📤 ENVIADO</div><div style="font-size:9px;color:var(--muted2)">${p.fechaEnviado}</div>`:p.fechaDescarga?`<div style="color:#25d366">📄 DESCARGADO</div><div style="font-size:9px;color:var(--muted2)">${p.fechaDescarga}</div><div style="font-size:9px;margin-top:2px"><a href="#" onclick="event.preventDefault();marcarPresupuestoEnviadoManual('${p.id}')" style="color:var(--blue-light);text-decoration:underline;cursor:pointer">Marcar enviado</a></div>`:`<div style="color:var(--muted)">📝 FORMULADO</div><div style="font-size:9px;color:var(--muted2)">${fmtDate(p.fecha)}</div><div style="font-size:9px;margin-top:2px"><a href="#" onclick="event.preventDefault();marcarPresupuestoEnviadoManual('${p.id}')" style="color:var(--blue-light);text-decoration:underline;cursor:pointer">Marcar enviado</a></div>`}</td>
-      <td style="font-size:9px;text-align:center;white-space:nowrap">${p.informeGuardado?`<a href="${p.informeDriveUrl||'#'}" target="_blank" style="color:#25d366;text-decoration:none" title="Guardado en Drive">✔ Drive<br><span style='color:var(--muted);font-size:8px'>${p.informeGuardado}</span></a>`:p.informeGenerado?`<span style='color:#9b59b6'>📋 ${p.informeGenerado}</span>`:'—'}</td>
+      <td style="font-size:9px;text-align:center;white-space:nowrap">${p.informeGuardado?`<a href="${p.informeDriveUrl||'#'}" target="_blank" style="color:#25d366;text-decoration:none" title="Guardado en Drive">✔ Drive<br><span style='color:var(--muted);font-size:8px'>${p.informeGuardado}</span></a>`:p.informeGenerado?`<span style='color:#9b59b6'>📋 ${p.informeGenerado}</span>`:(presupuestoSinInforme(p)?`<span style="color:#c39bd3;font-weight:700">⚠️ Sin informe</span><br><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px" onclick="generarInformeTecnico('${p.id}')" title="Armar el informe técnico de este presupuesto">📋 Hacer</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px" onclick="descartarAlertaInforme('${p.id}')" title="Sacar este aviso (el informe ya se hizo por otro lado o no hacía falta)">✕ Ya está</button>`:'—')}</td>
       <td><div class="actions">
         <button class="btn-secondary" title="Editar" onclick="generarPresupuestoPDF('${p.id}')">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('presupuestos','${p.id}',['pendiente','aprobado','no aprobado'])">Estado</button>
@@ -5909,7 +5960,7 @@ function resolverOAutoCrearMaquina(clienteId, serie, modelo, tipo, maquinaIdPrev
   return nueva.id;
 }
 
-function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail, tipoMaquina, tcDesdePdf, checklistIdOrigen) {
+function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail, tipoMaquina, tcDesdePdf, checklistIdOrigen, opcionesOcultasStr, plazoElegido, costoParadaDia) {
   if (!confirmarMontoPresupuesto(monto)) return;
   let p = DB.presupuestos.find(x=>x.id===presupId);
   const esNuevoPresup = !p;
@@ -6000,6 +6051,18 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
   // sola en el sector Máquinas, sin tener que ir a cargarla ahí a mano.
   p.maquinaId = resolverOAutoCrearMaquina(clienteIdFinal, serie, modeloMaquina, tipoMaquina, p.maquinaId, horometro, p.fecha);
 
+  // v17.69 — opciones de pago y plazo elegido desde el PDF quedan guardados
+  if (opcionesOcultasStr !== undefined) {
+    p.opcionesPagoOcultas = String(opcionesOcultasStr||'').split(',').map(x=>parseInt(x,10)).filter(n=>n>=0&&n<=3);
+  }
+  if (plazoElegido && ['contado','30','60','90'].indexOf(plazoElegido) >= 0) {
+    const tfPl = tarifarioVigente();
+    p.plazoPago = plazoElegido;
+    p.recargoPct = plazoElegido==='30' ? (tfPl?tfPl.recargo30:3) : plazoElegido==='60' ? (tfPl?tfPl.recargo60:6) : plazoElegido==='90' ? (tfPl?tfPl.recargo90:9) : 0;
+  }
+  if (costoParadaDia !== undefined) p.costoParadaDia = Number(costoParadaDia)||0;
+  const _opcOcultas = (p.opcionesPagoOcultas||[]).join(',');
+
   saveLocal();
   renderPresupuestos();
   showToast(esNuevoPresup ? ('Presupuesto #'+String(p.num).padStart(4,'0')+' creado ✔') : 'Presupuesto actualizado y guardado ✔','success');
@@ -6014,7 +6077,8 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
   if (esNuevoPresup) {
     writeToSheet({ action:'addPresupuesto', row:{
       id:p.id, num:p.num, cliente_id:p.clienteId, cliente:clNom2, descripcion:descripcionCompleta2,
-      monto: monto||0, precio_usd:p.montoUsd||0, tc_al_momento:p.tcAlMomento||0, plazo_pago:'contado', recargo_pct:0,
+      monto: monto||0, precio_usd:p.montoUsd||0, tc_al_momento:p.tcAlMomento||0, plazo_pago:p.plazoPago||'contado', recargo_pct:p.recargoPct||0,
+      opciones_pago_ocultas:_opcOcultas, costo_parada_dia:p.costoParadaDia||'',
       serie_maquina:p.serieMaquina||'', modelo_maquina:p.modeloMaquina||'', horometro:p.horometro||'',
       tipo_maquina:p.tipoMaquina||'', maquina_id:p.maquinaId||'', checklist_id:p.checklistId||'',
       estado:p.estado, fecha:p.fecha, notas:p.notas||''
@@ -6024,7 +6088,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
       cliente_id:p.clienteId, cliente:clNom2, descripcion:descripcionCompleta2,
       monto: monto||p.monto||0,
       precio_usd:p.montoUsd||0, tc_al_momento:p.tcAlMomento||0,
-      plazo_pago:p.plazoPago||'contado', recargo_pct:p.recargoPct||0,
+      plazo_pago:p.plazoPago||'contado', recargo_pct:p.recargoPct||0, opciones_pago_ocultas:_opcOcultas, costo_parada_dia:p.costoParadaDia||'',
       serie_maquina:p.serieMaquina||'', modelo_maquina:p.modeloMaquina||'', horometro:p.horometro||'',
       tipo_maquina:p.tipoMaquina||'', maquina_id:p.maquinaId||'',
       estado:p.estado, notas:notas||p.notas||''
@@ -8038,6 +8102,44 @@ async function vincularGastoATrabajo(id) {
     : 'Vínculo borrado', 'success');
 }
 
+// v17.69 — Gastos de campo (Gastos de Estructura / app de gastos de Emmanuel)
+// vinculados a un presupuesto, visibles y vinculables desde 📊 Economía: se
+// listan los ya vinculados y los últimos 45 días sin vincular, con un botón
+// para sumarlos a "Otros gastos".
+function gastosDePresupuesto(pid) {
+  return (DB.gastosEstructura||[]).filter(g => String(g.presupuestoId)===String(pid));
+}
+function htmlGastosDePresupuesto(pid) {
+  const vinc = gastosDePresupuesto(pid);
+  const suma = vinc.reduce((a,g)=>a+(Number(g.total)||0),0);
+  const lim = Date.now() - 45*86400000;
+  const libres = (DB.gastosEstructura||[]).filter(g => !g.presupuestoId && !g.terciarizadoId && ((_fechaFlexible(g.fecha)||0) >= lim))
+    .sort((a,b)=>((_fechaFlexible(b.fecha)||0)-(_fechaFlexible(a.fecha)||0))).slice(0,12);
+  const fila = (g, acc) => `<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--border);font-size:12px">
+    <span>${fmtDate(g.fecha)} · ${g.usuario||''}${g.clienteVisitado?' · '+g.clienteVisitado:''}<br><span style="color:var(--muted);font-size:11px">${String(g.resumen||'').split('\n').slice(0,2).join(' · ')}</span></span>
+    <span style="white-space:nowrap"><b>${fmtMonto(g.total)}</b> ${acc}</span></div>`;
+  return `<div style="background:var(--dark);border:1px solid var(--border2);border-radius:6px;padding:10px 12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:12px;font-weight:700;color:var(--yellow)">💸 GASTOS DE CAMPO DE ESTE TRABAJO</span>
+      ${suma>0?`<button type="button" class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="document.getElementById('f-ecgastos').value=${Math.round(suma)};calcularEconomiaPresup()">Usar ${fmtMonto(suma)} como "Otros gastos"</button>`:''}</div>
+    ${vinc.length ? vinc.map(g=>fila(g, `<button type="button" class="btn-secondary" style="font-size:10px;padding:2px 6px" title="Desvincular" onclick="vincularGastoAPresupuestoDirecto('${g.id}','','${pid}')">✕</button>`)).join('') : '<div style="font-size:11px;color:var(--muted);margin-top:4px">Todavía no hay gastos vinculados a este presupuesto.</div>'}
+    ${libres.length ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:var(--blue-light)">＋ Vincular un gasto cargado (últimos 45 días, ${libres.length} sin vincular)</summary>
+      ${libres.map(g=>fila(g, `<button type="button" class="btn-secondary" style="font-size:10px;padding:2px 6px" onclick="vincularGastoAPresupuestoDirecto('${g.id}','${pid}','${pid}')">Vincular</button>`)).join('')}</details>` : ''}
+  </div>`;
+}
+async function vincularGastoAPresupuestoDirecto(gid, pid, pidVista) {
+  const g = (DB.gastosEstructura||[]).find(x=>x.id===gid); if(!g) return;
+  const presup = pid ? DB.presupuestos.find(p=>p.id===pid) : null;
+  const trab = presup ? DB.trabajos.find(t=>t.presupuestoId===presup.id) : null;
+  g.presupuestoId = presup ? presup.id : '';
+  g.presupuestoNum = presup ? String(presup.num) : '';
+  g.trabajoId = trab ? trab.id : '';
+  saveLocal();
+  const cont = document.getElementById('ec-gastos'); if(cont) cont.innerHTML = htmlGastosDePresupuesto(pidVista);
+  try { renderGastos(); } catch(e) {}
+  await writeToSheet({ action:'vincularGastoTrabajo', id:gid, row:{ trabajoId:g.trabajoId, presupuestoId:g.presupuestoId } });
+  showToast(presup ? 'Gasto vinculado ✔' : 'Gasto desvinculado', 'success');
+}
+
 // Terciarizado no tiene un N° corto como Presupuestos, así que en vez de
 // pedir un número se muestra una lista numerada de los últimos registros
 // (más recientes primero) y el usuario elige de ahí — mismo espíritu que
@@ -9420,6 +9522,10 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     'var REC30=' + JSON.stringify(recargo30Presup) + ';',
     'var REC60=' + JSON.stringify(recargo60Presup) + ';',
     'var REC90=' + JSON.stringify(recargo90Presup) + ';',
+    // v17.69 — opciones de pago que se sacaron con la cruz y plazo elegido por el cliente:
+    // ahora quedan guardados en el presupuesto (antes se perdían al cerrar la ventana).
+    'var OCULTOS_INI=' + JSON.stringify(p.opcionesPagoOcultas||[]) + ';',
+    'var PLAZO_ELEGIDO=' + JSON.stringify(p.plazoPago||'contado') + ';',
     'var ZONAS_MOV=' + JSON.stringify(zonasParaMovilidad) + ';',
     'var KM_USD_RATE=' + JSON.stringify(kmUsdRatePresup) + ';',
     'var ZONA_DEFAULT=' + JSON.stringify(zonaDefaultPresup) + ';',
@@ -9480,8 +9586,19 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     // strings, y persiste mientras dura la sesión de armado del
     // presupuesto (se recalcula la tabla entera cada vez que cambia un
     // ítem, así que sin esto las opciones ocultas reaparecerían solas).
-    'var tramosPagoOcultos = [];',
+    'var tramosPagoOcultos = (OCULTOS_INI||[]).slice();',
+    'function recalcParada() {',
+    '  var box = document.getElementById("paradaBox"), txt = document.getElementById("paradaTxt"), ed = document.getElementById("pdf-parada");',
+    '  if (!box || !txt || !ed) return;',
+    '  var dia = parse(ed.innerText);',
+    '  var total = parse((document.getElementById("tTotal")||{innerText:""}).innerText);',
+    '  if (!(dia > 0) || !(total > 0)) { box.classList.add("vacia"); txt.innerHTML = "Complet\\u00E1 abajo cu\\u00E1nto le cuesta al cliente cada d\\u00EDa de m\\u00E1quina parada para mostrar en cu\\u00E1ntos d\\u00EDas se paga la reparaci\\u00F3n."; return; }',
+    '  box.classList.remove("vacia");',
+    '  var n = Math.max(1, Math.ceil(total / dia));',
+    '  txt.innerHTML = "Su m\\u00E1quina parada le cuesta <b>" + fmt(dia) + " por d\\u00EDa</b>. Esta reparaci\\u00F3n se paga en <b>" + n + " " + (n===1?"d\\u00EDa":"d\\u00EDas") + "</b> de trabajo.";',
+    '}',
     'function recalcPagos() {',
+    '  try { recalcParada(); } catch (eP) {}',
     '  var tbody = document.getElementById("tbodyPagos");',
     '  if (!tbody) return;',
     '  var total = parse(document.getElementById("tTotal").innerText);',
@@ -9492,10 +9609,10 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '    return;',
     '  }',
     '  var tramos = [',
-    '    {label:"CONTADO", pct:0},',
-    '    {label:"A 30 D\\u00CDAS", pct:REC30},',
-    '    {label:"A 60 D\\u00CDAS", pct:REC60},',
-    '    {label:"A 90 D\\u00CDAS", pct:REC90}',
+    '    {label:"CONTADO", pct:0, key:"contado"},',
+    '    {label:"A 30 D\\u00CDAS", pct:REC30, key:"30"},',
+    '    {label:"A 60 D\\u00CDAS", pct:REC60, key:"60"},',
+    '    {label:"A 90 D\\u00CDAS", pct:REC90, key:"90"}',
     '  ];',
     '  var html = "";',
     '  var visibles = 0;',
@@ -9505,10 +9622,11 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '    var ars = Math.round(total * (1 + t.pct/100));',
     '    var usdTxt = tc > 0 ? ("USD " + Math.round(ars/tc).toLocaleString("es-AR")) : "\\u2014";',
     '    var puedeQuitar = visibles > 1;',
-    '    html += "<tr><td>" + t.label + (t.pct>0 ? (" <span style=\\"color:#999;font-size:10px\\">(+"+t.pct+"%)</span>") : "") + "</td>"',
+    '    var elegida = (t.key === PLAZO_ELEGIDO && t.key !== "contado");',
+    '    html += "<tr" + (elegida ? " style=\\"background:#FFF3CC\\"" : "") + "><td>" + (elegida ? "\\u2714 " : "") + t.label + (t.pct>0 ? (" <span style=\\"color:#999;font-size:10px\\">(+"+t.pct+"%)</span>") : "") + (elegida ? " <b style=\\"color:#003B70;font-size:10px\\">ELEGIDA</b>" : "") + "</td>"',
     '      + "<td style=\\"text-align:right;font-weight:bold\\">$" + ars.toLocaleString("es-AR") + "</td>"',
     '      + "<td style=\\"text-align:right;color:#003B70;font-size:11px\\">" + usdTxt + "</td>"',
-    '      + "<td class=\\"no-print del-col\\">" + (puedeQuitar ? ("<button class=\\"btn-del\\" title=\\"Sacar esta opci\\u00F3n del presupuesto\\" onclick=\\"ocultarTramoPago("+idx+")\\">\\u2715</button>") : "") + "</td></tr>";',
+    '      + "<td class=\\"no-print del-col\\" style=\\"white-space:nowrap\\">" + "<button class=\\"btn-del\\" style=\\"color:" + (elegida?"#F4B400":"#999") + "\\" title=\\"Marcar como el plazo que eligi\\u00F3 el cliente\\" onmousedown=\\"event.preventDefault();elegirTramoPago(\\x27"+t.key+"\\x27)\\">\\u2605</button>" + (puedeQuitar ? ("<button class=\\"btn-del\\" title=\\"Sacar esta opci\\u00F3n del presupuesto\\" onmousedown=\\"event.preventDefault();ocultarTramoPago("+idx+")\\">\\u2715</button>") : "") + "</td></tr>";',
     '  });',
     '  tbody.innerHTML = html;',
     '}',
@@ -9516,8 +9634,15 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     // ESTE presupuesto puntual. Si Emmanuel borra por error la única que
     // quedaba, recalcPagos ya no muestra la cruz en la última visible
     // (puedeQuitar), así que siempre queda al menos una opción de pago.
+    'var CLAVES_TRAMO = ["contado","30","60","90"];',
     'function ocultarTramoPago(idx) {',
     '  tramosPagoOcultos.push(idx);',
+    '  if (CLAVES_TRAMO[idx] === PLAZO_ELEGIDO) PLAZO_ELEGIDO = "contado";',
+    '  recalcPagos();',
+    '}',
+    // Estrella: marca/desmarca el plazo que eligió el cliente (vuelve a "contado" si se toca de nuevo)
+    'function elegirTramoPago(key) {',
+    '  PLAZO_ELEGIDO = (PLAZO_ELEGIDO === key) ? "contado" : key;',
     '  recalcPagos();',
     '}',
     'function delRow(btn) {',
@@ -9657,6 +9782,8 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '    });',
     '  }',
     '}',
+    'var parEl0 = document.getElementById("pdf-parada");',
+    'if (parEl0) { parEl0.addEventListener("input", recalcParada); parEl0.addEventListener("blur", function(){ var v = parse(parEl0.innerText); parEl0.innerText = v>0 ? Math.round(v).toLocaleString("es-AR") : ""; recalcParada(); }); }',
     'var tcEl0 = document.getElementById("pdf-tc");',
     'if (tcEl0) { tcEl0.addEventListener("input", recalcPagos); tcEl0.addEventListener("blur", recalcPagos); }',
     // "Traer" TC en vivo: usa la misma fuente que ya usa el resto del CRM
@@ -9748,7 +9875,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '    return;',
     '  }',
     '  if(window.opener && window.opener._recibirCambiosPresupuesto) {',
-    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro, clienteIdSel, cliNombre, cliEmpresa.replace("—","").trim(), cliZona.replace("—","").trim(), cliTelefono.replace("—","").trim(), cliEmail.replace("—","").trim(), tipoMaq, tcGuardar, CHECKLIST_ID_ORIGEN);',
+    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro, clienteIdSel, cliNombre, cliEmpresa.replace("—","").trim(), cliZona.replace("—","").trim(), cliTelefono.replace("—","").trim(), cliEmail.replace("—","").trim(), tipoMaq, tcGuardar, CHECKLIST_ID_ORIGEN, tramosPagoOcultos.join(","), PLAZO_ELEGIDO, parse((document.getElementById("pdf-parada")||{innerText:""}).innerText) || 0);',
     '    var sb = document.querySelector(".btn-save");',
     '    if(sb){sb.style.background="#25d366";sb.style.color="#fff";sb.textContent="\\u2714 Guardado";}',
     '    setTimeout(function(){if(sb){sb.style.background="#1A1A1A";sb.style.color="#F4B400";sb.textContent="\\uD83D\\uDCBE GUARDAR";}},2500);',
@@ -9832,6 +9959,11 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     + '.vencimiento{background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:5px 12px;font-size:11px;color:#856404;font-weight:700}'
     + '#pdf-tc{border-bottom:1px dashed #999;padding:0 3px;min-width:36px;display:inline-block;font-weight:700}'
     + '#pdf-tc:empty:before{content:"tocá acá";color:#bbb;font-weight:400;font-style:italic;font-size:10px}'
+    + '.parada-box{background:#1A1A1A;color:#F5F2EC;border-radius:8px;padding:14px 18px;margin:0 0 22px;display:flex;gap:14px;align-items:center}'
+    + '.parada-box .ico{font-size:26px}.parada-box b{color:#F4B400}.parada-box .tx{font-size:13px;line-height:1.5}'
+    + '.parada-edit{font-size:11px;color:#888;margin:-14px 0 22px;padding:6px 2px}'
+    + '.parada-edit span[contenteditable]{display:inline-block;min-width:90px;border-bottom:1px dashed #F4B400;color:#1A1A1A;font-weight:700;padding:0 4px}'
+    + '@media print{.parada-box.vacia{display:none!important}}'
     + '@media print{.no-print{display:none}body{padding:20px}[contenteditable]{color:#1A1A1A!important}.btn-del{display:none!important}}'
     + '</style>'
     + '</head><body>'
@@ -9937,6 +10069,13 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
       + '</div>'
     ) : '')
     + '</div></div>'
+
+    // v17.69 — "La calculadora como argumento de venta": cuánto le cuesta al cliente
+    // tener la máquina parada y en cuántos días se paga la reparación. Se completa
+    // el costo por día (lo que pierde: alquiler de reemplazo, obra frenada, etc.);
+    // si queda vacío, el bloque no sale en el PDF.
+    + '<div class="parada-box' + ((p.costoParadaDia>0)?'':' vacia') + '" id="paradaBox"><div class="ico">\u23F1\uFE0F</div><div class="tx" id="paradaTxt"></div></div>'
+    + '<div class="parada-edit no-print">Costo de la m\u00E1quina parada por d\u00EDa: $<span id="pdf-parada" contenteditable="true">' + (p.costoParadaDia>0 ? Math.round(p.costoParadaDia).toLocaleString('es-AR') : '') + '</span> \u2014 lo que el cliente pierde cada d\u00EDa sin la m\u00E1quina (alquiler de reemplazo, obra frenada, operario parado). Si lo dej\u00E1s vac\u00EDo, no aparece en el PDF.</div>'
 
     + '<div class="detalle-wrap">'
     + '<div class="detalle-titulo">Opciones de pago'
@@ -11268,7 +11407,7 @@ function openModal(type, data={}) {
         if(!DB.prospectos) DB.prospectos=[];
         const pr = { id:uid(), nombre:obj.referido, contacto:'', telefono:obj.referidoTel||'', email:'', direccion:'', zona:cl.zona||'', tipoOferta:'maquinaria', marcaEquipos:'', origen:'referido',
           estado:'nuevo', fechaVisita:'', horaVisita:'', visitado:false, fechaVisitaReal:'', resultado:'', resultadoNotas:'', proximoContacto:'', clienteId:'', visitaCalendarioId:'', prioridad:'alta',
-          notas:'Referido por '+(cl.nombre||'un cliente'), fechaAlta:today(), _local:true };
+          notas:'Referido por '+(cl.nombre||'un cliente'), fechaAlta:today(), referidoPor:cl.nombre||'', flotaEstimada:0, _local:true };
         DB.prospectos.push(pr); prosGuardar(pr); obj.referidoProspectoId = pr.id;
         showToast('El referido se cargó en Prospectos ✔','success');
       }
@@ -11316,7 +11455,10 @@ function openModal(type, data={}) {
       <div class="form-group full"><label>Qué se le ofrece</label>
         <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px">${PROS_TIPOS_OFERTA.map(t=>`<label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" class="f-prtipo" value="${t.value}" ${tiposSel.includes(t.value)?'checked':''}/> ${t.icon} ${t.label}</label>`).join('')}</div></div>
       <div class="form-group"><label>Equipos / marcas que usan</label><input id="f-prmarca" value="${prosEsc(data.marcaEquipos)}" placeholder="Ej: John Deere 310, CAT 320"/></div>
-      <div class="form-group"><label>¿Cómo llegó?</label><select id="f-prorigen">${PROS_ORIGENES.map(o=>`<option value="${o.value}" ${(data.origen||'visita_frio')===o.value?'selected':''}>${o.label}</option>`).join('')}</select></div>
+      <div class="form-group"><label>¿Cómo llegó?</label><select id="f-prorigen" onchange="document.getElementById('wrap-prref').style.display=this.value==='referido'?'block':'none'">${PROS_ORIGENES.map(o=>`<option value="${o.value}" ${(data.origen||'visita_frio')===o.value?'selected':''}>${o.label}</option>`).join('')}</select></div>
+      <div class="form-group" id="wrap-prref" style="display:${data.origen==='referido'?'block':'none'}"><label>Referido por (qué cliente lo pasó)</label><input id="f-prref" value="${prosEsc(data.referidoPor)}" list="pros-clientes-list" placeholder="Nombre del cliente"/>
+        <datalist id="pros-clientes-list">${(DB.clientes||[]).map(c=>`<option value="${prosEsc(c.nombre)}">`).join('')}</datalist></div>
+      <div class="form-group"><label>Flota estimada (cantidad de máquinas)</label><input id="f-prflota" type="number" min="0" step="1" value="${data.flotaEstimada||''}" placeholder="Ej: 4"/></div>
       <div class="form-group"><label>Fecha de visita</label><input id="f-prfecha" type="date" value="${data.fechaVisita||''}"/></div>
       <div class="form-group"><label>Hora</label><input id="f-prhora" type="time" value="${data.horaVisita||''}"/></div>
       <div class="form-group"><label>Estado</label><select id="f-prestado">${PROS_ESTADOS.map(e=>`<option value="${e.value}" ${(data.estado||'nuevo')===e.value?'selected':''}>${e.label}</option>`).join('')}</select></div>
@@ -11335,6 +11477,7 @@ function openModal(type, data={}) {
         zona:gv('f-przona'), direccion:gv('f-prdir'), tipoOferta:tipos, marcaEquipos:gv('f-prmarca'), origen:gv('f-prorigen'),
         fechaVisita:gv('f-prfecha'), horaVisita:gv('f-prhora'), estado:gv('f-prestado'), prioridad:gv('f-prprio'),
         proximoContacto:gv('f-prprox'), notas:gv('f-prnotas'),
+        flotaEstimada: parseInt(gv('f-prflota'),10)||0, referidoPor: gv('f-prorigen')==='referido' ? gv('f-prref') : '',
         visitado: previo?!!previo.visitado:false, fechaVisitaReal: previo?previo.fechaVisitaReal||'':'',
         resultado: previo?previo.resultado||'':'', resultadoNotas: previo?previo.resultadoNotas||'':'',
         clienteId: previo?previo.clienteId||'':'', visitaCalendarioId: previo?previo.visitaCalendarioId||'':'',
@@ -11553,9 +11696,10 @@ function openModal(type, data={}) {
       <div class="form-group"><label>Otros gastos (ARS)</label><input id="f-ecgastos" type="number" value="${(t0&&t0.montoGastos)||''}" placeholder="combustible, viáticos…" oninput="calcularEconomiaPresup()"/></div>
       <div class="form-group"><label>Estado del cobro</label><select id="f-ecestado" onchange="document.getElementById('ec-cobro-extra').style.display=this.value==='cobrado'?'contents':'none'"><option value="pendiente"${p.estadoCobro==='cobrado'||(t0&&t0.estadoCobro==='cobrado')?'':' selected'}>Pendiente de cobro</option><option value="cobrado"${p.estadoCobro==='cobrado'||(t0&&t0.estadoCobro==='cobrado')?' selected':''}>Cobrado ✔</option></select></div>
       <div id="ec-cobro-extra" style="display:${p.estadoCobro==='cobrado'||(t0&&t0.estadoCobro==='cobrado')?'contents':'none'}">
-        <div class="form-group"><label>Fecha de cobro</label><input id="f-ecfecha" type="date" value="${p.fechaCobroReal||(t0&&t0.fechaCobroReal)||today()}"/></div>
+        <div class="form-group"><label>Fecha de cobro</label><input id="f-ecfecha" type="date" value="${isoParaInput(p.fechaCobroReal||(t0&&t0.fechaCobroReal))||today()}"/></div>
         <div class="form-group"><label>Dólar del día del cobro (opcional)</label><input id="f-ectc" type="number" value="${p.tcCobro||(t0&&t0.tcCobro)||''}" placeholder="para ver la ganancia en USD"/></div>
       </div>
+      <div class="form-group full" id="ec-gastos">${htmlGastosDePresupuesto(p.id)}</div>
       <div class="form-group full" style="font-size:11px;color:var(--muted)">🔒 Esta pestaña es solo interna: nada de esto aparece en el PDF ni en el informe que ve el cliente.</div>
       <div class="form-group full" id="ec-resultado" style="padding:12px;border-radius:6px;background:var(--dark);border:1px solid var(--border2);font-size:13px"></div>
     </div>`;
@@ -11577,7 +11721,11 @@ function openModal(type, data={}) {
       }
       pushUndo('Economía real presupuesto');
       const estCobro = gv('f-ecestado')||'pendiente';
-      const fechaC = gv('f-ecfecha')||today();
+      // v17.69 — la fecha de cobro no se pisa con la de hoy al volver a abrir Economía:
+      // el campo ahora entiende la fecha guardada (antes venía "dd/mm/aaaa" del Sheet, el
+      // campo de fecha la rechazaba, quedaba vacío y al guardar se ponía la de hoy).
+      const _fechaPrevia = isoParaInput(p.fechaCobroReal || (trabajoDePresupuesto(p)||{}).fechaCobroReal);
+      const fechaC = gv('f-ecfecha') || _fechaPrevia || today();
       const tcC = parseFloat(gv('f-ectc'))||0;
       const presup = DB.presupuestos.find(x=>x.id===p.id);
       if(estCobro==='cobrado' && !campos.montoCobrado) campos.montoCobrado = campos.manoObraCobrada + campos.movilidad + campos.precioRepuestoFacturado;
@@ -11642,7 +11790,7 @@ function openModal(type, data={}) {
         Esperado según cotización: <b style="color:var(--blue-light)">USD ${usdEsperado.toLocaleString('es-AR')}</b> ·
         Plazo: <b style="text-transform:capitalize">${p.plazoPago||'contado'}</b>${recargoPct>0?` (+${recargoPct}%)`:''}
       </div>
-      <div class="form-group"><label>Fecha de cobro real *</label><input id="f-crfecha" type="date" value="${data.fechaCobroReal||today()}"/></div>
+      <div class="form-group"><label>Fecha de cobro real *</label><input id="f-crfecha" type="date" value="${isoParaInput(data.fechaCobroReal)||today()}"/></div>
       <div class="form-group"><label>Monto realmente cobrado (ARS) *</label><input id="f-crmonto" type="number" value="${data.montoCobradoReal||''}" oninput="calcularDiferenciaCobro(${usdEsperado})"/></div>
       <div class="form-group">
         <label>TC del día del cobro *</label>
@@ -11700,7 +11848,7 @@ function openModal(type, data={}) {
         Monto a cobrar: <b style="color:var(--yellow)">${fmtMonto(montoCobrado)}</b> · Ganancia (MO+Mov+Margen): <b style="color:var(--green)">${fmtMonto(gananciaArsT)}</b>
         ${tieneAnclaje?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border2)">Ganancia esperada al TC del día del trabajo ($${t.tcAlMomento}): <b style="color:var(--blue-light)">USD ${t.gananciaUsdEsperada}</b></div>`:`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);color:var(--muted2)">Este trabajo no tiene dólar cargado del día que se hizo — no vas a poder comparar contra el del cobro. Podés editarlo antes de confirmar y cargarlo.</div>`}
       </div>
-      <div class="form-group"><label>Fecha de cobro real</label><input id="f-tfechacobro" type="date" value="${t.fechaCobroReal||today()}"/></div>
+      <div class="form-group"><label>Fecha de cobro real</label><input id="f-tfechacobro" type="date" value="${isoParaInput(t.fechaCobroReal)||today()}"/></div>
       <div class="form-group">
         <label>TC del día del cobro (opcional — para ver el equivalente en USD)</label>
         <div style="display:flex;gap:6px">
@@ -11757,7 +11905,7 @@ function openModal(type, data={}) {
         Esperado según cotización: <b style="color:var(--blue-light)">USD ${usdEsperadoCon.toLocaleString('es-AR')}</b> ·
         Plazo: <b style="text-transform:capitalize">${c.plazoPago||'contado'}</b>${recargoPctCon>0?` (+${recargoPctCon}%)`:''}
       </div>
-      <div class="form-group"><label>Fecha de cobro real *</label><input id="f-ccfecha" type="date" value="${c.fechaCobroReal||today()}"/></div>
+      <div class="form-group"><label>Fecha de cobro real *</label><input id="f-ccfecha" type="date" value="${isoParaInput(c.fechaCobroReal)||today()}"/></div>
       <div class="form-group"><label>Monto realmente cobrado (ARS) *</label><input id="f-ccmonto" type="number" value="${c.montoCobradoReal||''}" oninput="calcularDiferenciaCobroContrato(${usdEsperadoCon})"/></div>
       <div class="form-group">
         <label>TC del día del cobro *</label>
@@ -12851,11 +12999,65 @@ function prosMostrarTab(tab) {
   });
   renderProspectos();
 }
+// v17.69 — PUNTAJE DE PROSPECTOS (0–100). Mismo cálculo que usa Mi día (Code.gs → puntajeProspecto_).
+//   Flota estimada hasta 30 · Marca (John Deere 20, otra marca pesada 10) · Cercanía hasta 25
+//   (zona de una salida agendada en los próximos 14 días 20, zona con clientes activos 10) ·
+//   Origen (referido 20, web 15, llamado 12, Instagram 8, investigación 5, visita en frío 3) ·
+//   Prioridad manual (alta +5, baja −5).
+function _normZona(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
+function _zonaCoincide(a, b){ a=_normZona(a); b=_normZona(b); return a.length>=3 && b.length>=3 && (a.includes(b) || b.includes(a)); }
+const PROS_PUNTOS_ORIGEN = { referido:20, web:15, llamado:12, instagram:8, investigacion:5, visita_frio:3, otro:0 };
+const PROS_MARCAS_PESADAS = ['cat','caterpillar','case','new holland','komatsu','bobcat','jcb','hyundai','volvo','xcmg','liugong','sany','doosan','kubota','takeuchi','michigan','zanello','hitachi'];
+function puntajeProspecto(p, ctx) {
+  ctx = ctx || prosContextoPuntaje();
+  const det = [];
+  let flota = parseInt(p.flotaEstimada,10)||0;
+  if(!flota && p.marcaEquipos) flota = String(p.marcaEquipos).split(/[,;\/]| y /).filter(x=>x.trim()).length;
+  const pf = flota>=10?30 : flota>=4?25 : flota>=2?16 : flota===1?8 : 0;
+  if(pf) det.push('flota '+flota+' (+'+pf+')');
+  const marca = ' '+_normZona(p.marcaEquipos)+' ';
+  let pm = 0;
+  if(/ (john deere|deere|jd) /.test(marca) || /john ?deere/.test(marca)) pm = 20;
+  else if(PROS_MARCAS_PESADAS.some(m=>marca.includes(' '+m+' ') || marca.includes(' '+m))) pm = 10;
+  if(pm) det.push((pm===20?'John Deere':'marca pesada')+' (+'+pm+')');
+  let pc = 0;
+  const z = [p.zona, p.direccion].filter(Boolean).join(' ');
+  if(z && ctx.zonasSalidas.some(x=>_zonaCoincide(z,x) || _zonaCoincide(p.zona,x))){ pc += 20; det.push('salida agendada en la zona (+20)'); }
+  if(z && ctx.zonasClientes.some(x=>_zonaCoincide(z,x) || _zonaCoincide(p.zona,x))){ pc += 10; det.push('hay clientes en la zona (+10)'); }
+  pc = Math.min(pc, 25);
+  const po = PROS_PUNTOS_ORIGEN[p.origen]||0;
+  if(po) det.push(prosLabelOrigen(p.origen).toLowerCase()+(p.referidoPor?' por '+p.referidoPor:'')+' (+'+po+')');
+  const pp = p.prioridad==='alta'?5 : p.prioridad==='baja'?-5 : 0;
+  if(pp) det.push('prioridad '+p.prioridad+' ('+(pp>0?'+':'')+pp+')');
+  const total = Math.max(0, Math.min(100, pf+pm+pc+po+pp));
+  return { total, detalle: det.join(' · ') || 'Sin datos para puntuar: cargá flota, marcas y zona' };
+}
+function prosContextoPuntaje() {
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const lim = new Date(hoy.getTime()+14*86400000);
+  const zonasSalidas = [];
+  (DB.calendarioVisitas||[]).forEach(v=>{
+    const f = parseFechaAny(v.fecha); if(!f || f<hoy || f>lim) return;
+    if(String(v.estado||'').toLowerCase()==='cancelada') return;
+    const cl = DB.clientes.find(c=>String(c.id)===String(v.clienteId));
+    if(cl && cl.zona) zonasSalidas.push(cl.zona);
+  });
+  const zonasClientes = [...new Set((DB.clientes||[]).filter(c=>c.estado!=='inactivo' && c.zona).map(c=>c.zona))];
+  return { zonasSalidas, zonasClientes };
+}
+function prosPuntajeHtml(p, ctx) {
+  const r = puntajeProspecto(p, ctx);
+  const col = r.total>=60?'#2ecc71' : r.total>=35?'#F4B400' : '#7f8c8d';
+  return `<span title="${prosEsc(r.detalle)}" style="display:inline-block;min-width:30px;text-align:center;font-family:'Bebas Neue';font-size:15px;color:${col};border:1px solid ${col};border-radius:6px;padding:0 5px;cursor:help">${r.total}</span>`;
+}
+
 function prosFiltrados() {
   const q = (document.getElementById('pros-buscar')?.value||'').toLowerCase().trim();
   const zona = document.getElementById('pros-f-zona')?.value||'';
   const tipo = document.getElementById('pros-f-tipo')?.value||'';
   const estado = document.getElementById('pros-f-estado')?.value||'';
+  const ordenP = document.getElementById('pros-f-orden')?.value||'puntaje';
+  const ctxP = prosContextoPuntaje();
   return (DB.prospectos||[]).filter(p=>{
     if(zona && (p.zona||'')!==zona) return false;
     if(tipo && !prosTipos(p).includes(tipo)) return false;
@@ -12867,10 +13069,12 @@ function prosFiltrados() {
       if(!hay.includes(q)) return false;
     }
     return true;
-  }).sort((a,b)=>{
+  }).map(p=>({p, s:puntajeProspecto(p, ctxP).total})).sort((x,y)=>{
+    const a=x.p, b=y.p;
     const fa=a.fechaVisita||'9999', fb=b.fechaVisita||'9999';
-    return fa<fb?-1:fa>fb?1:(a.nombre||'').localeCompare(b.nombre||'');
-  });
+    if(ordenP==='fecha') return fa<fb?-1:fa>fb?1:(a.nombre||'').localeCompare(b.nombre||'');
+    return (y.s-x.s) || (fa<fb?-1:fa>fb?1:0) || (a.nombre||'').localeCompare(b.nombre||'');
+  }).map(x=>x.p);
 }
 function prosPoblarFiltroZona() {
   const sel = document.getElementById('pros-f-zona'); if(!sel) return;
@@ -13110,6 +13314,7 @@ function renderProspectos() {
   const tab = _prosTab;
   if(tab==='lista') {
     const data = prosFiltrados();
+    const ctxPt = prosContextoPuntaje();
     const tb = document.getElementById('tabla-prospectos');
     if(tb) {
       tb.innerHTML = data.length ? data.map(p=>{
@@ -13117,7 +13322,8 @@ function renderProspectos() {
         const venc = prosVisitaVencida(p);
         return `<tr>
           <td style="text-align:center"><input type="checkbox" ${p.visitado?'checked':''} onchange="prosToggleVisitado('${p.id}', this)" title="${p.visitado?'Ya se visitó (tocá para desmarcar)':'Marcar como visitado y registrar el resultado'}" style="width:18px;height:18px;cursor:pointer"/></td>
-          <td><strong>${prosEsc(p.nombre)}</strong>${p.contacto?`<div class="td-muted" style="font-size:11px">${prosEsc(p.contacto)}${p.telefono?' · '+prosEsc(p.telefono):''}</div>`:''}${p.marcaEquipos?`<div class="td-muted" style="font-size:11px">🚜 ${prosEsc(p.marcaEquipos)}</div>`:''}</td>
+          <td style="text-align:center">${prosPuntajeHtml(p, ctxPt)}</td>
+          <td><strong>${prosEsc(p.nombre)}</strong>${p.referidoPor?`<div style="font-size:11px;color:#2ecc71">🤝 Referido por ${prosEsc(p.referidoPor)}</div>`:''}${p.contacto?`<div class="td-muted" style="font-size:11px">${prosEsc(p.contacto)}${p.telefono?' · '+prosEsc(p.telefono):''}</div>`:''}${p.marcaEquipos?`<div class="td-muted" style="font-size:11px">🚜 ${prosEsc(p.marcaEquipos)}</div>`:''}</td>
           <td>${prosEsc(p.zona)||'<span class="td-muted">—</span>'}${p.direccion?`<div class="td-muted" style="font-size:11px">${prosEsc(p.direccion)}</div>`:''}</td>
           <td style="white-space:nowrap">${prosTiposHtml(p)}</td>
           <td style="white-space:nowrap">${p.fechaVisita?`<span style="${venc?'color:#e74c3c;font-weight:600':''}">${fmtDate(p.fechaVisita)}${p.horaVisita?' '+prosEsc(p.horaVisita):''}</span>${venc?'<div style="font-size:10px;color:#e74c3c">vencida</div>':''}`:'<span class="td-muted">sin fecha</span>'}</td>
@@ -13125,7 +13331,7 @@ function renderProspectos() {
           <td style="font-size:12px">${p.resultado?`<strong>${prosLabelResultado(p.resultado)}</strong>`:''}${p.resultadoNotas?`<div class="td-muted" style="font-size:11px">${prosEsc(p.resultadoNotas)}</div>`:''}${p.proximoContacto?`<div style="font-size:11px;${prosContactoVencido(p)?'color:#e74c3c':'color:var(--muted)'}">↻ ${fmtDate(p.proximoContacto)}</div>`:''}</td>
           <td style="white-space:nowrap">${prosFilaAcciones(p)}</td>
         </tr>`;
-      }).join('') : `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">No hay prospectos con estos filtros. Usá <strong>+ NUEVO PROSPECTO</strong> para cargar el primero.</td></tr>`;
+      }).join('') : `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:24px">No hay prospectos con estos filtros. Usá <strong>+ NUEVO PROSPECTO</strong> para cargar el primero.</td></tr>`;
     }
     const kp = document.getElementById('pros-kpis');
     if(kp) {
@@ -13248,6 +13454,11 @@ function renderProspectosStats() {
     <div class="card" style="margin-bottom:12px"><div class="card-title" style="margin-bottom:8px">📍 POR ZONA</div><div class="table-wrap"><table>${cab.replace('<th></th>','<th>Zona</th>')}<tbody>${agrupar(p=>(p.zona||'').trim(), k=>prosEsc(k))}</tbody></table></div></div>
     <div class="card" style="margin-bottom:12px"><div class="card-title" style="margin-bottom:8px">🧰 POR LO QUE SE OFRECE</div><div class="table-wrap"><table>${cab.replace('<th></th>','<th>Oferta</th>')}<tbody>${agrupar(p=>prosTipos(p), k=>{const o=PROS_TIPOS_OFERTA.find(x=>x.value===k); return o?o.icon+' '+o.label:prosEsc(k);})}</tbody></table></div></div>
     <div class="card" style="margin-bottom:12px"><div class="card-title" style="margin-bottom:8px">🎯 POR ORIGEN (¿qué canal trae clientes?)</div><div class="table-wrap"><table>${cab.replace('<th></th>','<th>Origen</th>')}<tbody>${agrupar(p=>p.origen, k=>prosLabelOrigen(k))}</tbody></table></div></div>
+    <div class="card" style="margin-bottom:12px"><div class="card-title" style="margin-bottom:8px">🤝 REFERIDOS — QUÉ CLIENTES TRAEN CLIENTES</div>
+      ${(()=>{ const g={}; todos.filter(p=>p.origen==='referido').forEach(p=>{ const k=(p.referidoPor||'').trim()||'Sin dato de quién'; g[k]=g[k]||{t:0,g:0}; g[k].t++; if(p.estado==='ganado') g[k].g++; });
+        const ks=Object.keys(g).sort((a,b)=>g[b].t-g[a].t);
+        return ks.length ? `<div class="table-wrap"><table><thead><tr><th>Cliente que lo pasó</th><th>Referidos</th><th>Ganados</th></tr></thead><tbody>${ks.map(k=>`<tr><td>${prosEsc(k)}</td><td>${g[k].t}</td><td>${g[k].g}</td></tr>`).join('')}</tbody></table></div>` : '<div class="td-muted">Todavía no hay referidos cargados. En cada visita a un cliente fuerte, Mi día le recuerda a Emmanuel preguntar “¿quién más trabaja por acá?”.</div>'; })()}
+    </div>
     <div class="card"><div class="card-title" style="margin-bottom:8px">📝 RESULTADO DE LAS VISITAS</div>
       ${Object.keys(resumenResultados).length ? Object.keys(resumenResultados).sort((a,b)=>resumenResultados[b]-resumenResultados[a]).map(k=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--border);font-size:13px"><span>${prosLabelResultado(k)}</span><strong>${resumenResultados[k]}</strong></div>`).join('') : '<div class="td-muted">Todavía no se registró ninguna visita.</div>'}
     </div>`;
@@ -13275,7 +13486,8 @@ function prosParaSheet(p) {
     zona:p.zona||'', tipoOferta:p.tipoOferta||'', marcaEquipos:p.marcaEquipos||'', origen:p.origen||'', estado:p.estado||'nuevo',
     fechaVisita:p.fechaVisita||'', horaVisita:p.horaVisita||'', visitado:p.visitado?'SI':'NO', fechaVisitaReal:p.fechaVisitaReal||'',
     resultado:p.resultado||'', resultadoNotas:p.resultadoNotas||'', proximoContacto:p.proximoContacto||'', clienteId:p.clienteId||'',
-    visitaCalendarioId:p.visitaCalendarioId||'', prioridad:p.prioridad||'media', notas:p.notas||'', fechaAlta:p.fechaAlta||'' };
+    visitaCalendarioId:p.visitaCalendarioId||'', prioridad:p.prioridad||'media', notas:p.notas||'', fechaAlta:p.fechaAlta||'',
+    flotaEstimada:p.flotaEstimada||'', referidoPor:p.referidoPor||'' };
 }
 // ── Enlace con el Calendario ──────────────────────────────────────────────
 // Si el prospecto tiene fecha de visita, se crea/actualiza su evento en el
