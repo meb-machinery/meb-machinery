@@ -2062,7 +2062,7 @@ async function syncAll() {
             informeAlertaOk:String(r.INFORME_ALERTA_OK||'').toUpperCase()==='SI',
             informeFaltanteMotivo:r.INFORME_FALTANTE_MOTIVO||'', informeFaltanteNota:r.INFORME_FALTANTE_NOTA||'',
             costoParadaDia:parseMonto(r.COSTO_PARADA_DIA||'0'),
-            cuitCliente:String(r.CUIT_CLIENTE||'').trim(), motivo:String(r.MOTIVO||'').trim(),
+            cuitCliente:String(r.CUIT_CLIENTE||'').trim(), motivo:String(r.MOTIVO||'').trim(), tcFecha:String(r.TC_FECHA||'').trim(),
             opcionesPagoOcultas:String(r.OPCIONES_PAGO_OCULTAS||'').split(',').map(x=>parseInt(x,10)).filter(n=>n>=0&&n<=3),
             motivoNota:r.MOTIVO_NOTA||'',
             presupVinculadoId:r.PRESUP_VINCULADO_ID||'',
@@ -6014,7 +6014,7 @@ function resolverOAutoCrearMaquina(clienteId, serie, modelo, tipo, maquinaIdPrev
   return nueva.id;
 }
 
-function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail, tipoMaquina, tcDesdePdf, checklistIdOrigen, opcionesOcultasStr, plazoElegido, costoParadaDia, cuitCliente, motivoPresup) {
+function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail, tipoMaquina, tcDesdePdf, checklistIdOrigen, opcionesOcultasStr, plazoElegido, costoParadaDia, cuitCliente, motivoPresup, tcFechaPdf, maquinaIdSel) {
   if (!confirmarMontoPresupuesto(monto)) return;
   let p = DB.presupuestos.find(x=>x.id===presupId);
   const esNuevoPresup = !p;
@@ -6106,7 +6106,19 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
   // Auto-registrar/vincular la máquina — el pedido de Emmanuel: con solo
   // cargar serie+modelo (y tipo) en el presupuesto, la máquina queda de alta
   // sola en el sector Máquinas, sin tener que ir a cargarla ahí a mano.
-  p.maquinaId = resolverOAutoCrearMaquina(clienteIdFinal, serie, modeloMaquina, tipoMaquina, p.maquinaId, horometro, p.fecha);
+  // v17.73 — si se eligió una máquina del cliente en el selector del PDF, se usa esa
+  // (y no se le pisa el modelo con "marca + modelo", que es como se muestra en el PDF)
+  let _maqPrev = p.maquinaId, _modeloParaMaq = modeloMaquina;
+  if (maquinaIdSel === '__otra') _maqPrev = '';
+  else if (maquinaIdSel) {
+    const mSel = DB.maquinas.find(m => m.id === maquinaIdSel && String(m.clienteId) === String(clienteIdFinal));
+    if (mSel) {
+      _maqPrev = mSel.id;
+      const combo = [mSel.marca, mSel.modelo].filter(Boolean).join(' ').trim();
+      if (String(modeloMaquina||'').trim() === combo) _modeloParaMaq = mSel.modelo;
+    }
+  }
+  p.maquinaId = resolverOAutoCrearMaquina(clienteIdFinal, serie, _modeloParaMaq, tipoMaquina, _maqPrev, horometro, p.fecha);
 
   // v17.69 — opciones de pago y plazo elegido desde el PDF quedan guardados
   if (opcionesOcultasStr !== undefined) {
@@ -6120,6 +6132,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
   if (costoParadaDia !== undefined) p.costoParadaDia = Number(costoParadaDia)||0;
   if (cuitCliente !== undefined) p.cuitCliente = String(cuitCliente||'').trim();
   if (motivoPresup !== undefined) p.motivo = String(motivoPresup||'').trim().slice(0,300);
+  if (tcFechaPdf) p.tcFecha = tcFechaPdf;
   const _opcOcultas = (p.opcionesPagoOcultas||[]).join(',');
 
   saveLocal();
@@ -6137,7 +6150,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
     writeToSheet({ action:'addPresupuesto', row:{
       id:p.id, num:p.num, cliente_id:p.clienteId, cliente:clNom2, descripcion:descripcionCompleta2,
       monto: monto||0, precio_usd:p.montoUsd||0, tc_al_momento:p.tcAlMomento||0, plazo_pago:p.plazoPago||'contado', recargo_pct:p.recargoPct||0,
-      opciones_pago_ocultas:_opcOcultas, costo_parada_dia:p.costoParadaDia||'', cuit_cliente:p.cuitCliente||'', motivo:p.motivo||'',
+      opciones_pago_ocultas:_opcOcultas, costo_parada_dia:p.costoParadaDia||'', cuit_cliente:p.cuitCliente||'', motivo:p.motivo||'', tc_fecha:p.tcFecha||'',
       serie_maquina:p.serieMaquina||'', modelo_maquina:p.modeloMaquina||'', horometro:p.horometro||'',
       tipo_maquina:p.tipoMaquina||'', maquina_id:p.maquinaId||'', checklist_id:p.checklistId||'',
       estado:p.estado, fecha:p.fecha, notas:p.notas||''
@@ -6147,7 +6160,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
       cliente_id:p.clienteId, cliente:clNom2, descripcion:descripcionCompleta2,
       monto: monto||p.monto||0,
       precio_usd:p.montoUsd||0, tc_al_momento:p.tcAlMomento||0,
-      plazo_pago:p.plazoPago||'contado', recargo_pct:p.recargoPct||0, opciones_pago_ocultas:_opcOcultas, costo_parada_dia:p.costoParadaDia||'', cuit_cliente:p.cuitCliente||'', motivo:p.motivo||'',
+      plazo_pago:p.plazoPago||'contado', recargo_pct:p.recargoPct||0, opciones_pago_ocultas:_opcOcultas, costo_parada_dia:p.costoParadaDia||'', cuit_cliente:p.cuitCliente||'', motivo:p.motivo||'', tc_fecha:p.tcFecha||'',
       serie_maquina:p.serieMaquina||'', modelo_maquina:p.modeloMaquina||'', horometro:p.horometro||'',
       tipo_maquina:p.tipoMaquina||'', maquina_id:p.maquinaId||'',
       estado:p.estado, notas:notas||p.notas||''
@@ -9690,6 +9703,11 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     'var REC30=' + JSON.stringify(recargo30Presup) + ';',
     'var REC60=' + JSON.stringify(recargo60Presup) + ';',
     'var REC90=' + JSON.stringify(recargo90Presup) + ';',
+    'var TC_ORIGINAL=' + JSON.stringify(p.tcAlMomento||0) + ';',
+    'var TC_FECHA_ORIGINAL=' + JSON.stringify(p.tcFecha ? fmtDate(p.tcFecha) : (p.fecha ? fmtDate(p.fecha) : fechaHoy)) + ';',
+    'var TC_FECHA = ' + JSON.stringify(p.tcFecha || '') + ';',
+    'var MAQUINAS_DATA=' + JSON.stringify(DB.maquinas.map(function(m){ return { id:m.id, clienteId:String(m.clienteId||''), marca:m.marca||'', modelo:m.modelo||'', tipo:m.tipo||'', serie:m.serie||'', horometro:m.horometro||'', horometroFecha:m.horometroFecha||'' }; })) + ';',
+    'var MAQUINA_ID_INI=' + JSON.stringify(p.maquinaId||'') + ';',
     // v17.69 — opciones de pago que se sacaron con la cruz y plazo elegido por el cliente:
     // ahora quedan guardados en el presupuesto (antes se perdían al cerrar la ventana).
     'var OCULTOS_INI=' + JSON.stringify(p.opcionesPagoOcultas||[]) + ';',
@@ -9711,6 +9729,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '  document.getElementById("pdf-cli-telefono").innerText = c.telefono || "";',
     '  document.getElementById("pdf-cli-email").innerText = c.email || "";',
     '  var cuitEl = document.getElementById("pdf-cli-cuit"); if (cuitEl) cuitEl.innerText = c.cuit || "";',
+    '  if (typeof llenarMaquinasCliente === "function") llenarMaquinasCliente(id, "");',
     '}',
     '',
     'var MONEDA_SYM=' + JSON.stringify((p.monedaSym||'$')) + ';',
@@ -9838,6 +9857,14 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '      + "<td class=\\"no-print del-col\\" style=\\"white-space:nowrap\\">" + "<button class=\\"btn-del\\" style=\\"color:" + (elegida?"#F4B400":"#999") + "\\" title=\\"Marcar como el plazo que eligi\\u00F3 el cliente\\" onmousedown=\\"event.preventDefault();elegirTramoPago(\\x27"+t.key+"\\x27)\\">\\u2605</button>" + (puedeQuitar ? ("<button class=\\"btn-del\\" title=\\"Sacar esta opci\\u00F3n del presupuesto\\" onmousedown=\\"event.preventDefault();ocultarTramoPago("+idx+")\\">\\u2715</button>") : "") + "</td></tr>";',
     '  });',
     '  tbody.innerHTML = html;',
+    '  var avisoOc = document.getElementById("pagosOcultosAviso");',
+    '  if (avisoOc) {',
+    '    if (tramosPagoOcultos.length) {',
+    '      var nombresOc = tramosPagoOcultos.map(function(i){ return tramos[i] ? tramos[i].label.toLowerCase() : ""; }).filter(String).join(", ");',
+    '      avisoOc.style.display = "block";',
+    '      avisoOc.innerHTML = "Opciones ocultas en este presupuesto: <b>" + nombresOc + "</b> \\u2014 <a href=\\"#\\" onmousedown=\\"event.preventDefault();mostrarTodasLasOpciones()\\" style=\\"color:#003B70;font-weight:700\\">\\u21BA Volver a mostrarlas</a>";',
+    '    } else avisoOc.style.display = "none";',
+    '  }',
     '  var filaEl = document.getElementById("tElegidaRow");',
     '  if (filaEl) {',
     '    var tEl = null; tramos.forEach(function(t){ if (t.key === PLAZO_ELEGIDO && t.key !== "contado") tEl = t; });',
@@ -9860,6 +9887,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '  recalcPagos();',
     '}',
     // Estrella: marca/desmarca el plazo que eligió el cliente (vuelve a "contado" si se toca de nuevo)
+    'function mostrarTodasLasOpciones() { tramosPagoOcultos = []; recalcPagos(); }',
     'function elegirTramoPago(key) {',
     '  PLAZO_ELEGIDO = (PLAZO_ELEGIDO === key) ? "contado" : key;',
     '  recalcPagos();',
@@ -10002,6 +10030,9 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '    });',
     '  }',
     '}',
+    'var notasEl0 = document.getElementById("notasBox");',
+    'function marcarNotasVacias(){ if (!notasEl0) return; var t = (notasEl0.innerText||"").trim(); notasEl0.classList.toggle("vacia", !t || t === "Agregar notas, condiciones especiales o aclaraciones..."); }',
+    'if (notasEl0) { notasEl0.addEventListener("input", marcarNotasVacias); marcarNotasVacias(); }',
     'var motEl0 = document.getElementById("pdf-motivo");',
     'if (motEl0) motEl0.addEventListener("input", function(){ motEl0.parentElement.classList.toggle("vacia", !(motEl0.innerText||"").trim()); });',
     'var parEl0 = document.getElementById("pdf-parada");',
@@ -10019,6 +10050,8 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '    btnTraerTC.disabled = true; btnTraerTC.textContent = "...";',
     '    window.opener.obtenerDolarReferencia().then(function(valor){',
     '      tcEl0.innerText = valor;',
+    '      var hoyD = new Date(); TC_FECHA = hoyD.getFullYear() + "-" + ("0"+(hoyD.getMonth()+1)).slice(-2) + "-" + ("0"+hoyD.getDate()).slice(-2);',
+    '      var fEl = document.getElementById("pdf-tc-fecha"); if (fEl) fEl.innerText = "(al " + hoyD.toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"}) + ")";',
     '      recalcPagos();',
     '      if (typeof actualizarPreviewMovilidad === "function") actualizarPreviewMovilidad();',
     '      btnTraerTC.disabled = false; btnTraerTC.textContent = "\\uD83D\\uDD04 Traer";',
@@ -10028,6 +10061,25 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '    });',
     '  });',
     '}',
+    'var btnTCOrig = document.getElementById("btnTCOriginal");',
+    'if (btnTCOrig) btnTCOrig.addEventListener("click", function(){ tcEl0.innerText = TC_ORIGINAL; TC_FECHA = ""; var fEl = document.getElementById("pdf-tc-fecha"); if (fEl) fEl.innerText = "(al " + TC_FECHA_ORIGINAL + ")"; recalcPagos(); });',
+    // Máquinas del cliente: al elegir una, completa tipo, modelo y serie (se puede seguir escribiendo a mano)
+    'function llenarMaquinasCliente(cid, selId) {',
+    '  var sel = document.getElementById("pdf-maq-select"); if (!sel) return;',
+    '  var lista = MAQUINAS_DATA.filter(function(m){ return cid && m.clienteId === String(cid); });',
+    '  sel.innerHTML = "<option value=\\"\\">" + (lista.length ? "\\u2014 Elegir una m\\u00E1quina de este cliente (" + lista.length + ") \\u2014" : "Este cliente no tiene m\\u00E1quinas cargadas \\u2014 escrib\\u00ED los datos abajo") + "</option>"',
+    '    + lista.map(function(m){ return "<option value=\\"" + m.id + "\\"" + (m.id===selId?" selected":"") + ">" + [m.marca, m.modelo].filter(Boolean).join(" ") + (m.tipo ? " \\u00B7 " + m.tipo : "") + (m.serie ? " \\u00B7 serie " + m.serie : "") + (m.horometro ? " \\u00B7 \\u00FAlt. " + m.horometro + " hs" : "") + "</option>"; }).join("")',
+    '    + (lista.length ? "<option value=\\"__otra\\">Otra m\\u00E1quina (escribir a mano)</option>" : "");',
+    '}',
+    'function onMaquinaSelectChange() {',
+    '  var sel = document.getElementById("pdf-maq-select"); if (!sel) return;',
+    '  var m = MAQUINAS_DATA.filter(function(x){ return x.id === sel.value; })[0];',
+    '  if (!m) { if (sel.value === "__otra") { ["pdf-tipo","pdf-serie","pdf-modelo","pdf-horometro"].forEach(function(id){ var e=document.getElementById(id); if(e) e.innerText=""; }); } return; }',
+    '  document.getElementById("pdf-tipo").innerText = m.tipo || "";',
+    '  document.getElementById("pdf-modelo").innerText = [m.marca, m.modelo].filter(Boolean).join(" ");',
+    '  document.getElementById("pdf-serie").innerText = m.serie || "";',
+    '}',
+    'llenarMaquinasCliente(((document.getElementById("pdf-cli-select")||{}).value) || ' + JSON.stringify(String(p.clienteId||'')) + ', MAQUINA_ID_INI);',
     'recalc();',
     '',
     'function envWA() {',
@@ -10097,7 +10149,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '    return;',
     '  }',
     '  if(window.opener && window.opener._recibirCambiosPresupuesto) {',
-    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro, clienteIdSel, cliNombre, cliEmpresa.replace("—","").trim(), cliZona.replace("—","").trim(), cliTelefono.replace("—","").trim(), cliEmail.replace("—","").trim(), tipoMaq, tcGuardar, CHECKLIST_ID_ORIGEN, tramosPagoOcultos.join(","), PLAZO_ELEGIDO, parse((document.getElementById("pdf-parada")||{innerText:""}).innerText) || 0, ((document.getElementById("pdf-cli-cuit")||{}).innerText || "").replace("\u2014","").trim(), ((document.getElementById("pdf-motivo")||{}).innerText || "").trim());',
+    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro, clienteIdSel, cliNombre, cliEmpresa.replace("—","").trim(), cliZona.replace("—","").trim(), cliTelefono.replace("—","").trim(), cliEmail.replace("—","").trim(), tipoMaq, tcGuardar, CHECKLIST_ID_ORIGEN, tramosPagoOcultos.join(","), PLAZO_ELEGIDO, parse((document.getElementById("pdf-parada")||{innerText:""}).innerText) || 0, ((document.getElementById("pdf-cli-cuit")||{}).innerText || "").replace("\u2014","").trim(), ((document.getElementById("pdf-motivo")||{}).innerText || "").trim(), TC_FECHA, ((document.getElementById("pdf-maq-select")||{}).value || ""));',
     '    var sb = document.querySelector(".btn-save");',
     '    if(sb){sb.style.background="#25d366";sb.style.color="#fff";sb.textContent="\\u2714 Guardado";}',
     '    setTimeout(function(){if(sb){sb.style.background="#1A1A1A";sb.style.color="#F4B400";sb.textContent="\\uD83D\\uDCBE GUARDAR";}},2500);',
@@ -10137,6 +10189,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     + '.campo span{font-weight:600;color:#1A1A1A;font-size:13px;display:inline-block;min-width:80px;min-height:18px;border-bottom:1px dashed transparent}'
     + '.campo span[contenteditable]:empty{border-bottom:1px dashed #ccc}'
     + '.campo span[contenteditable]:empty:before{content:"Toc\u00E1 para completar";color:#bbb;font-size:11px;font-style:italic}'
+    + '@media print{.campo span[contenteditable]:empty:before{content:"\u2014";color:#1A1A1A;font-style:normal;font-size:inherit}.notas-box.vacia{display:none!important}}'
     + '.detalle-wrap{border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;margin-bottom:20px}'
     + '.detalle-titulo{background:#F4B400;color:#1A1A1A;font-weight:700;font-size:10px;letter-spacing:2px;padding:9px 14px;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}'
     + '.detalle-titulo button{background:#1A1A1A;color:#F4B400;border:none;padding:5px 14px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700;letter-spacing:.5px}'
@@ -10187,6 +10240,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     + '.parada-edit span[contenteditable]{display:inline-block;min-width:90px;border-bottom:1px dashed #F4B400;color:#1A1A1A;font-weight:700;padding:0 4px}'
     + '@media print{.parada-box.vacia{display:none!important}}'
     // v17.72 — cosas del editor que no tienen que salir en el PDF que recibe el cliente
+    + '@media print{.pagos-wrap,.total-section,.parada-box,.motivo-box,.condiciones,.condiciones-pago-legal,.firmas{break-inside:avoid;page-break-inside:avoid}}'
     + '@media print{.solo-pantalla{display:none!important}tr.fila-vacia{display:none!important}.motivo-box.vacia{display:none!important}}'
     + '.motivo-box{border:2px solid #F4B400;border-radius:8px;margin:0 0 22px;overflow:hidden}'
     + '.motivo-box .mt{background:#F4B400;color:#1A1A1A;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:8px 14px}'
@@ -10239,6 +10293,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     + '<div class="campo"><label>N\u00BA Presupuesto</label><span contenteditable="true">' + numPresup + '</span></div>'
     + '<div class="campo"><label>Fecha</label><span contenteditable="true">' + (p.fecha ? fmtDate(p.fecha) : fechaHoy) + '</span></div>'
     + '<div class="campo"><label>Estado</label><span contenteditable="true">' + estadoPresup + '</span></div>'
+    + '<div class="campo solo-pantalla"><label>M\u00E1quina del cliente</label><select id="pdf-maq-select" onchange="onMaquinaSelectChange()" style="width:100%;padding:5px;font-size:12px;border:1px solid #ccc;border-radius:4px;background:#fff;color:#1A1A1A"></select></div>'
     + '<div class="campo"><label>Tipo</label><span id="pdf-tipo" contenteditable="true">' + ph(maqTipo) + '</span></div>'
     + '<div class="campo"><label>N\u00BA de serie</label><span id="pdf-serie" contenteditable="true">' + ph(p.serieMaquina) + '</span></div>'
     + '<div class="campo"><label>Modelo de la m\u00E1quina</label><span id="pdf-modelo" contenteditable="true">' + ph(p.modeloMaquina) + '</span></div>'
@@ -10309,10 +10364,14 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     + '<div class="parada-box' + ((p.costoParadaDia>0)?'':' vacia') + '" id="paradaBox"><div class="ico">\u23F1\uFE0F</div><div class="tx" id="paradaTxt"></div></div>'
     + '<div class="parada-edit solo-pantalla">Costo de la m\u00E1quina parada por d\u00EDa: $<span id="pdf-parada" contenteditable="true">' + (p.costoParadaDia>0 ? Math.round(p.costoParadaDia).toLocaleString('es-AR') : '') + '</span> \u2014 lo que el cliente pierde cada d\u00EDa sin la m\u00E1quina (alquiler de reemplazo, obra frenada, operario parado). Si lo dej\u00E1s vac\u00EDo, no aparece en el PDF.</div>'
 
-    + '<div class="detalle-wrap">'
+    + '<div class="detalle-wrap pagos-wrap">'
     + '<div class="detalle-titulo">Opciones de pago'
-    + '<span style="font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:#1A1A1A">Tipo de cambio del d\u00EDa: $<span id="pdf-tc" contenteditable="true">' + (p.tcAlMomento||'') + '</span> <button id="btnTraerTC" class="solo-pantalla" type="button" style="background:#1A1A1A;color:#F4B400;border:none;padding:3px 9px;border-radius:3px;cursor:pointer;font-size:10px;font-weight:700;margin-left:4px">\uD83D\uDD04 Traer</button></span>'
+    + '<span style="font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:#1A1A1A">D\u00F3lar oficial: $<span id="pdf-tc" contenteditable="true">' + (p.tcAlMomento||'') + '</span> <span id="pdf-tc-fecha" style="color:#666">' + (p.tcAlMomento ? '(al ' + (p.tcFecha ? fmtDate(p.tcFecha) : (p.fecha ? fmtDate(p.fecha) : fechaHoy)) + ')' : '') + '</span>'
+    + ' <button id="btnTraerTC" class="solo-pantalla" type="button" title="Trae el d\u00F3lar oficial (BNA venta) de hoy" style="background:#1A1A1A;color:#F4B400;border:none;padding:3px 9px;border-radius:3px;cursor:pointer;font-size:10px;font-weight:700;margin-left:4px">\uD83D\uDD04 Oficial de hoy</button>'
+    + (p.tcAlMomento ? ' <button id="btnTCOriginal" class="solo-pantalla" type="button" title="Volver al d\u00F3lar con el que se hizo el presupuesto" style="background:#fff;color:#1A1A1A;border:1px solid #ccc;padding:3px 9px;border-radius:3px;cursor:pointer;font-size:10px;font-weight:700;margin-left:2px">\u21A9 Del presupuesto ($' + p.tcAlMomento + ')</button>' : '')
+    + '</span>'
     + '</div>'
+    + '<div id="pagosOcultosAviso" class="solo-pantalla" style="display:none;padding:8px 14px;font-size:11px;background:#fff8e1;border-bottom:1px solid #f0e2b0"></div>'
     + '<table>'
     + '<thead><tr><th>Modalidad</th><th style="text-align:right">Monto ARS</th><th style="text-align:right">Referencia USD</th><th class="no-print" style="width:28px"></th></tr></thead>'
     + '<tbody id="tbodyPagos"></tbody>'
