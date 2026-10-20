@@ -134,6 +134,7 @@ tr:hover td { background:rgba(255,255,255,0.015); }
 .search-bar { display:flex; align-items:center; gap:10px; background:var(--dark); border:1px solid var(--border2); border-radius:4px; padding:7px 12px; margin-bottom:14px; }
 .search-bar input { background:transparent; border:none; outline:none; color:var(--text); font-family:'Barlow'; font-size:13px; flex:1; }
 .search-bar input::placeholder { color:var(--muted2); }
+.search-bar select { width:auto !important; max-width:250px; flex:0 0 auto; margin:0 !important; }
 .filter-tabs { display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
 .filter-tab { padding:4px 12px; border-radius:20px; font-size:11px; letter-spacing:1px; text-transform:uppercase; cursor:pointer; border:1px solid var(--border2); color:var(--muted); background:transparent; transition:all 0.15s; }
 .filter-tab:hover { border-color:var(--yellow); color:var(--yellow); }
@@ -477,7 +478,8 @@ select option { background:var(--dark); }
       <div class="page-title">CLIENTES</div>
       <button class="btn-primary" onclick="openModal('cliente')">+ NUEVO CLIENTE</button>
     </div>
-    <div class="search-bar"><span>🔍</span><input type="text" placeholder="Buscar nombre, empresa, zona..." id="searchClientes" oninput="renderClientes()"></div>
+    <div class="search-bar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span>🔍</span><input type="text" placeholder="Buscar nombre, empresa, zona, quién lo recomendó..." id="searchClientes" oninput="renderClientes()" style="flex:1;min-width:200px">
+      <select id="filtroOrigenCliente" onchange="renderClientes()" title="¿Cómo llegó?" style="background:var(--dark);color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:6px 8px;font-size:12px"></select></div>
     <div class="filter-tabs">
       <button class="filter-tab active" onclick="setFilter('clientes','todos',this)">Todos</button>
       <button class="filter-tab" onclick="setFilter('clientes','activo',this)">Activos</button>
@@ -496,6 +498,8 @@ select option { background:var(--dark); }
       <div class="page-title">MÁQUINAS</div>
       <button class="btn-primary" onclick="openModal('maquina')">+ NUEVA MÁQUINA</button>
     </div>
+    <div class="search-bar"><span>🔍</span><input type="text" placeholder="Buscar N° (m002), marca, modelo, serie, cliente..." id="searchMaquinas" oninput="renderMaquinas()"></div>
+    <div id="maquinas-aviso-duplicadas" style="margin-bottom:10px"></div>
     <div class="card"><div class="table-wrap"><table>
       <thead><tr><th>Marca / Modelo</th><th>Cliente</th><th>Tipo</th><th>Serie</th><th>Trabajos</th><th>Acciones</th></tr></thead>
       <tbody id="tabla-maquinas"></tbody>
@@ -517,6 +521,12 @@ select option { background:var(--dark); }
       <button class="filter-tab" style="border-color:var(--red);color:var(--red)" onclick="filtrarPorCobrar(this)">🔴 Por cobrar</button>
       <button class="filter-tab" id="filtertab-trabajos-sinvincular" style="border-color:var(--orange);color:var(--orange)" onclick="setFilter('trabajos','sinvincular',this)">📄 Sin vincular <span class="nav-badge" id="badge-trabajos-sinvincular" style="margin-left:2px;background:var(--orange)">0</span></button>
       <button class="btn-secondary" style="font-size:11px;padding:4px 10px;border-color:#6fa8dc;color:#6fa8dc" onclick="vincularAutomaticoPorNumero()" title="Vincula solo cuando el número del Trabajo Y el cliente coinciden con un Presupuesto — el resto queda para revisar a mano">🔗 Vincular automático por número</button>
+    </div>
+    <div class="search-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span>🔍</span>
+      <input type="text" placeholder="Buscar título, cliente, máquina, N° (t0127), herramienta..." id="searchTrabajos" oninput="renderTrabajos()" style="flex:1;min-width:200px">
+      <select id="filtroTipoTrabajo" onchange="renderTrabajos()" title="Tipo de trabajo (especialidad)" style="background:var(--dark);color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:6px 8px;font-size:12px"></select>
+      <select id="filtroHerramienta" onchange="renderTrabajos()" title="Herramienta especial usada" style="background:var(--dark);color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:6px 8px;font-size:12px"></select>
+      <span id="trabajos-filtro-resumen" style="font-size:11px;color:var(--muted)"></span>
     </div>
     <div id="trabajos-aviso-vinculo" style="margin-bottom:10px"></div>
     <div class="card"><div class="table-wrap"><table>
@@ -755,8 +765,10 @@ select option { background:var(--dark); }
   <!-- ESTADÍSTICAS -->
   <div class="page" id="page-estadisticas">
     <div class="page-header"><div class="page-title">ESTADÍSTICAS <span>& REPORTES</span></div></div>
+    <!-- v17.75 — elegir qué ver (el scroll con todo junto era muy largo) -->
+    <div class="filter-tabs" id="est-secciones" style="position:sticky;top:0;z-index:20;background:var(--dark);padding:8px 0;margin-bottom:12px"></div>
     <!-- Fila 1: comparativa presupuestado vs cobrado real -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+    <div data-est="resumen" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
       <div class="stat-card green" style="border:2px solid var(--green)">
         <div class="stat-val" id="e-cobrado-real">$0</div>
         <div id="e-cobrado-real-usd" style="font-size:12px;color:var(--blue-light);margin-top:2px"></div>
@@ -775,30 +787,30 @@ select option { background:var(--dark); }
       </div>
     </div>
     <!-- Fila 2: KPIs -->
-    <div class="stats-grid">
+    <div data-est="resumen" class="stats-grid">
       <div class="stat-card blue"><div class="stat-val" id="e-conversion">0%</div><div class="stat-label">Tasa de conversión</div><div class="stat-icon">🎯</div></div>
       <div class="stat-card blue"><div class="stat-val" id="e-ticket">$0</div><div class="stat-label">Ticket promedio</div><div class="stat-icon">📊</div></div>
     </div>
     <!-- Embudo de conversión de presupuestos: Formulado → Enviado → Aprobado -->
-    <div class="card" style="margin-bottom:12px">
+    <div data-est="presupuestos" class="card" style="margin-bottom:12px">
       <div class="card-header"><span class="card-title">🎯 EMBUDO DE CONVERSIÓN DE PRESUPUESTOS</span></div>
       <p style="font-size:11px;color:var(--muted);margin:0 12px 10px">De lo que se formuló, cuánto efectivamente se mandó al cliente, y de eso, cuánto se aprobó — la pregunta real no es "cuántos aprobé de todos", es "cuántos aprobé de los que el cliente realmente vio".</p>
       <div id="embudo-conversion-lista" style="padding:0 12px 14px"></div>
     </div>
     <!-- Motivos de no aprobación — para no confundir un duplicado (se aprobó
          la otra opción) con una venta perdida de verdad -->
-    <div class="card" style="margin-bottom:12px">
+    <div data-est="presupuestos" class="card" style="margin-bottom:12px">
       <div class="card-header"><span class="card-title">❓ MOTIVOS DE NO APROBACIÓN</span></div>
       <p style="font-size:11px;color:var(--muted);margin:0 12px 10px">Antes de esto, "No aprobados" era un solo número que mezclaba pérdidas reales con duplicados (dos presupuestos para el mismo trabajo, uno con repuestos originales y otro con genéricos) — ahora se ve separado.</p>
       <div id="motivos-no-aprobacion-lista" style="padding:0 12px 14px"></div>
     </div>
-    <div class="card" style="margin-bottom:12px">
+    <div data-est="presupuestos" class="card" style="margin-bottom:12px">
       <div class="card-header"><span class="card-title">📋 INFORMES TÉCNICOS — ¿QUÉ PRESUPUESTOS APROBADOS NO TIENEN?</span></div>
       <p style="font-size:11px;color:var(--muted);margin:0 12px 10px">De los presupuestos aprobados: cuántos tienen informe, cuántos no y por qué (lo que se carga con "🚫 No tengo informe").</p>
       <div id="informes-cobertura" style="padding:0 12px 14px"></div>
     </div>
     <!-- Rentabilidad real: margen por Tipo de trabajo y por Cliente, sobre lo ya cobrado -->
-    <div class="card" style="margin-bottom:12px">
+    <div data-est="rentabilidad" class="card" style="margin-bottom:12px">
       <div class="card-header"><span class="card-title">💹 RENTABILIDAD REAL</span></div>
       <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">
         Margen real (cobrado − repuesto − movilidad − gastos) sobre trabajos ya cobrados — no sobre lo presupuestado. Sirve para ver qué tipo de trabajo y qué clientes dejan mejor margen, más allá de cuánto facturan.
@@ -816,7 +828,7 @@ select option { background:var(--dark); }
       </table></div>
     </div>
     <!-- Estacionalidad y tiempos de respuesta -->
-    <div class="card" style="margin-bottom:12px">
+    <div data-est="tiempos" class="card" style="margin-bottom:12px">
       <div class="card-header"><span class="card-title">📅 ESTACIONALIDAD Y TIEMPOS</span></div>
       <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">
         En qué mes se concentra más trabajo (para anticipar carga y vender contratos con un argumento real), y cuánto tarda un trabajo típico una vez que arranca.
@@ -836,14 +848,14 @@ select option { background:var(--dark); }
       <p style="font-size:10px;color:var(--muted2);margin-top:6px">De los presupuestos aprobados, qué porcentaje tiene un Trabajo vinculado — el vínculo es opcional, así que este número solo mide lo vinculado, no el negocio real completo (todavía).</p>
     </div>
     <!-- Fila 3: Estado de cobro -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px">
+    <div data-est="cobros" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px">
       <div class="stat-card green"><div class="stat-val" id="e-cobro-cobrado">$0</div><div class="stat-label">✅ Ya cobrado</div><div class="stat-sub" id="e-cobro-cobrado-n">0 trabajos</div></div>
       <div class="stat-card yellow"><div class="stat-val" id="e-cobro-parcial">$0</div><div class="stat-label">🟡 Cobrado parcial</div><div class="stat-sub" id="e-cobro-parcial-n">0 trabajos</div></div>
       <div class="stat-card red"><div class="stat-val" id="e-cobro-pendiente">$0</div><div class="stat-label">🔴 Por cobrar</div><div class="stat-sub" id="e-cobro-pendiente-n">0 trabajos completados</div></div>
       <div class="stat-card orange"><div class="stat-val" id="e-cobro-pct">0%</div><div class="stat-label">📈 Tasa de cobro</div><div class="stat-sub">% del completado cobrado</div></div>
     </div>
     <!-- Fila 3.5: Impacto cambiario en cobros -->
-    <div class="card" style="margin-bottom:12px">
+    <div data-est="cobros" class="card" style="margin-bottom:12px">
       <div class="card-header"><span class="card-title">💱 Impacto cambiario en cobros</span></div>
       <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">
         Compara, para los presupuestos ya marcados como cobrados, cuántos dólares reales terminó recibiendo Emmanuel contra lo que esperaba con el recargo por plazo aplicado. Sirve para saber si el 3/6/9% del Tarifario alcanza o hay que ajustarlo.
@@ -860,7 +872,7 @@ select option { background:var(--dark); }
       </table></div>
     </div>
     <!-- Fila 3.55: Impacto cambiario en cobros — CONTRATOS (misma lógica que Presupuestos) -->
-    <div class="card" style="margin-bottom:12px">
+    <div data-est="cobros" class="card" style="margin-bottom:12px">
       <div class="card-header"><span class="card-title">💱 Impacto cambiario en cobros — Contratos</span></div>
       <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">
         Lo mismo que arriba, pero para Contratos de mantenimiento cobrados.
@@ -877,7 +889,7 @@ select option { background:var(--dark); }
       </table></div>
     </div>
     <!-- Fila 3.6: Por cobrar según Presupuestos, desglose por plazo -->
-    <div class="card" style="margin-bottom:12px">
+    <div data-est="cobros" class="card" style="margin-bottom:12px">
       <div class="card-header"><span class="card-title">📅 Por cobrar según Presupuestos — desglose por plazo</span></div>
       <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">
         Presupuestos aprobados que todavía no se marcaron como cobrados, agrupados por el plazo que eligió el cliente. Esto es distinto del "Por cobrar" de Trabajos de arriba — ese mira trabajos técnicos, esto mira presupuestos con plazo.
@@ -901,7 +913,7 @@ select option { background:var(--dark); }
       </div>
     </div>
     <!-- Fila 3.7: Proyección financiera a futuro -->
-    <div class="card" style="margin-bottom:12px;border-left:3px solid var(--yellow)">
+    <div data-est="cobros" class="card" style="margin-bottom:12px;border-left:3px solid var(--yellow)">
       <div class="card-header"><span class="card-title">🔮 PROYECCIÓN — SI COBRO TODO LO PENDIENTE, ASÍ CIERRA EL MES</span></div>
       <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">
         Toma lo que ya cobraste este mes, le suma todo lo que está aprobado/activo y todavía no cobraste (Presupuestos + Contratos), y lo compara contra los gastos que ya cargaste este mes. No inventa fechas exactas de cobro ni gastos futuros que no cargaste — es un "mejor caso" asumiendo que cobrás todo lo pendiente antes de fin de mes.
@@ -920,7 +932,7 @@ select option { background:var(--dark); }
       </table></div>
     </div>
     <!-- Fila 4: desglose -->
-    <div class="stats-grid">
+    <div data-est="rentabilidad" class="stats-grid">
       <div class="stat-card orange"><div class="stat-val" id="e-rentabilidad">0%</div><div class="stat-label">Rentabilidad real</div><div class="stat-icon">📈</div><div class="stat-sub">Sobre monto cobrado real</div></div>
       <div class="stat-card green"><div class="stat-val" id="e-mano-obra">$0</div><div class="stat-label">Ganancia mano de obra</div><div class="stat-icon">🔧</div><div class="stat-sub">Cobrado por trabajo técnico</div></div>
       <div class="stat-card blue"><div class="stat-val" id="e-comision-rep">$0</div><div class="stat-label">Comisión repuestos</div><div class="stat-icon">⚙️</div><div class="stat-sub">Markup sobre costo de repuesto</div></div>
@@ -928,27 +940,27 @@ select option { background:var(--dark); }
       <div class="stat-card yellow"><div class="stat-val" id="e-rep-facturado">$0</div><div class="stat-label">Repuestos facturados</div><div class="stat-icon">🧾</div><div class="stat-sub">Lo que se cobró al cliente</div></div>
       <div class="stat-card blue"><div class="stat-val" id="e-movilidad">$0</div><div class="stat-label">Movilidad total</div><div class="stat-icon">🚗</div><div class="stat-sub">Traslados cobrados</div></div>
     </div>
-    <div class="charts-grid">
+    <div data-est="presupuestos trabajos" class="charts-grid">
       <div class="chart-card"><div class="chart-title">TRABAJOS POR ESTADO</div><div class="chart-wrap"><canvas id="chartEstados"></canvas></div></div>
       <div class="chart-card"><div class="chart-title">PRESUPUESTOS POR ESTADO</div><div class="chart-wrap"><canvas id="chartPresup"></canvas></div></div>
     </div>
-    <div class="charts-grid">
+    <div data-est="rentabilidad" class="charts-grid">
       <div class="chart-card"><div class="chart-title">DESGLOSE DE INGRESOS</div><div class="chart-wrap"><canvas id="chartDesglose"></canvas></div></div>
       <div class="chart-card"><div class="chart-title">REPUESTO: COSTO VS FACTURADO</div><div class="chart-wrap"><canvas id="chartRepuestos"></canvas></div></div>
     </div>
-    <div class="charts-grid">
+    <div data-est="rentabilidad" class="charts-grid">
       <div class="chart-card"><div class="chart-title">FACTURADO POR RUBRO — COBRADO VS POR COBRAR</div><p style="font-size:10.5px;color:var(--muted);margin:-4px 0 6px">Según los ítems de los presupuestos aprobados: mano de obra, repuestos, traslado y servicios de terceros (tornería, bombista…).</p><div class="chart-wrap"><canvas id="chartRubros"></canvas></div></div>
       <div class="chart-card"><div class="chart-title">RUBROS — DETALLE</div><div id="tabla-rubros" style="padding:6px 4px;font-size:12px"></div></div>
     </div>
-    <div class="charts-grid">
+    <div data-est="cobros clientes" class="charts-grid">
       <div class="chart-card"><div class="chart-title">COBRADO REAL VS PRESUPUESTADO</div><div class="chart-wrap"><canvas id="chartCobradoVsPresup"></canvas></div></div>
       <div class="chart-card"><div class="chart-title">CLIENTES POR ZONA</div><div class="chart-wrap"><canvas id="chartZonas"></canvas></div></div>
     </div>
-    <div class="charts-grid">
+    <div data-est="presupuestos" class="charts-grid">
       <div class="chart-card"><div class="chart-title">ALERTAS MANUALES: RESUELTA vs PENDIENTE</div><p style="font-size:10.5px;color:var(--muted);margin:-4px 0 6px">Solo las que cargaste a mano en "Alertas" — no incluye las de mantenimiento (repuestos), que se ven aparte más abajo.</p><div class="chart-wrap"><canvas id="chartAlertas"></canvas></div></div>
       <div class="chart-card"><div class="chart-title">PRESUPUESTOS: CONVERSIÓN</div><div class="chart-wrap"><canvas id="chartPresupConv"></canvas></div></div>
     </div>
-    <div class="card">
+    <div data-est="rentabilidad trabajos" class="card">
       <div class="card-header"><span class="card-title">TRABAJOS CON MAYOR RENTABILIDAD</span></div>
       <div class="table-wrap"><table>
         <thead><tr><th>Trabajo</th><th>Cliente</th><th>Cobrado</th><th>Gastado</th><th>Ganancia</th><th>Margen</th></tr></thead>
@@ -956,14 +968,39 @@ select option { background:var(--dark); }
       </table></div>
     </div>
 
+    <!-- v17.75 — TIPOS DE TRABAJO Y HERRAMIENTAS -->
+    <div data-est="trabajos" style="margin-top:16px">
+      <div class="page-title" style="font-size:18px;margin-bottom:6px">TIPOS DE TRABAJO <span>& HERRAMIENTAS</span></div>
+      <p style="font-size:11px;color:var(--muted);margin:0 0 10px">Qué tipo de trabajos hace MEB y cuánto deja cada uno. El tipo sale del campo "Tipo de trabajo" del trabajo; si está vacío, se deduce del título (se ve en gris). "Facturado" = monto cobrado del trabajo o, si no lo tiene, el presupuesto aprobado.</p>
+      <div class="charts-grid">
+        <div class="chart-card"><div class="chart-title">FACTURADO POR TIPO DE TRABAJO</div><div class="chart-wrap chart-wrap-tall"><canvas id="chartTiposTrabajo"></canvas></div></div>
+        <div class="chart-card"><div class="chart-title">TIPOS DE TRABAJO — DETALLE</div><div id="tabla-tipos-trabajo" style="padding:6px 4px;font-size:12px;overflow-x:auto"></div></div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="card-header"><span class="card-title">🧰 HERRAMIENTAS ESPECIALES — ¿CUÁNTOS TRABAJOS HIZO CADA UNA?</span></div>
+        <div id="tabla-herramientas" style="padding:0 12px 14px;font-size:12px;overflow-x:auto"></div>
+      </div>
+    </div>
+
+    <!-- v17.75 — CÓMO LLEGAN LOS CLIENTES -->
+    <div data-est="clientes" style="margin-top:16px">
+      <div class="page-title" style="font-size:18px;margin-bottom:6px">CÓMO LLEGAN <span>LOS CLIENTES</span></div>
+      <p style="font-size:11px;color:var(--muted);margin:0 0 10px">Sale del campo "¿Cómo llegó?" de cada cliente. Los que no lo tienen cargado pero lo dicen en las notas se cuentan igual (marcados "según notas").</p>
+      <div class="charts-grid">
+        <div class="chart-card"><div class="chart-title">CLIENTES POR ORIGEN</div><div class="chart-wrap"><canvas id="chartOrigenClientes"></canvas></div></div>
+        <div class="chart-card"><div class="chart-title">¿QUÉ CANAL TRAE MÁS PLATA?</div><div id="tabla-origen-clientes" style="padding:6px 4px;font-size:12px;overflow-x:auto"></div></div>
+      </div>
+      <div id="origen-clientes-referentes" style="margin-top:12px"></div>
+    </div>
+
     <!-- BLOQUE FINANCIERO MENSUAL -->
-    <div style="margin-top:16px">
+    <div data-est="cobros" style="margin-top:16px">
       <div class="page-title" style="font-size:18px;margin-bottom:12px">EVOLUCIÓN <span>MENSUAL</span></div>
       <div class="chart-card"><div class="chart-title">COBRADO vs GASTOS POR MES</div><p style="font-size:10.5px;color:var(--muted);margin:-4px 0 6px">Cada compra cuenta en el mes de su propia fecha, no en el mes de hoy — así un gasto de julio siempre se ve en julio.</p><div class="chart-wrap chart-wrap-tall"><canvas id="chartMensual"></canvas></div></div>
     </div>
 
     <!-- IMPACTO CAMBIARIO MES A MES (Presupuestos + Contratos + Trabajos) -->
-    <div style="margin-top:16px">
+    <div data-est="cobros" style="margin-top:16px">
       <div class="chart-card">
         <div class="chart-title">💱 IMPACTO CAMBIARIO POR MES — GANANCIA / PÉRDIDA EN USD</div>
         <p style="font-size:11px;color:var(--muted);margin:-6px 0 10px">
@@ -974,7 +1011,7 @@ select option { background:var(--dark); }
     </div>
 
     <!-- RENTABILIDAD POR CLIENTE -->
-    <div style="margin-top:16px">
+    <div data-est="rentabilidad clientes" style="margin-top:16px">
       <div class="page-title" style="font-size:18px;margin-bottom:12px">RENTABILIDAD <span>POR CLIENTE</span></div>
       <div class="card">
         <div class="table-wrap"><table>
@@ -985,7 +1022,7 @@ select option { background:var(--dark); }
     </div>
 
     <!-- ÍNDICE DE ESTADO DE FLOTA -->
-    <div style="margin-top:16px">
+    <div data-est="flota" style="margin-top:16px">
       <div class="page-title" style="font-size:18px;margin-bottom:12px">ÍNDICE DE <span>FLOTA</span></div>
       <div class="stats-grid" style="margin-bottom:12px">
         <div class="stat-card green"><div class="stat-val" id="flota-funcionando">0</div><div class="stat-label">✅ Funcionando</div></div>
@@ -1003,13 +1040,13 @@ select option { background:var(--dark); }
     </div>
 
     <!-- ALERTAS MANTENIMIENTO EN ESTADÍSTICAS -->
-    <div style="margin-top:16px">
+    <div data-est="flota" style="margin-top:16px">
       <div class="page-title" style="font-size:18px;margin-bottom:12px">ALERTAS <span>MANTENIMIENTO</span></div>
       <div id="est-alertas-mantenimiento"></div>
     </div>
 
     <!-- BLOQUE PROVEEDORES EN ESTADÍSTICAS -->
-    <div style="margin-top:16px">
+    <div data-est="proveedores" style="margin-top:16px">
       <div class="page-title" style="font-size:18px;margin-bottom:12px">PROVEEDORES <span>& COMPRAS</span></div>
       <div class="stats-grid" style="margin-bottom:12px">
         <div class="stat-card orange"><div class="stat-val" id="est-prov-invertido">$0</div><div class="stat-label">💸 Total invertido en compras</div></div>
@@ -1543,7 +1580,7 @@ select option { background:var(--dark); }
 const SHEET_ID = '16SHES6x-MHTy5uj0PtCdkEc8HNh6Hrc3ae-k6eOa8nM';
 const API_KEY = 'AIzaSyD9s9TjBBiBpABCDE12345'; // Placeholder - ver instrucciones
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxtclHVxfu4QetFqaqoej42ByNOOqWgdFU2U3xX_p8tlDwKca7kGGbDm7HuF1QIbtzBWw/exec';
-const USERS = { 'meb': 'meb2025', 'admin': 'meb2025' };
+// v17.74 — la contraseña ya no está acá (este archivo es público en GitHub): la valida el Apps Script.
 const PIPELINE_STAGES = ['Contacto','Cotización','Negociación','Aprobado','En ejecución','Finalizado','Sin avance'];
 const STAGE_COLORS = ['#7bb3e0','#F4B400','#e67e22','#2ecc71','#9b59b6','#2ecc71','#666'];
 
@@ -1559,7 +1596,7 @@ const MEB_FIRMA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlEAAAGnCAY
 let DB = { clientes:[], maquinas:[], trabajos:[], presupuestos:[], alertas:[], calendarioEventos:[], alertasRepuesto:{}, proveedores:[], compras:[], contratos:[], tarifario:[], presupCounter:1, gastosEstructura:[], vehiculos:[], vehiculoServices:[], gastosPersonales:[], calendarioVisitas:[], inversiones:[], stockSimulado:[], prospectos:[], config:{}, postventa:[], sueldos:[], reglasService:[], eventosWeb:[], accesosMiFlota:[], horometros:[] };
 
 // ── Usuario actual (para el registro de actividad) ──────────────────────────
-// El CRM sigue siendo un único login compartido (meb/meb2025) — esto no es
+// El CRM sigue siendo un único login compartido (usuario meb, contraseña validada por el script) — esto no es
 // una cuenta separada por persona, es solo una etiqueta para saber quién
 // hizo cada cambio. Se guarda por navegador, no por sesión, así que cada
 // uno lo elige una sola vez en su propia computadora/celular.
@@ -1700,12 +1737,47 @@ document.addEventListener('DOMContentLoaded', function() {
   if(li) li.src = MEB_LOGO_B64;
 });
 
-function doLogin() {
+// ── v17.74 — SESIÓN ─────────────────────────────────────────────────────
+// El login lo valida el Apps Script (la contraseña ya no está en este archivo
+// público). Si es correcta, devuelve una "sesión" firmada que vence a los 14 días;
+// se guarda en este navegador y viaja en cada lectura y cada cambio.
+const LS_SESION = 'meb_sesion';
+function sesionGuardada() { try { const o = JSON.parse(localStorage.getItem(LS_SESION)||'null'); return (o && o.s && o.vence > Date.now()) ? o : null; } catch(e){ return null; } }
+function sesionCRM() { const o = sesionGuardada(); return o ? o.s : ''; }
+function guardarSesion(o) { try { localStorage.setItem(LS_SESION, JSON.stringify(o)); } catch(e){} }
+function borrarSesion() { try { localStorage.removeItem(LS_SESION); } catch(e){} }
+let _avisoSesionMostrado = false;
+function sesionVencida() {
+  borrarSesion();
+  if(_avisoSesionMostrado) return;
+  _avisoSesionMostrado = true;
+  showToast('Tu sesión venció — volvé a entrar con tu contraseña','error');
+  setTimeout(()=>{ _avisoSesionMostrado = false; doLogout(); }, 1500);
+}
+async function doLogin() {
+  const errEl = document.getElementById('loginError');
+  const u = document.getElementById('loginUser').value.trim().toLowerCase().replace(/\s/g,'');
+  const p = document.getElementById('loginPass').value;
+  if(!u || !p){ errEl.style.display='block'; errEl.textContent='Completá usuario y contraseña'; return; }
+  errEl.style.display='block'; errEl.style.color='var(--muted)'; errEl.textContent='Verificando…';
+  let r = null;
   try {
-    const u = document.getElementById('loginUser').value.trim().toLowerCase().replace(/\s/g,'');
-    const p = document.getElementById('loginPass').value.trim().replace(/\s/g,'');
-    const ok = (u === 'meb' || u === 'admin') && p === 'meb2025';
-    if(ok) {
+    const res = await fetch(SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({ action:'crmLogin', row:{ usuario:u, clave:p } }) });
+    r = await res.json();
+  } catch(e) { r = { ok:false, mensaje:'No se pudo conectar. Revisá internet e intentá de nuevo.' }; }
+  errEl.style.color = '';
+  // Si el Apps Script todavía es una versión vieja (no conoce crmLogin), se dice claro qué falta.
+  if(r && !r.ok && /desconocida/i.test(String(r.error||''))) { errEl.style.display='block'; errEl.textContent = 'Falta actualizar el Apps Script: Implementar → Gestionar implementaciones → Editar → Nueva versión (con el Code.gs nuevo).'; return; }
+  if(!r || !r.ok) { errEl.style.display='block'; errEl.textContent = (r && r.mensaje) || 'Usuario o contraseña incorrectos'; return; }
+  guardarSesion({ s:r.sesion, u:r.usuario, vence:r.vence });
+  document.getElementById('loginPass').value = '';
+  errEl.style.display='none';
+  entrarAlCRM();
+  if(r.debeCambiarClave) setTimeout(()=>showToast('⚠️ Todavía se usa la contraseña inicial: cambiala desde la planilla → menú 🔒 Seguridad CRM','error'), 2500);
+}
+function entrarAlCRM() {
+  try {
+    {
       document.getElementById('loginScreen').style.display='none';
       document.getElementById('appTopbar').style.display='flex';
       document.getElementById('appSidebar').style.display='flex';
@@ -1722,17 +1794,16 @@ function doLogin() {
       // Auto-sync desde Sheets al login
       showToast('Bienvenido a MEB CRM ✔ — Sincronizando...','success');
       setTimeout(()=>{ try{ syncAll(); }catch(e){ console.warn('auto-sync error:',e); } }, 400);
-    } else {
-      const errEl = document.getElementById('loginError');
-      errEl.style.display='block';
-      errEl.textContent='Usuario o contraseña incorrectos';
     }
   } catch(e) {
     console.error('doLogin error:',e);
     alert('Error al iniciar sesión. Recargá la página e intentá de nuevo.');
   }
 }
+// Si este navegador ya tiene una sesión vigente, entra directo (sin volver a pedir la contraseña)
+document.addEventListener('DOMContentLoaded', ()=>{ if(sesionGuardada()) setTimeout(entrarAlCRM, 50); });
 function doLogout() {
+  borrarSesion();
   document.getElementById('loginScreen').style.display='flex';
   ['appTopbar','appSidebar','mainContent'].forEach(id=>document.getElementById(id).style.display='none');
   document.getElementById('loginUser').value='';
@@ -1772,17 +1843,29 @@ function resolverIdEstable(r, sheetName) {
   return nuevoId;
 }
 
+// v17.74 — la planilla ya no se lee directo (eso obligaba a dejarla pública con
+// "cualquiera con el enlace"): se le pide al Apps Script con la sesión, que la lee
+// con la cuenta de la dueña y devuelve cada hoja en el mismo formato CSV de antes.
+let _cacheHojas = null;
+async function leerHojasServidor(nombres) {
+  const s = sesionCRM();
+  if(!s) { sesionVencida(); throw new Error('Sin sesión'); }
+  const url = SCRIPT_URL + '?action=crmLeer&s=' + encodeURIComponent(s) + '&hojas=' + encodeURIComponent(nombres.join(',')) + '&_ts=' + Date.now();
+  const res = await fetch(url, { cache: 'no-store' });
+  const j = await res.json();
+  if(!j || !j.ok) { if(j && j.error==='sesion') sesionVencida(); throw new Error((j && j.error)==='sesion' ? 'Sesión vencida' : 'No se pudo leer la planilla'); }
+  return j.hojas || {};
+}
+// Trae muchas hojas en UN solo pedido (antes eran ~30 pedidos separados)
+async function precargarHojas(nombres) { _cacheHojas = await leerHojasServidor(nombres); }
 async function fetchSheet(sheetName) {
   try {
-    // Cache-busting: sin esto, tanto el navegador como el servidor de Google
-    // pueden seguir sirviendo una copia vieja de la hoja durante un buen
-    // rato después de borrar/editar filas — ya lo vimos con hojas nuevas,
-    // y también pasa con filas borradas en una hoja existente.
-    const url = SHEET_CSV_BASE + encodeURIComponent(sheetName) + '&_ts=' + Date.now();
-    const res = await fetch(url, { cache: 'no-store' });
-    if(!res.ok) throw new Error('No se pudo leer la hoja');
-    const text = await res.text();
-    return parseCSV(text);
+    if(_cacheHojas && Object.prototype.hasOwnProperty.call(_cacheHojas, sheetName)) {
+      const t = _cacheHojas[sheetName];
+      return t ? parseCSV(t) : [];
+    }
+    const h = await leerHojasServidor([sheetName]);
+    return h[sheetName] ? parseCSV(h[sheetName]) : [];
   } catch(e) {
     console.warn('Error leyendo hoja:', sheetName, e);
     return [];
@@ -1881,6 +1964,12 @@ async function syncAll() {
   const _calendarioEventos = DB.calendarioEventos || [];
 
   try {
+    // v17.74 — todas las hojas en un solo pedido al Apps Script (con la sesión).
+    // Si falla (sin conexión o sesión vencida) no se toca nada de lo que ya está cargado.
+    await precargarHojas(['CLIENTES','MAQUINAS','TRABAJOS','PRESUPUESTOS','ALERTAS','PROVEEDORES','CONTRATOS','TARIFARIO','INFORMES','OPORTUNIDADES_LOG','PEAJES',
+      'CAJAS_HERRAMIENTAS','CHECKLIST_VISITAS','GASTOS_ESTRUCTURA','VEHICULOS','VEHICULO_SERVICES','TERCIARIZADO','TERCIARIZADO_LIQUIDACIONES',
+      'GASTOS_PERSONALES','CALENDARIO_VISITAS','INVERSIONES','STOCK_SIMULADO','PROSPECTOS','CONFIG','POSTVENTA','SUELDOS','REGLAS_SERVICE',
+      'EVENTOS_WEB','ACCESOS_MI_FLOTA','MI_DIA_ACCESOS','HOROMETROS']);
     const [cl,mq,tr,pr,al,pv,ct,tf,inf,opl,pj,ch,chk,ge,vh,vs,tz,tzl,gp,vc,inv,ssim,pros,cfg,pvt,sue,rsv,evw,acf,mda,hor] = await Promise.all([
       fetchSheet('CLIENTES'), fetchSheet('MAQUINAS'),
       fetchSheet('TRABAJOS'), fetchSheet('PRESUPUESTOS'), fetchSheet('ALERTAS'),
@@ -1921,13 +2010,30 @@ async function syncAll() {
       id:resolverIdEstable(r,'CLIENTES'), nombre:r.NOMBRE||'', empresa:r.EMPRESA||'',
       telefono:r.TELEFONO||'', email:r.EMAIL||'', zona:r.ZONA||'',
       estado:(r.ESTADO||'activo').toLowerCase().trim(), ultimoContacto:r.ULTIMO_CONTACTO||r.ULTIMO_CONTACTO_||'',
-      notas:r.NOTAS||'', tokenPortal:r.TOKEN_PORTAL||'', cuit:String(r.CUIT||'').trim()
+      notas:r.NOTAS||'', tokenPortal:r.TOKEN_PORTAL||'', cuit:String(r.CUIT||'').trim(),
+      origen:String(r.ORIGEN||'').trim(), origenDetalle:String(r.ORIGEN_DETALLE||'').trim()
     }));
     if(mq.length) DB.maquinas = mq.map(r=>({
       id:resolverIdEstable(r,'MAQUINAS'), clienteId:String(r.CLIENTE_ID||'').trim(), marca:r.MARCA||'',
       modelo:r.MODELO||'', serie:r.SERIE||'', tipo:r.TIPO||'',
-      horometro:r.HOROMETRO||'', horometroFecha:r.HOROMETRO_FECHA||'', notas:r.NOTAS||''
+      horometro:r.HOROMETRO||'', horometroFecha:r.HOROMETRO_FECHA||'', notas:r.NOTAS||'', _fila:r._rowIndex
     })); else if(!DB.maquinas.length) DB.maquinas=[];
+    // v17.75 — máquinas con el MISMO ID en dos filas (ej. m001 en las filas 2 y 3): se muestra la más completa
+    // y se avisa en la pestaña Máquinas cuál borrar o renumerar.
+    window._maquinasDuplicadas = [];
+    (function(){
+      const grupos = {};
+      DB.maquinas.forEach(m => { const k = String(m.id).toLowerCase(); (grupos[k] = grupos[k] || []).push(m); });
+      const descartar = new Set();
+      Object.keys(grupos).forEach(k => {
+        const g = grupos[k]; if(g.length < 2) return;
+        const score = m => (m.marca?4:0) + (m.modelo && m.modelo!=='—'?4:0) + (m.serie?2:0) + (m.tipo?1:0) + (DB.clientes.some(c=>String(c.id)===String(m.clienteId))?1:0);
+        const orden = g.slice().sort((a,b)=>score(b)-score(a));
+        orden.slice(1).forEach(m => descartar.add(m));
+        window._maquinasDuplicadas.push({ id:g[0].id, filas:g.map(m=>({ fila:m._fila, vacia:score(m)<=1, desc:[m.marca,m.modelo].filter(x=>x&&x!=='—').join(' ')||'(sin marca ni modelo)', cliente:m.clienteId })), queda:orden[0]._fila });
+      });
+      if(descartar.size) DB.maquinas = DB.maquinas.filter(m => !descartar.has(m));
+    })();
     if(tr.length) DB.trabajos = tr.map(r=>({
       id:resolverIdEstable(r,'TRABAJOS'), clienteId:String(r.CLIENTE_ID||'').trim(), maquinaId:String(r.MAQUINA_ID||'').trim(),
       presupuestoId:String(r.PRESUPUESTO_ID||'').trim(),
@@ -1949,6 +2055,7 @@ async function syncAll() {
       fechaCobroReal:r.FECHA_COBRO_REAL||'',
       horasTrabajadas:parseFloat(r.HORAS_TRABAJADAS)||0,
       tercerosCobrado:parseMonto(r.TERCEROS_COBRADO), tercerosCosto:parseMonto(r.TERCEROS_COSTO), tercerosProveedor:r.TERCEROS_PROVEEDOR||'',
+      categoriaTrabajo:String(r.CATEGORIA_TRABAJO||'').trim(), herramientas:String(r.HERRAMIENTAS||'').trim(),
       _fila:r._rowIndex
     })); else if(!DB.trabajos.length) DB.trabajos=[];
     // v17.67 — filas duplicadas en TRABAJOS (mismo ID en dos filas): el CRM mostraba las dos, una quedaba
@@ -1964,10 +2071,25 @@ async function syncAll() {
         if(g.length < 2) return;
         const score = t => (t.presupuestoId?100:0) + (t.estadoCobro==='cobrado'?20:0) + (Number(t.montoCobrado)>0?10:0)
           + (Number(t.costoRepuesto)>0?2:0) + (Number(t.precioRepuestoFacturado)>0?2:0) + (t.fechaCobroReal?1:0);
-        const orden = g.slice().sort((a,b)=>score(b)-score(a));
+        // v17.75 — si son trabajos DISTINTOS, se muestra el de la fila más arriba: es el que el Apps Script
+        // encuentra primero al guardar, así lo que se edite en el CRM cae en la fila correcta.
+        const _n = x => String(x||'').trim().toLowerCase();
+        const _dist = g.some(t => _n(t.clienteId)!==_n(g[0].clienteId) || _n(t.titulo)!==_n(g[0].titulo));
+        const orden = _dist ? g.slice().sort((a,b)=>(a._fila||1e9)-(b._fila||1e9)) : g.slice().sort((a,b)=>score(b)-score(a));
         orden.slice(1).forEach(t => descartar.add(t));
-        window._trabajosDuplicados.push({ id:id, filas:g.map(t=>t._fila).filter(Boolean) });
+        // v17.75 — ¿es la MISMA fila cargada dos veces, o son DOS TRABAJOS DISTINTOS que quedaron con el mismo
+        // número? (pasó con t0127: el martillo de Baez y la mano de obra de Fioravanti). En el segundo caso
+        // no hay que borrar nada: hay que darle un número nuevo a uno de los dos.
+        const norm = x => String(x||'').trim().toLowerCase();
+        const distintos = g.some(t => norm(t.clienteId)!==norm(g[0].clienteId) || norm(t.titulo)!==norm(g[0].titulo));
+        window._trabajosDuplicados.push({ id:id, filas:g.map(t=>t._fila).filter(Boolean), distintos:distintos,
+          detalle:g.map(t=>({ fila:t._fila, titulo:t.titulo, clienteId:t.clienteId, oculto:t!==orden[0] })) });
       });
+      if(window._trabajosDuplicados.length) {
+        let max = 0;
+        DB.trabajos.forEach(t => { const m = /^t0*(\d+)$/i.exec(String(t.id)); if(m) max = Math.max(max, parseInt(m[1],10)); });
+        window._trabajosDuplicados.forEach(d => { if(d.distintos) { max++; d.idSugerido = fmtIdTrabajo(max); } });
+      }
       if(descartar.size) DB.trabajos = DB.trabajos.filter(t => !descartar.has(t));
     })();
     // FIX carrera de sincronización: si un cambio de cobro se hizo hace menos
@@ -2610,10 +2732,11 @@ async function syncAll() {
     showToast(`Sincronizado — ${DB.clientes.length} clientes · ${DB.maquinas.length} máquinas · ${DB.trabajos.length} trabajos · ${DB.presupuestos.length} presupuestos`,'success');
   } catch(e) {
     if(status){status.textContent='● Error sync'; status.style.color='var(--red)';}
-    showToast('Error: '+e.message+' — verificá que el Sheet esté público','error');
+    showToast('Error: '+e.message+' — revisá la conexión (o volvé a entrar si venció la sesión)','error');
     console.error('SyncAll error:', e);
   }
 
+  _cacheHojas = null;
   hideLoading();
   if(btn){btn.classList.remove('syncing'); btn.textContent='↺ SINCRONIZAR';}
   updateBadges(); refreshCurrentPage();
@@ -2765,6 +2888,336 @@ function badgeNumeroTrabajo(t) {
     ? `<span style="font-family:'Bebas Neue';color:var(--yellow);font-size:13px;margin-right:6px" title="N° de trabajo (ID ${t.id})">T${String(n).padStart(4,'0')}</span>`
     : `<span style="font-size:9px;color:var(--muted);margin-right:6px" title="Trabajo creado desde el CRM (ID ${t.id})">s/n°</span>`;
 }
+// ============================================================
+// v17.75 — N° DE MÁQUINA (m002 → M002), como en el Sheet
+// ============================================================
+function numeroMaquina(m) { const x = /^m0*(\d+)$/i.exec(String(m && m.id || '')); return x ? parseInt(x[1],10) : null; }
+function badgeNumeroMaquina(m, size) {
+  const n = numeroMaquina(m);
+  return n!==null
+    ? `<span style="font-family:'Bebas Neue';color:var(--yellow);font-size:${size||13}px;margin-right:6px;letter-spacing:1px" title="N° de máquina en el Sheet (ID ${m.id})">M${String(n).padStart(3,'0')}</span>`
+    : '';
+}
+
+// ============================================================
+// v17.75 — TIPO DE TRABAJO (especialidad) y HERRAMIENTAS ESPECIALES
+// El tipo se guarda en CATEGORIA_TRABAJO; si está vacío se deduce del título
+// (y de las notas / motivo del presupuesto), así los trabajos viejos ya
+// quedan clasificados sin cargar nada a mano.
+// ============================================================
+const CATEGORIAS_TRABAJO = [
+  ['Martillo hidráulico',              /martillo/],
+  ['Service / mantenimiento',          /^service\b|^servicio \d|aceite y filtro|\bservice \d/],
+  ['Cilindros hidráulicos',            /cilindro/],
+  ['Bombas hidráulicas',               /bomba/],
+  ['Transmisión y mandos finales',     /hidrost[aá]tic|transmisi[oó]n|convertidor|embrague|caja de cambio|mando final|cadena de tracci|traccion|tracción|manch[oó]n|acople/],
+  ['Frenos y dirección',               /freno|\bdirecci[oó]n/],
+  ['Sistema eléctrico / electrónico',  /el[eé]ctric|electr[oó]nic|calibraci|sensor|monitor|escaneo|scanner|vgt|accionador|v[aá]lvula bidireccional|cableado/],
+  ['Motor e inyección',                /motor|inyecci|inyector|arranque|enfriador|distribuci[oó]n|turbo|culata/],
+  ['Pernos, bujes y articulaciones',   /perno|buje|articulaci|laima|cuchilla|extremo/],
+  ['Sistema hidráulico',               /hidr[aá]ulic|sellos|banco|mangueras?|ret[eé]n/],
+  ['Service / mantenimiento',          /service|servicio|mantenimiento|filtro|aceite|\b\d{3,5}\s?hs\b/],
+  ['Tornería / fabricación',           /torner|fabricaci|soldad|herrer/],
+  ['Diagnóstico',                      /diagn[oó]stic|inspecci|relevamiento|desmontaje/]
+];
+function _sinTildes(x) { return String(x||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function categoriaTrabajo(t) {
+  if(!t) return { nombre:'', inferida:false };
+  if(t.categoriaTrabajo) return { nombre:t.categoriaTrabajo, inferida:false };
+  const p = t.presupuestoId ? DB.presupuestos.find(x=>x.id===t.presupuestoId) : null;
+  const textos = [t.titulo, p && p.motivo, p && p.notas, t.notas];
+  for(const tx of textos) {
+    const low = String(tx||'').toLowerCase(); if(!low.trim()) continue;
+    if(/^\s*mano de obra\s*(\/\s*servicio)?\s*$/.test(low)) continue; // título genérico: se mira el motivo / notas
+    const hit = CATEGORIAS_TRABAJO.find(c => c[1].test(low) || c[1].test(_sinTildes(low)));
+    if(hit) return { nombre:hit[0], inferida:true };
+  }
+  return { nombre:'', inferida:true };
+}
+function listaTiposTrabajo() {
+  const set = new Set(CATEGORIAS_TRABAJO.map(c=>c[0]));
+  DB.trabajos.forEach(t=>{ if(t.categoriaTrabajo) set.add(t.categoriaTrabajo); });
+  return Array.from(set).sort((a,b)=>a.localeCompare(b,'es'));
+}
+function normalizarHerramientas(str) {
+  return String(str||'').split(/[,;\n]/).map(x=>x.trim()).filter(Boolean)
+    .filter((x,i,a)=>a.findIndex(y=>y.toLowerCase()===x.toLowerCase())===i).join(', ');
+}
+function herramientasDe(t) { return String(t && t.herramientas || '').split(',').map(x=>x.trim()).filter(Boolean); }
+function listaHerramientas() {
+  const m = {};
+  DB.trabajos.forEach(t=>herramientasDe(t).forEach(h=>{ const k=h.toLowerCase(); if(!m[k]) m[k]=h; }));
+  return Object.values(m).sort((a,b)=>a.localeCompare(b,'es'));
+}
+function chipsTipoTrabajo(t) {
+  const c = categoriaTrabajo(t), hs = herramientasDe(t);
+  if(!c.nombre && !hs.length) return '';
+  return `<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap">`
+    + (c.nombre ? `<span style="font-size:10px;padding:1px 7px;border-radius:10px;border:1px solid ${c.inferida?'var(--border2)':'var(--yellow)'};color:${c.inferida?'var(--muted)':'var(--yellow)'}" title="${c.inferida?'Tipo deducido del título — podés fijarlo con ✏️':'Tipo de trabajo'}">${prosEsc(c.nombre)}</span>` : '')
+    + hs.map(h=>`<span style="font-size:10px;padding:1px 7px;border-radius:10px;background:rgba(123,179,224,0.12);color:var(--blue-light)" title="Herramienta especial usada">🧰 ${prosEsc(h)}</span>`).join('')
+    + `</div>`;
+}
+function textoBusquedaTrabajo(t) {
+  const cl = DB.clientes.find(c=>String(c.id)===String(t.clienteId));
+  const mq = DB.maquinas.find(m=>m.id===t.maquinaId);
+  return [t.id, t.titulo, t.tipo, categoriaTrabajo(t).nombre, t.herramientas, t.notas, t.repuestosDetalle,
+    cl&&cl.nombre, cl&&cl.empresa, mq&&mq.id, mq&&mq.marca, mq&&mq.modelo, mq&&mq.serie].join(' ').toLowerCase();
+}
+function filtrarTrabajosBusqueda(data) {
+  const selT = document.getElementById('filtroTipoTrabajo'), selH = document.getElementById('filtroHerramienta');
+  if(selT) {
+    const v = selT.value, cnt = {};
+    DB.trabajos.forEach(t=>{ const n = categoriaTrabajo(t).nombre || '__sin'; cnt[n]=(cnt[n]||0)+1; });
+    selT.innerHTML = `<option value="">Tipo de trabajo: todos</option>` + listaTiposTrabajo().filter(x=>cnt[x]).map(x=>`<option value="${prosEsc(x)}">${prosEsc(x)} (${cnt[x]})</option>`).join('')
+      + (cnt.__sin ? `<option value="__sin">Sin clasificar (${cnt.__sin})</option>` : '');
+    selT.value = v;
+  }
+  if(selH) {
+    const v = selH.value, hs = listaHerramientas();
+    selH.innerHTML = `<option value="">Herramienta: todas</option>` + hs.map(h=>`<option value="${prosEsc(h)}">🧰 ${prosEsc(h)} (${DB.trabajos.filter(t=>herramientasDe(t).some(x=>x.toLowerCase()===h.toLowerCase())).length})</option>`).join('');
+    selH.value = v; selH.style.display = hs.length ? '' : 'none';
+  }
+  const q = ((document.getElementById('searchTrabajos')||{}).value||'').toLowerCase().trim();
+  const fT = selT ? selT.value : '', fH = selH ? selH.value : '';
+  const out = data.filter(t => (!q || textoBusquedaTrabajo(t).includes(q))
+    && (!fT || (fT==='__sin' ? !categoriaTrabajo(t).nombre : categoriaTrabajo(t).nombre===fT))
+    && (!fH || herramientasDe(t).some(x=>x.toLowerCase()===fH.toLowerCase())));
+  const res = document.getElementById('trabajos-filtro-resumen');
+  if(res) {
+    if(q || fT || fH) {
+      const fact = out.reduce((a,t)=>a+facturadoTrabajo(t),0);
+      res.innerHTML = `${out.length} trabajo${out.length!==1?'s':''} · ${fmtMonto(fact)} facturado <a href="#" onclick="event.preventDefault();irATrabajosFiltrados('','','')" style="color:var(--yellow);margin-left:6px">limpiar</a>`;
+    } else res.innerHTML = '';
+  }
+  return out;
+}
+function irATrabajosFiltrados(tipo, herr, texto) {
+  const gi = document.getElementById('globalSearchInput'); if(gi) gi.value = '';
+  const gr = document.getElementById('globalSearchResults'); if(gr) gr.style.display = 'none';
+  showPage('trabajos');
+  const st = document.getElementById('searchTrabajos'); if(st) st.value = texto||'';
+  filtrarTrabajosBusqueda([]); // llena los selects antes de elegir
+  const a = document.getElementById('filtroTipoTrabajo'); if(a) a.value = tipo||'';
+  const b = document.getElementById('filtroHerramienta'); if(b) b.value = herr||'';
+  renderTrabajos();
+}
+function hitsTipoYHerramienta(q) {
+  const out = [];
+  listaTiposTrabajo().filter(x=>_sinTildes(x).includes(_sinTildes(q))).slice(0,2).forEach(x=>{
+    const n = DB.trabajos.filter(t=>categoriaTrabajo(t).nombre===x).length; if(!n) return;
+    out.push(`<div class="gs-item" onmousedown="event.preventDefault();irATrabajosFiltrados('${prosEsc(x).replace(/'/g,"\\'")}','','')">
+      <span style="font-size:11px;color:var(--muted)">🛠 TIPO DE TRABAJO</span>
+      <div style="font-size:13px;font-weight:600;color:var(--yellow)">${prosEsc(x)}</div>
+      <div style="font-size:11px;color:var(--muted)">${n} trabajo${n!==1?'s':''} — ver todos</div></div>`);
+  });
+  listaHerramientas().filter(h=>_sinTildes(h).includes(_sinTildes(q))).slice(0,2).forEach(h=>{
+    const n = DB.trabajos.filter(t=>herramientasDe(t).some(x=>x.toLowerCase()===h.toLowerCase())).length;
+    out.push(`<div class="gs-item" onmousedown="event.preventDefault();irATrabajosFiltrados('','${prosEsc(h).replace(/'/g,"\\'")}','')">
+      <span style="font-size:11px;color:var(--muted)">🧰 HERRAMIENTA</span>
+      <div style="font-size:13px;font-weight:600;color:var(--blue-light)">${prosEsc(h)}</div>
+      <div style="font-size:11px;color:var(--muted)">usada en ${n} trabajo${n!==1?'s':''} — ver todos</div></div>`);
+  });
+  return out;
+}
+// Lo que dejó un trabajo: el monto cobrado o, si todavía no lo tiene, el presupuesto aprobado vinculado.
+function facturadoTrabajo(t) {
+  const m = Number(t && t.montoCobrado || 0); if(m > 0) return m;
+  const p = t && t.presupuestoId ? DB.presupuestos.find(x=>x.id===t.presupuestoId) : null;
+  return (p && p.estado==='aprobado') ? (Number(p.monto)||0) : 0;
+}
+// Si el Apps Script tuvo que darle otro número a un trabajo nuevo (el que tenía ya estaba usado), se corrige acá también.
+function aplicarIdAsignadoTrabajo(obj, resp) {
+  if(!resp || !resp.idAsignado || !obj || resp.idAsignado === obj.id) return;
+  const viejo = obj.id;
+  obj.id = resp.idAsignado;
+  saveLocal(); try { refreshCurrentPage(); } catch(e) {}
+  showToast(`El N° ${viejo} ya estaba usado en el Sheet — el trabajo quedó como ${resp.idAsignado}`, 'success');
+}
+// Aviso de IDs repetidos en TRABAJOS, explicando qué hacer en cada caso.
+function htmlAvisoTrabajoDuplicado(d) {
+  const nomCli = id => { const c = DB.clientes.find(x=>String(x.id)===String(id)); return c ? c.nombre : ('cliente '+id); };
+  const est = 'margin-top:8px;padding:10px 14px;background:rgba(224,122,122,0.1);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:var(--text);line-height:1.6';
+  if(!d.distintos) {
+    return `<div style="${est}">⚠️ <b style="color:var(--red)">${d.id}</b> está cargado <b>dos veces igual</b> en la hoja TRABAJOS (filas ${d.filas.join(' y ')}). Borrá la fila repetida en el Sheet (o corré <code>limpiarDuplicadosTrabajos</code> en Apps Script) y tocá Sincronizar.</div>`;
+  }
+  const oculto = d.detalle.find(x=>x.oculto) || d.detalle[d.detalle.length-1];
+  const filaCambiar = d.detalle.reduce((a,x)=>(x.fila||0)>(a.fila||0)?x:a, d.detalle[0]);
+  return `<div style="${est}">⚠️ El número <b style="color:var(--red)">${d.id}</b> lo tienen <b>${d.detalle.length} trabajos distintos</b>:
+    ${d.detalle.map(x=>`fila ${x.fila} → <b>${prosEsc(x.titulo)}</b> (${prosEsc(nomCli(x.clienteId))})`).join(' · ')}.
+    <br>No hay que borrar nada: en la hoja TRABAJOS, en la <b>fila ${filaCambiar.fila}</b>, cambiá el ID <b>${d.id}</b> por <b style="color:var(--yellow)">${d.idSugerido}</b> y tocá Sincronizar.
+    <span style="color:var(--muted)">Mientras tanto el CRM no muestra "${prosEsc(oculto.titulo)}" (fila ${oculto.fila}).</span></div>`;
+}
+
+// ============================================================
+// v17.75 — CÓMO LLEGÓ EL CLIENTE (ORIGEN)
+// ============================================================
+const CLI_ORIGENES = [
+  { value:'referido',      label:'Recomendación / referido', color:'#f4b400' },
+  { value:'visita_frio',   label:'Visita en frío',           color:'#e67e22' },
+  { value:'llamado',       label:'Llamado / WhatsApp',       color:'#25d366' },
+  { value:'google',        label:'Google / Maps',            color:'#4A90D9' },
+  { value:'web',           label:'Web / calculadora',        color:'#7bb3e0' },
+  { value:'instagram',     label:'Instagram',                color:'#c13584' },
+  { value:'facebook',      label:'Facebook',                 color:'#3b5998' },
+  { value:'concesionario', label:'Derivado (concesionario / taller)', color:'#9b59b6' },
+  { value:'investigacion', label:'Investigación (obra / empresa)',    color:'#16a085' },
+  { value:'otro',          label:'Otro',                     color:'#7f8c8d' }
+];
+function labelOrigenCliente(v) { const o = CLI_ORIGENES.find(x=>x.value===v); return o ? o.label : (v||''); }
+function origenCliente(c) {
+  if(!c) return { valor:'', detalle:'', inferido:false };
+  if(c.origen) return { valor:c.origen, detalle:c.origenDetalle||'', inferido:false };
+  const n = _sinTildes(c.notas);
+  if(!n.trim()) return { valor:'', detalle:'', inferido:false };
+  const reglas = [
+    ['referido', /recomend|referid|de parte de|lo paso/],
+    ['instagram', /instagram|\big\b/], ['facebook', /facebook/], ['google', /google|maps/],
+    ['web', /calculadora|pagina web|por la web|formulario/], ['concesionario', /concesionari|derivad/],
+    ['visita_frio', /visita en frio|visita que|visita sin aviso|pase por/], ['llamado', /whatsapp|llamo|llamado|mensaje/],
+    ['investigacion', /prospeccion|investigacion/]
+  ];
+  const hit = reglas.find(r=>r[1].test(n));
+  if(!hit) return { valor:'', detalle:'', inferido:false };
+  let det = '';
+  if(hit[0]==='referido') {
+    const mm = /(?:[Rr]ecomendad[oa]|[Rr]eferid[oa]|de parte de|lo pas[oó]|lo recomend[oó])\s+(?:por\s+)?(?:de\s+)?([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][A-Za-záéíóúñ]+)?)/.exec(String(c.notas));
+    det = mm ? mm[1] : '';
+  }
+  return { valor:hit[0], detalle:det, inferido:true };
+}
+function chipOrigenCliente(c) {
+  const o = origenCliente(c); if(!o.valor) return '';
+  const def = CLI_ORIGENES.find(x=>x.value===o.valor) || { color:'#7f8c8d' };
+  return `<div style="margin-top:3px"><span style="font-size:10px;padding:1px 7px;border-radius:10px;border:1px ${o.inferido?'dashed':'solid'} ${def.color};color:${def.color}" title="${o.inferido?'Según las notas — confirmalo en Editar':'Cómo llegó'}">${labelOrigenCliente(o.valor)}${o.detalle?' · '+prosEsc(o.detalle):''}</span></div>`;
+}
+
+// ============================================================
+// v17.75 — ESTADÍSTICAS: elegir qué secciones ver
+// ============================================================
+const EST_SECCIONES = [
+  ['resumen','📊 Resumen'], ['presupuestos','🎯 Presupuestos'], ['rentabilidad','💹 Rentabilidad'],
+  ['cobros','💱 Cobros y dólar'], ['tiempos','📅 Tiempos'], ['trabajos','🛠 Trabajos y herramientas'],
+  ['clientes','👥 Clientes y origen'], ['flota','⚙️ Flota'], ['proveedores','📦 Proveedores'], ['todo','Ver todo']
+];
+function seccionEstElegida() { try { return localStorage.getItem('meb_est_seccion') || 'resumen'; } catch(e) { return 'resumen'; } }
+function elegirSeccionEst(g) {
+  try { localStorage.setItem('meb_est_seccion', g); } catch(e) {}
+  renderSeccionesEstadisticas();
+  const pg = document.getElementById('page-estadisticas'); if(pg && pg.scrollIntoView) pg.scrollIntoView({block:'start'});
+}
+function renderSeccionesEstadisticas() {
+  const g = seccionEstElegida();
+  const bar = document.getElementById('est-secciones');
+  if(bar) bar.innerHTML = EST_SECCIONES.map(x=>`<button class="filter-tab ${x[0]===g?'active':''}" onclick="elegirSeccionEst('${x[0]}')">${x[1]}</button>`).join('');
+  document.querySelectorAll('#page-estadisticas [data-est]').forEach(el=>{
+    const grupos = el.getAttribute('data-est').split(/\s+/);
+    el.style.display = (g==='todo' || grupos.includes(g)) ? '' : 'none';
+  });
+  // los gráficos que estaban ocultos se dibujan con tamaño 0: se reacomodan al mostrarse
+  setTimeout(()=>{ Object.values(charts||{}).forEach(ch=>{ try { ch.resize(); } catch(e) {} }); }, 30);
+}
+
+function renderTiposTrabajoYHerramientas() {
+  const grupos = {};
+  DB.trabajos.forEach(t=>{
+    if(['cancelado','no aprobado'].includes(t.estado)) return;
+    const c = categoriaTrabajo(t); const k = c.nombre || 'Sin clasificar';
+    const g = grupos[k] = grupos[k] || { n:0, comp:0, fact:0, horas:0, nHoras:0, inferidos:0 };
+    g.n++; if(t.estado==='completado') g.comp++;
+    g.fact += facturadoTrabajo(t);
+    if(Number(t.horasTrabajadas)>0) { g.horas += Number(t.horasTrabajadas); g.nHoras++; }
+    if(c.inferida) g.inferidos++;
+  });
+  const filas = Object.entries(grupos).sort((a,b)=>b[1].fact-a[1].fact || b[1].n-a[1].n);
+  const cv = document.getElementById('chartTiposTrabajo');
+  if(charts.chartTiposTrabajo) { charts.chartTiposTrabajo.destroy(); delete charts.chartTiposTrabajo; }
+  if(cv && typeof Chart!=='undefined') charts.chartTiposTrabajo = new Chart(cv, {
+    type:'bar',
+    data:{ labels:filas.map(f=>f[0]), datasets:[{ label:'Facturado', data:filas.map(f=>Math.round(f[1].fact)), backgroundColor:filas.map(f=>f[0]==='Sin clasificar'?'rgba(127,140,141,0.5)':'rgba(244,180,0,0.85)'), borderWidth:0, borderRadius:4 }]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      scales:{ x:{ beginAtZero:true, ticks:{ callback:v=>'$'+Number(v).toLocaleString('es-AR'), color:'#888' } }, y:{ ticks:{ color:'#ccc', font:{size:11} } } },
+      plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label:c=>fmtMonto(c.raw)+' · '+filas[c.dataIndex][1].n+' trabajos' } } } }
+  });
+  const tb = document.getElementById('tabla-tipos-trabajo');
+  if(tb) {
+    const tot = filas.reduce((a,f)=>a+f[1].fact,0) || 1;
+    tb.innerHTML = `<table style="width:100%"><thead><tr><th style="text-align:left">Tipo</th><th style="text-align:right">Trabajos</th><th style="text-align:right">Facturado</th><th style="text-align:right">Ticket prom.</th><th style="text-align:right">% total</th></tr></thead><tbody>`
+      + filas.map(f=>`<tr style="cursor:pointer" onclick="irATrabajosFiltrados('${f[0]==='Sin clasificar'?'__sin':prosEsc(f[0]).replace(/'/g,"\\'")}','','')" title="Ver estos trabajos">
+          <td>${prosEsc(f[0])}${f[1].inferidos===f[1].n&&f[0]!=='Sin clasificar'?' <span style="font-size:9px;color:var(--muted)">(deducido)</span>':''}</td>
+          <td style="text-align:right">${f[1].n}${f[1].comp?` <span style="font-size:10px;color:var(--muted)">(${f[1].comp} ✓)</span>`:''}</td>
+          <td style="text-align:right;color:var(--yellow)">${fmtMonto(f[1].fact)}</td>
+          <td style="text-align:right">${f[1].n?fmtMonto(f[1].fact/f[1].n):'—'}</td>
+          <td style="text-align:right;color:var(--muted)">${Math.round(f[1].fact/tot*100)}%</td></tr>`).join('')
+      + `</tbody></table><p style="font-size:10.5px;color:var(--muted);margin:6px 2px 0">Tocá una fila para ver esos trabajos. No cuenta cancelados ni no aprobados.</p>`;
+  }
+  const th = document.getElementById('tabla-herramientas');
+  if(th) {
+    const hs = listaHerramientas();
+    if(!hs.length) {
+      th.innerHTML = `<div style="padding:10px 2px;color:var(--muted);line-height:1.6">Todavía no hay ninguna herramienta cargada. Cuando un trabajo use una herramienta especial (como la que se compró para el martillo hidráulico), abrilo con ✏️ y escribila en <b>"Herramientas especiales usadas"</b>. Desde ese momento acá vas a ver cuántos trabajos hizo cada herramienta y cuánto facturaron — por ejemplo, para saber si un torno se paga solo.</div>`;
+    } else {
+      th.innerHTML = `<table style="width:100%"><thead><tr><th style="text-align:left">Herramienta</th><th style="text-align:right">Trabajos</th><th style="text-align:right">Facturado con ella</th><th style="text-align:left">Clientes</th><th style="text-align:right">Primer uso</th><th style="text-align:right">Último uso</th></tr></thead><tbody>`
+        + hs.map(h=>{
+          const ts = DB.trabajos.filter(t=>herramientasDe(t).some(x=>x.toLowerCase()===h.toLowerCase()));
+          const fechas = ts.map(t=>parseFechaAny(t.fechaInicio)).filter(Boolean).sort((a,b)=>a-b);
+          const clis = Array.from(new Set(ts.map(t=>{ const c=DB.clientes.find(x=>String(x.id)===String(t.clienteId)); return c?c.nombre:''; }).filter(Boolean)));
+          return `<tr style="cursor:pointer" onclick="irATrabajosFiltrados('','${prosEsc(h).replace(/'/g,"\\'")}','')" title="Ver estos trabajos">
+            <td>🧰 <b>${prosEsc(h)}</b></td><td style="text-align:right">${ts.length}</td>
+            <td style="text-align:right;color:var(--yellow)">${fmtMonto(ts.reduce((a,t)=>a+facturadoTrabajo(t),0))}</td>
+            <td style="font-size:11px;color:var(--muted)">${clis.map(prosEsc).join(', ')||'—'}</td>
+            <td style="text-align:right" class="td-muted">${fechas.length?fmtDate(fechas[0]):'—'}</td>
+            <td style="text-align:right" class="td-muted">${fechas.length?fmtDate(fechas[fechas.length-1]):'—'}</td></tr>`;
+        }).join('') + `</tbody></table>`;
+    }
+  }
+}
+
+function renderOrigenClientes() {
+  const clientes = DB.clientes.filter(c=>c.estado!=='prospecto');
+  const factCli = {};
+  DB.trabajos.forEach(t=>{ if(['cancelado','no aprobado'].includes(t.estado)) return; const k=String(t.clienteId); factCli[k]=(factCli[k]||0)+facturadoTrabajo(t); });
+  const g = {};
+  clientes.forEach(c=>{
+    const o = origenCliente(c); const k = o.valor || '__sin';
+    const x = g[k] = g[k] || { n:0, fact:0, inferidos:0, nombres:[] };
+    x.n++; x.fact += factCli[String(c.id)]||0; if(o.inferido) x.inferidos++; x.nombres.push(c.nombre);
+  });
+  const orden = Object.entries(g).sort((a,b)=>(a[0]==='__sin')-(b[0]==='__sin') || b[1].fact-a[1].fact || b[1].n-a[1].n);
+  const lab = k => k==='__sin' ? 'Sin dato' : labelOrigenCliente(k);
+  const col = k => k==='__sin' ? 'rgba(127,140,141,0.45)' : ((CLI_ORIGENES.find(x=>x.value===k)||{}).color||'#7f8c8d');
+  const cv = document.getElementById('chartOrigenClientes');
+  if(charts.chartOrigenClientes) { charts.chartOrigenClientes.destroy(); delete charts.chartOrigenClientes; }
+  if(cv && typeof Chart!=='undefined') charts.chartOrigenClientes = new Chart(cv, {
+    type:'doughnut',
+    data:{ labels:orden.map(o=>lab(o[0])), datasets:[{ data:orden.map(o=>o[1].n), backgroundColor:orden.map(o=>col(o[0])), borderWidth:0 }]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'right', labels:{ color:'#aaa', font:{size:11} } },
+      tooltip:{ callbacks:{ label:c=>c.label+': '+c.raw+' cliente'+(c.raw!==1?'s':'') } } } }
+  });
+  const tb = document.getElementById('tabla-origen-clientes');
+  if(tb) {
+    const conDato = orden.filter(o=>o[0]!=='__sin');
+    const sin = g.__sin ? g.__sin.n : 0;
+    tb.innerHTML = `<table style="width:100%"><thead><tr><th style="text-align:left">Cómo llegó</th><th style="text-align:right">Clientes</th><th style="text-align:right">Facturado</th><th style="text-align:right">Por cliente</th></tr></thead><tbody>`
+      + orden.map(o=>`<tr style="cursor:pointer" onclick="showPage('clientes');setTimeout(()=>{const s=document.getElementById('filtroOrigenCliente');if(s){renderClientes();s.value='${o[0]}';renderClientes();}},50)" title="${prosEsc(o[1].nombres.join(', '))}">
+          <td><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${col(o[0])};margin-right:6px"></span>${lab(o[0])}${o[1].inferidos?` <span style="font-size:9px;color:var(--muted)">(${o[1].inferidos} según notas)</span>`:''}</td>
+          <td style="text-align:right">${o[1].n}</td><td style="text-align:right;color:var(--yellow)">${fmtMonto(o[1].fact)}</td>
+          <td style="text-align:right">${o[1].n?fmtMonto(o[1].fact/o[1].n):'—'}</td></tr>`).join('')
+      + `</tbody></table>`
+      + (sin ? `<p style="font-size:11px;color:var(--orange);margin:8px 2px 0">⚠️ ${sin} cliente${sin!==1?'s':''} sin dato de cómo llegaron. En <b>Clientes</b>, filtro "Cómo llegó → Sin dato", abrí cada uno con Editar y elegilo — así este gráfico se vuelve confiable.</p>` : '')
+      + (!conDato.length ? '' : `<p style="font-size:10.5px;color:var(--muted);margin:6px 2px 0">Tocá una fila para ver esos clientes.</p>`);
+  }
+  // Quiénes recomiendan más (detalle de los referidos)
+  const ref = document.getElementById('origen-clientes-referentes');
+  if(ref) {
+    const porQuien = {};
+    clientes.forEach(c=>{ const o=origenCliente(c); if(o.valor==='referido' && o.detalle) { const k=o.detalle.trim(); (porQuien[k]=porQuien[k]||[]).push(c); } });
+    const lista = Object.entries(porQuien).sort((a,b)=>b[1].length-a[1].length);
+    ref.innerHTML = lista.length ? `<div class="card" style="border-left:3px solid var(--yellow)"><div class="card-header"><span class="card-title">🤝 QUIÉNES NOS RECOMIENDAN</span></div>
+      <div style="padding:0 14px 12px;font-size:12px;line-height:1.8">${lista.map(([k,cs])=>`<b>${prosEsc(k)}</b> → ${cs.map(c=>prosEsc(c.nombre)).join(', ')} <span style="color:var(--yellow)">(${fmtMonto(cs.reduce((a,c)=>a+(factCli[String(c.id)]||0),0))})</span>`).join('<br>')}
+      <div style="font-size:10.5px;color:var(--muted);margin-top:6px">Vale la pena agradecerles: un mensaje, un descuento en el próximo service.</div></div></div>` : '';
+  }
+}
+
 // Vincula un trabajo a un presupuesto con un clic y lo guarda en el Sheet.
 function vincularTrabajoAPresupuesto(tid, pid) {
   const t = DB.trabajos.find(x=>x.id===tid), p = DB.presupuestos.find(x=>x.id===pid);
@@ -4317,17 +4770,21 @@ async function renderResumenCambiarioDashboard() {
 // ============================================================
 function renderClientes() {
   const search=document.getElementById('searchClientes').value.toLowerCase();
+  const selOr = document.getElementById('filtroOrigenCliente');
+  if(selOr) { const v = selOr.value; selOr.innerHTML = `<option value="">Cómo llegó: todos</option>` + CLI_ORIGENES.map(o=>`<option value="${o.value}">${o.label}</option>`).join('') + `<option value="__sin">Sin dato</option>`; selOr.value = v; }
+  const fOr = selOr ? selOr.value : '';
   let data=DB.clientes.filter(c=>{
-    const m=((c.nombre||'')+(c.empresa||'')+(c.telefono||'')+(c.zona||'')+(c.email||'')).toLowerCase().includes(search);
+    const m=((c.nombre||'')+(c.empresa||'')+(c.telefono||'')+(c.zona||'')+(c.email||'')+(c.origenDetalle||'')).toLowerCase().includes(search);
     const f=filters.clientes==='todos'||c.estado===filters.clientes;
-    return m&&f;
+    const o = !fOr || (fOr==='__sin' ? !origenCliente(c).valor : origenCliente(c).valor===fOr);
+    return m&&f&&o;
   });
   const tbody=document.getElementById('tabla-clientes');
   if(!data.length){tbody.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="icon">👥</div><p>Sin clientes</p></div></td></tr>`;return;}
   tbody.innerHTML=data.map(c=>{
     const mqs=DB.maquinas.filter(m=>m.clienteId===c.id).length;
     return `<tr>
-      <td><div class="td-name">${c.nombre}</div><div class="td-muted">${c.empresa||'—'}</div></td>
+      <td><div class="td-name">${c.nombre}</div><div class="td-muted">${c.empresa||'—'}</div>${chipOrigenCliente(c)}</td>
       <td>${c.telefono?`<a href="https://wa.me/${c.telefono.replace(/\D/g,'')}" target="_blank" style="color:var(--green);text-decoration:none">📱 ${c.telefono}</a>`:' —'}</td>
       <td>${c.zona||'—'}</td>
       <td>${badgeEstado(c.estado)}</td>
@@ -4390,6 +4847,7 @@ function verCliente(id) {
       ${c.telefono?`<div class="detail-row"><span class="detail-key">WhatsApp</span><span class="detail-val"><a href="https://wa.me/${c.telefono.replace(/\D/g,'')}" target="_blank" style="color:var(--green);text-decoration:none">📱 Abrir chat</a></span></div>`:''}
       <div class="detail-row"><span class="detail-key">Email</span><span class="detail-val">${c.email||'—'}</span></div>
       <div class="detail-row"><span class="detail-key">Zona</span><span class="detail-val">${c.zona||'—'}</span></div>
+      <div class="detail-row"><span class="detail-key">Cómo llegó</span><span class="detail-val">${(()=>{ const o=origenCliente(c); return o.valor ? `${labelOrigenCliente(o.valor)}${o.detalle?' · '+prosEsc(o.detalle):''}${o.inferido?' <span style="font-size:10px;color:var(--muted)">(según notas — confirmalo en Editar)</span>':''}` : '<span style="color:var(--muted)">Sin dato — cargalo en Editar</span>'; })()}</span></div>
       <div class="detail-row"><span class="detail-key">Estado</span><span class="detail-val">${badgeEstado(c.estado)}</span></div>
       ${(()=>{ const u=ultimoContactoReal(c); return `<div class="detail-row"><span class="detail-key">Último contacto</span><span class="detail-val">${u?fmtDate(u.iso):'—'}</span></div>${u?`<div style="font-size:10px;color:var(--muted);text-align:right;margin-top:-4px">${u.origen}</div>`:''}`; })()}
     </div>
@@ -4403,7 +4861,7 @@ function verCliente(id) {
     </div>
     <div class="detail-section">
       <div class="detail-section-title">Máquinas (${mqs.length})</div>
-      ${mqs.length?mqs.map(m=>`<div class="maquina-card" style="cursor:pointer" onclick="verMaquina('${m.id}')"><div class="maquina-info"><div class="mq-name">${m.marca} ${m.modelo}</div><div class="mq-sub">${m.tipo||''} · Serie: ${m.serie||'—'}${m.horometro?` · ⏱ ${m.horometro} hs (${fmtDate(m.horometroFecha)})`:''}</div></div><span class="badge badge-blue">Ver →</span></div>`).join(''):'<p style="font-size:12px;color:var(--muted)">Sin máquinas registradas</p>'}
+      ${mqs.length?mqs.map(m=>`<div class="maquina-card" style="cursor:pointer" onclick="verMaquina('${m.id}')"><div class="maquina-info"><div class="mq-name">${badgeNumeroMaquina(m)}${m.marca} ${m.modelo}</div><div class="mq-sub">${m.tipo||''} · Serie: ${m.serie||'—'}${m.horometro?` · ⏱ ${m.horometro} hs (${fmtDate(m.horometroFecha)})`:''}</div></div><span class="badge badge-blue">Ver →</span></div>`).join(''):'<p style="font-size:12px;color:var(--muted)">Sin máquinas registradas</p>'}
     </div>
     <div class="detail-section">
       <div class="detail-section-title" style="display:flex;justify-content:space-between;align-items:center">
@@ -4506,7 +4964,7 @@ function verMaquina(id) {
 
   document.getElementById('detailContent').innerHTML = `
     <div style="margin-bottom:16px">
-      <div style="font-family:'Bebas Neue';font-size:22px;color:var(--text);letter-spacing:2px">${m.marca||''} ${m.modelo||''}</div>
+      <div style="font-family:'Bebas Neue';font-size:22px;color:var(--text);letter-spacing:2px">${badgeNumeroMaquina(m,18)}${m.marca||''} ${m.modelo||''}</div>
       <div style="font-size:12px;color:var(--yellow);letter-spacing:1px;margin-top:2px">${m.tipo||'—'} · Serie: ${m.serie||'—'}</div>
     </div>
 
@@ -4566,12 +5024,21 @@ function verMaquina(id) {
 
 function renderMaquinas() {
   const tbody=document.getElementById('tabla-maquinas');
-  if(!DB.maquinas.length){tbody.innerHTML=`<tr><td colspan="6"><div class="empty-state"><div class="icon">⚙️</div><p>Sin máquinas</p></div></td></tr>`;return;}
-  tbody.innerHTML=DB.maquinas.map(m=>{
+  const avDup = document.getElementById('maquinas-aviso-duplicadas');
+  if(avDup) avDup.innerHTML = (window._maquinasDuplicadas||[]).map(d=>`<div style="margin-top:6px;padding:10px 14px;background:rgba(224,122,122,0.1);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:var(--text)">
+      ⚠️ La máquina <b>${d.id}</b> está cargada en <b>${d.filas.length} filas</b> de la hoja MAQUINAS: ${d.filas.map(f=>`fila ${f.fila} → ${prosEsc(f.desc)}${f.vacia?' <b style="color:var(--red)">(vacía)</b>':''}`).join(' · ')}.
+      ${d.filas.filter(f=>f.vacia).length ? `Borrá la fila vacía en el Sheet (${d.filas.filter(f=>f.vacia).map(f=>f.fila).join(', ')}).` : `Si son máquinas distintas, cambiale el ID a una por <b>${siguienteIdMaquina()}</b>.`}
+      El CRM muestra la de la fila ${d.queda}.</div>`).join('');
+  const qM = ((document.getElementById('searchMaquinas')||{}).value||'').toLowerCase().trim();
+  let lista = DB.maquinas.slice().sort((a,b)=>{ const na=numeroMaquina(a), nb=numeroMaquina(b); return (na===null?1e9:na)-(nb===null?1e9:nb); });
+  if(qM) lista = lista.filter(m=>{ const cl=DB.clientes.find(c=>String(c.id)===String(m.clienteId));
+    return [m.id, 'm'+String(numeroMaquina(m)||''), m.marca, m.modelo, m.serie, m.tipo, cl&&cl.nombre, cl&&cl.empresa].join(' ').toLowerCase().includes(qM); });
+  if(!lista.length){tbody.innerHTML=`<tr><td colspan="6"><div class="empty-state"><div class="icon">⚙️</div><p>Sin máquinas</p></div></td></tr>`;return;}
+  tbody.innerHTML=lista.map(m=>{
     const cl=DB.clientes.find(c=>String(c.id)===String(m.clienteId));
     const trs=DB.trabajos.filter(t=>t.maquinaId===m.id).length;
     return `<tr>
-      <td><div class="td-name">${m.marca} ${m.modelo}</div></td>
+      <td><div class="td-name">${badgeNumeroMaquina(m)}${m.marca} ${m.modelo}</div></td>
       <td>${cl?`<div class="td-name">${cl.nombre}</div><div class="td-muted">${cl.empresa||''}</div>`:'—'}</td>
       <td><span class="badge badge-blue">${m.tipo||'—'}</span></td>
       <td class="td-muted">${m.serie||'—'}</td>
@@ -4633,6 +5100,7 @@ async function writeToSheet(payload) {
   // Etiqueta quién hizo este cambio, para el registro de actividad. No pisa
   // un valor que la propia función ya haya puesto a propósito.
   if(!payload.usuario) payload.usuario = currentUser || 'Sin identificar';
+  payload.s = sesionCRM(); // v17.74 — la sesión viaja con cada cambio
   return new Promise((resolve) => {
     try {
       const xhr = new XMLHttpRequest();
@@ -4642,6 +5110,7 @@ async function writeToSheet(payload) {
         try {
           const resp = JSON.parse(xhr.responseText);
           resolve(resp);
+          if (resp && resp.error === 'sesion') { sesionVencida(); return; }
           if (payload.action === 'deleteRow' && resp.encontrado === false) {
             console.warn('⚠️ No se borró nada — no había ninguna fila con ese ID en el Sheet:', payload.tipo, payload.id, '(típico en registros de antes del sistema de ID — hay que borrarlos a mano en el Sheet)');
           } else {
@@ -4741,7 +5210,9 @@ function verTrabajo(id) {
       <div class="detail-section-title">CLIENTE & MÁQUINA</div>
       <div class="detail-row"><span class="detail-key">Cliente</span><span class="detail-val" style="color:var(--yellow)">${cl?cl.nombre:'—'}</span></div>
       ${cl&&cl.telefono?`<div class="detail-row"><span class="detail-key">WhatsApp</span><span class="detail-val"><a href="https://wa.me/${cl.telefono.replace(/\D/g,'')}" target="_blank" style="color:var(--green)">📱 ${cl.telefono}</a></span></div>`:''}
-      <div class="detail-row"><span class="detail-key">Máquina</span><span class="detail-val">${mq?`${mq.marca} ${mq.modelo}`:'—'}</span></div>
+      <div class="detail-row"><span class="detail-key">Máquina</span><span class="detail-val">${mq?`${badgeNumeroMaquina(mq)}${mq.marca} ${mq.modelo}`:'—'}</span></div>
+      <div class="detail-row"><span class="detail-key">Tipo de trabajo</span><span class="detail-val">${(()=>{ const c=categoriaTrabajo(t); return c.nombre ? prosEsc(c.nombre)+(c.inferida?' <span style="font-size:10px;color:var(--muted)">(deducido)</span>':'') : '—'; })()}</span></div>
+      ${herramientasDe(t).length?`<div class="detail-row"><span class="detail-key">Herramientas</span><span class="detail-val">${herramientasDe(t).map(h=>'🧰 '+prosEsc(h)).join('<br>')}</span></div>`:''}
       ${mq&&mq.serie?`<div class="detail-row"><span class="detail-key">Serie</span><span class="detail-val" style="font-size:11px">${mq.serie}</span></div>`:''}
     </div>
 
@@ -4801,6 +5272,8 @@ function renderTrabajos() {
   } else if(filters.trabajos!=='todos') {
     data=data.filter(t=>t.estado===filters.trabajos);
   }
+  // v17.75 — buscador + filtro por tipo de trabajo y por herramienta especial usada
+  data = filtrarTrabajosBusqueda(data);
   // v17.49 — pedido de Belu: mismo criterio que los avisos de Presupuestos.
   const sinVincular = DB.trabajos.filter(t=>!t.presupuestoId).length;
   const bTsv = document.getElementById('badge-trabajos-sinvincular'); if(bTsv) bTsv.textContent = sinVincular;
@@ -4811,9 +5284,7 @@ function renderTrabajos() {
     </div>` : '';
   }
   if(avisoVinc && window._trabajosDuplicados && window._trabajosDuplicados.length) {
-    avisoVinc.innerHTML += `<div style="margin-top:8px;padding:10px 14px;background:rgba(224,122,122,0.1);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:var(--red)">
-      ⚠️ Hay trabajos <b>repetidos en el Sheet</b> (misma fila cargada dos veces): ${window._trabajosDuplicados.map(d=>`<b>${d.id}</b> (filas ${d.filas.join(' y ')})`).join(' · ')}. El CRM muestra una sola de cada una; borrá la repetida en la hoja TRABAJOS (o corré <code>limpiarDuplicadosTrabajos</code> en Apps Script).
-    </div>`;
+    avisoVinc.innerHTML += window._trabajosDuplicados.map(htmlAvisoTrabajoDuplicado).join('');
   }
   const tbody=document.getElementById('tabla-trabajos');
   if(!data.length){tbody.innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="icon">🔧</div><p>Sin trabajos</p></div></td></tr>`;return;}
@@ -4831,9 +5302,9 @@ function renderTrabajos() {
     const margen=montoCobrado>0?Math.round(ganancia/montoCobrado*100):(factTerceros>0?Math.round(ganancia/factTerceros*100):0);
     const margenColor=margen>=30?'var(--green)':margen>=10?'var(--yellow)':'var(--red)';
     return `<tr>
-      <td id="trabajo-row-${t.id}"><div class="td-name">${badgeNumeroTrabajo(t)}${t.titulo}</div><div class="td-muted">${fmtDate(t.fechaInicio)}${t.horasTrabajadas?` · ⏱ ${t.horasTrabajadas}h`:''}</div>${correlatividadTrabajo(t)}</td>
+      <td id="trabajo-row-${t.id}"><div class="td-name">${badgeNumeroTrabajo(t)}${t.titulo}</div><div class="td-muted">${fmtDate(t.fechaInicio)}${t.horasTrabajadas?` · ⏱ ${t.horasTrabajadas}h`:''}</div>${chipsTipoTrabajo(t)}${correlatividadTrabajo(t)}</td>
       <td>${cl?cl.nombre:'—'}</td>
-      <td>${mq?`${mq.marca} ${mq.modelo}`:'—'}</td>
+      <td>${mq?`${badgeNumeroMaquina(mq)}${mq.marca} ${mq.modelo}`:'—'}</td>
       <td><span class="badge badge-blue">${t.tipo||'—'}</span></td>
       <td>${badgeEstado(t.estado)}</td>
       <td>${t.estadoMaquina?badgeEstado(t.estadoMaquina.toLowerCase()):'—'}</td>
@@ -6195,8 +6666,8 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
       estado:trabajoAuto.estado, estadoMaquina:trabajoAuto.estadoMaquina,
       fechaInicio:'', fechaFin:'', montoCobrado:0, montoGastos:0, costoRepuesto:0,
       precioRepuestoFacturado:0, manoObraCobrada:0, movilidad:0, repuestosDetalle:'',
-      notas:trabajoAuto.notas, fotoUrl:'', tcAlMomento:0, gananciaUsdEsperada:0, horasTrabajadas:0
-    }});
+      notas:trabajoAuto.notas, fotoUrl:'', tcAlMomento:0, gananciaUsdEsperada:0, horasTrabajadas:0, nuevo:true
+    }}).then(resp => aplicarIdAsignadoTrabajo(trabajoAuto, resp));
     saveLocal();
   }
 }
@@ -6232,6 +6703,7 @@ function generarInformeTecnico(presupId) {
   const jsCode = [
     'var PRESUP_ID=' + JSON.stringify(presupId) + ';',
     'var SHEET_URL=' + JSON.stringify((typeof SCRIPT_URL!=='undefined'?SCRIPT_URL:'')) + ';',
+    'var SESION_CRM=' + JSON.stringify(sesionCRM()) + ';',
     'var NUM_PRESUP=' + JSON.stringify(numPresup) + ';',
     'var CLIENTE_NOMBRE=' + JSON.stringify(cl?cl.nombre:'') + ';',
     'var CLIENTE_TEL=' + JSON.stringify(clTelIT) + ';',
@@ -6557,6 +7029,7 @@ function generarInformeTecnico(presupId) {
     '    }',
     '  };',
     '  if(SHEET_URL){',
+    '    payload.s = (window.opener && window.opener.sesionCRM) ? window.opener.sesionCRM() : SESION_CRM;',
     '    var xhr=new XMLHttpRequest();',
     '    xhr.open("POST",SHEET_URL,true);',
     '    xhr.setRequestHeader("Content-Type","text/plain");',
@@ -7399,6 +7872,9 @@ function renderEstadisticas() {
   try { renderInformesCobertura(); } catch(eIc) {}
   renderRentabilidadReal();
   renderEstacionalidadYTiempos();
+  try { renderTiposTrabajoYHerramientas(); } catch(eTt) { console.warn(eTt); }
+  try { renderOrigenClientes(); } catch(eOc) { console.warn(eOc); }
+  try { renderSeccionesEstadisticas(); } catch(eSe) { console.warn(eSe); }
 }
 
 // ── Estacionalidad y tiempos de respuesta ───────────────────────────────────
@@ -7954,7 +8430,7 @@ function renderBusquedaGlobal(q) {
   q = q.toLowerCase();
   const hits = [];
 
-  DB.clientes.filter(c=>(c.nombre+c.empresa+c.zona).toLowerCase().includes(q)).slice(0,4).forEach(c=>{
+  DB.clientes.filter(c=>(c.nombre+c.empresa+c.zona+' '+labelOrigenCliente(origenCliente(c).valor)+' '+(c.origenDetalle||'')).toLowerCase().includes(q)).slice(0,4).forEach(c=>{
     hits.push(`<div class="gs-item" onclick="irACliente('${c.id}');document.getElementById('globalSearchInput').value='';document.getElementById('globalSearchResults').style.display='none'">
       <span style="font-size:11px;color:var(--muted)">👥 CLIENTE</span>
       <div style="font-size:13px;font-weight:600;color:var(--text)">${c.nombre}</div>
@@ -7962,12 +8438,24 @@ function renderBusquedaGlobal(q) {
     </div>`);
   });
 
-  DB.maquinas.filter(m=>(m.marca+m.modelo+m.serie+m.tipo).toLowerCase().includes(q)).slice(0,4).forEach(m=>{
+  // v17.75 — tipo de trabajo / herramienta: un solo resultado que abre Trabajos ya filtrado
+  hitsTipoYHerramienta(q).forEach(h=>hits.push(h));
+
+  DB.maquinas.filter(m=>(m.id+' '+m.marca+m.modelo+m.serie+m.tipo).toLowerCase().includes(q)).slice(0,4).forEach(m=>{
     const cl = DB.clientes.find(c=>String(c.id)===String(m.clienteId));
-    hits.push(`<div class="gs-item" onclick="showPage('maquinas')">
+    hits.push(`<div class="gs-item" onclick="document.getElementById('globalSearchInput').value='';document.getElementById('globalSearchResults').style.display='none';verMaquina('${m.id}')">
       <span style="font-size:11px;color:var(--muted)">⚙️ MÁQUINA</span>
-      <div style="font-size:13px;font-weight:600;color:var(--text)">${m.marca} ${m.modelo}</div>
+      <div style="font-size:13px;font-weight:600;color:var(--text)">${badgeNumeroMaquina(m)}${m.marca} ${m.modelo}</div>
       <div style="font-size:11px;color:var(--muted)">${cl?cl.nombre:'—'} · ${m.serie||'S/N'}</div>
+    </div>`);
+  });
+
+  DB.trabajos.filter(t=>textoBusquedaTrabajo(t).includes(q)).slice(0,4).forEach(t=>{
+    const cl = DB.clientes.find(c=>String(c.id)===String(t.clienteId));
+    hits.push(`<div class="gs-item" onclick="document.getElementById('globalSearchInput').value='';document.getElementById('globalSearchResults').style.display='none';verTrabajo('${t.id}')">
+      <span style="font-size:11px;color:var(--muted)">🔧 TRABAJO</span>
+      <div style="font-size:13px;font-weight:600;color:var(--text)">${badgeNumeroTrabajo(t)}${prosEsc(t.titulo)}</div>
+      <div style="font-size:11px;color:var(--muted)">${cl?cl.nombre:'—'} · ${prosEsc(categoriaTrabajo(t).nombre||'sin tipo')}</div>
     </div>`);
   });
 
@@ -9150,7 +9638,11 @@ function renderMapa() {
 }
 
 function maquinaOptions(selected='') {
-  return DB.maquinas.map(m=>`<option value="${m.id}" ${m.id===selected?'selected':''}>${m.marca} ${m.modelo}</option>`).join('');
+  // v17.75 — con el N° de máquina adelante (M002 · CASE SA175 — BAEZ), igual que en el Sheet
+  return DB.maquinas.slice().sort((a,b)=>{ const na=numeroMaquina(a), nb=numeroMaquina(b); return (na===null?1e9:na)-(nb===null?1e9:nb); }).map(m=>{
+    const n = numeroMaquina(m); const cl = DB.clientes.find(c=>String(c.id)===String(m.clienteId));
+    return `<option value="${m.id}" ${m.id===selected?'selected':''}>${n!==null?'M'+String(n).padStart(3,'0')+' · ':''}${m.marca} ${m.modelo}${cl?' — '+cl.nombre:''}</option>`;
+  }).join('');
 }
 
 // Vínculo opcional Trabajo → Presupuesto de origen — antes no existía
@@ -10456,7 +10948,7 @@ async function _subirPDFaDrive(data) {
       }
     } catch(e) { console.warn('PDF Drive upload error:', e); }
   };
-  xhr.send(JSON.stringify({action:'guardarPDFDrive', row:{
+  xhr.send(JSON.stringify({action:'guardarPDFDrive', s:sesionCRM(), row:{
     num: data.num,
     cliente: data.cliente,
     filename: data.filename,
@@ -10504,7 +10996,7 @@ async function _guardarInformeDesdeCRM(data, btn) {
   xhr.ontimeout = function(){
     if(btn){btn.style.background='#e67e22';btn.style.color='#fff';btn.textContent='\u26A0 Tiempo agotado';btn.disabled=false;}
   };
-  xhr.send(JSON.stringify({action:'guardarInformeDrive', row:data}));
+  xhr.send(JSON.stringify({action:'guardarInformeDrive', s:sesionCRM(), row:data}));
 }
 
 function _registrarInformeCRM(inf) {
@@ -10807,6 +11299,11 @@ function openModal(type, data={}) {
         ${data.lockEstado ? `<div style="padding:9px 12px;background:rgba(123,179,224,0.12);border:1px solid var(--blue-light);border-radius:4px;color:var(--blue-light);font-size:13px">🎯 Prospecto — se guarda así, no es editable acá</div><input type="hidden" id="f-estado" value="prospecto"/>` : `<select id="f-estado"><option value="prospecto" ${data.estado==='prospecto'?'selected':''}>Prospecto</option><option value="activo" ${data.estado==='activo'?'selected':''}>Activo</option><option value="inactivo" ${data.estado==='inactivo'?'selected':''}>Inactivo</option></select>`}
       </div>
       <div class="form-group"><label>Último contacto</label><input id="f-contacto" type="date" value="${(data.id&&ultimoContactoReal(data)?ultimoContactoReal(data).iso:'')||data.ultimoContacto||today()}"/><div style="font-size:10px;color:var(--muted);margin-top:4px">Se calcula solo (trabajos, presupuestos, visitas, informes, horómetros). Cambialo solo si hubo un contacto que no quedó registrado.</div></div>
+      <div class="form-group"><label>¿Cómo llegó?</label><select id="f-origen" onchange="document.getElementById('wrap-origen-det').querySelector('label').textContent=this.value==='referido'?'¿Quién lo recomendó?':'Detalle (opcional)'">
+        <option value="">— Sin dato —</option>${CLI_ORIGENES.map(o=>`<option value="${o.value}" ${(data.origen||(data.id?'':''))===o.value?'selected':''}>${o.label}</option>`).join('')}</select>
+        ${data.id && !data.origen && origenCliente(data).valor ? `<div style="font-size:10px;color:var(--yellow);margin-top:4px">Por las notas parece: <b>${labelOrigenCliente(origenCliente(data).valor)}</b> <a href="#" onclick="event.preventDefault();document.getElementById('f-origen').value='${origenCliente(data).valor}';document.getElementById('f-origen-det').value=document.getElementById('f-origen-det').value||'${prosEsc(origenCliente(data).detalle).replace(/'/g,'')}'" style="color:var(--yellow)">usar</a></div>` : ''}
+      </div>
+      <div class="form-group" id="wrap-origen-det"><label>${data.origen==='referido'?'¿Quién lo recomendó?':'Detalle (opcional)'}</label><input id="f-origen-det" value="${prosEsc(data.origenDetalle||'')}" placeholder="Ej: Victor Masciotra · búsqueda en Google Maps"/></div>
       <div class="form-group full"><label>Notas</label><textarea id="f-notas" placeholder="Contexto libre: qué máquinas tiene, cómo lo conociste, etc. — el registro de qué contrato se le ofreció y cuándo se hace desde el botón 🛠️ Ofrecer contrato de Oportunidades de Contrato, no acá.">${data.notas||''}</textarea></div>
     </div>`;
     onSave=()=>{
@@ -10820,7 +11317,7 @@ function openModal(type, data={}) {
           return;
         }
       }
-      guardar('clientes',{id:data.id||siguienteIdCliente(),nombre:nombreForm,empresa:gv('f-empresa'),telefono:gv('f-telefono'),email:gv('f-email'),zona:gv('f-zona'),estado:gv('f-estado'),ultimoContacto:gv('f-contacto'),notas:gv('f-notas'),cuit:gv('f-cuit'),tokenPortal:data.tokenPortal||''},'nombre');
+      guardar('clientes',{id:data.id||siguienteIdCliente(),nombre:nombreForm,empresa:gv('f-empresa'),telefono:gv('f-telefono'),email:gv('f-email'),zona:gv('f-zona'),estado:gv('f-estado'),ultimoContacto:gv('f-contacto'),notas:gv('f-notas'),cuit:gv('f-cuit'),tokenPortal:data.tokenPortal||'',origen:gv('f-origen'),origenDetalle:gv('f-origen-det').trim()},'nombre');
     };
   }
 
@@ -10861,6 +11358,16 @@ function openModal(type, data={}) {
           <option ${data.tipo==='Fabricación'?'selected':''}>Fabricación</option>
           <option ${data.tipo==='Otro'?'selected':''}>Otro</option>
         </select>
+      </div>
+      <div class="form-group"><label>Tipo de trabajo (especialidad)</label>
+        <input id="f-tcat" list="dl-tipos-trabajo" value="${prosEsc(data.categoriaTrabajo||'')}" placeholder="${prosEsc(data.id && !data.categoriaTrabajo && categoriaTrabajo(data).nombre ? 'Sugerido: '+categoriaTrabajo(data).nombre : 'Ej: Martillo hidráulico')}"/>
+        <datalist id="dl-tipos-trabajo">${listaTiposTrabajo().map(x=>`<option value="${prosEsc(x)}">`).join('')}</datalist>
+        <p style="font-size:10px;color:var(--muted);margin-top:3px">Si lo dejás vacío, el CRM lo deduce del título. Sirve para buscar y para Estadísticas → Trabajos y herramientas.</p>
+      </div>
+      <div class="form-group"><label>Herramientas especiales usadas</label>
+        <input id="f-therr" list="dl-herramientas" value="${prosEsc(data.herramientas||'')}" placeholder="Ej: Extractor de bujes de martillo"/>
+        <datalist id="dl-herramientas">${listaHerramientas().map(x=>`<option value="${prosEsc(x)}">`).join('')}</datalist>
+        <p style="font-size:10px;color:var(--muted);margin-top:3px">Las que se compraron para hacer este tipo de trabajo. Varias: separalas con coma. Así se ve cuántos trabajos hizo cada herramienta.</p>
       </div>
       <div class="form-group"><label>Estado</label>
         <select id="f-testado">
@@ -10914,7 +11421,7 @@ function openModal(type, data={}) {
       // esperado corresponde exactamente a lo que Emmanuel ve como ganancia.
       const gananciaArsAlGuardar = (manoObraV+movilidadV+(precioRepV-costoRepV)) || (montoCobradoV-costoRepV-montoGastosV);
       const gananciaUsdEsperadaCalc = tcMomento>0 ? Math.round(gananciaArsAlGuardar/tcMomento) : (data.gananciaUsdEsperada||0);
-      guardar('trabajos',{id:data.id||siguienteIdTrabajo(),titulo:gv('f-ttit'),clienteId:gv('f-tcli'),maquinaId:gv('f-tmaq'),presupuestoId:gv('f-tpresup'),tipo:gv('f-ttipo'),estado:gv('f-testado'),estadoMaquina:gv('f-tmaqestado'),fechaInicio:gv('f-tfecha'),fechaFin:gv('f-tfechafin'),montoCobrado:montoCobradoV,montoGastos:montoGastosV,costoRepuesto:costoRepV,precioRepuestoFacturado:precioRepV,manoObraCobrada:manoObraV,movilidad:movilidadV,repuestosDetalle:gv('f-trepdetalle'),fotoUrl:gv('f-tfoto'),notas:gv('f-tnotas'),tcAlMomento:tcMomento||data.tcAlMomento||0,gananciaUsdEsperada:gananciaUsdEsperadaCalc,horasTrabajadas:parseFloat(gv('f-thoras'))||0},'titulo');
+      guardar('trabajos',{id:data.id||siguienteIdTrabajo(),categoriaTrabajo:gv('f-tcat').trim(),herramientas:normalizarHerramientas(gv('f-therr')),titulo:gv('f-ttit'),clienteId:gv('f-tcli'),maquinaId:gv('f-tmaq'),presupuestoId:gv('f-tpresup'),tipo:gv('f-ttipo'),estado:gv('f-testado'),estadoMaquina:gv('f-tmaqestado'),fechaInicio:gv('f-tfecha'),fechaFin:gv('f-tfechafin'),montoCobrado:montoCobradoV,montoGastos:montoGastosV,costoRepuesto:costoRepV,precioRepuestoFacturado:precioRepV,manoObraCobrada:manoObraV,movilidad:movilidadV,repuestosDetalle:gv('f-trepdetalle'),fotoUrl:gv('f-tfoto'),notas:gv('f-tnotas'),tcAlMomento:tcMomento||data.tcAlMomento||0,gananciaUsdEsperada:gananciaUsdEsperadaCalc,horasTrabajadas:parseFloat(gv('f-thoras'))||0},'titulo');
     };
     setTimeout(()=>compararPisoTarifario(), 50);
   }
@@ -12632,11 +13139,13 @@ function guardar(tipo, obj, campoRequerido) {
       costoRepuesto:obj.costoRepuesto||0, precioRepuestoFacturado:obj.precioRepuestoFacturado||0,
       manoObraCobrada:obj.manoObraCobrada||0, movilidad:obj.movilidad||0,
       repuestosDetalle:obj.repuestosDetalle||'', notas:obj.notas||'', fotoUrl:obj.fotoUrl||'',
-      tcAlMomento:obj.tcAlMomento||0, gananciaUsdEsperada:obj.gananciaUsdEsperada||0
+      tcAlMomento:obj.tcAlMomento||0, gananciaUsdEsperada:obj.gananciaUsdEsperada||0,
+      categoriaTrabajo:obj.categoriaTrabajo||'', herramientas:obj.herramientas||'',
+      nuevo: esNuevo
       // estadoCobro NO se manda acá a propósito: lo maneja updateCobro por
       // separado (botón "Cobrado"/"Parcial"/"Pendiente"), así este guardado
       // nunca pisa un cobro ya registrado.
-    }});
+    }}).then(resp => aplicarIdAsignadoTrabajo(obj, resp));
   }
 
   if(tipo==='presupuestos') {
@@ -12679,7 +13188,8 @@ function guardar(tipo, obj, campoRequerido) {
       ID:obj.id, NOMBRE:obj.nombre, EMPRESA:obj.empresa||'',
       TELEFONO:obj.telefono||'', EMAIL:obj.email||'',
       ZONA:obj.zona||'', ESTADO:obj.estado||'activo',
-      ULTIMO_CONTACTO:obj.ultimoContacto||'', NOTAS:obj.notas||'', CUIT:obj.cuit||''
+      ULTIMO_CONTACTO:obj.ultimoContacto||'', NOTAS:obj.notas||'', CUIT:obj.cuit||'',
+      ORIGEN:obj.origen||'', ORIGEN_DETALLE:obj.origenDetalle||''
     }});
   }
 }
@@ -13877,7 +14387,8 @@ function convertirProspectoEnCliente(id) {
   if(!cli) {
     if(!confirm('Se va a crear el cliente "'+p.nombre+'" con estos datos y el prospecto pasa a GANADO. ¿Seguimos?')) return;
     cli = { id:siguienteIdCliente(), nombre:p.nombre, empresa:p.nombre, zona:p.zona||'', telefono:p.telefono||'', email:p.email||'', estado:'activo',
-            notas:'Origen: prospección ('+prosLabelOrigen(p.origen)+')'+(p.notas?' — '+p.notas:''), _local:true };
+            notas:'Origen: prospección ('+prosLabelOrigen(p.origen)+')'+(p.notas?' — '+p.notas:''), _local:true,
+            origen: (CLI_ORIGENES.some(o=>o.value===p.origen) ? p.origen : (p.origen?'otro':'')), origenDetalle: p.referidoPor || '' };
     DB.clientes.push(cli);
     writeToSheet({ action:'addCliente', row: cli });
   } else if(!confirm('Ya existe un cliente con ese nombre. ¿Vincular el prospecto a ese cliente y marcarlo como GANADO?')) return;
