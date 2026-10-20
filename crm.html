@@ -355,6 +355,7 @@ select option { background:var(--dark); }
     <div class="nav-item" onclick="showPage('trabajos',this)"><span class="nav-icon">🔧</span> Trabajos <span class="nav-badge" id="badge-trabajos">0</span></div>
     <div class="nav-item" onclick="showPage('presupuestos',this)"><span class="nav-icon">📋</span> Presupuestos <span class="nav-badge" id="badge-presup">0</span></div>
     <div class="nav-item" onclick="showPage('contratos',this)"><span class="nav-icon">🛠️</span> Contratos <span class="nav-badge" id="badge-contratos">0</span></div>
+    <div class="nav-item" onclick="showPage('serviciosTerceros',this)"><span class="nav-icon">⚙️</span> Servicios de terceros <span class="nav-badge" id="badge-terceros" style="display:none">0</span></div>
   </div>
   <div class="nav-section">
     <div class="nav-label">Gestión</div>
@@ -936,6 +937,10 @@ select option { background:var(--dark); }
       <div class="chart-card"><div class="chart-title">REPUESTO: COSTO VS FACTURADO</div><div class="chart-wrap"><canvas id="chartRepuestos"></canvas></div></div>
     </div>
     <div class="charts-grid">
+      <div class="chart-card"><div class="chart-title">FACTURADO POR RUBRO — COBRADO VS POR COBRAR</div><p style="font-size:10.5px;color:var(--muted);margin:-4px 0 6px">Según los ítems de los presupuestos aprobados: mano de obra, repuestos, traslado y servicios de terceros (tornería, bombista…).</p><div class="chart-wrap"><canvas id="chartRubros"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">RUBROS — DETALLE</div><div id="tabla-rubros" style="padding:6px 4px;font-size:12px"></div></div>
+    </div>
+    <div class="charts-grid">
       <div class="chart-card"><div class="chart-title">COBRADO REAL VS PRESUPUESTADO</div><div class="chart-wrap"><canvas id="chartCobradoVsPresup"></canvas></div></div>
       <div class="chart-card"><div class="chart-title">CLIENTES POR ZONA</div><div class="chart-wrap"><canvas id="chartZonas"></canvas></div></div>
     </div>
@@ -1405,6 +1410,29 @@ select option { background:var(--dark); }
         </table></div>
       </div>
       <div id="inv-proyecciones"></div>
+    </div>
+  </div>
+
+  <!-- v17.71 — Servicios de terceros que MEB contrata para un trabajo (tornería, bombista, rectificadora…) -->
+  <div class="page" id="page-serviciosTerceros">
+    <div class="page-header">
+      <div class="page-title">SERVICIOS DE <span>TERCEROS</span></div>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-top:-8px">
+      Lo que MEB le encarga a otro (tornero, bombista, rectificadora…) dentro de un trabajo y le cobra al cliente.
+      Sale solo de los ítems de presupuesto con tipo <b>“Servicio de terceros”</b>, desde el <b id="terceros-desde-txt"></b>.
+      Lo que se le pagó al tercero se carga en 📊 Economía del presupuesto. (No confundir con “Terciarizado”, que son los trabajos que Emmanuel hace para Matías.)
+    </p>
+    <div id="terceros-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:16px"></div>
+    <div class="charts-grid">
+      <div class="chart-card"><div class="chart-title">FACTURADO POR RUBRO (PRESUPUESTOS APROBADOS)</div><div class="chart-wrap"><canvas id="chartRubrosTer"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">SERVICIOS DE TERCEROS: COBRADO VS PAGADO</div><div class="chart-wrap"><canvas id="chartTerceros"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="table-wrap"><table>
+        <thead><tr><th>Presupuesto</th><th>Fecha</th><th>Cliente</th><th>Servicio</th><th style="text-align:right">Cobrado al cliente</th><th style="text-align:right">Pagado al tercero</th><th style="text-align:right">Margen</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tabla-terceros"></tbody>
+      </table></div>
     </div>
   </div>
 
@@ -1893,7 +1921,7 @@ async function syncAll() {
       id:resolverIdEstable(r,'CLIENTES'), nombre:r.NOMBRE||'', empresa:r.EMPRESA||'',
       telefono:r.TELEFONO||'', email:r.EMAIL||'', zona:r.ZONA||'',
       estado:(r.ESTADO||'activo').toLowerCase().trim(), ultimoContacto:r.ULTIMO_CONTACTO||r.ULTIMO_CONTACTO_||'',
-      notas:r.NOTAS||'', tokenPortal:r.TOKEN_PORTAL||''
+      notas:r.NOTAS||'', tokenPortal:r.TOKEN_PORTAL||'', cuit:String(r.CUIT||'').trim()
     }));
     if(mq.length) DB.maquinas = mq.map(r=>({
       id:resolverIdEstable(r,'MAQUINAS'), clienteId:String(r.CLIENTE_ID||'').trim(), marca:r.MARCA||'',
@@ -1920,6 +1948,7 @@ async function syncAll() {
       diferenciaUsd:parseFloat(r.DIFERENCIA_USD)||0, diferenciaPct:parseFloat(r.DIFERENCIA_PCT)||0,
       fechaCobroReal:r.FECHA_COBRO_REAL||'',
       horasTrabajadas:parseFloat(r.HORAS_TRABAJADAS)||0,
+      tercerosCobrado:parseMonto(r.TERCEROS_COBRADO), tercerosCosto:parseMonto(r.TERCEROS_COSTO), tercerosProveedor:r.TERCEROS_PROVEEDOR||'',
       _fila:r._rowIndex
     })); else if(!DB.trabajos.length) DB.trabajos=[];
     // v17.67 — filas duplicadas en TRABAJOS (mismo ID en dos filas): el CRM mostraba las dos, una quedaba
@@ -2033,6 +2062,7 @@ async function syncAll() {
             informeAlertaOk:String(r.INFORME_ALERTA_OK||'').toUpperCase()==='SI',
             informeFaltanteMotivo:r.INFORME_FALTANTE_MOTIVO||'', informeFaltanteNota:r.INFORME_FALTANTE_NOTA||'',
             costoParadaDia:parseMonto(r.COSTO_PARADA_DIA||'0'),
+            cuitCliente:String(r.CUIT_CLIENTE||'').trim(),
             opcionesPagoOcultas:String(r.OPCIONES_PAGO_OCULTAS||'').split(',').map(x=>parseInt(x,10)).filter(n=>n>=0&&n<=3),
             motivoNota:r.MOTIVO_NOTA||'',
             presupVinculadoId:r.PRESUP_VINCULADO_ID||'',
@@ -3088,7 +3118,7 @@ function showPage(name, el) {
     pipeline:renderPipeline, alertas:renderAlertas, reconectar:renderReconectar, estadisticas:renderEstadisticas,
     repuestos:renderRepuestos, proveedores:renderProveedores, mapa:renderMapa, calendario:renderCalendario,
     informes:renderInformes, actividad:renderActividad, movilidad:renderMovilidad, gastos:renderGastos,
-    terciarizado:renderTerciarizado, gastosPersonales:renderGastosPersonales, prospectos:renderProspectos, postventa:renderPostventa, sueldos:renderSueldos
+    terciarizado:renderTerciarizado, serviciosTerceros:renderServiciosTerceros, gastosPersonales:renderGastosPersonales, prospectos:renderProspectos, postventa:renderPostventa, sueldos:renderSueldos
   };
   if(renders[name]) renders[name]();
   // Restaurar el scroll donde estaba — con una pequeña espera para dar
@@ -5984,7 +6014,7 @@ function resolverOAutoCrearMaquina(clienteId, serie, modelo, tipo, maquinaIdPrev
   return nueva.id;
 }
 
-function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail, tipoMaquina, tcDesdePdf, checklistIdOrigen, opcionesOcultasStr, plazoElegido, costoParadaDia) {
+function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail, tipoMaquina, tcDesdePdf, checklistIdOrigen, opcionesOcultasStr, plazoElegido, costoParadaDia, cuitCliente) {
   if (!confirmarMontoPresupuesto(monto)) return;
   let p = DB.presupuestos.find(x=>x.id===presupId);
   const esNuevoPresup = !p;
@@ -6031,6 +6061,9 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
       const telLimpio = (cliTelefono||'').trim();
       const emailLimpio = (cliEmail||'').trim();
       let cambioCliente = false;
+      // v17.71 — CUIT: si se escribió en el presupuesto, queda también en el cliente
+      const cuitLimpio = String(cuitCliente||'').trim();
+      if (cuitLimpio && clExistente.cuit !== cuitLimpio) { clExistente.cuit = cuitLimpio; cambioCliente = true; }
       if (nombreLimpio2 && clExistente.nombre !== nombreLimpio2) { clExistente.nombre = nombreLimpio2; cambioCliente = true; }
       if (clExistente.empresa !== empresaLimpia) { clExistente.empresa = empresaLimpia; cambioCliente = true; }
       if (clExistente.zona !== zonaLimpia) { clExistente.zona = zonaLimpia; cambioCliente = true; }
@@ -6085,6 +6118,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
     p.recargoPct = plazoElegido==='30' ? (tfPl?tfPl.recargo30:3) : plazoElegido==='60' ? (tfPl?tfPl.recargo60:6) : plazoElegido==='90' ? (tfPl?tfPl.recargo90:9) : 0;
   }
   if (costoParadaDia !== undefined) p.costoParadaDia = Number(costoParadaDia)||0;
+  if (cuitCliente !== undefined) p.cuitCliente = String(cuitCliente||'').trim();
   const _opcOcultas = (p.opcionesPagoOcultas||[]).join(',');
 
   saveLocal();
@@ -6102,7 +6136,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
     writeToSheet({ action:'addPresupuesto', row:{
       id:p.id, num:p.num, cliente_id:p.clienteId, cliente:clNom2, descripcion:descripcionCompleta2,
       monto: monto||0, precio_usd:p.montoUsd||0, tc_al_momento:p.tcAlMomento||0, plazo_pago:p.plazoPago||'contado', recargo_pct:p.recargoPct||0,
-      opciones_pago_ocultas:_opcOcultas, costo_parada_dia:p.costoParadaDia||'',
+      opciones_pago_ocultas:_opcOcultas, costo_parada_dia:p.costoParadaDia||'', cuit_cliente:p.cuitCliente||'',
       serie_maquina:p.serieMaquina||'', modelo_maquina:p.modeloMaquina||'', horometro:p.horometro||'',
       tipo_maquina:p.tipoMaquina||'', maquina_id:p.maquinaId||'', checklist_id:p.checklistId||'',
       estado:p.estado, fecha:p.fecha, notas:p.notas||''
@@ -6112,7 +6146,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
       cliente_id:p.clienteId, cliente:clNom2, descripcion:descripcionCompleta2,
       monto: monto||p.monto||0,
       precio_usd:p.montoUsd||0, tc_al_momento:p.tcAlMomento||0,
-      plazo_pago:p.plazoPago||'contado', recargo_pct:p.recargoPct||0, opciones_pago_ocultas:_opcOcultas, costo_parada_dia:p.costoParadaDia||'',
+      plazo_pago:p.plazoPago||'contado', recargo_pct:p.recargoPct||0, opciones_pago_ocultas:_opcOcultas, costo_parada_dia:p.costoParadaDia||'', cuit_cliente:p.cuitCliente||'',
       serie_maquina:p.serieMaquina||'', modelo_maquina:p.modeloMaquina||'', horometro:p.horometro||'',
       tipo_maquina:p.tipoMaquina||'', maquina_id:p.maquinaId||'',
       estado:p.estado, notas:notas||p.notas||''
@@ -7019,6 +7053,9 @@ function renderEstadisticas() {
     });
   }
 
+  // v17.71 — Facturado por rubro (incluye servicios de terceros)
+  try { renderGraficoRubros('chartRubros', 'tabla-rubros', null); } catch(eRub) { console.warn(eRub); }
+
   // Repuestos: costo vs facturado
   destroyChart('repuestos');
   if(document.getElementById('chartRepuestos')) {
@@ -7490,6 +7527,87 @@ function renderMotivosNoAprobacion() {
     </div>`;
   }
   cont.innerHTML = html;
+}
+
+// ── v17.71 — RUBROS Y SERVICIOS DE TERCEROS ─────────────────────────────
+const TERCEROS_DESDE_DEF = '2026-10-20';
+function tercerosDesde() { return (DB.config && DB.config.terceros_desde) || TERCEROS_DESDE_DEF; }
+function presupCobrado(p) { const t = trabajoDePresupuesto(p); return p.estadoCobro==='cobrado' || !!(t && t.estadoCobro==='cobrado'); }
+const RUBROS = [ ['mo','Mano de obra','rgba(244,180,0,0.85)'], ['rep','Repuestos / materiales','rgba(123,179,224,0.85)'], ['mov','Traslado / viáticos','rgba(230,126,34,0.85)'], ['ter','Servicios de terceros','rgba(199,146,234,0.85)'] ];
+function renderGraficoRubros(canvasId, tablaId, desdeIso) {
+  const desde = desdeIso ? parseFechaAny(desdeIso) : null;
+  const cob = {mo:0,rep:0,mov:0,ter:0}, pend = {mo:0,rep:0,mov:0,ter:0};
+  DB.presupuestos.filter(p=>p.estado==='aprobado').forEach(p=>{
+    if(desde){ const f=parseFechaAny(p.fecha); if(!f || f<desde) return; }
+    const d = desgloseDePresupuesto(p);
+    const dest = presupCobrado(p) ? cob : pend;
+    RUBROS.forEach(r=>{ dest[r[0]] += d[r[0]]||0; });
+  });
+  if(charts[canvasId]) { charts[canvasId].destroy(); delete charts[canvasId]; }
+  const cv = document.getElementById(canvasId);
+  if(cv && typeof Chart!=='undefined') charts[canvasId] = new Chart(cv, {
+    type:'bar',
+    data:{ labels:RUBROS.map(r=>r[1]), datasets:[
+      { label:'Cobrado', data:RUBROS.map(r=>Math.round(cob[r[0]])), backgroundColor:RUBROS.map(r=>r[2]), borderWidth:0, borderRadius:4 },
+      { label:'Por cobrar', data:RUBROS.map(r=>Math.round(pend[r[0]])), backgroundColor:RUBROS.map(r=>r[2].replace('0.85','0.30')), borderWidth:0, borderRadius:4 } ]},
+    options:{ responsive:true, maintainAspectRatio:false, scales:{ x:{stacked:true}, y:{stacked:true, beginAtZero:true, ticks:{ callback:v=>'$'+Number(v).toLocaleString('es-AR') }} },
+      plugins:{ legend:{ position:'bottom', labels:{ font:{size:11}, color:'#aaa' } }, tooltip:{ callbacks:{ label:c=>c.dataset.label+': '+fmtMonto(c.raw) } } } }
+  });
+  const tb = tablaId && document.getElementById(tablaId);
+  if(tb) {
+    const tot = RUBROS.reduce((a,r)=>a+cob[r[0]]+pend[r[0]],0) || 1;
+    tb.innerHTML = `<table style="width:100%"><thead><tr><th style="text-align:left">Rubro</th><th style="text-align:right">Cobrado</th><th style="text-align:right">Por cobrar</th><th style="text-align:right">% del total</th></tr></thead><tbody>`
+      + RUBROS.map(r=>`<tr><td><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${r[2]};margin-right:6px"></span>${r[1]}</td><td style="text-align:right">${fmtMonto(cob[r[0]])}</td><td style="text-align:right;color:var(--muted)">${fmtMonto(pend[r[0]])}</td><td style="text-align:right">${Math.round((cob[r[0]]+pend[r[0]])*100/tot)}%</td></tr>`).join('')
+      + `</tbody></table>`;
+  }
+}
+function filasServiciosTerceros() {
+  const desde = parseFechaAny(tercerosDesde());
+  const out = [];
+  DB.presupuestos.forEach(p=>{
+    const f = parseFechaAny(p.fecha);
+    if(!f || (desde && f < desde)) return;
+    const its = itemsDePresupuesto(p).filter(it=>it.cat==='ter');
+    if(!its.length) return;
+    const t = trabajoDePresupuesto(p);
+    out.push({ p, t, items:its, cobrado: its.reduce((a,it)=>a+it.sub,0), pagado: Number(t&&t.tercerosCosto)||0, proveedor:(t&&t.tercerosProveedor)||'' });
+  });
+  return out.sort((a,b)=>(parseFechaAny(b.p.fecha)||0)-(parseFechaAny(a.p.fecha)||0));
+}
+function renderServiciosTerceros() {
+  const desdeTxt = document.getElementById('terceros-desde-txt'); if(desdeTxt) desdeTxt.textContent = fmtDate(tercerosDesde());
+  const filas = filasServiciosTerceros();
+  const aprob = filas.filter(x=>x.p.estado==='aprobado');
+  const sum = (arr,k) => arr.reduce((a,x)=>a+(x[k]||0),0);
+  const cobradas = aprob.filter(x=>presupCobrado(x.p));
+  const cotAprob = sum(aprob,'cobrado'), cob = sum(cobradas,'cobrado'), pag = sum(aprob,'pagado');
+  const st = document.getElementById('terceros-stats');
+  const card = (l,v,sub,c)=>`<div class="stat-card"><div class="stat-label">${l}</div><div class="stat-val" ${c?`style="color:${c}"`:''}>${v}</div>${sub?`<div class="td-muted" style="font-size:10px;margin-top:2px">${sub}</div>`:''}</div>`;
+  if(st) st.innerHTML = card('Presupuestado (aprobados)', fmtMonto(cotAprob), aprob.length+' presupuesto'+(aprob.length!==1?'s':''))
+    + card('Ya cobrado', fmtMonto(cob), cobradas.length+' cobrado'+(cobradas.length!==1?'s':''), '#2ecc71')
+    + card('Pagado a terceros', fmtMonto(pag), 'cargado en 📊 Economía', '#e74c3c')
+    + card('Margen de MEB', fmtMonto(cotAprob-pag), cotAprob?Math.round((cotAprob-pag)*100/cotAprob)+'% de lo presupuestado':'', '#F4B400');
+  const tb = document.getElementById('tabla-terceros');
+  if(tb) tb.innerHTML = filas.length ? filas.map(x=>{
+    const cl = DB.clientes.find(c=>String(c.id)===String(x.p.clienteId));
+    const estado = x.p.estado!=='aprobado' ? `<span class="td-muted">${x.p.estado}</span>` : (presupCobrado(x.p)?'<span style="color:#2ecc71">Cobrado</span>':'<span style="color:var(--orange)">Por cobrar</span>');
+    return `<tr><td><span style="font-family:'Bebas Neue';color:var(--yellow);cursor:pointer" onclick="irAPresupuestoPorNum('${x.p.num}')">#${String(x.p.num).padStart(4,'0')}</span></td>
+      <td class="td-muted">${fmtDate(x.p.fecha)}</td><td>${cl?cl.nombre:'—'}</td>
+      <td style="font-size:12px">${x.items.map(it=>it.desc||it.tipo).join('<br>')}${x.proveedor?`<div class="td-muted" style="font-size:11px">→ ${x.proveedor}</div>`:''}</td>
+      <td style="text-align:right">${fmtMonto(x.cobrado)}</td>
+      <td style="text-align:right">${x.pagado?fmtMonto(x.pagado):'<span class="td-muted">—</span>'}</td>
+      <td style="text-align:right;color:${x.pagado?((x.cobrado-x.pagado)>=0?'#2ecc71':'#e74c3c'):'var(--muted)'}">${x.pagado?fmtMonto(x.cobrado-x.pagado):'—'}</td>
+      <td>${estado}</td>
+      <td>${x.p.estado!=='no aprobado'?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="openModal('economiaPresupuesto',DB.presupuestos.find(y=>y.id==='${x.p.id}'))" title="Cargar lo que se le pagó al tercero">📊 Economía</button>`:''}</td></tr>`;
+  }).join('') : `<tr><td colspan="9"><div class="empty-state"><div class="icon">⚙️</div><p>Todavía no hay presupuestos con servicios de terceros desde el ${fmtDate(tercerosDesde())}.<br>En el presupuesto, en la columna <b>Tipo</b>, elegí <b>“Servicio de terceros”</b> (tornería, bombista…).</p></div></td></tr>`;
+  try { renderGraficoRubros('chartRubrosTer', null, null); } catch(e) {}
+  if(charts.terceros){ charts.terceros.destroy(); delete charts.terceros; }
+  const cv = document.getElementById('chartTerceros');
+  if(cv && typeof Chart!=='undefined') charts.terceros = new Chart(cv, { type:'bar',
+    data:{ labels:['Cobrado al cliente','Pagado al tercero','Margen MEB'], datasets:[{ data:[Math.round(cotAprob), Math.round(pag), Math.round(cotAprob-pag)], backgroundColor:['rgba(199,146,234,0.85)','rgba(231,76,60,0.7)','rgba(244,180,0,0.85)'], borderWidth:0, borderRadius:4 }]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:c=>fmtMonto(c.raw) } } }, scales:{ y:{ beginAtZero:true, ticks:{ callback:v=>'$'+Number(v).toLocaleString('es-AR') } } } } });
+  const bd = document.getElementById('badge-terceros');
+  if(bd){ const sinPagar = aprob.filter(x=>!x.pagado).length; bd.textContent = sinPagar; bd.style.display = sinPagar?'':'none'; }
 }
 
 function renderInformesCobertura() {
@@ -9536,7 +9654,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
   ).join('');
   const clientesParaEmbeber = DB.clientes.map(c => ({
     id:c.id, nombre:c.nombre||'', empresa:c.empresa||'', zona:c.zona||'',
-    telefono:c.telefono||'', email:c.email||''
+    telefono:c.telefono||'', email:c.email||'', cuit:c.cuit||''
   }));
 
   // Build rows HTML - no JS needed for initial render
@@ -9591,6 +9709,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '  document.getElementById("pdf-cli-zona").innerText = c.zona || "";',
     '  document.getElementById("pdf-cli-telefono").innerText = c.telefono || "";',
     '  document.getElementById("pdf-cli-email").innerText = c.email || "";',
+    '  var cuitEl = document.getElementById("pdf-cli-cuit"); if (cuitEl) cuitEl.innerText = c.cuit || "";',
     '}',
     '',
     'var MONEDA_SYM=' + JSON.stringify((p.monedaSym||'$')) + ';',
@@ -9602,27 +9721,65 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '  if(!s||s==="-"||s==="\\u2014") return 0;',
     '  return parseFloat(String(s).replace(/[$]/g,"").replace(/\\s/g,"").replace(/\\./g,"").replace(",",".")) || 0;',
     '}',
+    // v17.71 — categoría de cada ítem (misma regla que categoriaItemPresup del CRM):
+    //   "Servicio de terceros" (tornería, bombista, rectificadora…) → ter · Repuesto/Material → rep ·
+    //   Traslado/Movilidad/Viáticos → mov · el resto (Mano de obra, Servicio, Servicio técnico) → mano de obra.
+    //   Si el tipo es genérico ("Servicio") pero la descripción dice traslado/movilidad, cuenta como traslado.
+    'function categoriaItem(tipo, desc) {',
+    '  tipo = String(tipo||"").toLowerCase(); desc = String(desc||"").toLowerCase();',
+    '  if (/tercer|terciariz|torner|tornero|bombist|rectific/.test(tipo)) return "ter";',
+    '  if (/repuesto|material/.test(tipo)) return "rep";',
+    '  if (/traslad|movilid|vi[a\\u00E1]tico/.test(tipo)) return "mov";',
+    '  if ((tipo === "" || /^servicio( t[e\\u00E9]cnico)?$/.test(tipo)) && /^(traslado|movilidad|vi[a\\u00E1]tico)/.test(desc.trim())) return "mov";',
+    '  return "mo";',
+    '}',
+    // Menú para elegir el tipo de ítem (se abre al tocar la celda "Tipo"; igual se puede escribir a mano)
+    'var TIPOS_ITEM = ["Mano de obra","Servicio t\\u00E9cnico","Repuesto","Material","Traslado","Servicio de terceros"];',
+    'var menuTipoEl = null, celdaTipoActiva = null;',
+    'function abrirMenuTipo(td) {',
+    '  if (!menuTipoEl) {',
+    '    menuTipoEl = document.createElement("div");',
+    '    menuTipoEl.className = "no-print menu-tipo";',
+    '    menuTipoEl.style.cssText = "position:absolute;z-index:60;background:#fff;border:1px solid #F4B400;border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.18);padding:4px;display:none;min-width:190px";',
+    '    TIPOS_ITEM.forEach(function(t){',
+    '      var b = document.createElement("div");',
+    '      b.textContent = t + (t==="Servicio de terceros" ? " (torner\\u00EDa, bombista\\u2026)" : "");',
+    '      b.style.cssText = "padding:7px 10px;font-size:12px;cursor:pointer;border-radius:4px;color:#1A1A1A";',
+    '      b.onmouseenter = function(){ b.style.background = "#FFF3CC"; }; b.onmouseleave = function(){ b.style.background = ""; };',
+    '      b.addEventListener("mousedown", function(ev){ ev.preventDefault(); if (celdaTipoActiva) { celdaTipoActiva.innerText = t; recalc(); } menuTipoEl.style.display = "none"; });',
+    '      menuTipoEl.appendChild(b);',
+    '    });',
+    '    document.body.appendChild(menuTipoEl);',
+    '  }',
+    '  celdaTipoActiva = td;',
+    '  var r = td.getBoundingClientRect();',
+    '  menuTipoEl.style.left = (r.left + window.scrollX) + "px";',
+    '  menuTipoEl.style.top = (r.bottom + window.scrollY + 2) + "px";',
+    '  menuTipoEl.style.display = "block";',
+    '}',
+    'document.addEventListener("mousedown", function(ev){ if (menuTipoEl && !menuTipoEl.contains(ev.target) && !(ev.target.classList && ev.target.classList.contains("tipo-col"))) menuTipoEl.style.display = "none"; });',
     'function recalc() {',
     '  var rows = document.querySelectorAll("#tbodyItems tr");',
-    '  var tMO=0,tRep=0,tMov=0,grand=0;',
+    '  var tMO=0,tRep=0,tMov=0,tTer=0,grand=0;',
     '  rows.forEach(function(tr) {',
     '    var c = tr.querySelectorAll("td");',
     '    if(c.length<6) return;',
     '    var tipo = (c[2].innerText||"").toLowerCase().trim();',
+    '    var descL = (c[1].innerText||"").toLowerCase();',
     '    var cant = parseFloat((c[3].innerText||"").replace(",",".")) || 0;',
     '    var precio = parse(c[4].innerText);',
     '    var sub = cant>0 && precio>0 ? cant*precio : 0;',
     '    c[5].innerText = sub>0 ? fmt(sub) : "";',
     '    if(sub>0) {',
     '      grand += sub;',
-    '      if(tipo.indexOf("repuesto")>=0||tipo.indexOf("material")>=0) tRep+=sub;',
-    '      else if(tipo.indexOf("traslado")>=0||tipo.indexOf("via")>=0) tMov+=sub;',
-    '      else tMO+=sub;',
+    '      var cat = categoriaItem(tipo, descL);',
+    '      if(cat==="rep") tRep+=sub; else if(cat==="mov") tMov+=sub; else if(cat==="ter") tTer+=sub; else tMO+=sub;',
     '    }',
     '  });',
     '  document.getElementById("tMO").innerText = tMO>0?fmt(tMO):"\\u2014";',
     '  document.getElementById("tRep").innerText = tRep>0?fmt(tRep):"\\u2014";',
     '  document.getElementById("tMov").innerText = tMov>0?fmt(tMov):"\\u2014";',
+    '  var terEl = document.getElementById("tTer"); if (terEl) { terEl.innerText = tTer>0?fmt(tTer):"\\u2014"; terEl.parentElement.style.display = tTer>0 ? "" : "none"; }',
     '  document.getElementById("tTotal").innerText = grand>0?fmt(grand):"\\u2014";',
     '  recalcPagos();',
     '}',
@@ -9727,7 +9884,8 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '}',
     'function bindRow(tr) {',
     '  tr.querySelectorAll("td[contenteditable]").forEach(function(td, idx) {',
-    '    td.addEventListener("input", function() { if(idx===2||idx===3) recalc(); });',
+    '    td.addEventListener("input", function() { if(idx===1||idx===2||idx===3) recalc(); });',
+    '    if (idx===1) { td.addEventListener("focus", function(){ abrirMenuTipo(td); }); td.addEventListener("click", function(){ abrirMenuTipo(td); }); }',
     '    td.addEventListener("blur", function() {',
     '      if(idx===3){var v=parse(td.innerText);if(v>0)td.innerText=fmt(v);}',
     '      if(idx===2){var v=parseFloat((td.innerText||"").replace(",","."));if(v>0&&v!==Math.floor(v))td.innerText=v;else if(v>0)td.innerText=String(Math.round(v));}',
@@ -9935,7 +10093,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '    return;',
     '  }',
     '  if(window.opener && window.opener._recibirCambiosPresupuesto) {',
-    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro, clienteIdSel, cliNombre, cliEmpresa.replace("—","").trim(), cliZona.replace("—","").trim(), cliTelefono.replace("—","").trim(), cliEmail.replace("—","").trim(), tipoMaq, tcGuardar, CHECKLIST_ID_ORIGEN, tramosPagoOcultos.join(","), PLAZO_ELEGIDO, parse((document.getElementById("pdf-parada")||{innerText:""}).innerText) || 0);',
+    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro, clienteIdSel, cliNombre, cliEmpresa.replace("—","").trim(), cliZona.replace("—","").trim(), cliTelefono.replace("—","").trim(), cliEmail.replace("—","").trim(), tipoMaq, tcGuardar, CHECKLIST_ID_ORIGEN, tramosPagoOcultos.join(","), PLAZO_ELEGIDO, parse((document.getElementById("pdf-parada")||{innerText:""}).innerText) || 0, ((document.getElementById("pdf-cli-cuit")||{}).innerText || "").replace("\u2014","").trim());',
     '    var sb = document.querySelector(".btn-save");',
     '    if(sb){sb.style.background="#25d366";sb.style.color="#fff";sb.textContent="\\u2714 Guardado";}',
     '    setTimeout(function(){if(sb){sb.style.background="#1A1A1A";sb.style.color="#F4B400";sb.textContent="\\uD83D\\uDCBE GUARDAR";}},2500);',
@@ -10062,6 +10220,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     + '</select></div>'
     + '<div class="campo"><label>Empresa / Nombre</label><span id="pdf-cli-nombre" contenteditable="true">' + ph(cl?cl.nombre:'') + '</span></div>'
     + '<div class="campo"><label>Raz\u00F3n social</label><span id="pdf-cli-empresa" contenteditable="true">' + ph(cl?(cl.empresa||cl.nombre):'') + '</span></div>'
+    + '<div class="campo"><label>CUIT</label><span id="pdf-cli-cuit" contenteditable="true">' + ph(p.cuitCliente || (cl&&cl.cuit) || '') + '</span></div>'
     + '<div class="campo"><label>Zona</label><span id="pdf-cli-zona" contenteditable="true">' + ph(cl?cl.zona:'') + '</span></div>'
     + '<div class="campo"><label>Tel\u00E9fono</label><span id="pdf-cli-telefono" contenteditable="true">' + ph(cl?cl.telefono:'') + '</span></div>'
     + '<div class="campo"><label>Email</label><span id="pdf-cli-email" contenteditable="true">' + ph(cl?cl.email:'') + '</span></div>'
@@ -10116,6 +10275,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     + '<div class="total-row"><span>Subtotal mano de obra</span><span id="tMO">&mdash;</span></div>'
     + '<div class="total-row"><span>Repuestos / Materiales</span><span id="tRep">&mdash;</span></div>'
     + '<div class="total-row"><span>Traslado / vi\u00E1ticos</span><span id="tMov">&mdash;</span></div>'
+    + '<div class="total-row" style="display:none"><span>Servicios de terceros (torner\u00EDa, etc.)</span><span id="tTer">&mdash;</span></div>'
     + '<div class="total-row"><span>Descuento</span><span contenteditable="true" id="tDesc">&mdash;</span></div>'
     + '<div class="total-row main"><span>TOTAL</span><span id="tTotal">&mdash;</span></div>'
     // Línea de plazo acordado — se arma con el plazo/recargo que tenga
@@ -10567,6 +10727,7 @@ function openModal(type, data={}) {
       <div class="form-group"><label>Empresa</label><input id="f-empresa" value="${data.empresa||''}"/></div>
       <div class="form-group"><label>Teléfono / WhatsApp</label><input id="f-telefono" value="${data.telefono||''}" placeholder="+549..."/></div>
       <div class="form-group"><label>Email</label><input id="f-email" type="email" value="${data.email||''}"/></div>
+      <div class="form-group"><label>CUIT</label><input id="f-cuit" value="${data.cuit||''}" placeholder="Ej: 30-71234567-8"/></div>
       <div class="form-group"><label>Zona / Provincia</label><input id="f-zona" value="${data.zona||''}"/></div>
       <div class="form-group"><label>Estado</label>
         ${data.lockEstado ? `<div style="padding:9px 12px;background:rgba(123,179,224,0.12);border:1px solid var(--blue-light);border-radius:4px;color:var(--blue-light);font-size:13px">🎯 Prospecto — se guarda así, no es editable acá</div><input type="hidden" id="f-estado" value="prospecto"/>` : `<select id="f-estado"><option value="prospecto" ${data.estado==='prospecto'?'selected':''}>Prospecto</option><option value="activo" ${data.estado==='activo'?'selected':''}>Activo</option><option value="inactivo" ${data.estado==='inactivo'?'selected':''}>Inactivo</option></select>`}
@@ -10585,7 +10746,7 @@ function openModal(type, data={}) {
           return;
         }
       }
-      guardar('clientes',{id:data.id||siguienteIdCliente(),nombre:nombreForm,empresa:gv('f-empresa'),telefono:gv('f-telefono'),email:gv('f-email'),zona:gv('f-zona'),estado:gv('f-estado'),ultimoContacto:gv('f-contacto'),notas:gv('f-notas')},'nombre');
+      guardar('clientes',{id:data.id||siguienteIdCliente(),nombre:nombreForm,empresa:gv('f-empresa'),telefono:gv('f-telefono'),email:gv('f-email'),zona:gv('f-zona'),estado:gv('f-estado'),ultimoContacto:gv('f-contacto'),notas:gv('f-notas'),cuit:gv('f-cuit'),tokenPortal:data.tokenPortal||''},'nombre');
     };
   }
 
@@ -11765,6 +11926,9 @@ function openModal(type, data={}) {
       <div class="form-group"><label>Movilidad cobrada (ARS) <span style="color:var(--muted)">· cotizado ${fm(d0.mov)}</span></label><input id="f-ecmov" type="number" value="${v(t0&&t0.movilidad,d0.mov)}" oninput="calcularEconomiaPresup()"/></div>
       <div class="form-group"><label>Repuestos cobrados al cliente (ARS) <span style="color:var(--muted)">· cotizado ${fm(d0.rep)}</span></label><input id="f-ecrepfact" type="number" value="${v(t0&&t0.precioRepuestoFacturado,d0.rep)}" oninput="calcularEconomiaPresup()"/></div>
       <div class="form-group"><label>Repuestos: lo que PAGASTE realmente (ARS)</label><input id="f-eccostorep" type="number" value="${(t0&&t0.costoRepuesto)||''}" placeholder="lo que te costaron a vos" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group"><label>Servicios de terceros cobrados (ARS) <span style="color:var(--muted)">· cotizado ${fm(d0.ter)}</span></label><input id="f-ecterfact" type="number" value="${v(t0&&t0.tercerosCobrado,d0.ter)}" oninput="calcularEconomiaPresup()" title="Tornería, bombista, rectificadora… lo que se le cobró al cliente"/></div>
+      <div class="form-group"><label>Servicios de terceros: lo que PAGASTE (ARS)</label><input id="f-ecter" type="number" value="${(t0&&t0.tercerosCosto)||''}" placeholder="lo que le pagaste al tornero, bombista…" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group"><label>¿A quién? (tornero, bombista…)</label><input id="f-ecterprov" value="${((t0&&t0.tercerosProveedor)||'').replace(/"/g,'&quot;')}" placeholder="Opcional"/></div>
       <div class="form-group"><label>Total realmente cobrado / facturado (ARS)</label><input id="f-ecmonto" type="number" value="${v(t0&&t0.montoCobrado,p.montoCobradoReal||'')}" placeholder="${Math.round(Number(p.monto)||0)}" oninput="calcularEconomiaPresup()"/></div>
       <div class="form-group"><label>Otros gastos (ARS)</label><input id="f-ecgastos" type="number" value="${(t0&&t0.montoGastos)||''}" placeholder="combustible, viáticos…" oninput="calcularEconomiaPresup()"/></div>
       <div class="form-group"><label>Estado del cobro</label><select id="f-ecestado" onchange="document.getElementById('ec-cobro-extra').style.display=this.value==='cobrado'?'contents':'none'"><option value="pendiente"${p.estadoCobro==='cobrado'||(t0&&t0.estadoCobro==='cobrado')?'':' selected'}>Pendiente de cobro</option><option value="cobrado"${p.estadoCobro==='cobrado'||(t0&&t0.estadoCobro==='cobrado')?' selected':''}>Cobrado ✔</option></select></div>
@@ -11780,7 +11944,8 @@ function openModal(type, data={}) {
       const n = id => parseFloat(gv(id))||0;
       const campos = {
         manoObraCobrada:n('f-ecmo'), movilidad:n('f-ecmov'), precioRepuestoFacturado:n('f-ecrepfact'),
-        costoRepuesto:n('f-eccostorep'), montoCobrado:n('f-ecmonto'), montoGastos:n('f-ecgastos')
+        costoRepuesto:n('f-eccostorep'), montoCobrado:n('f-ecmonto'), montoGastos:n('f-ecgastos'),
+        tercerosCobrado:n('f-ecterfact'), tercerosCosto:n('f-ecter'), tercerosProveedor:gv('f-ecterprov')
       };
       let t = trabajoDePresupuesto(p);
       if(t) t.presupuestoId = p.id;
@@ -11801,7 +11966,7 @@ function openModal(type, data={}) {
       const fechaC = gv('f-ecfecha') || _fechaPrevia || today();
       const tcC = parseFloat(gv('f-ectc'))||0;
       const presup = DB.presupuestos.find(x=>x.id===p.id);
-      if(estCobro==='cobrado' && !campos.montoCobrado) campos.montoCobrado = campos.manoObraCobrada + campos.movilidad + campos.precioRepuestoFacturado;
+      if(estCobro==='cobrado' && !campos.montoCobrado) campos.montoCobrado = campos.manoObraCobrada + campos.movilidad + campos.precioRepuestoFacturado + campos.tercerosCobrado;
       Object.assign(t, campos);
       let revertido = false;
       if(estCobro==='cobrado'){
@@ -11828,7 +11993,7 @@ function openModal(type, data={}) {
       const tc = Number(t.tcCobro)||0;
       if(t.estadoCobro==='cobrado' && tc>0){
         t.montoCobradoUsd = Math.round(t.montoCobrado/tc);
-        t.gananciaUsd = Math.round((t.manoObraCobrada + t.movilidad + (t.precioRepuestoFacturado - t.costoRepuesto))/tc);
+        t.gananciaUsd = Math.round((t.manoObraCobrada + t.movilidad + (t.precioRepuestoFacturado - t.costoRepuesto) + ((t.tercerosCobrado||0) - (t.tercerosCosto||0)))/tc);
         cambiosCobroRecientes[t.id] = { estadoCobro:'cobrado', tcCobro:tc, montoCobradoUsd:t.montoCobradoUsd, gananciaUsd:t.gananciaUsd, diferenciaUsd:t.diferenciaUsd||0, diferenciaPct:t.diferenciaPct||0, fechaCobroReal:t.fechaCobroReal||'', ts:Date.now() };
       }
       writeToSheet({ action:'addTrabajo', row:{
@@ -11839,7 +12004,8 @@ function openModal(type, data={}) {
         costoRepuesto:t.costoRepuesto||0, precioRepuestoFacturado:t.precioRepuestoFacturado||0,
         manoObraCobrada:t.manoObraCobrada||0, movilidad:t.movilidad||0,
         repuestosDetalle:t.repuestosDetalle||'', notas:t.notas||'', fotoUrl:t.fotoUrl||'',
-        tcAlMomento:t.tcAlMomento||0, gananciaUsdEsperada:t.gananciaUsdEsperada||0, horasTrabajadas:t.horasTrabajadas||0
+        tcAlMomento:t.tcAlMomento||0, gananciaUsdEsperada:t.gananciaUsdEsperada||0, horasTrabajadas:t.horasTrabajadas||0,
+        tercerosCobrado:t.tercerosCobrado||0, tercerosCosto:t.tercerosCosto||0, tercerosProveedor:t.tercerosProveedor||''
       }});
       if(t.estadoCobro==='cobrado' || revertido){
         writeToSheet({ action:'updateCobro', id:t.id, estadoCobro:t.estadoCobro, tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0, ganancia_usd:t.gananciaUsd||0, diferencia_usd:t.diferenciaUsd||0, diferencia_pct:t.diferenciaPct||0, fecha_cobro_real:t.fechaCobroReal||'' });
@@ -12198,31 +12364,47 @@ async function actualizarTCTrabajo(gananciaArsT, gananciaUsdEsperada, tieneAncla
 function calcularEconomiaPresup() {
   const n = id => { const e=document.getElementById(id); return e ? (parseFloat(e.value)||0) : 0; };
   const mo=n('f-ecmo'), mov=n('f-ecmov'), rf=n('f-ecrepfact'), cr=n('f-eccostorep'), gas=n('f-ecgastos');
+  const tf=n('f-ecterfact'), tc=n('f-ecter');
   const margenRep = rf - cr;
-  const gan = mo + mov + margenRep;
+  const margenTer = tf - tc;
+  const gan = mo + mov + margenRep + margenTer;
   const fm = x => (x<0?'-':'')+'$ '+Math.abs(Math.round(x)).toLocaleString('es-AR');
   const el = document.getElementById('ec-resultado'); if(!el) return;
   const col = x => x>=0 ? 'var(--green)' : 'var(--red)';
   el.innerHTML = `Ganancia en repuestos (cobrado − pagado): <b style="color:${col(margenRep)}">${fm(margenRep)}</b><br>`
-    + `Ganancia del trabajo (mano de obra + movilidad + repuestos): <b style="color:${col(gan)}">${fm(gan)}</b>`
+    + ((tf||tc) ? `Ganancia en servicios de terceros (cobrado − pagado): <b style="color:${col(margenTer)}">${fm(margenTer)}</b><br>` : '')
+    + `Ganancia del trabajo (mano de obra + movilidad + repuestos${(tf||tc)?' + terceros':''}): <b style="color:${col(gan)}">${fm(gan)}</b>`
     + (gas>0 ? `<br>Después de otros gastos: <b style="color:${col(gan-gas)}">${fm(gan-gas)}</b>` : '');
 }
 
 // v17.64 — desglose del presupuesto por tipo de ítem (mano de obra / repuestos / movilidad),
 // leído de las líneas "descripción|tipo|cantidad|precio" del presupuesto.
-function desgloseDePresupuesto(p) {
-  const d = { mo:0, rep:0, mov:0 };
+// v17.71 — misma regla que el PDF (categoriaItem): servicio de terceros (tornería, bombista…),
+// repuesto/material, traslado/movilidad y el resto mano de obra. Antes "Servicio" y "Material"
+// no sumaban en ningún rubro acá (y en el PDF "Servicio" iba a mano de obra).
+function categoriaItemPresup(tipo, desc) {
+  tipo = String(tipo||'').toLowerCase().trim(); desc = String(desc||'').toLowerCase().trim();
+  if (/tercer|terciariz|torner|tornero|bombist|rectific/.test(tipo)) return 'ter';
+  if (/repuesto|material/.test(tipo)) return 'rep';
+  if (/traslad|movilid|vi[aá]tico/.test(tipo)) return 'mov';
+  if ((tipo === '' || /^servicio( t[eé]cnico)?$/.test(tipo)) && /^(traslado|movilidad|vi[aá]tico)/.test(desc)) return 'mov';
+  return 'mo';
+}
+function itemsDePresupuesto(p) {
+  const out = [];
   String((p && p.descripcion) || '').split('\n').forEach(linea => {
     const pts = linea.split('|');
     if(pts.length < 4) return;
-    const tipo = String(pts[1]||'').toLowerCase();
     const cant = parseFloat(String(pts[2]).replace(',','.')) || 1;
     const sub = cant * (parseMonto(pts[3]) || 0);
-    if(tipo.indexOf('mano') >= 0) d.mo += sub;
-    else if(tipo.indexOf('repuesto') >= 0) d.rep += sub;
-    else if(tipo.indexOf('traslad') >= 0 || tipo.indexOf('movil') >= 0) d.mov += sub;
+    out.push({ desc:String(pts[0]||'').trim(), tipo:String(pts[1]||'').trim(), cant, sub, cat:categoriaItemPresup(pts[1], pts[0]) });
   });
-  d.mo = Math.round(d.mo); d.rep = Math.round(d.rep); d.mov = Math.round(d.mov);
+  return out;
+}
+function desgloseDePresupuesto(p) {
+  const d = { mo:0, rep:0, mov:0, ter:0 };
+  itemsDePresupuesto(p).forEach(it => { d[it.cat] += it.sub; });
+  d.mo = Math.round(d.mo); d.rep = Math.round(d.rep); d.mov = Math.round(d.mov); d.ter = Math.round(d.ter);
   return d;
 }
 
@@ -12250,11 +12432,13 @@ function sincronizarCobroPresupuestoATrabajos(p, extra) {
       if(!isNaN(extra.repFact) && extra.repFact !== undefined) t.precioRepuestoFacturado = extra.repFact || 0;
       else if(!Number(t.precioRepuestoFacturado)) t.precioRepuestoFacturado = d.rep;
       if(!isNaN(extra.costoRep) && extra.costoRep !== undefined) t.costoRepuesto = extra.costoRep || 0;
+      if(!Number(t.tercerosCobrado)) t.tercerosCobrado = d.ter;
     }
     const tc = Number(t.tcCobro) || 0;
     if(tc > 0 && i === 0) {
       t.montoCobradoUsd = Math.round((Number(t.montoCobrado)||0) / tc);
-      const gan = (Number(t.manoObraCobrada)||0) + (Number(t.movilidad)||0) + ((Number(t.precioRepuestoFacturado)||0) - (Number(t.costoRepuesto)||0));
+      const gan = (Number(t.manoObraCobrada)||0) + (Number(t.movilidad)||0) + ((Number(t.precioRepuestoFacturado)||0) - (Number(t.costoRepuesto)||0))
+        + ((Number(t.tercerosCobrado)||0) - (Number(t.tercerosCosto)||0));
       t.gananciaUsd = Math.round(gan / tc);
     }
     cambiosCobroRecientes[t.id] = { estadoCobro:'cobrado', tcCobro:t.tcCobro||0, montoCobradoUsd:t.montoCobradoUsd||0, gananciaUsd:t.gananciaUsd||0, diferenciaUsd:t.diferenciaUsd||0, diferenciaPct:t.diferenciaPct||0, fechaCobroReal:t.fechaCobroReal||'', ts:Date.now() };
@@ -12266,7 +12450,8 @@ function sincronizarCobroPresupuestoATrabajos(p, extra) {
       costoRepuesto:t.costoRepuesto||0, precioRepuestoFacturado:t.precioRepuestoFacturado||0,
       manoObraCobrada:t.manoObraCobrada||0, movilidad:t.movilidad||0,
       repuestosDetalle:t.repuestosDetalle||'', notas:t.notas||'', fotoUrl:t.fotoUrl||'',
-      tcAlMomento:t.tcAlMomento||0, gananciaUsdEsperada:t.gananciaUsdEsperada||0, horasTrabajadas:t.horasTrabajadas||0
+      tcAlMomento:t.tcAlMomento||0, gananciaUsdEsperada:t.gananciaUsdEsperada||0, horasTrabajadas:t.horasTrabajadas||0,
+      tercerosCobrado:t.tercerosCobrado||0
     }});
     writeToSheet({ action:'updateCobro', id:t.id, estadoCobro:'cobrado', tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0, ganancia_usd:t.gananciaUsd||0, diferencia_usd:t.diferenciaUsd||0, diferencia_pct:t.diferenciaPct||0, fecha_cobro_real:t.fechaCobroReal||'' });
   });
@@ -12420,7 +12605,7 @@ function guardar(tipo, obj, campoRequerido) {
       ID:obj.id, NOMBRE:obj.nombre, EMPRESA:obj.empresa||'',
       TELEFONO:obj.telefono||'', EMAIL:obj.email||'',
       ZONA:obj.zona||'', ESTADO:obj.estado||'activo',
-      ULTIMO_CONTACTO:obj.ultimoContacto||'', NOTAS:obj.notas||''
+      ULTIMO_CONTACTO:obj.ultimoContacto||'', NOTAS:obj.notas||'', CUIT:obj.cuit||''
     }});
   }
 }
