@@ -6402,6 +6402,7 @@ function eliminarCommMant(keyEncoded, idx) {
 
 // Recibe cambios editados desde la ventana PDF del presupuesto
 function _marcarPresupuestoEnviado(presupId) {
+  presupId = idPresupReal(presupId);
   const p = DB.presupuestos.find(x=>x.id===presupId);
   if (!p || p.fechaEnviado) return; // ya estaba marcado — no pisar la fecha real de envío
   p.fechaEnviado = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
@@ -6485,7 +6486,17 @@ function resolverOAutoCrearMaquina(clienteId, serie, modelo, tipo, maquinaIdPrev
   return nueva.id;
 }
 
+// v17.75 — los presupuestos nuevos quedan con ID P0127 (igual a su número), no con un código al azar.
+// La ficha se abre con un ID provisorio; al guardar se cambia y se recuerda el alias, por si la misma
+// ventana vuelve a guardar o marca "enviado".
+window._aliasPresupId = window._aliasPresupId || {};
+function idPresupReal(id) { return window._aliasPresupId[id] || id; }
+function idPresupDeNumero(num) {
+  const cand = 'P' + String(num).padStart(4,'0');
+  return DB.presupuestos.some(x=>String(x.id).toLowerCase()===cand.toLowerCase()) ? null : cand;
+}
 function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail, tipoMaquina, tcDesdePdf, checklistIdOrigen, opcionesOcultasStr, plazoElegido, costoParadaDia, cuitCliente, motivoPresup, tcFechaPdf, maquinaIdSel) {
+  presupId = idPresupReal(presupId);
   if (!confirmarMontoPresupuesto(monto)) return;
   let p = DB.presupuestos.find(x=>x.id===presupId);
   const esNuevoPresup = !p;
@@ -6548,8 +6559,11 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
 
   if (esNuevoPresup) {
     if (!clienteIdFinal) { showToast('No se pudo guardar: falta el cliente','error'); return; }
+    const numNuevo = DB.presupCounter++;
+    const idLindo = idPresupDeNumero(numNuevo);
+    if (idLindo && idLindo !== presupId) { window._aliasPresupId[presupId] = idLindo; presupId = idLindo; }
     p = {
-      id: presupId, num: DB.presupCounter++, clienteId: clienteIdFinal,
+      id: presupId, num: numNuevo, clienteId: clienteIdFinal,
       descripcion: descripcion||'', monto: monto||0,
       montoUsd: tcNuevo>0 ? Math.round((monto||0)/tcNuevo*100)/100 : 0,
       tcAlMomento: tcNuevo,
@@ -8484,12 +8498,12 @@ function duplicarPresupuesto(id) {
   if (!orig) return;
   const nuevo = {
     ...orig,
-    id: uid(),
     num: DB.presupCounter++,
     estado: 'pendiente',
     fecha: new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}).split('/').reverse().join('/'),
     notas: (orig.notas||'') + ' [Copia]'
   };
+  nuevo.id = idPresupDeNumero(nuevo.num) || uid(); // v17.75 — P0127 en vez de un código al azar
   DB.presupuestos.push(nuevo);
   saveLocal();
   renderPresupuestos();
@@ -11736,9 +11750,10 @@ function openModal(type, data={}) {
       // coincidían entre pantallas. Ahora el recargo se aplica siempre al
       // vuelo, en el momento de mostrar cada plazo, nunca se guarda mezclado.
       const usdAncla = tcVal>0 ? (monedaVal==='USD' ? montoContadoArs : montoContadoArs/tcVal) : 0;
+      const _numP = data.num||DB.presupCounter++;
       guardar('presupuestos',{
-        id:data.id||uid(),
-        num:data.num||DB.presupCounter++,
+        id:data.id||idPresupDeNumero(_numP)||uid(),
+        num:_numP,
         clienteId:clienteIdFinal,
         descripcion,
         monto:Math.round(montoContadoArs),
