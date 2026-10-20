@@ -1092,11 +1092,11 @@ select option { background:var(--dark); }
     </div>
     <div class="card" style="margin-top:12px">
       <div class="card-header">
-        <span class="card-title">HISTORIAL DE COMPRAS</span>
+        <span class="card-title">HISTORIAL DE COMPRAS <span id="compras-deuda-resumen" style="font-family:Barlow,sans-serif;font-size:12px;letter-spacing:0;margin-left:10px"></span></span>
         <button class="btn-primary" style="font-size:11px;padding:6px 14px" onclick="openModal('nuevaCompra')">+ REGISTRAR COMPRA</button>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>FECHA</th><th>PROVEEDOR</th><th>DETALLE</th><th>CATEGORÍA</th><th>MONTO</th><th>USD</th><th>NOTAS</th><th>ACCIONES</th></tr></thead>
+        <thead><tr><th>FECHA</th><th>PROVEEDOR</th><th>DETALLE</th><th>CATEGORÍA</th><th>MONTO</th><th>PAGO</th><th>USD</th><th>NOTAS</th><th>ACCIONES</th></tr></thead>
         <tbody id="tabla-compras"></tbody>
       </table></div>
     </div>
@@ -2245,7 +2245,9 @@ async function syncAll() {
         montoUsd:parseFloat(r.MONTO_USD)||0, tcAlMomento:parseFloat(r.TC_AL_MOMENTO)||0,
         fecha:r.FECHA||'', notas:r.NOTAS||'',
         comprobantePago:r.COMPROBANTE_PAGO||'',
-        entregasLog: deserializarEntregas(r.ENTREGAS_LOG||'')
+        entregasLog: deserializarEntregas(r.ENTREGAS_LOG||''),
+        pagosLog: deserializarPagosCompra(r.PAGOS_LOG||''), pagosRegistrados: r.PAGOS_LOG!==undefined && String(r.PAGOS_LOG||'').trim()!=='',
+        cuotas: parseInt(r.CUOTAS,10)||0
       }));
     } else { if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; }
     // Siempre refleja lo que hay en el Sheet (incluso si está vacío) — evita que
@@ -8576,16 +8578,26 @@ function renderProveedores() {
       <td>${c.detalle||'—'}</td>
       <td><span class="badge ${catColor}">${c.categoria.toUpperCase()}</span></td>
       <td><span class="monto" style="color:var(--red)">−${fmtMonto(c.monto)}</span></td>
+      <td>${htmlEstadoPagoCompra(c)}</td>
       <td>${c.montoUsd>0?`<span style="color:var(--blue-light)">−USD ${c.montoUsd.toLocaleString('es-AR',{maximumFractionDigits:0})}</span><div style="font-size:9px;color:var(--muted2)">TC $${c.tcAlMomento||'—'}</div>`:'<span style="color:var(--muted)">—</span>'}</td>
       <td class="td-muted">${c.notas||'—'}</td>
       <td><div class="actions">
         <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="verEntregasCompra('${c.id}')" title="Ver / registrar entregas">📦 ${entregasTxt}</button>
         <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="editCompra('${c.id}')" title="Editar">✏️</button>
+        <button class="btn-secondary" style="font-size:10px;padding:3px 7px" onclick="verPagosCompra('${c.id}')" title="Pagos de esta compra">💵</button>
         <button class="btn-secondary" style="font-size:10px;padding:3px 7px;${c.comprobantePago?'background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366':''}" onclick="adjuntarComprobante('compras','${c.id}')" title="${c.comprobantePago?'Comprobante cargado — clic para cambiarlo':'Adjuntar comprobante de pago (captura, ticket)'}">${c.comprobantePago?'📎✔':'📎'}</button>
         <button class="btn-danger" style="font-size:10px;padding:3px 7px" onclick="eliminar('compras','${c.id}')" title="Eliminar">✕</button>
       </div></td>
     </tr>`;
-  }).join('') : `<tr><td colspan="8"><div class="empty-state"><div class="icon">📦</div><p>Sin compras registradas</p></div></td></tr>`;
+  }).join('') : `<tr><td colspan="9"><div class="empty-state"><div class="icon">📦</div><p>Sin compras registradas</p></div></td></tr>`;
+  const deudaEl = document.getElementById('compras-deuda-resumen');
+  if(deudaEl) {
+    const deben = DB.compras.filter(c=>estadoPagoCompra(c).estado==='debe');
+    const totDeuda = deben.reduce((a,c)=>a+estadoPagoCompra(c).saldo,0);
+    const sinDato = DB.compras.filter(c=>estadoPagoCompra(c).estado==='sin').length;
+    deudaEl.innerHTML = (deben.length ? `<span style="color:var(--red)">🔴 Se debe ${fmtMonto(totDeuda)} en ${deben.length} compra${deben.length!==1?'s':''}</span>` : (DB.compras.length ? '<span style="color:var(--green)">🟢 Nada pendiente de pago</span>' : ''))
+      + (sinDato ? `<span style="color:var(--muted);margin-left:8px">· ${sinDato} sin pago cargado</span>` : '');
+  }
 
   // Resumen de exposición cambiaria en compras: cada compra dolarizada
   // conserva su propio USD histórico (calculado con el TC del día que se
@@ -9248,6 +9260,17 @@ function showModalCompra(data={}) {
         <div id="mc-conversion" style="font-size:11px;color:var(--blue-light);margin-top:4px">—</div>
       </div>
       <div class="form-group"><label>FECHA</label><input id="mc-fecha" type="date" value="${data.fecha||today}"></div>
+      ${data.id ? `<div class="form-group"><label>PAGO</label><div style="font-size:12px">${htmlEstadoPagoCompra(data)} <a href="#" onclick="event.preventDefault();document.getElementById('modal-compra').remove();verPagosCompra('${data.id}')" style="color:var(--yellow);margin-left:6px">ver / registrar pagos</a></div></div>` : `
+      <div class="form-group"><label>¿CUÁNTO SE ABONÓ? (en pesos)</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+          <button type="button" class="btn-secondary" style="font-size:11px" onclick="document.getElementById('mc-abonado').value=Math.round(montoArsFormCompra())">Todo</button>
+          <button type="button" class="btn-secondary" style="font-size:11px" onclick="document.getElementById('mc-abonado').value=Math.round(montoArsFormCompra()/2)">50% (seña)</button>
+          <button type="button" class="btn-secondary" style="font-size:11px" onclick="document.getElementById('mc-abonado').value=0">Nada todavía</button>
+        </div>
+        <input id="mc-abonado" type="number" placeholder="Vacío = se pagó todo">
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">Si queda saldo, la compra se ve en rojo hasta que registres el resto con el botón 💵.</div>
+      </div>
+      <div class="form-group"><label>CUOTAS (opcional)</label><input id="mc-cuotas" type="number" min="0" placeholder="Ej: 3 — si se paga en cuotas"></div>`}
       <div class="form-group"><label>NOTAS</label><textarea id="mc-notas" rows="2">${data.notas||''}</textarea></div>
     </div>
     <div class="modal-footer">
@@ -9325,27 +9348,121 @@ function guardarCompra() {
     fecha: document.getElementById('mc-fecha').value,
     notas: document.getElementById('mc-notas').value.trim(),
     entregasLog: compraPrevia.entregasLog || [],
+    pagosLog: compraPrevia.pagosLog || [], pagosRegistrados: !!compraPrevia.pagosRegistrados, cuotas: compraPrevia.cuotas || 0,
     _local: esNueva ? true : compraPrevia._local
   };
+  if(esNueva) {
+    // v17.75 — cuánto se abonó al registrarla (vacío = todo)
+    const abEl = document.getElementById('mc-abonado'), cuEl = document.getElementById('mc-cuotas');
+    const abTxt = abEl ? String(abEl.value).trim() : '';
+    const abonado = abTxt === '' ? montoArs : Math.max(0, Number(abTxt)||0);
+    compra.pagosLog = abonado > 0 ? [{ monto: Math.round(abonado*100)/100, fecha: compra.fecha, nota: abonado >= montoArs ? 'Pago total' : 'Pago inicial' }] : [];
+    compra.pagosRegistrados = true;
+    compra.cuotas = cuEl ? (parseInt(cuEl.value,10)||0) : 0;
+  }
   if(idx>=0) DB.compras[idx] = compra; else DB.compras.push(compra);
   saveLocal();
   document.getElementById('modal-compra').remove();
   renderProveedores();
   showToast(esNueva ? 'Compra registrada ✓' : 'Compra actualizada ✓','success');
-  writeToSheet({ action:'addCompra', row: {
-    id:compra.id, proveedorId:compra.proveedorId,
-    proveedor:compra.proveedorNombre, descripcion:compra.detalle,
-    categoria:compra.categoria, cantidad:compra.cantidad, monto:compra.monto,
-    moneda:compra.moneda, montoUsd:compra.montoUsd, tcAlMomento:compra.tcAlMomento,
-    fecha:compra.fecha, notas:compra.notas,
-    entregasLog: serializarEntregas(compra.entregasLog)
-  }});
+  writeToSheet({ action:'addCompra', row: filaCompraSheet(compra) });
 }
 
 // ── ENTREGAS DE INDUMENTARIA/ARTÍCULOS ──────────────────────────────────
 // Registro simple de a quién y cuándo se le entregó parte de lo comprado —
 // para compras de indumentaria u otros artículos que se reparten entre
 // operarios de a poco, no todos juntos el día de la compra.
+// ── v17.75 — PAGOS DE COMPRAS (seña, cuotas, saldo) ─────────────────────
+function filaCompraSheet(c) {
+  const r = { id:c.id, proveedorId:c.proveedorId, proveedor:c.proveedorNombre, descripcion:c.detalle,
+    categoria:c.categoria, cantidad:c.cantidad, monto:c.monto, moneda:c.moneda,
+    montoUsd:c.montoUsd, tcAlMomento:c.tcAlMomento, fecha:c.fecha, notas:c.notas,
+    entregasLog: serializarEntregas(c.entregasLog) };
+  if(c.pagosRegistrados) { r.pagosLog = serializarPagosCompra(c.pagosLog); r.cuotas = c.cuotas||0; }
+  return r;
+}
+function serializarPagosCompra(lista) { return (lista||[]).length ? lista.map(p=>[p.monto, p.fecha, String(p.nota||'').replace(/[|§]/g,' ')].join('|')).join(' §§ ') : '-'; } // '-' = registrado, sin pagos todavía
+function deserializarPagosCompra(texto) {
+  if(!texto) return [];
+  return String(texto).split(' §§ ').filter(l=>l.indexOf('|')>=0).map(l=>{ const [m,f,n] = l.split('|'); return { monto:parseFloat(m)||0, fecha:f||'', nota:n||'' }; });
+}
+function montoArsFormCompra() {
+  const mon = (document.getElementById('mc-moneda')||{}).value, m = Number((document.getElementById('mc-monto')||{}).value||0), tc = parseFloat((document.getElementById('mc-tc')||{}).value)||0;
+  return mon==='USD' ? m*tc : m;
+}
+// estado: 'pagado' | 'debe' | 'sin' (compra vieja sin pagos registrados)
+function estadoPagoCompra(c) {
+  const total = Number(c.monto||0);
+  if(!c.pagosRegistrados) return { estado:'sin', total, pagado:0, saldo:0 };
+  const pagado = (c.pagosLog||[]).reduce((a,p)=>a+Number(p.monto||0),0);
+  const saldo = Math.max(0, Math.round((total - pagado)*100)/100);
+  return { estado: saldo <= 0.5 ? 'pagado' : 'debe', total, pagado, saldo };
+}
+function htmlEstadoPagoCompra(c) {
+  const e = estadoPagoCompra(c);
+  const cuotasTxt = c.cuotas ? ` · cuota ${Math.min((c.pagosLog||[]).length, c.cuotas)}/${c.cuotas}` : '';
+  const click = `onclick="verPagosCompra('${c.id}')" style="cursor:pointer"`;
+  if(e.estado==='sin') return `<span ${click} title="Tocá para registrar cómo se pagó"><span style="font-size:11px;color:var(--muted);border:1px dashed var(--border2);border-radius:10px;padding:2px 8px">💵 cargar pago</span></span>`;
+  if(e.estado==='pagado') return `<span ${click} title="Ver pagos"><span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(37,211,102,0.12);border:1px solid var(--green);border-radius:10px;padding:2px 8px">✓ Pagado</span>${c.cuotas?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${c.cuotas} cuotas</div>`:''}</span>`;
+  const pct = e.total>0 ? Math.round(e.pagado/e.total*100) : 0;
+  return `<span ${click} title="Ver / registrar pagos"><span style="font-size:11px;font-weight:700;color:var(--red);background:rgba(224,122,122,0.12);border:1px solid var(--red);border-radius:10px;padding:2px 8px">Debe ${fmtMonto(e.saldo)}</span>
+    <div style="font-size:10px;color:var(--muted);margin-top:3px">Pagado ${fmtMonto(e.pagado)} (${pct}%)${cuotasTxt}</div>
+    <div style="height:4px;background:rgba(224,122,122,0.25);border-radius:2px;margin-top:2px;width:110px"><div style="height:4px;width:${pct}%;background:var(--green);border-radius:2px"></div></div></span>`;
+}
+function verPagosCompra(id) {
+  const c = DB.compras.find(x=>x.id===id); if(!c) return;
+  const e = estadoPagoCompra(c);
+  const hoyIso = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}).split('/').reverse().join('-');
+  const viejo = (document.getElementById('modal-pagos-compra')); if(viejo) viejo.remove();
+  const m = document.createElement('div'); m.className = 'modal-overlay open'; m.id = 'modal-pagos-compra';
+  const filas = (c.pagosLog||[]).length ? c.pagosLog.map((p,i)=>`<tr><td class="td-muted">${fmtDate(p.fecha)}</td><td style="text-align:right;color:var(--green)">${fmtMonto(p.monto)}</td><td style="font-size:11px">${prosEsc(p.nota)}</td>
+      <td style="text-align:right"><button class="btn-danger" style="font-size:10px;padding:2px 6px" onclick="borrarPagoCompra('${id}',${i})">✕</button></td></tr>`).join('')
+    : `<tr><td colspan="4" class="td-muted" style="text-align:center;padding:14px">${c.pagosRegistrados?'Todavía no se pagó nada':'Esta compra es de antes: no tiene pagos cargados'}</td></tr>`;
+  m.innerHTML = `<div class="modal">
+    <div class="modal-header"><span class="modal-title">PAGOS — ${prosEsc(c.detalle)}</span><button class="modal-close" onclick="document.getElementById('modal-pagos-compra').remove()">✕</button></div>
+    <div class="modal-body">
+      <div class="card" style="padding:10px 12px;margin-bottom:12px;display:flex;justify-content:space-around;text-align:center">
+        <div><div style="font-family:'Bebas Neue';font-size:20px">${fmtMonto(e.total)}</div><div style="font-size:10px;color:var(--muted)">TOTAL</div></div>
+        <div><div style="font-family:'Bebas Neue';font-size:20px;color:var(--green)">${fmtMonto(e.pagado)}</div><div style="font-size:10px;color:var(--muted)">PAGADO</div></div>
+        <div><div style="font-family:'Bebas Neue';font-size:20px;color:${e.estado==='debe'?'var(--red)':'var(--muted)'}">${e.estado==='sin'?'—':fmtMonto(e.saldo)}</div><div style="font-size:10px;color:var(--muted)">FALTA</div></div>
+      </div>
+      <table style="width:100%;font-size:12px"><thead><tr><th>Fecha</th><th style="text-align:right">Monto</th><th>Nota</th><th></th></tr></thead><tbody>${filas}</tbody></table>
+      <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">
+        ${e.estado!=='pagado' ? `<button class="btn-secondary" style="width:100%;margin-bottom:10px;border-color:var(--green);color:var(--green)" onclick="registrarPagoCompra('${id}', true)">✓ Marcar como pagado del todo${e.estado==='debe'?' (paga '+fmtMonto(e.saldo)+')':''}</button>` : ''}
+        <div class="form-group"><label>Monto pagado ($)</label><input id="pc-monto" type="number" value="${e.estado==='debe'?(c.cuotas&&c.cuotas>(c.pagosLog||[]).length?Math.round(e.saldo/(c.cuotas-(c.pagosLog||[]).length)):Math.round(e.saldo)):''}"></div>
+        <div class="form-group"><label>Fecha</label><input id="pc-fecha" type="date" value="${hoyIso}"></div>
+        <div class="form-group"><label>Nota (opcional)</label><input id="pc-nota" placeholder="Ej: cuota 2, transferencia"></div>
+        <div class="form-group"><label>Cuotas en total (opcional)</label><input id="pc-cuotas" type="number" min="0" value="${c.cuotas||''}" placeholder="Ej: 3"></div>
+        <button class="btn-primary" style="width:100%" onclick="registrarPagoCompra('${id}', false)">+ Registrar pago</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+function registrarPagoCompra(id, todo) {
+  const c = DB.compras.find(x=>x.id===id); if(!c) return;
+  if(!c.pagosRegistrados) { c.pagosLog = []; c.pagosRegistrados = true; }
+  const e = estadoPagoCompra(c);
+  const cu = document.getElementById('pc-cuotas'); if(cu) c.cuotas = parseInt(cu.value,10)||0;
+  const fecha = (document.getElementById('pc-fecha')||{}).value || today();
+  const nota = ((document.getElementById('pc-nota')||{}).value||'').trim();
+  let monto = todo ? e.saldo : Number((document.getElementById('pc-monto')||{}).value||0);
+  if(todo && monto<=0) { c.pagosRegistrados = true; }
+  else if(!(monto>0)) { showToast('Ingresá el monto pagado','error'); return; }
+  else c.pagosLog.push({ monto: Math.round(monto*100)/100, fecha, nota: nota || (todo?'Saldo':'') });
+  saveLocal();
+  writeToSheet({ action:'addCompra', row: filaCompraSheet(c) });
+  verPagosCompra(id); renderProveedores();
+  showToast(estadoPagoCompra(c).estado==='pagado' ? 'Compra pagada del todo ✓' : 'Pago registrado ✓','success');
+}
+function borrarPagoCompra(id, i) {
+  const c = DB.compras.find(x=>x.id===id); if(!c || !c.pagosLog) return;
+  if(!confirm('¿Borrar este pago?')) return;
+  c.pagosLog.splice(i,1); saveLocal();
+  writeToSheet({ action:'addCompra', row: filaCompraSheet(c) });
+  verPagosCompra(id); renderProveedores();
+}
+
 function serializarEntregas(lista) {
   return (lista||[]).map(e => [e.operario,e.cantidad,e.fecha].join('|')).join(' §§ ');
 }
@@ -9402,12 +9519,7 @@ function agregarEntregaCompra(id) {
   if(!c.entregasLog) c.entregasLog = [];
   c.entregasLog.push({ operario, cantidad, fecha });
   saveLocal();
-  writeToSheet({ action:'addCompra', row: {
-    id:c.id, proveedorId:c.proveedorId, proveedor:c.proveedorNombre, descripcion:c.detalle,
-    categoria:c.categoria, cantidad:c.cantidad, monto:c.monto, moneda:c.moneda,
-    montoUsd:c.montoUsd, tcAlMomento:c.tcAlMomento, fecha:c.fecha, notas:c.notas,
-    entregasLog: serializarEntregas(c.entregasLog)
-  }});
+  writeToSheet({ action:'addCompra', row: filaCompraSheet(c) });
   document.getElementById('modal-entregas').remove();
   verEntregasCompra(id);
   renderProveedores();
@@ -9419,12 +9531,7 @@ function borrarEntregaCompra(id, idx) {
   if(!c || !c.entregasLog) return;
   c.entregasLog.splice(idx,1);
   saveLocal();
-  writeToSheet({ action:'addCompra', row: {
-    id:c.id, proveedorId:c.proveedorId, proveedor:c.proveedorNombre, descripcion:c.detalle,
-    categoria:c.categoria, cantidad:c.cantidad, monto:c.monto, moneda:c.moneda,
-    montoUsd:c.montoUsd, tcAlMomento:c.tcAlMomento, fecha:c.fecha, notas:c.notas,
-    entregasLog: serializarEntregas(c.entregasLog)
-  }});
+  writeToSheet({ action:'addCompra', row: filaCompraSheet(c) });
   document.getElementById('modal-entregas').remove();
   verEntregasCompra(id);
   renderProveedores();
