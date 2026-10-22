@@ -1457,10 +1457,12 @@ select option { background:var(--dark); }
     </div>
     <p style="font-size:12px;color:var(--muted);margin-top:-8px">
       Lo que MEB le encarga a otro (tornero, bombista, rectificadora…) dentro de un trabajo y le cobra al cliente.
-      Sale solo de los ítems de presupuesto con tipo <b>“Servicio de terceros”</b>, desde el <input type="date" id="terceros-desde-inp" title="Cambiá la fecha para incluir presupuestos anteriores" onchange="if(this.value){setCfg('terceros_desde',this.value);renderServiciosTerceros();}" style="background:var(--dark);color:var(--yellow);border:1px solid var(--border2);border-radius:4px;padding:2px 6px;font-size:12px;width:auto"> <span style="font-size:10.5px">(cambiala si querés incluir presupuestos anteriores)</span><b id="terceros-desde-txt" style="display:none"></b>.
+      Sale de dos lugares: los ítems de presupuesto con tipo <b>“Servicio de terceros”</b> (como el presupuesto suelto de tornería) y lo cargado en <b>📊 Economía</b> de cada presupuesto (cuando el tornero o el bombista van dentro de un presupuesto de reparación).
+      <br>Mostrar desde: <input type="date" id="terceros-desde-inp" onchange="setCfg('terceros_desde2',this.value||'');renderServiciosTerceros();" style="background:var(--dark);color:var(--yellow);border:1px solid var(--border2);border-radius:4px;padding:2px 6px;font-size:12px;width:auto"> <a href="#" onclick="event.preventDefault();setCfg('terceros_desde2','');renderServiciosTerceros();" style="color:var(--yellow);font-size:11px">desde siempre</a> <span style="font-size:10.5px">(vacío = desde siempre)</span><b id="terceros-desde-txt" style="display:none"></b>.
       Lo que se le pagó al tercero se carga en 📊 Economía del presupuesto. (No confundir con “Terciarizado”, que son los trabajos que Emmanuel hace para Matías.)
     </p>
-    <div id="terceros-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:16px"></div>
+    <div id="terceros-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:8px"></div>
+    <div id="terceros-por-tipo" style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.7"></div>
     <div class="charts-grid">
       <div class="chart-card"><div class="chart-title">FACTURADO POR RUBRO (PRESUPUESTOS APROBADOS)</div><div class="chart-wrap"><canvas id="chartRubrosTer"></canvas></div></div>
       <div class="chart-card"><div class="chart-title">SERVICIOS DE TERCEROS: COBRADO VS PAGADO</div><div class="chart-wrap"><canvas id="chartTerceros"></canvas></div></div>
@@ -1929,7 +1931,7 @@ async function syncAll() {
   const status=document.getElementById('syncStatus');
   if(btn){btn.classList.add('syncing'); btn.textContent='↺ SINCRONIZANDO...';}
   if(status){status.textContent='● Sincronizando...'; status.style.color='var(--yellow)';}
-  showLoading('SINCRONIZANDO CON GOOGLE SHEETS...');
+  showLoading('SINCRONIZANDO...');
   _idsParaCorregir = [];
 
   // Preserve local data that may not be in Sheets yet
@@ -2054,7 +2056,7 @@ async function syncAll() {
       diferenciaUsd:parseFloat(r.DIFERENCIA_USD)||0, diferenciaPct:parseFloat(r.DIFERENCIA_PCT)||0,
       fechaCobroReal:r.FECHA_COBRO_REAL||'',
       horasTrabajadas:parseFloat(r.HORAS_TRABAJADAS)||0,
-      tercerosCobrado:parseMonto(r.TERCEROS_COBRADO), tercerosCosto:parseMonto(r.TERCEROS_COSTO), tercerosProveedor:r.TERCEROS_PROVEEDOR||'',
+      tercerosCobrado:parseMonto(r.TERCEROS_COBRADO), tercerosCosto:parseMonto(r.TERCEROS_COSTO), tercerosProveedor:r.TERCEROS_PROVEEDOR||'', tercerosTipo:String(r.TERCEROS_TIPO||'').trim(), tercerosDetalle:String(r.TERCEROS_DETALLE||'').trim(),
       categoriaTrabajo:String(r.CATEGORIA_TRABAJO||'').trim(), herramientas:String(r.HERRAMIENTAS||'').trim(),
       _fila:r._rowIndex
     })); else if(!DB.trabajos.length) DB.trabajos=[];
@@ -8036,8 +8038,8 @@ function renderMotivosNoAprobacion() {
 }
 
 // ── v17.71 — RUBROS Y SERVICIOS DE TERCEROS ─────────────────────────────
-const TERCEROS_DESDE_DEF = '2026-10-20';
-function tercerosDesde() { return (DB.config && DB.config.terceros_desde) || TERCEROS_DESDE_DEF; }
+const TERCEROS_DESDE_DEF = ''; // v17.76 — por defecto, desde siempre (la fecha queda como filtro opcional)
+function tercerosDesde() { return (DB.config && DB.config.terceros_desde2) || TERCEROS_DESDE_DEF; }
 function presupCobrado(p) { const t = trabajoDePresupuesto(p); return p.estadoCobro==='cobrado' || !!(t && t.estadoCobro==='cobrado'); }
 const RUBROS = [ ['mo','Mano de obra','rgba(244,180,0,0.85)'], ['rep','Repuestos / materiales','rgba(123,179,224,0.85)'], ['mov','Traslado / viáticos','rgba(230,126,34,0.85)'], ['ter','Servicios de terceros','rgba(199,146,234,0.85)'] ];
 function renderGraficoRubros(canvasId, tablaId, desdeIso) {
@@ -8045,7 +8047,10 @@ function renderGraficoRubros(canvasId, tablaId, desdeIso) {
   const cob = {mo:0,rep:0,mov:0,ter:0}, pend = {mo:0,rep:0,mov:0,ter:0};
   DB.presupuestos.filter(p=>p.estado==='aprobado').forEach(p=>{
     if(desde){ const f=parseFechaAny(p.fecha); if(!f || f<desde) return; }
-    const d = desgloseDePresupuesto(p);
+    const d = Object.assign({}, desgloseDePresupuesto(p));
+    // v17.76 — si el servicio de terceros va dentro del presupuesto y se cargó en Economía, se pasa de mano de obra a terceros
+    const tEco = trabajoDePresupuesto(p);
+    if(tEco && !(d.ter>0) && Number(tEco.tercerosCobrado)>0) { const mv = Math.min(Number(tEco.tercerosCobrado), d.mo||0); d.mo = (d.mo||0) - mv; d.ter = mv; }
     const dest = presupCobrado(p) ? cob : pend;
     RUBROS.forEach(r=>{ dest[r[0]] += d[r[0]]||0; });
   });
@@ -8067,46 +8072,96 @@ function renderGraficoRubros(canvasId, tablaId, desdeIso) {
       + `</tbody></table>`;
   }
 }
+// v17.76 — Servicios de terceros salen de DOS lugares:
+//   1) ítems del presupuesto con tipo "Servicio de terceros" (ej. el presupuesto suelto de tornería #0123)
+//   2) lo cargado en 📊 Economía del presupuesto/trabajo (tercerosCobrado / tercerosCosto / detalle), que es
+//      lo más común: el tornero o el bombista van metidos dentro de un presupuesto de reparación.
+// Si un presupuesto tiene las dos cosas, cuenta una sola vez (manda lo cargado en Economía, que es lo real).
+const TIPOS_TERCEROS = ['Tornería','Bombista','Rectificadora','Soldadura / herrería','Electricista','Inyectorista','Otro'];
+function sugerirTipoTerceros(p) {
+  const tx = _sinTildes((p && p.descripcion) || '');
+  if(/torner|tornero/.test(tx)) return 'Tornería';
+  if(/bombist/.test(tx)) return 'Bombista';
+  if(/rectific/.test(tx)) return 'Rectificadora';
+  if(/soldad|herrer/.test(tx)) return 'Soldadura / herrería';
+  return '';
+}
+function tipoTercerosDeFila(t, items) {
+  if(t && t.tercerosTipo) return t.tercerosTipo;
+  const tx = _sinTildes([(t&&t.tercerosDetalle)||'', (t&&t.tercerosProveedor)||'', ...(items||[]).map(it=>it.desc+' '+it.tipo)].join(' '));
+  if(/torner|tornero/.test(tx)) return 'Tornería';
+  if(/bombist/.test(tx)) return 'Bombista';
+  if(/rectific/.test(tx)) return 'Rectificadora';
+  if(/soldad|herrer/.test(tx)) return 'Soldadura / herrería';
+  if(/electric/.test(tx)) return 'Electricista';
+  if(/inyector/.test(tx)) return 'Inyectorista';
+  return 'Sin especificar';
+}
 function filasServiciosTerceros() {
-  const desde = parseFechaAny(tercerosDesde());
-  const out = [];
+  const desde = tercerosDesde() ? parseFechaAny(tercerosDesde()) : null;
+  const out = [], vistos = new Set();
+  const tieneEco = t => t && ((Number(t.tercerosCobrado)||0) > 0 || (Number(t.tercerosCosto)||0) > 0 || t.tercerosDetalle);
   DB.presupuestos.forEach(p=>{
-    const f = parseFechaAny(p.fecha);
-    if(!f || (desde && f < desde)) return;
     const its = itemsDePresupuesto(p).filter(it=>it.cat==='ter');
-    if(!its.length) return;
     const t = trabajoDePresupuesto(p);
-    out.push({ p, t, items:its, cobrado: its.reduce((a,it)=>a+it.sub,0), pagado: Number(t&&t.tercerosCosto)||0, proveedor:(t&&t.tercerosProveedor)||'' });
+    if(!its.length && !tieneEco(t)) return;
+    const f = parseFechaAny(p.fecha);
+    if(desde && f && f < desde) return;
+    if(t) vistos.add(t.id);
+    const cotizado = its.reduce((a,it)=>a+it.sub,0);
+    const cobrado = (t && Number(t.tercerosCobrado)>0) ? Number(t.tercerosCobrado) : cotizado;
+    out.push({ key:'p'+p.id, p, t, num:p.num, fecha:p.fecha, clienteId:p.clienteId, items:its,
+      desc: (t && t.tercerosDetalle) || its.map(it=>it.desc||it.tipo).join(' · ') || 'Servicio de terceros (sin detalle)',
+      origen: its.length ? 'presupuesto' : 'economia', tipo: tipoTercerosDeFila(t, its),
+      cobrado, pagado: Number(t&&t.tercerosCosto)||0, proveedor:(t&&t.tercerosProveedor)||'',
+      aprobado: p.estado==='aprobado', estadoTxt: p.estado, cobradoOk: presupCobrado(p) });
   });
-  return out.sort((a,b)=>(parseFechaAny(b.p.fecha)||0)-(parseFechaAny(a.p.fecha)||0));
+  // trabajos viejos sin presupuesto vinculado, con terceros cargados a mano en el Sheet
+  DB.trabajos.forEach(t=>{
+    if(vistos.has(t.id) || !tieneEco(t)) return;
+    if(t.presupuestoId && DB.presupuestos.some(x=>x.id===t.presupuestoId)) return;
+    const f = parseFechaAny(t.fechaInicio);
+    if(desde && f && f < desde) return;
+    out.push({ key:'t'+t.id, p:null, t, num:null, fecha:t.fechaInicio, clienteId:t.clienteId, items:[],
+      desc: t.tercerosDetalle || t.titulo, origen:'economia', tipo: tipoTercerosDeFila(t, []),
+      cobrado: Number(t.tercerosCobrado)||0, pagado: Number(t.tercerosCosto)||0, proveedor:t.tercerosProveedor||'',
+      aprobado: !['cancelado','no aprobado'].includes(t.estado), estadoTxt: t.estado, cobradoOk: t.estadoCobro==='cobrado' });
+  });
+  return out.sort((a,b)=>(parseFechaAny(b.fecha)||0)-(parseFechaAny(a.fecha)||0));
 }
 function renderServiciosTerceros() {
-  const desdeTxt = document.getElementById('terceros-desde-txt'); if(desdeTxt) desdeTxt.textContent = fmtDate(tercerosDesde());
-  const desdeInp = document.getElementById('terceros-desde-inp'); if(desdeInp && document.activeElement!==desdeInp) desdeInp.value = String(tercerosDesde()).slice(0,10);
+  const desdeTxt = document.getElementById('terceros-desde-txt'); if(desdeTxt) desdeTxt.textContent = tercerosDesde() ? fmtDate(tercerosDesde()) : 'siempre';
+  const desdeInp = document.getElementById('terceros-desde-inp'); if(desdeInp && document.activeElement!==desdeInp) desdeInp.value = tercerosDesde() ? String(tercerosDesde()).slice(0,10) : '';
   const filas = filasServiciosTerceros();
-  const aprob = filas.filter(x=>x.p.estado==='aprobado');
+  const aprob = filas.filter(x=>x.aprobado);
   const sum = (arr,k) => arr.reduce((a,x)=>a+(x[k]||0),0);
-  const cobradas = aprob.filter(x=>presupCobrado(x.p));
+  const cobradas = aprob.filter(x=>x.cobradoOk);
   const cotAprob = sum(aprob,'cobrado'), cob = sum(cobradas,'cobrado'), pag = sum(aprob,'pagado');
   const st = document.getElementById('terceros-stats');
   const card = (l,v,sub,c)=>`<div class="stat-card"><div class="stat-label">${l}</div><div class="stat-val" ${c?`style="color:${c}"`:''}>${v}</div>${sub?`<div class="td-muted" style="font-size:10px;margin-top:2px">${sub}</div>`:''}</div>`;
-  if(st) st.innerHTML = card('Presupuestado (aprobados)', fmtMonto(cotAprob), aprob.length+' presupuesto'+(aprob.length!==1?'s':''))
+  const porTipo = {};
+  aprob.forEach(x=>{ const k=x.tipo; porTipo[k]=porTipo[k]||{n:0,c:0,pg:0}; porTipo[k].n++; porTipo[k].c+=x.cobrado; porTipo[k].pg+=x.pagado; });
+  const ptEl = document.getElementById('terceros-por-tipo');
+  if(ptEl) ptEl.innerHTML = Object.keys(porTipo).length ? '<b style="color:var(--text)">Por tipo:</b> ' + Object.entries(porTipo).sort((a,b)=>b[1].c-a[1].c).map(([k,v])=>`${prosEsc(k)} <span style="color:var(--yellow)">${fmtMonto(v.c)}</span> (${v.n})${v.pg?` · margen ${fmtMonto(v.c-v.pg)}`:''}`).join(' &nbsp;|&nbsp; ') : '';
+  if(st) st.innerHTML = card('Cobrado / presupuestado (aprobados)', fmtMonto(cotAprob), aprob.length+' trabajo'+(aprob.length!==1?'s':'')+' con terceros')
     + card('Ya cobrado', fmtMonto(cob), cobradas.length+' cobrado'+(cobradas.length!==1?'s':''), '#2ecc71')
     + card('Pagado a terceros', fmtMonto(pag), 'cargado en 📊 Economía', '#e74c3c')
     + card('Margen de MEB', fmtMonto(cotAprob-pag), cotAprob?Math.round((cotAprob-pag)*100/cotAprob)+'% de lo presupuestado':'', '#F4B400');
   const tb = document.getElementById('tabla-terceros');
   if(tb) tb.innerHTML = filas.length ? filas.map(x=>{
-    const cl = DB.clientes.find(c=>String(c.id)===String(x.p.clienteId));
-    const estado = x.p.estado!=='aprobado' ? `<span class="td-muted">${x.p.estado}</span>` : (presupCobrado(x.p)?'<span style="color:#2ecc71">Cobrado</span>':'<span style="color:var(--orange)">Por cobrar</span>');
-    return `<tr><td><span style="font-family:'Bebas Neue';color:var(--yellow);cursor:pointer" onclick="irAPresupuestoPorNum('${x.p.num}')">#${String(x.p.num).padStart(4,'0')}</span></td>
-      <td class="td-muted">${fmtDate(x.p.fecha)}</td><td>${cl?cl.nombre:'—'}</td>
-      <td style="font-size:12px">${x.items.map(it=>it.desc||it.tipo).join('<br>')}${x.proveedor?`<div class="td-muted" style="font-size:11px">→ ${x.proveedor}</div>`:''}</td>
-      <td style="text-align:right">${fmtMonto(x.cobrado)}</td>
+    const cl = DB.clientes.find(c=>String(c.id)===String(x.clienteId));
+    const estado = !x.aprobado ? `<span class="td-muted">${x.estadoTxt||'—'}</span>` : (x.cobradoOk?'<span style="color:#2ecc71">Cobrado</span>':'<span style="color:var(--orange)">Por cobrar</span>');
+    const ref = x.p ? `<span style="font-family:'Bebas Neue';color:var(--yellow);cursor:pointer" onclick="irAPresupuestoPorNum('${x.p.num}')">#${String(x.p.num).padStart(4,'0')}</span>` : `<span class="td-muted" title="Trabajo sin presupuesto vinculado">${badgeNumeroTrabajo(x.t)}</span>`;
+    const origenChip = x.origen==='presupuesto' ? '<span style="font-size:9px;color:#c792ea;border:1px solid #c792ea;border-radius:8px;padding:0 5px;margin-left:4px" title="Ítem del presupuesto con tipo Servicio de terceros">ítem</span>' : '<span style="font-size:9px;color:var(--blue-light);border:1px solid var(--blue-light);border-radius:8px;padding:0 5px;margin-left:4px" title="Cargado en Economía (va dentro del presupuesto)">economía</span>';
+    return `<tr><td>${ref}</td>
+      <td class="td-muted">${fmtDate(x.fecha)}</td><td>${cl?cl.nombre:'—'}</td>
+      <td style="font-size:12px"><b style="color:var(--text)">${prosEsc(x.tipo)}</b>${origenChip}<div>${prosEsc(x.desc)}</div>${x.proveedor?`<div class="td-muted" style="font-size:11px">→ ${prosEsc(x.proveedor)}</div>`:''}</td>
+      <td style="text-align:right">${x.cobrado?fmtMonto(x.cobrado):'<span class="td-muted">—</span>'}</td>
       <td style="text-align:right">${x.pagado?fmtMonto(x.pagado):'<span class="td-muted">—</span>'}</td>
       <td style="text-align:right;color:${x.pagado?((x.cobrado-x.pagado)>=0?'#2ecc71':'#e74c3c'):'var(--muted)'}">${x.pagado?fmtMonto(x.cobrado-x.pagado):'—'}</td>
       <td>${estado}</td>
-      <td>${x.p.estado!=='no aprobado'?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="openModal('economiaPresupuesto',DB.presupuestos.find(y=>y.id==='${x.p.id}'))" title="Cargar lo que se le pagó al tercero">📊 Economía</button>`:''}</td></tr>`;
-  }).join('') : `<tr><td colspan="9"><div class="empty-state"><div class="icon">⚙️</div><p>Todavía no hay presupuestos con servicios de terceros desde el ${fmtDate(tercerosDesde())}.<br>En el presupuesto, en la columna <b>Tipo</b>, elegí <b>“Servicio de terceros”</b> (tornería, bombista…).</p></div></td></tr>`;
+      <td>${x.p && x.p.estado!=='no aprobado'?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="openModal('economiaPresupuesto',DB.presupuestos.find(y=>y.id==='${x.p.id}'))" title="Cargar qué hizo el tercero y cuánto se le pagó">📊 Economía</button>`:''}</td></tr>`;
+  }).join('') : `<tr><td colspan="9"><div class="empty-state"><div class="icon">⚙️</div><p>Todavía no hay servicios de terceros cargados${tercerosDesde()?' desde el '+fmtDate(tercerosDesde()):''}.<br>Abrí el presupuesto → <b>📊 Economía</b> y completá "Servicios de terceros" y "¿Qué trabajo hizo el tercero?".</p></div></td></tr>`;
   try { renderGraficoRubros('chartRubrosTer', null, null); } catch(e) {}
   if(charts.terceros){ charts.terceros.destroy(); delete charts.terceros; }
   const cv = document.getElementById('chartTerceros');
@@ -12633,6 +12688,9 @@ function openModal(type, data={}) {
       <div class="form-group"><label>Servicios de terceros cobrados (ARS) <span style="color:var(--muted)">· cotizado ${fm(d0.ter)}</span></label><input id="f-ecterfact" type="number" value="${v(t0&&t0.tercerosCobrado,d0.ter)}" oninput="calcularEconomiaPresup()" title="Tornería, bombista, rectificadora… lo que se le cobró al cliente"/></div>
       <div class="form-group"><label>Servicios de terceros: lo que PAGASTE (ARS)</label><input id="f-ecter" type="number" value="${(t0&&t0.tercerosCosto)||''}" placeholder="lo que le pagaste al tornero, bombista…" oninput="calcularEconomiaPresup()"/></div>
       <div class="form-group"><label>¿A quién? (tornero, bombista…)</label><input id="f-ecterprov" value="${((t0&&t0.tercerosProveedor)||'').replace(/"/g,'&quot;')}" placeholder="Opcional"/></div>
+      <div class="form-group"><label>Tipo de servicio de terceros</label><select id="f-ectertipo"><option value="">—</option>${TIPOS_TERCEROS.map(x=>`<option value="${x}" ${((t0&&t0.tercerosTipo)||sugerirTipoTerceros(p))===x?'selected':''}>${x}</option>`).join('')}</select></div>
+      <div class="form-group full"><label>¿Qué trabajo hizo el tercero?</label><input id="f-ecterdet" value="${prosEsc((t0&&t0.tercerosDetalle)||'')}" placeholder="Ej: rectificado de eje del cilindro de levante, encamisado de buje…"/>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px">Si el servicio de terceros va dentro de este presupuesto (lo más común), cargalo acá y ya cuenta en la pestaña <b>Servicios de terceros</b>, aunque en el presupuesto no figure como ítem aparte.</div></div>
       <div class="form-group"><label>Total realmente cobrado / facturado (ARS)</label><input id="f-ecmonto" type="number" value="${v(t0&&t0.montoCobrado,p.montoCobradoReal||'')}" placeholder="${Math.round(Number(p.monto)||0)}" oninput="calcularEconomiaPresup()"/></div>
       <div class="form-group"><label>Otros gastos (ARS)</label><input id="f-ecgastos" type="number" value="${(t0&&t0.montoGastos)||''}" placeholder="combustible, viáticos…" oninput="calcularEconomiaPresup()"/></div>
       <div class="form-group"><label>Estado del cobro</label><select id="f-ecestado" onchange="document.getElementById('ec-cobro-extra').style.display=this.value==='cobrado'?'contents':'none'"><option value="pendiente"${p.estadoCobro==='cobrado'||(t0&&t0.estadoCobro==='cobrado')?'':' selected'}>Pendiente de cobro</option><option value="cobrado"${p.estadoCobro==='cobrado'||(t0&&t0.estadoCobro==='cobrado')?' selected':''}>Cobrado ✔</option></select></div>
@@ -12649,7 +12707,8 @@ function openModal(type, data={}) {
       const campos = {
         manoObraCobrada:n('f-ecmo'), movilidad:n('f-ecmov'), precioRepuestoFacturado:n('f-ecrepfact'),
         costoRepuesto:n('f-eccostorep'), montoCobrado:n('f-ecmonto'), montoGastos:n('f-ecgastos'),
-        tercerosCobrado:n('f-ecterfact'), tercerosCosto:n('f-ecter'), tercerosProveedor:gv('f-ecterprov')
+        tercerosCobrado:n('f-ecterfact'), tercerosCosto:n('f-ecter'), tercerosProveedor:gv('f-ecterprov'),
+        tercerosTipo:gv('f-ectertipo'), tercerosDetalle:gv('f-ecterdet').trim()
       };
       let t = trabajoDePresupuesto(p);
       if(t) t.presupuestoId = p.id;
@@ -12709,7 +12768,8 @@ function openModal(type, data={}) {
         manoObraCobrada:t.manoObraCobrada||0, movilidad:t.movilidad||0,
         repuestosDetalle:t.repuestosDetalle||'', notas:t.notas||'', fotoUrl:t.fotoUrl||'',
         tcAlMomento:t.tcAlMomento||0, gananciaUsdEsperada:t.gananciaUsdEsperada||0, horasTrabajadas:t.horasTrabajadas||0,
-        tercerosCobrado:t.tercerosCobrado||0, tercerosCosto:t.tercerosCosto||0, tercerosProveedor:t.tercerosProveedor||''
+        tercerosCobrado:t.tercerosCobrado||0, tercerosCosto:t.tercerosCosto||0, tercerosProveedor:t.tercerosProveedor||'',
+        tercerosTipo:t.tercerosTipo||'', tercerosDetalle:t.tercerosDetalle||''
       }});
       if(t.estadoCobro==='cobrado' || revertido){
         writeToSheet({ action:'updateCobro', id:t.id, estadoCobro:t.estadoCobro, tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0, ganancia_usd:t.gananciaUsd||0, diferencia_usd:t.diferenciaUsd||0, diferencia_pct:t.diferenciaPct||0, fecha_cobro_real:t.fechaCobroReal||'' });
