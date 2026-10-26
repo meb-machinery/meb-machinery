@@ -152,6 +152,12 @@ let vista = 'dia';
 let diaSel = '';
 let zonaFiltro = '';
 let enRuta = {};            // prospectoId -> true
+// v17.76 — zonas extra y prospectos sumados a mano por día (ej. el cliente está en Pilar pero hoy fuiste a su sede de Luján)
+function _jsonLs(k){ try{ return JSON.parse(ls(k)||'{}')||{}; }catch(e){ return {}; } }
+function zonasExtra(f){ return (_jsonLs('meb_midia_zonas')[f]||[]); }
+function setZonasExtra(f,arr){ const o=_jsonLs('meb_midia_zonas'); Object.keys(o).forEach(k=>{ if(k<(D.hoy||hoyLocal())) delete o[k]; }); o[f]=arr; ls('meb_midia_zonas',JSON.stringify(o)); }
+function sumadosDia(f){ return (_jsonLs('meb_midia_sumados')[f]||[]); }
+function setSumadosDia(f,arr){ const o=_jsonLs('meb_midia_sumados'); Object.keys(o).forEach(k=>{ if(k<(D.hoy||hoyLocal())) delete o[k]; }); o[f]=arr; ls('meb_midia_sumados',JSON.stringify(o)); }
 let ultimaCarga = '';
 let sinConexion = false;
 let _ultimoPedido = 0;
@@ -258,6 +264,7 @@ function zonasDelDia(f){
     if(v.zona) z.add(v.zona);
     if(p && p.zona) z.add(p.zona);
   });
+  zonasExtra(f).forEach(x=>z.add(x));
   return [...z];
 }
 function esLeadWeb(p){ return p.origen==='web' && !p.visitado && (p.estado==='nuevo'||p.estado==='a_visitar'); }
@@ -336,9 +343,16 @@ function render(){
   // prospectos cercanos
   const zonas = zonasDelDia(diaSel);
   const cand = candidatos(diaSel);
-  const cerca = cand.filter(p=>coincideZona(p,zonas)).slice(0,6);
+  // v17.76 — van primero los que tienen fecha de visita ese día o se sumaron a mano, estén en la zona que estén
+  const sumados = sumadosDia(diaSel);
+  const fijos = cand.filter(p=>p.fechaVisita===diaSel || sumados.includes(p.id));
+  const idsFijos = new Set(fijos.map(p=>p.id));
+  const cerca = fijos.concat(cand.filter(p=>!idsFijos.has(p.id) && coincideZona(p,zonas)).slice(0,6));
   html += `<h2>Si tenés tiempo, pasá por acá</h2>`;
-  if(zonas.length) html += `<div class="ayuda">Zonas de tus visitas: ${zonas.map(esc).join(', ')}</div>`;
+  const extras = zonasExtra(diaSel);
+  const zonasBase = zonas.filter(z=>!extras.includes(z));
+  html += `<div class="ayuda">Zonas de este día: ${zonasBase.map(esc).join(', ')||'—'}</div>`;
+  html += `<div class="zonas" style="margin-top:4px">${extras.map(z=>`<button class="z on" data-quitarzona="${esc(z)}" type="button" title="Quitar">📍 ${esc(z)} ✕</button>`).join('')}<button class="z" data-sumarzona="1" type="button">＋ Estoy en otra zona</button></div>`;
   if(!cerca.length){
     const yaEnVisitas = vs.filter(v=>v.prospectoId).length;
     const msg = yaEnVisitas
@@ -725,6 +739,9 @@ function tarjetaProspecto(p){
       <button class="a ok" type="button" data-fui="p:${esc(p.id)}">✔ Fui</button>
     </div>
     <label class="sum"><input type="checkbox" data-ruta="${esc(p.id)}" ${enRuta[p.id]?'checked':''}> Sumar a la ruta</label>
+    ${sumadosDia(diaSel).includes(p.id)
+      ? `<button class="a" type="button" data-pin="${esc(p.id)}" style="margin-top:6px">✕ Sacar de este día</button>`
+      : (p.fechaVisita===diaSel ? '' : `<button class="a" type="button" data-pin="${esc(p.id)}" style="margin-top:6px">📌 Sumar a ${diaSel===(D.hoy||hoyLocal())?'hoy':'este día'}</button>`)}
   </div>`;
 }
 function armarParadas(vs){
@@ -744,6 +761,19 @@ function urlRuta(paradas){
 /* ---------- hojas (formularios) ---------- */
 function abrirHoja(html){ document.getElementById('sheet').innerHTML=html; document.getElementById('sheetBg').classList.add('on'); }
 function cerrarHoja(){ document.getElementById('sheetBg').classList.remove('on'); }
+// v17.76 — "Estoy en otra zona": suma una zona a este día para ver los prospectos de ahí
+function hojaZonaExtra(){
+  const todas=[...new Set(D.prospectos.map(p=>p.zona).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  abrirHoja(`<h3>¿En qué zona estás?</h3>
+    <div class="ayuda">Por ejemplo: el cliente figura en Pilar pero hoy fuiste a su sede de Luján. Se suman los prospectos de esa zona a este día.</div>
+    <div class="zonas" style="flex-wrap:wrap">${todas.map(z=>`<button class="z" type="button" data-zelegir="${esc(z)}">${esc(z)}</button>`).join('')}</div>
+    <div class="f"><label>U otra</label><input id="zx-in" placeholder="Ej: Luján" list="zx-dl"><datalist id="zx-dl">${todas.map(z=>`<option value="${esc(z)}">`).join('')}</datalist></div>
+    <div class="acts"><button class="a ok" type="button" id="zx-ok">Sumar zona</button><button class="a" type="button" id="zx-c">Cancelar</button></div>`);
+  const sumar=z=>{ z=String(z||'').trim(); if(!z) return; const arr=zonasExtra(diaSel); if(!arr.includes(z)) arr.push(z); setZonasExtra(diaSel,arr); cerrarHoja(); render(); toast('Zona sumada: '+z); };
+  document.querySelectorAll('[data-zelegir]').forEach(b=>b.onclick=()=>sumar(b.dataset.zelegir));
+  document.getElementById('zx-ok').onclick=()=>sumar(document.getElementById('zx-in').value);
+  document.getElementById('zx-c').onclick=cerrarHoja;
+}
 
 function hojaFui(clave){
   const [tipo,id]=[clave.slice(0,1),clave.slice(2)];
@@ -865,6 +895,10 @@ document.addEventListener('click',e=>{
     document.getElementById('o-c').onclick=cerrarHoja;
     return; }
   const rb=e.target.closest('[data-ref]'); if(rb){ const v=D.visitas.find(x=>x.id===rb.dataset.ref); const f=v&&fichaDe(v); hojaNuevo({ referidoPor:(f&&f.nombre)||(v&&v.cliente)||'', zona:(v&&v.zona)||'' }); return; }
+  const pb=e.target.closest('[data-pin]'); if(pb){ const id=pb.dataset.pin, arr=sumadosDia(diaSel).slice(); const i=arr.indexOf(id);
+    if(i>=0) arr.splice(i,1); else arr.push(id); setSumadosDia(diaSel,arr); render(); toast(i>=0?'Sacado de este día':'Sumado ✔ — ahora está arriba, con los de tu día'); return; }
+  const qz=e.target.closest('[data-quitarzona]'); if(qz){ setZonasExtra(diaSel, zonasExtra(diaSel).filter(z=>z!==qz.dataset.quitarzona)); render(); return; }
+  const sz=e.target.closest('[data-sumarzona]'); if(sz){ hojaZonaExtra(); return; }
   const hb=e.target.closest('[data-hor]'); if(hb){ const [vid,mid]=hb.dataset.hor.split('|'); hojaHorometro(vid,mid||''); return; }
   const t=e.target.closest('[data-dia],[data-zona],[data-fui]'); if(!t) return;
   if(t.dataset.dia){ diaSel=t.dataset.dia; zonaFiltro=''; render(); }
