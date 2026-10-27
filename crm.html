@@ -134,6 +134,14 @@ tr:hover td { background:rgba(255,255,255,0.015); }
 .search-bar { display:flex; align-items:center; gap:10px; background:var(--dark); border:1px solid var(--border2); border-radius:4px; padding:7px 12px; margin-bottom:14px; }
 .search-bar input { background:transparent; border:none; outline:none; color:var(--text); font-family:'Barlow'; font-size:13px; flex:1; }
 .search-bar input::placeholder { color:var(--muted2); }
+/* v17.78 — fila marcada: al tocar una fila queda resaltada para seguirla con el scroll horizontal */
+tbody tr.fila-marcada > td { background: rgba(244,180,0,0.13) !important; border-top: 1px solid rgba(244,180,0,0.55); border-bottom: 1px solid rgba(244,180,0,0.55); }
+tbody tr.fila-marcada > td:first-child { box-shadow: inset 4px 0 0 var(--yellow); }
+#page-presupuestos .table-wrap tbody td:first-child, #page-presupuestos .table-wrap thead th:first-child,
+#page-trabajos .table-wrap tbody td:first-child, #page-trabajos .table-wrap thead th:first-child { position: sticky; left: 0; z-index: 2; background: var(--panel); }
+#page-presupuestos .table-wrap thead th:first-child, #page-trabajos .table-wrap thead th:first-child { z-index: 3; }
+#page-presupuestos tbody tr.fila-marcada > td:first-child, #page-trabajos tbody tr.fila-marcada > td:first-child { background: #2b250f !important; }
+
 .search-bar select { width:auto !important; max-width:250px; flex:0 0 auto; margin:0 !important; }
 .filter-tabs { display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
 .filter-tab { padding:4px 12px; border-radius:20px; font-size:11px; letter-spacing:1px; text-transform:uppercase; cursor:pointer; border:1px solid var(--border2); color:var(--muted); background:transparent; transition:all 0.15s; }
@@ -665,6 +673,10 @@ select option { background:var(--dark); }
   <!-- REPUESTOS MÁS USADOS -->
   <div class="page" id="page-repuestos">
     <div class="page-header"><div class="page-title">REPUESTOS <span>MÁS USADOS</span></div></div>
+    <div class="card" style="margin-bottom:16px;border-color:var(--yellow)">
+      <div class="card-header"><span class="card-title">📑 INFORME DE REPUESTOS</span></div>
+      <div id="repuestos-informe" style="padding:0 8px 12px"></div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
       <div class="card">
         <div class="card-header"><span class="card-title">🏆 RANKING DE REPUESTOS</span></div>
@@ -3477,6 +3489,41 @@ function parseMonto(v) {
 }
 function fmtMonto(n) { const v=parseMonto(n); return '$'+(isNaN(v)?0:v).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}); }
 function gv(id) { return document.getElementById(id)?.value?.trim()||''; }
+// v17.78 — montos en formato argentino en los formularios: 4.417.701,60 (punto = miles, coma = centavos).
+// Los campos de plata pasan a ser de texto con class="in-monto": se muestran formateados y se leen con leerMontoAR.
+function leerMontoAR(v) {
+  let s = String(v==null?'':v).trim().replace(/[$\s]|ARS/gi,'');
+  if(!s) return 0;
+  const neg = s.startsWith('-'); s = s.replace(/^-/,'');
+  if(s.includes(',')) s = s.replace(/\./g,'').replace(',', '.');           // 4.417.701,6 → 4417701.6
+  else if((s.match(/\./g)||[]).length > 1) s = s.replace(/\./g,'');        // 4.417.701 → 4417701
+  else if(/^\d{1,3}\.\d{3}$/.test(s)) s = s.replace('.','');               // 1.500 → 1500 (miles, como se escribe acá)
+  const n = parseFloat(s); return isNaN(n) ? 0 : (neg ? -n : n);
+}
+function fmtMontoAR(n) {
+  const v = Number(n); if(!v && v!==0) return '';
+  if(!v) return '';
+  return v.toLocaleString('es-AR', { minimumFractionDigits: (Math.round(v*100)%100) ? 2 : 0, maximumFractionDigits: 2 });
+}
+function valMonto(id) { const e = document.getElementById(id); return e ? leerMontoAR(e.value) : 0; }
+document.addEventListener('focusout', e => { const el = e.target; if(el && el.classList && el.classList.contains('in-monto') && String(el.value).trim()) { el.value = fmtMontoAR(leerMontoAR(el.value)); } });
+
+// v17.78 — tocar una fila la marca (y desmarca la anterior de esa tabla); se mantiene al hacer scroll horizontal
+document.addEventListener('click', e => {
+  const tr = e.target.closest && e.target.closest('.table-wrap tbody tr');
+  if(!tr || tr.querySelector('.empty-state')) return;
+  const tb = tr.parentElement; const ya = tr.classList.contains('fila-marcada');
+  tb.querySelectorAll('tr.fila-marcada').forEach(x=>x.classList.remove('fila-marcada'));
+  if(!ya || e.target.closest('button,a,select,input')) tr.classList.add('fila-marcada');
+  if(tb.id) { window._filaMarcada = window._filaMarcada || {}; window._filaMarcada[tb.id] = tr.classList.contains('fila-marcada') ? (tr.cells[0]||{}).innerText : ''; }
+});
+// si la tabla se vuelve a dibujar (guardar, sincronizar), la fila marcada se recupera por su primera celda
+new MutationObserver(() => {
+  const m = window._filaMarcada; if(!m) return;
+  Object.keys(m).forEach(id => { if(!m[id]) return; const tb = document.getElementById(id); if(!tb || tb.querySelector('tr.fila-marcada')) return;
+    const tr = [...tb.rows].find(r => r.cells[0] && r.cells[0].innerText === m[id]); if(tr) tr.classList.add('fila-marcada'); });
+}).observe(document.documentElement, { childList:true, subtree:true });
+
 
 // Motivo de no aprobación — categorías fijas (no texto libre) para que
 // después se puedan sacar estadísticas reales. "Duplicado" es el caso que
@@ -4336,8 +4383,9 @@ function poblarSelectorMesStock() {
 // que el ahorro es mucho más grande de lo que realmente sería mes a mes.
 // "Todos los meses" queda como opción aparte, para cuando quieran ver el
 // acumulado histórico a propósito.
-function recalcularAhorroRealStock() {
+function recalcularAhorroRealStock(silencioso) {
   poblarSelectorMesStock();
+  try { const sel=document.getElementById('stock-sim-mes'); if(sel){ if(!silencioso) localStorage.setItem('meb_stock_mes', sel.value); else { const g=localStorage.getItem('meb_stock_mes'); if(g && [...sel.options].some(o=>o.value===g)) sel.value=g; } } } catch(e) {}
   const mesElegido = document.getElementById('stock-sim-mes')?.value || new Date().toISOString().slice(0,7);
   const todos = mesElegido === '__todos__';
   const montoPorCategoria = {};
@@ -4355,6 +4403,7 @@ function recalcularAhorroRealStock() {
   });
   (DB.stockSimulado||[]).forEach(s => { s.montoRepuestosReales = montoPorCategoria[s.categoria] || 0; });
   renderStockSimulado();
+  if(silencioso) return;
   const totalDetectado = Object.values(montoPorCategoria).reduce((a,b)=>a+b,0);
   const etiquetaMes = todos ? 'en todo el historial' : `en ${mesLabel(mesElegido)}`;
   showToast(totalDetectado>0 ? `Encontré $${Math.round(totalDetectado).toLocaleString('es-AR')} en repuestos reales que calzan, ${etiquetaMes} ✔` : `No encontré repuestos de estas categorías ${etiquetaMes}`,'success');
@@ -9601,62 +9650,105 @@ function borrarEntregaCompra(id, idx) {
 }
 
 
-function renderRepuestos() {
-  // Extraer todos los repuestos de los detalles de trabajos
-  const conteo = {};
-  DB.trabajos.forEach(t => {
-    if(!t.repuestosDetalle) return;
-    t.repuestosDetalle.split('\n').forEach(rep => {
-      const r = rep.trim();
-      if(r) conteo[r] = (conteo[r]||0) + 1;
-    });
+function _normRep(x) { return _sinTildes(String(x||'')).replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
+function _codigoRep(x) { const m = /\b([A-Z]{1,4}\d{4,8}[A-Z]?)\b/.exec(String(x||'').toUpperCase()); return m ? m[1] : ''; }
+function periodoRepuestos() { try { return localStorage.getItem('meb_rep_periodo') || '__todos__'; } catch(e) { return '__todos__'; } }
+// v17.78 — análisis de repuestos con TODO lo actual: ítems de repuesto de los presupuestos aprobados (cantidad,
+// plata, código) + los repuestos anotados en cada trabajo. Se recalcula solo cada vez que se entra.
+function analizarRepuestos(periodo) {
+  const todos = !periodo || periodo==='__todos__';
+  const items = {};
+  const add = (nombre, o) => {
+    const k = _codigoRep(nombre) || _normRep(nombre); if(!k) return;
+    const it = items[k] = items[k] || { nombre: String(nombre).trim(), codigo:_codigoRep(nombre), veces:0, cant:0, monto:0, clientes:new Set(), ultimo:null, fuentes:new Set() };
+    it.veces++; it.cant += o.cant||0; it.monto += o.monto||0; if(o.cliente) it.clientes.add(o.cliente); it.fuentes.add(o.fuente);
+    if(o.fecha && (!it.ultimo || o.fecha > it.ultimo)) it.ultimo = o.fecha;
+  };
+  DB.presupuestos.filter(p=>p.estado==='aprobado' && (todos || mesDePresupuesto(p)===periodo)).forEach(p=>{
+    const cl = (DB.clientes.find(c=>String(c.id)===String(p.clienteId))||{}).nombre || '';
+    itemsDePresupuesto(p).filter(it=>it.cat==='rep').forEach(it=>add(it.desc, { cant:it.cant, monto:it.sub, cliente:cl, fecha:parseFechaAny(normalizarFecha(p.fecha)||''), fuente:'presupuesto' }));
   });
-
-  const ranking = Object.entries(conteo).sort((a,b)=>b[1]-a[1]);
-
+  DB.trabajos.forEach(t=>{
+    if(!t.repuestosDetalle) return;
+    const f = parseFechaAny(t.fechaInicio);
+    if(!todos) { const iso = normalizarFecha(t.fechaInicio); if(!iso || iso.slice(0,7)!==periodo) return; }
+    const cl = (DB.clientes.find(c=>String(c.id)===String(t.clienteId))||{}).nombre || '';
+    t.repuestosDetalle.split('\n').map(x=>x.trim()).filter(Boolean).forEach(r=>add(r, { cant:1, monto:0, cliente:cl, fecha:f, fuente:'trabajo' }));
+  });
+  const lista = Object.values(items).sort((a,b)=>b.veces-a.veces || b.monto-a.monto);
+  const porCat = {};
+  lista.forEach(it=>{ const c = categorizarRepuestoParaStock(it.nombre) || 'Otros'; const x = porCat[c] = porCat[c] || { veces:0, monto:0, n:0 }; x.veces+=it.veces; x.monto+=it.monto; x.n++; });
+  return { lista, porCat, total: lista.reduce((a,x)=>a+x.monto,0), veces: lista.reduce((a,x)=>a+x.veces,0) };
+}
+function elegirPeriodoRepuestos(v) { try { localStorage.setItem('meb_rep_periodo', v); } catch(e) {} renderRepuestos(); }
+function renderRepuestos() {
+  const periodo = periodoRepuestos();
+  const an = analizarRepuestos(periodo);
   const elRanking = document.getElementById('repuestos-ranking');
   const elStock = document.getElementById('repuestos-stock');
   const elLista = document.getElementById('repuestos-lista');
-
-  if(!ranking.length) {
-    const empty = `<div class="empty-state"><div class="icon">🔩</div><p>Sin repuestos registrados</p><p style="font-size:11px;color:var(--muted2);margin-top:6px">Cargalos en el detalle de cada trabajo</p></div>`;
-    if(elRanking) elRanking.innerHTML = empty;
-    if(elStock) elStock.innerHTML = empty;
-    if(elLista) elLista.innerHTML = empty;
-    return;
-  }
-
-  const top5 = ranking.slice(0,5);
-  const colores = ['#F4B400','#7bb3e0','#2ecc71','#e67e22','#9b59b6'];
-
-  if(elRanking) elRanking.innerHTML = `<div style="padding:12px">` + top5.map(([ rep, cnt ], i) => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="font-family:'Bebas Neue';font-size:22px;color:${colores[i]};width:28px;text-align:center">${i+1}</div>
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:600;color:var(--text)">${rep}</div>
-        <div style="font-size:10px;color:var(--muted)">${cnt} uso${cnt>1?'s':''}</div>
+  const elInf = document.getElementById('repuestos-informe');
+  // selector de período (mismos meses que la simulación)
+  const meses = new Set(); DB.presupuestos.filter(p=>p.estado==='aprobado').forEach(p=>{ const m=mesDePresupuesto(p); if(m) meses.add(m); });
+  const opts = `<option value="__todos__">Todo el historial</option>` + [...meses].sort().reverse().map(m=>`<option value="${m}">${mesLabel(m)}</option>`).join('');
+  const etiqueta = periodo==='__todos__' ? 'todo el historial' : mesLabel(periodo);
+  if(elInf) {
+    const cats = Object.entries(an.porCat).sort((a,b)=>b[1].monto-a[1].monto || b[1].veces-a[1].veces);
+    const conCod = an.lista.filter(x=>x.codigo);
+    const repet = an.lista.filter(x=>x.veces>=2);
+    // historial de informes (se guarda uno por día y período; no se borra)
+    let hist = []; try { hist = JSON.parse((DB.config||{}).rep_informes || '[]'); } catch(e) { hist = []; }
+    const hoyIso = new Date().toISOString().slice(0,10);
+    const snap = { fecha:hoyIso, periodo, total:Math.round(an.total), veces:an.veces, distintos:an.lista.length, top:an.lista.slice(0,3).map(x=>x.nombre) };
+    const idx = hist.findIndex(h=>h.fecha===hoyIso && h.periodo===periodo);
+    const cambio = idx<0 || hist[idx].total!==snap.total || hist[idx].veces!==snap.veces;
+    if(an.lista.length && cambio) { if(idx>=0) hist[idx]=snap; else hist.unshift(snap); hist = hist.slice(0,40); try { setCfg('rep_informes', JSON.stringify(hist)); } catch(e) {} }
+    elInf.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;padding:0 4px 10px">
+        <div style="font-size:12px;color:var(--muted)">Recalculado ahora con los presupuestos aprobados y los trabajos actuales · <b style="color:var(--text)">${etiqueta}</b></div>
+        <select onchange="elegirPeriodoRepuestos(this.value)" style="max-width:220px;font-size:12px">${opts.replace(`value="${periodo}"`,`value="${periodo}" selected`)}</select></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;padding:0 4px 12px">
+        <div class="stat-card yellow"><div class="stat-val">${fmtMonto(an.total)}</div><div class="stat-label">Repuestos facturados</div></div>
+        <div class="stat-card blue"><div class="stat-val">${an.veces}</div><div class="stat-label">Veces usados</div></div>
+        <div class="stat-card"><div class="stat-val">${an.lista.length}</div><div class="stat-label">Repuestos distintos</div></div>
+        <div class="stat-card green"><div class="stat-val">${repet.length}</div><div class="stat-label">Se repitieron 2+ veces</div></div>
       </div>
-      <div style="background:${colores[i]};color:var(--black);font-family:'Bebas Neue';font-size:13px;padding:3px 10px;border-radius:10px">${cnt}x</div>
-    </div>`).join('') + `</div>`;
-
-  if(elStock) elStock.innerHTML = `<div style="padding:12px">
-    <div style="font-size:11px;color:var(--muted2);margin-bottom:10px;letter-spacing:1px">Repuestos que conviene tener en stock según frecuencia de uso:</div>
-    ${top5.map(([rep,cnt],i)=>`
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
-      <div style="font-size:12px;color:var(--text)">📦 ${rep}</div>
-      <div style="font-size:10px;color:var(--muted)">×${cnt}</div>
-    </div>`).join('')}
-    </div>`;
-
-  if(elLista) elLista.innerHTML = `<div style="padding:12px">
-    ${ranking.map(([rep,cnt])=>`
-    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
-      <span style="font-size:12px;color:var(--text)">🔩 ${rep}</span>
-      <span style="font-size:11px;color:var(--muted);font-family:'Bebas Neue';letter-spacing:1px">${cnt} vez${cnt>1?'es':''}</span>
-    </div>`).join('')}
-    </div>`;
-
-  renderStockSimulado();
+      ${cats.length?`<div class="table-wrap" style="padding:0 4px"><table><thead><tr><th>Categoría</th><th style="text-align:right">Repuestos distintos</th><th style="text-align:right">Veces</th><th style="text-align:right">Facturado</th><th style="text-align:right">% del total</th></tr></thead><tbody>
+        ${cats.map(([c,x])=>`<tr><td>${prosEsc(c)}</td><td style="text-align:right">${x.n}</td><td style="text-align:right">${x.veces}</td><td style="text-align:right;color:var(--yellow)">${fmtMonto(x.monto)}</td><td style="text-align:right;color:var(--muted)">${an.total?Math.round(x.monto/an.total*100):0}%</td></tr>`).join('')}
+      </tbody></table></div>`:''}
+      <div style="font-size:12px;color:var(--muted);padding:10px 4px 0;line-height:1.6">${conCod.length?`🔎 <b style="color:var(--text)">${conCod.length}</b> repuestos tienen código de fábrica (ej. ${conCod.slice(0,3).map(x=>x.codigo).join(', ')}) — son los más fáciles de cotizar para importar.`:'Tip: si en el presupuesto ponés el código de fábrica (ej. RE73665), acá se agrupan solos y sirven para cotizar la importación.'}</div>
+      ${hist.length?`<details style="padding:10px 4px 0"><summary style="cursor:pointer;font-size:12px;color:var(--yellow)">📚 Informes anteriores (${hist.length}) — se guardan solos, uno por día</summary>
+        <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Período</th><th style="text-align:right">Facturado</th><th style="text-align:right">Veces</th><th style="text-align:right">Distintos</th><th>Más usados</th></tr></thead><tbody>
+        ${hist.map(h=>`<tr><td class="td-muted">${fmtDate(h.fecha)}</td><td>${h.periodo==='__todos__'?'Todo':mesLabel(h.periodo)}</td><td style="text-align:right">${fmtMonto(h.total)}</td><td style="text-align:right">${h.veces}</td><td style="text-align:right">${h.distintos}</td><td style="font-size:11px">${(h.top||[]).map(prosEsc).join(' · ')}</td></tr>`).join('')}
+        </tbody></table></div></details>`:''}`;
+  }
+  if(!an.lista.length) {
+    const empty = `<div class="empty-state"><div class="icon">🔩</div><p>Sin repuestos en ${etiqueta}</p><p style="font-size:11px;color:var(--muted2);margin-top:6px">Salen de los ítems tipo "Repuesto" de los presupuestos aprobados y del detalle de cada trabajo</p></div>`;
+    [elRanking, elStock, elLista].forEach(el=>{ if(el) el.innerHTML = empty; });
+  } else {
+    const top = an.lista.slice(0,8);
+    const colores = ['#F4B400','#7bb3e0','#2ecc71','#e67e22','#9b59b6','#F4B400','#7bb3e0','#2ecc71'];
+    if(elRanking) elRanking.innerHTML = `<div style="padding:12px">` + top.map((x,i)=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="font-family:'Bebas Neue';font-size:22px;color:${colores[i]};width:28px;text-align:center">${i+1}</div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">${prosEsc(x.nombre)}</div>
+          <div style="font-size:10px;color:var(--muted)">${x.codigo?'Cód. '+x.codigo+' · ':''}${x.veces} uso${x.veces>1?'s':''}${x.monto?' · '+fmtMonto(x.monto):''}</div></div>
+        <div style="background:${colores[i]};color:var(--black);font-family:'Bebas Neue';font-size:13px;padding:3px 10px;border-radius:10px">${x.veces}x</div>
+      </div>`).join('') + `</div>`;
+    const stockear = an.lista.filter(x=>x.veces>=2 || x.clientes.size>=2).slice(0,8);
+    if(elStock) elStock.innerHTML = `<div style="padding:12px">
+      <div style="font-size:11px;color:var(--muted2);margin-bottom:10px;letter-spacing:1px">Se usaron más de una vez o en más de un cliente — candidatos al primer stock / pedido de importación:</div>
+      ${(stockear.length?stockear:an.lista.slice(0,5)).map(x=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:12px;color:var(--text)">📦 ${prosEsc(x.nombre)}${x.codigo?` <span class="td-muted">(${x.codigo})</span>`:''}</div>
+        <div style="font-size:10px;color:var(--muted);text-align:right">×${x.veces}${x.clientes.size>1?` · ${x.clientes.size} clientes`:''}</div>
+      </div>`).join('')}</div>`;
+    if(elLista) elLista.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Repuesto</th><th>Código</th><th style="text-align:right">Veces</th><th style="text-align:right">Cantidad</th><th style="text-align:right">Facturado</th><th>Último uso</th><th>Clientes</th></tr></thead><tbody>
+      ${an.lista.map(x=>`<tr><td>🔩 ${prosEsc(x.nombre)}</td><td class="td-muted">${x.codigo||'—'}</td><td style="text-align:right">${x.veces}</td><td style="text-align:right">${Math.round(x.cant*10)/10}</td><td style="text-align:right;color:var(--yellow)">${x.monto?fmtMonto(x.monto):'—'}</td>
+        <td class="td-muted">${x.ultimo?x.ultimo.toLocaleDateString('es-AR'):'—'}</td><td style="font-size:11px">${[...x.clientes].map(prosEsc).join(', ')}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  }
+  // la simulación de stock también se recalcula sola con lo actual (antes había que tocar el botón)
+  try { recalcularAhorroRealStock(true); } catch(e) { renderStockSimulado(); }
 }
 
 // ============================================================
@@ -12695,24 +12787,24 @@ function openModal(type, data={}) {
         Trabajo vinculado: <b>${t0?'sí':'se crea al guardar'}</b><br>
         Cargá acá lo que pasó en la realidad. Se guarda en el Trabajo y en el Sheet solo — no hace falta entrar al Sheet.
       </div>
-      <div class="form-group"><label>Mano de obra cobrada (ARS) <span style="color:var(--muted)">· cotizado ${fm(d0.mo)}</span></label><input id="f-ecmo" type="number" value="${v(t0&&t0.manoObraCobrada,d0.mo)}" oninput="calcularEconomiaPresup()"/></div>
-      <div class="form-group"><label>Movilidad cobrada (ARS) <span style="color:var(--muted)">· cotizado ${fm(d0.mov)}</span></label><input id="f-ecmov" type="number" value="${v(t0&&t0.movilidad,d0.mov)}" oninput="calcularEconomiaPresup()"/></div>
-      <div class="form-group"><label>Repuestos cobrados al cliente (ARS) <span style="color:var(--muted)">· cotizado ${fm(d0.rep)}</span></label><input id="f-ecrepfact" type="number" value="${v(t0&&t0.precioRepuestoFacturado,d0.rep)}" oninput="calcularEconomiaPresup()"/></div>
-      <div class="form-group"><label>Repuestos: lo que PAGASTE realmente (ARS)</label><input id="f-eccostorep" type="number" value="${(t0&&t0.costoRepuesto)||''}" placeholder="lo que te costaron a vos" oninput="calcularEconomiaPresup()"/></div>
-      <div class="form-group"><label>Servicios de terceros cobrados (ARS) <span style="color:var(--muted)">· cotizado ${fm(d0.ter)}</span></label><input id="f-ecterfact" type="number" value="${v(t0&&t0.tercerosCobrado,d0.ter)}" oninput="calcularEconomiaPresup()" title="Tornería, bombista, rectificadora… lo que se le cobró al cliente"/></div>
-      <div class="form-group"><label>Servicios de terceros: lo que PAGASTE (ARS)</label><input id="f-ecter" type="number" value="${(t0&&t0.tercerosCosto)||''}" placeholder="lo que le pagaste al tornero, bombista…" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group"><label>Mano de obra cobrada (ARS) <span style="color:var(--muted)">· cotizado ${fm(d0.mo)}</span></label><input id="f-ecmo" type="text" inputmode="decimal" class="in-monto" value="${fmtMontoAR(v(t0&&t0.manoObraCobrada,d0.mo))}" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group"><label>Movilidad cobrada (ARS) <span style="color:var(--muted)">· cotizado ${fm(d0.mov)}</span></label><input id="f-ecmov" type="text" inputmode="decimal" class="in-monto" value="${fmtMontoAR(v(t0&&t0.movilidad,d0.mov))}" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group"><label>Repuestos cobrados al cliente (ARS) <span style="color:var(--muted)">· cotizado ${fm(d0.rep)}</span></label><input id="f-ecrepfact" type="text" inputmode="decimal" class="in-monto" value="${fmtMontoAR(v(t0&&t0.precioRepuestoFacturado,d0.rep))}" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group"><label>Repuestos: lo que PAGASTE realmente (ARS)</label><input id="f-eccostorep" type="text" inputmode="decimal" class="in-monto" value="${fmtMontoAR((t0&&t0.costoRepuesto)||'')}" placeholder="lo que te costaron a vos" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group"><label>Servicios de terceros cobrados (ARS) <span style="color:var(--muted)">· cotizado ${fm(d0.ter)}</span></label><input id="f-ecterfact" type="text" inputmode="decimal" class="in-monto" value="${fmtMontoAR(v(t0&&t0.tercerosCobrado,d0.ter))}" oninput="calcularEconomiaPresup()" title="Tornería, bombista, rectificadora… lo que se le cobró al cliente"/></div>
+      <div class="form-group"><label>Servicios de terceros: lo que PAGASTE (ARS)</label><input id="f-ecter" type="text" inputmode="decimal" class="in-monto" value="${fmtMontoAR((t0&&t0.tercerosCosto)||'')}" placeholder="lo que le pagaste al tornero, bombista…" oninput="calcularEconomiaPresup()"/></div>
       <div class="form-group"><label>¿A quién? (tornero, bombista…)</label><input id="f-ecterprov" value="${((t0&&t0.tercerosProveedor)||'').replace(/"/g,'&quot;')}" placeholder="Opcional"/></div>
       <div class="form-group"><label>Tipo de servicio de terceros</label><select id="f-ectertipo"><option value="">—</option>${TIPOS_TERCEROS.map(x=>`<option value="${x}" ${((t0&&t0.tercerosTipo)||sugerirTipoTerceros(p))===x?'selected':''}>${x}</option>`).join('')}</select></div>
       <div class="form-group full"><label>¿Qué trabajo hizo el tercero?</label><input id="f-ecterdet" value="${prosEsc((t0&&t0.tercerosDetalle)||'')}" placeholder="Ej: rectificado de eje del cilindro de levante, encamisado de buje…"/>
         <div style="font-size:10px;color:var(--muted);margin-top:3px">Si el servicio de terceros va dentro de este presupuesto (lo más común), cargalo acá y ya cuenta en la pestaña <b>Servicios de terceros</b>, aunque en el presupuesto no figure como ítem aparte.</div></div>
-      <div class="form-group"><label>Total realmente cobrado / facturado (ARS)</label><input id="f-ecmonto" type="number" value="${v(t0&&t0.montoCobrado,p.montoCobradoReal||'')}" placeholder="${Math.round(Number(p.monto)||0)}" oninput="calcularEconomiaPresup()"/></div>
-      <div class="form-group"><label>Otros gastos (ARS)</label><input id="f-ecgastos" type="number" value="${(t0&&t0.montoGastos)||''}" placeholder="combustible, viáticos…" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group"><label>Total realmente cobrado / facturado (ARS)</label><input id="f-ecmonto" type="text" inputmode="decimal" class="in-monto" value="${fmtMontoAR(v(t0&&t0.montoCobrado,p.montoCobradoReal||''))}" placeholder="${Math.round(Number(p.monto)||0)}" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group"><label>Otros gastos (ARS)</label><input id="f-ecgastos" type="text" inputmode="decimal" class="in-monto" value="${fmtMontoAR((t0&&t0.montoGastos)||'')}" placeholder="combustible, viáticos…" oninput="calcularEconomiaPresup()"/></div>
       <div class="form-group full" style="border-top:1px solid var(--border);padding-top:10px;margin-top:2px"><label style="color:var(--yellow);font-size:11px;letter-spacing:2px">FACTURA, SEÑA Y COBRO</label></div>
-      <div class="form-group"><label>Seña / anticipo cobrado (ARS)</label><input id="f-ecsena" type="number" value="${(t0&&t0.senaMonto)||''}" placeholder="Ej: 50% del repuesto"/></div>
+      <div class="form-group"><label>Seña / anticipo cobrado (ARS)</label><input id="f-ecsena" type="text" inputmode="decimal" class="in-monto" value="${fmtMontoAR((t0&&t0.senaMonto)||'')}" placeholder="Ej: 50% del repuesto"/></div>
       <div class="form-group"><label>Fecha de la seña</label><input id="f-ecsenaf" type="date" value="${isoParaInput(t0&&t0.senaFecha)||''}"/></div>
       <div class="form-group"><label>Factura</label><div style="display:flex;gap:6px"><select id="f-ecftipo" style="width:90px"><option value="">—</option>${['A','B','C','Sin factura'].map(x=>`<option ${(t0&&t0.facturaTipo)===x?'selected':''}>${x}</option>`).join('')}</select><input id="f-ecfnum" value="${prosEsc((t0&&t0.facturaNum)||'')}" placeholder="N° (ej. 0001-00000123)" style="flex:1"/></div></div>
       <div class="form-group"><label>Medio de pago</label><select id="f-ecmedio"><option value="">—</option>${['Transferencia','Efectivo','Cheque','E-cheq','Mercado Pago','Otro'].map(x=>`<option ${(t0&&t0.medioPago)===x?'selected':''}>${x}</option>`).join('')}</select></div>
-      <div class="form-group"><label>Retenciones sufridas (ARS)</label><input id="f-ecret" type="number" value="${(t0&&t0.retenciones)||''}" placeholder="IIBB / Ganancias / IVA que te retuvieron"/></div>
+      <div class="form-group"><label>Retenciones sufridas (ARS)</label><input id="f-ecret" type="text" inputmode="decimal" class="in-monto" value="${fmtMontoAR((t0&&t0.retenciones)||'')}" placeholder="IIBB / Ganancias / IVA que te retuvieron"/></div>
       <div class="form-group full" style="border-top:1px solid var(--border);padding-top:10px;margin-top:2px"><label style="color:var(--yellow);font-size:11px;letter-spacing:2px">TIEMPO Y VIAJE</label></div>
       <div class="form-group"><label>Horas de trabajo</label><input id="f-echoras" type="number" step="0.5" value="${(t0&&t0.horasTrabajadas)||''}" placeholder="Ej: 6"/></div>
       <div class="form-group"><label>Horas de viaje (ida + vuelta)</label><input id="f-echviaje" type="number" step="0.5" value="${(t0&&t0.horasViaje)||''}" placeholder="Ej: 3"/></div>
@@ -12727,7 +12819,7 @@ function openModal(type, data={}) {
       <div class="form-group full" id="ec-resultado" style="padding:12px;border-radius:6px;background:var(--dark);border:1px solid var(--border2);font-size:13px"></div>
     </div>`;
     onSave=()=>{
-      const n = id => parseFloat(gv(id))||0;
+      const n = id => leerMontoAR(gv(id)); // v17.78 — acepta 4.417.701,60
       const campos = {
         manoObraCobrada:n('f-ecmo'), movilidad:n('f-ecmov'), precioRepuestoFacturado:n('f-ecrepfact'),
         costoRepuesto:n('f-eccostorep'), montoCobrado:n('f-ecmonto'), montoGastos:n('f-ecgastos'),
@@ -13154,7 +13246,7 @@ async function actualizarTCTrabajo(gananciaArsT, gananciaUsdEsperada, tieneAncla
 }
 
 function calcularEconomiaPresup() {
-  const n = id => { const e=document.getElementById(id); return e ? (parseFloat(e.value)||0) : 0; };
+  const n = id => valMonto(id);
   const mo=n('f-ecmo'), mov=n('f-ecmov'), rf=n('f-ecrepfact'), cr=n('f-eccostorep'), gas=n('f-ecgastos');
   const tf=n('f-ecterfact'), tc=n('f-ecter');
   const margenRep = rf - cr;
