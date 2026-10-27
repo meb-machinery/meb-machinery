@@ -2013,7 +2013,8 @@ async function syncAll() {
       telefono:r.TELEFONO||'', email:r.EMAIL||'', zona:r.ZONA||'',
       estado:(r.ESTADO||'activo').toLowerCase().trim(), ultimoContacto:r.ULTIMO_CONTACTO||r.ULTIMO_CONTACTO_||'',
       notas:r.NOTAS||'', tokenPortal:r.TOKEN_PORTAL||'', cuit:String(r.CUIT||'').trim(),
-      origen:String(r.ORIGEN||'').trim(), origenDetalle:String(r.ORIGEN_DETALLE||'').trim(), sedes:String(r.SEDES||'').trim()
+      origen:String(r.ORIGEN||'').trim(), origenDetalle:String(r.ORIGEN_DETALLE||'').trim(), sedes:String(r.SEDES||'').trim(),
+      condicionIva:String(r.CONDICION_IVA||'').trim(), domicilioFiscal:String(r.DOMICILIO_FISCAL||'').trim()
     }));
     if(mq.length) DB.maquinas = mq.map(r=>({
       id:resolverIdEstable(r,'MAQUINAS'), clienteId:String(r.CLIENTE_ID||'').trim(), marca:r.MARCA||'',
@@ -2058,8 +2059,13 @@ async function syncAll() {
       horasTrabajadas:parseFloat(r.HORAS_TRABAJADAS)||0,
       tercerosCobrado:parseMonto(r.TERCEROS_COBRADO), tercerosCosto:parseMonto(r.TERCEROS_COSTO), tercerosProveedor:r.TERCEROS_PROVEEDOR||'', tercerosTipo:String(r.TERCEROS_TIPO||'').trim(), tercerosDetalle:String(r.TERCEROS_DETALLE||'').trim(),
       categoriaTrabajo:String(r.CATEGORIA_TRABAJO||'').trim(), herramientas:String(r.HERRAMIENTAS||'').trim(),
+      facturaTipo:String(r.FACTURA_TIPO||'').trim(), facturaNum:String(r.FACTURA_NUM||'').trim(), medioPago:String(r.MEDIO_PAGO||'').trim(),
+      retenciones:parseMonto(r.RETENCIONES)||0, senaMonto:parseMonto(r.SENA_MONTO)||0, senaFecha:String(r.SENA_FECHA||'').trim(),
+      horasViaje:parseFloat(r.HORAS_VIAJE)||0, kmRecorridos:parseFloat(r.KM_RECORRIDOS)||0,
       _fila:r._rowIndex
     })); else if(!DB.trabajos.length) DB.trabajos=[];
+    // v17.77 — títulos que quedaron con el ítem crudo ("Mano de obra|Mano de obra|1|500000"): se muestran limpios
+    DB.trabajos.forEach(t=>{ if(String(t.titulo||'').includes('|')) { t._tituloCrudo = t.titulo; t.titulo = String(t.titulo).split('|')[0].trim() || 'Trabajo'; } });
     // v17.67 — filas duplicadas en TRABAJOS (mismo ID en dos filas): el CRM mostraba las dos, una quedaba
     // "sin vincular" para siempre (al vincular se actualizaba solo la primera). Ahora se queda con la mejor
     // fila de cada ID y avisa cuáles son para limpiarlas en el Sheet.
@@ -5287,6 +5293,8 @@ function renderTrabajos() {
       ⚠️ <b>${sinVincular}</b> trabajo${sinVincular!==1?'s':''} sin presupuesto vinculado — abrilo con ✏️ y elegí uno en "Presupuesto de origen" (el CRM te sugiere el más probable solo) · mirá la pestaña "📄 Sin vincular"
     </div>` : '';
   }
+  const _crudos = DB.trabajos.filter(t=>t._tituloCrudo).length;
+  if(avisoVinc && _crudos) avisoVinc.innerHTML += `<div style="margin-top:8px;padding:10px 14px;background:rgba(244,180,0,0.08);border-left:3px solid var(--yellow);border-radius:4px;font-size:12px;color:var(--text)">✏️ ${_crudos} trabajo${_crudos!==1?'s tienen':' tiene'} el título con el ítem crudo (ej. "Mano de obra|Mano de obra|1|500000"). <button class="btn-secondary" style="font-size:11px;padding:3px 10px;margin-left:6px" onclick="arreglarTitulosTrabajos()">Arreglar títulos</button></div>`;
   if(avisoVinc && window._trabajosDuplicados && window._trabajosDuplicados.length) {
     avisoVinc.innerHTML += window._trabajosDuplicados.map(htmlAvisoTrabajoDuplicado).join('');
   }
@@ -11471,6 +11479,8 @@ function openModal(type, data={}) {
       <div class="form-group"><label>Teléfono / WhatsApp</label><input id="f-telefono" value="${data.telefono||''}" placeholder="+549..."/></div>
       <div class="form-group"><label>Email</label><input id="f-email" type="email" value="${data.email||''}"/></div>
       <div class="form-group"><label>CUIT</label><input id="f-cuit" value="${data.cuit||''}" placeholder="Ej: 30-71234567-8"/></div>
+      <div class="form-group"><label>Condición frente al IVA</label><select id="f-condiva"><option value="">— Sin dato —</option>${CONDICIONES_IVA.map(x=>`<option ${data.condicionIva===x?'selected':''}>${x}</option>`).join('')}</select></div>
+      <div class="form-group full"><label>Domicilio fiscal</label><input id="f-domfiscal" value="${prosEsc(data.domicilioFiscal||'')}" placeholder="Calle, número, localidad (como figura en ARCA)"/></div>
       <div class="form-group"><label>Zona / Provincia</label><input id="f-zona" value="${data.zona||''}"/></div>
       <div class="form-group"><label>Otras sedes / sucursales (zonas)</label><input id="f-sedes" value="${prosEsc(data.sedes||'')}" placeholder="Ej: Luján, Campana"/></div>
       <div class="form-group"><label>Estado</label>
@@ -11495,7 +11505,7 @@ function openModal(type, data={}) {
           return;
         }
       }
-      guardar('clientes',{id:data.id||siguienteIdCliente(),nombre:nombreForm,empresa:gv('f-empresa'),telefono:gv('f-telefono'),email:gv('f-email'),zona:gv('f-zona'),estado:gv('f-estado'),ultimoContacto:gv('f-contacto'),notas:gv('f-notas'),cuit:gv('f-cuit'),tokenPortal:data.tokenPortal||'',origen:gv('f-origen'),origenDetalle:gv('f-origen-det').trim(),sedes:gv('f-sedes').trim()},'nombre');
+      guardar('clientes',{id:data.id||siguienteIdCliente(),nombre:nombreForm,empresa:gv('f-empresa'),telefono:gv('f-telefono'),email:gv('f-email'),zona:gv('f-zona'),estado:gv('f-estado'),ultimoContacto:gv('f-contacto'),notas:gv('f-notas'),cuit:gv('f-cuit'),tokenPortal:data.tokenPortal||'',origen:gv('f-origen'),origenDetalle:gv('f-origen-det').trim(),sedes:gv('f-sedes').trim(),condicionIva:gv('f-condiva'),domicilioFiscal:gv('f-domfiscal').trim()},'nombre');
     };
   }
 
@@ -12697,6 +12707,16 @@ function openModal(type, data={}) {
         <div style="font-size:10px;color:var(--muted);margin-top:3px">Si el servicio de terceros va dentro de este presupuesto (lo más común), cargalo acá y ya cuenta en la pestaña <b>Servicios de terceros</b>, aunque en el presupuesto no figure como ítem aparte.</div></div>
       <div class="form-group"><label>Total realmente cobrado / facturado (ARS)</label><input id="f-ecmonto" type="number" value="${v(t0&&t0.montoCobrado,p.montoCobradoReal||'')}" placeholder="${Math.round(Number(p.monto)||0)}" oninput="calcularEconomiaPresup()"/></div>
       <div class="form-group"><label>Otros gastos (ARS)</label><input id="f-ecgastos" type="number" value="${(t0&&t0.montoGastos)||''}" placeholder="combustible, viáticos…" oninput="calcularEconomiaPresup()"/></div>
+      <div class="form-group full" style="border-top:1px solid var(--border);padding-top:10px;margin-top:2px"><label style="color:var(--yellow);font-size:11px;letter-spacing:2px">FACTURA, SEÑA Y COBRO</label></div>
+      <div class="form-group"><label>Seña / anticipo cobrado (ARS)</label><input id="f-ecsena" type="number" value="${(t0&&t0.senaMonto)||''}" placeholder="Ej: 50% del repuesto"/></div>
+      <div class="form-group"><label>Fecha de la seña</label><input id="f-ecsenaf" type="date" value="${isoParaInput(t0&&t0.senaFecha)||''}"/></div>
+      <div class="form-group"><label>Factura</label><div style="display:flex;gap:6px"><select id="f-ecftipo" style="width:90px"><option value="">—</option>${['A','B','C','Sin factura'].map(x=>`<option ${(t0&&t0.facturaTipo)===x?'selected':''}>${x}</option>`).join('')}</select><input id="f-ecfnum" value="${prosEsc((t0&&t0.facturaNum)||'')}" placeholder="N° (ej. 0001-00000123)" style="flex:1"/></div></div>
+      <div class="form-group"><label>Medio de pago</label><select id="f-ecmedio"><option value="">—</option>${['Transferencia','Efectivo','Cheque','E-cheq','Mercado Pago','Otro'].map(x=>`<option ${(t0&&t0.medioPago)===x?'selected':''}>${x}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Retenciones sufridas (ARS)</label><input id="f-ecret" type="number" value="${(t0&&t0.retenciones)||''}" placeholder="IIBB / Ganancias / IVA que te retuvieron"/></div>
+      <div class="form-group full" style="border-top:1px solid var(--border);padding-top:10px;margin-top:2px"><label style="color:var(--yellow);font-size:11px;letter-spacing:2px">TIEMPO Y VIAJE</label></div>
+      <div class="form-group"><label>Horas de trabajo</label><input id="f-echoras" type="number" step="0.5" value="${(t0&&t0.horasTrabajadas)||''}" placeholder="Ej: 6"/></div>
+      <div class="form-group"><label>Horas de viaje (ida + vuelta)</label><input id="f-echviaje" type="number" step="0.5" value="${(t0&&t0.horasViaje)||''}" placeholder="Ej: 3"/></div>
+      <div class="form-group"><label>Km recorridos</label><input id="f-eckm" type="number" value="${(t0&&t0.kmRecorridos)||''}" placeholder="Ej: 180"/></div>
       <div class="form-group"><label>Estado del cobro</label><select id="f-ecestado" onchange="document.getElementById('ec-cobro-extra').style.display=this.value==='cobrado'?'contents':'none'"><option value="pendiente"${p.estadoCobro==='cobrado'||(t0&&t0.estadoCobro==='cobrado')?'':' selected'}>Pendiente de cobro</option><option value="cobrado"${p.estadoCobro==='cobrado'||(t0&&t0.estadoCobro==='cobrado')?' selected':''}>Cobrado ✔</option></select></div>
       <div id="ec-cobro-extra" style="display:${p.estadoCobro==='cobrado'||(t0&&t0.estadoCobro==='cobrado')?'contents':'none'}">
         <div class="form-group"><label>Fecha de cobro</label><input id="f-ecfecha" type="date" value="${isoParaInput(p.fechaCobroReal||(t0&&t0.fechaCobroReal))||today()}"/></div>
@@ -12712,7 +12732,9 @@ function openModal(type, data={}) {
         manoObraCobrada:n('f-ecmo'), movilidad:n('f-ecmov'), precioRepuestoFacturado:n('f-ecrepfact'),
         costoRepuesto:n('f-eccostorep'), montoCobrado:n('f-ecmonto'), montoGastos:n('f-ecgastos'),
         tercerosCobrado:n('f-ecterfact'), tercerosCosto:n('f-ecter'), tercerosProveedor:gv('f-ecterprov'),
-        tercerosTipo:gv('f-ectertipo'), tercerosDetalle:gv('f-ecterdet').trim()
+        tercerosTipo:gv('f-ectertipo'), tercerosDetalle:gv('f-ecterdet').trim(),
+        senaMonto:n('f-ecsena'), senaFecha:gv('f-ecsenaf'), facturaTipo:gv('f-ecftipo'), facturaNum:gv('f-ecfnum').trim(),
+        medioPago:gv('f-ecmedio'), retenciones:n('f-ecret'), horasTrabajadas:n('f-echoras'), horasViaje:n('f-echviaje'), kmRecorridos:n('f-eckm')
       };
       let t = trabajoDePresupuesto(p);
       if(t) t.presupuestoId = p.id;
@@ -12773,7 +12795,9 @@ function openModal(type, data={}) {
         repuestosDetalle:t.repuestosDetalle||'', notas:t.notas||'', fotoUrl:t.fotoUrl||'',
         tcAlMomento:t.tcAlMomento||0, gananciaUsdEsperada:t.gananciaUsdEsperada||0, horasTrabajadas:t.horasTrabajadas||0,
         tercerosCobrado:t.tercerosCobrado||0, tercerosCosto:t.tercerosCosto||0, tercerosProveedor:t.tercerosProveedor||'',
-        tercerosTipo:t.tercerosTipo||'', tercerosDetalle:t.tercerosDetalle||''
+        tercerosTipo:t.tercerosTipo||'', tercerosDetalle:t.tercerosDetalle||'',
+        senaMonto:t.senaMonto||0, senaFecha:t.senaFecha||'', facturaTipo:t.facturaTipo||'', facturaNum:t.facturaNum||'',
+        medioPago:t.medioPago||'', retenciones:t.retenciones||0, horasViaje:t.horasViaje||0, kmRecorridos:t.kmRecorridos||0
       }});
       if(t.estadoCobro==='cobrado' || revertido){
         writeToSheet({ action:'updateCobro', id:t.id, estadoCobro:t.estadoCobro, tc_cobro:t.tcCobro||0, monto_cobrado_usd:t.montoCobradoUsd||0, ganancia_usd:t.gananciaUsd||0, diferencia_usd:t.diferenciaUsd||0, diferencia_pct:t.diferenciaPct||0, fecha_cobro_real:t.fechaCobroReal||'' });
@@ -12816,7 +12840,7 @@ function openModal(type, data={}) {
       const fechaCobroReal=gv('f-crfecha'), montoCobradoReal=parseFloat(gv('f-crmonto'))||0, tcCobro=parseFloat(gv('f-crtc'))||0;
       if(!montoCobradoReal||!tcCobro){ showToast('Cargá monto y TC del día del cobro','error'); return; }
       const usdRecibido = montoCobradoReal/tcCobro;
-      const diferenciaUsd = usdRecibido - usdEsperado;
+      const diferenciaUsd = usdEsperado>0 ? usdRecibido - usdEsperado : 0; // v17.77 — sin dólar al cotizar no hay contra qué comparar
       const diferenciaPct = usdEsperado>0 ? (diferenciaUsd/usdEsperado*100) : 0;
       const item = DB.presupuestos.find(x=>x.id===p.id);
       if(item){
@@ -12929,7 +12953,7 @@ function openModal(type, data={}) {
       const fechaCC=gv('f-ccfecha'), montoCC=parseFloat(gv('f-ccmonto'))||0, tcCC=parseFloat(gv('f-cctc'))||0;
       if(!montoCC||!tcCC){ showToast('Cargá monto y TC del día del cobro','error'); return; }
       const usdRecibidoCC = montoCC/tcCC;
-      const difUsdCC = usdRecibidoCC - usdEsperadoCon;
+      const difUsdCC = usdEsperadoCon>0 ? usdRecibidoCC - usdEsperadoCon : 0;
       const difPctCC = usdEsperadoCon>0 ? (difUsdCC/usdEsperadoCon*100) : 0;
       const item = DB.contratos.find(x=>x.id===c.id);
       if(item){
@@ -13376,7 +13400,8 @@ function guardar(tipo, obj, campoRequerido) {
       TELEFONO:obj.telefono||'', EMAIL:obj.email||'',
       ZONA:obj.zona||'', ESTADO:obj.estado||'activo',
       ULTIMO_CONTACTO:obj.ultimoContacto||'', NOTAS:obj.notas||'', CUIT:obj.cuit||'',
-      ORIGEN:obj.origen||'', ORIGEN_DETALLE:obj.origenDetalle||'', SEDES:obj.sedes||''
+      ORIGEN:obj.origen||'', ORIGEN_DETALLE:obj.origenDetalle||'', SEDES:obj.sedes||'',
+      CONDICION_IVA:obj.condicionIva||'', DOMICILIO_FISCAL:obj.domicilioFiscal||''
     }});
   }
 }
@@ -14625,95 +14650,392 @@ function closeDetail() {
 // Arma un .xlsx con una hoja por módulo, en pesos y con nombres de clientes
 // resueltos (no IDs), listo para abrir en Excel/Google Sheets sin tocar el
 // CRM. Todo corre en el navegador — no sube nada a ningún lado.
-function exportarExcel() {
-  if(typeof XLSX === 'undefined') {
-    showToast('No se pudo cargar la librería de Excel — revisá tu conexión e intentá de nuevo', 'error');
-    return;
+// ============================================================
+// v17.77 — REPORTES: interno (completo) y para el contador (prolijo)
+// ============================================================
+function _rf(d) { // fecha robusta: acepta 'aaaa-mm-dd', 'aaaa-mm-ddT…', 'dd/mm/aaaa'
+  if(!d) return null; const s = String(d).trim();
+  const iso = /^(\d{4}-\d{1,2}-\d{1,2})/.exec(s); if(iso) return parseFechaAny(iso[1].split('-').map((x,i)=>i?x.padStart(2,'0'):x).join('-'));
+  return parseFechaAny(s);
+}
+function _rIso(d) { const f = _rf(d); return f ? f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0')+'-'+String(f.getDate()).padStart(2,'0') : ''; }
+function _rDMY(d) { const f = _rf(d); return f ? String(f.getDate()).padStart(2,'0')+'/'+String(f.getMonth()+1).padStart(2,'0')+'/'+f.getFullYear() : ''; }
+function _rMes(d) { const f = _rf(d); return f ? f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0') : ''; }
+const _MESES_TXT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function _rMesTxt(m) { const [y,mm] = String(m).split('-'); return m ? _MESES_TXT[parseInt(mm,10)-1]+' '+y : ''; }
+function _rCli(id) { return DB.clientes.find(c=>String(c.id)===String(id)) || null; }
+function _rNumP(p) { return p && p.num ? String(p.num).padStart(4,'0') : ''; }
+function _rNumT(t) { const n = numeroTrabajo(t); return n!==null ? 'T'+String(n).padStart(4,'0') : (t.id||''); }
+function _rHoras(a, b) { // 'HH:MM' → horas entre a y b
+  const p = x => { const m = /^(\d{1,2}):(\d{2})/.exec(String(x||'')); return m ? parseInt(m[1],10)*60+parseInt(m[2],10) : null; };
+  const x = p(a), y = p(b); if(x===null || y===null) return 0;
+  let d = y - x; if(d < 0) d += 24*60; return Math.round(d/6)/10;
+}
+const CONDICIONES_IVA = ['Responsable inscripto','Monotributista','Exento','Consumidor final'];
+
+// ── Registro único de cobros: una fila por plata que entró ──
+function registroCobros() {
+  const out = [];
+  const tDePres = p => DB.trabajos.find(t=>t.presupuestoId===p.id);
+  const desg = (p, t) => {
+    if(t && (Number(t.manoObraCobrada)||Number(t.precioRepuestoFacturado)||Number(t.movilidad)||Number(t.tercerosCobrado)))
+      return { mo:Number(t.manoObraCobrada)||0, rep:Number(t.precioRepuestoFacturado)||0, mov:Number(t.movilidad)||0, ter:Number(t.tercerosCobrado)||0 };
+    const d = p ? desgloseDePresupuesto(p) : {mo:0,rep:0,mov:0,ter:0};
+    return { mo:d.mo||0, rep:d.rep||0, mov:d.mov||0, ter:d.ter||0 };
+  };
+  const push = (o) => out.push(Object.assign({ origen:'', ref:'', clienteId:'', concepto:'', fecha:'', monto:0, mo:0, rep:0, mov:0, ter:0, sd:0,
+    facturaTipo:'', facturaNum:'', medio:'', retenciones:0, esSena:false }, o));
+  const vistosT = new Set();
+  DB.presupuestos.forEach(p=>{
+    const t = tDePres(p);
+    const cobrado = p.estadoCobro==='cobrado' || (t && t.estadoCobro==='cobrado');
+    const sena = t ? Number(t.senaMonto)||0 : 0;
+    if(!cobrado && !sena) return;
+    if(t) vistosT.add(t.id);
+    const base = { origen:'Presupuesto', ref:'#'+_rNumP(p), clienteId:p.clienteId, concepto:(String(p.descripcion||'').split('\n')[0].split('|')[0]||'').slice(0,80),
+      facturaTipo:(t&&t.facturaTipo)||'', facturaNum:(t&&t.facturaNum)||'', medio:(t&&t.medioPago)||'', retenciones:(t&&Number(t.retenciones))||0 };
+    if(sena) push(Object.assign({}, base, { concepto:'Seña — '+base.concepto, fecha:(t&&t.senaFecha)||p.fecha, monto:sena, sd:sena, esSena:true, retenciones:0 }));
+    if(cobrado) {
+      const total = Number(p.montoCobradoReal)>0 ? Number(p.montoCobradoReal) : (Number(t&&t.montoCobrado)>0 ? Number(t.montoCobrado) : Number(p.monto)||0);
+      const d = desg(p, t); const sumD = d.mo+d.rep+d.mov+d.ter; const k = sumD>0 ? (total-sena)/sumD : 0;
+      push(Object.assign({}, base, { fecha:p.fechaCobroReal||(t&&t.fechaCobroReal)||'', monto:total-sena,
+        mo:Math.round(d.mo*k), rep:Math.round(d.rep*k), mov:Math.round(d.mov*k), ter:Math.round(d.ter*k), sd:sumD>0?0:total-sena }));
+    }
+  });
+  // trabajos sin presupuesto vinculado que en realidad son el mismo cobro que un presupuesto (mismo cliente, monto parecido)
+  const cobradosP = DB.presupuestos.filter(p=>p.estadoCobro==='cobrado');
+  const esMismoQuePresup = t => { const m = Number(t.montoCobrado)||0; if(!m) return false;
+    return cobradosP.some(p=>String(p.clienteId)===String(t.clienteId) && [Number(p.monto)||0, Number(p.montoCobradoReal)||0].some(x=>x>0 && Math.abs(x-m)/m < 0.06)); };
+  DB.trabajos.forEach(t=>{
+    if(vistosT.has(t.id)) return;
+    if(!t.presupuestoId && esMismoQuePresup(t)) return;
+    const sena = Number(t.senaMonto)||0;
+    if(t.estadoCobro!=='cobrado' && !sena) return;
+    const base = { origen:'Trabajo', ref:_rNumT(t), clienteId:t.clienteId, concepto:String(t.titulo||'').split('|')[0].slice(0,80),
+      facturaTipo:t.facturaTipo||'', facturaNum:t.facturaNum||'', medio:t.medioPago||'', retenciones:Number(t.retenciones)||0 };
+    if(sena) push(Object.assign({}, base, { concepto:'Seña — '+base.concepto, fecha:t.senaFecha||t.fechaInicio, monto:sena, sd:sena, esSena:true, retenciones:0 }));
+    if(t.estadoCobro==='cobrado') {
+      const total = Number(t.montoCobrado)||0;
+      const d = { mo:Number(t.manoObraCobrada)||0, rep:Number(t.precioRepuestoFacturado)||0, mov:Number(t.movilidad)||0, ter:Number(t.tercerosCobrado)||0 };
+      const sumD = d.mo+d.rep+d.mov+d.ter; const k = sumD>0 ? (total-sena)/sumD : 0;
+      push(Object.assign({}, base, { fecha:t.fechaCobroReal||t.fechaFin||'', monto:total-sena,
+        mo:Math.round(d.mo*k), rep:Math.round(d.rep*k), mov:Math.round(d.mov*k), ter:Math.round(d.ter*k), sd:sumD>0?0:total-sena }));
+    }
+  });
+  (DB.contratos||[]).forEach(c=>{
+    if(c.estadoCobro!=='cobrado') return;
+    const m = Number(c.montoCobradoReal)||Number(c.precioArs)||0;
+    push({ origen:'Contrato', ref:nombrePlanContrato(c), clienteId:c.clienteId, concepto:'Contrato de mantenimiento '+nombrePlanContrato(c), fecha:c.fechaCobroReal||c.fechaInicio, monto:m, mo:m });
+  });
+  (DB.terciarizadoLiquidaciones||[]).forEach(l=>{
+    push({ origen:'Terciarizado', ref:'', clienteId:'', concepto:'Liquidación trabajos terciarizados'+(l.notas?' — '+l.notas:''), fecha:l.fechaPago, monto:Number(l.montoRecibido)||0, mo:Number(l.montoRecibido)||0 });
+  });
+  return out.sort((a,b)=>(_rf(a.fecha)||0)-(_rf(b.fecha)||0));
+}
+
+// ── Egresos: todo lo que salió ──
+function registroEgresos() {
+  const out = [];
+  DB.trabajos.forEach(t=>{
+    const p = t.presupuestoId ? DB.presupuestos.find(x=>x.id===t.presupuestoId) : null;
+    const f = t.fechaInicio || t.fechaFin || (p&&p.fecha) || '';
+    if(Number(t.costoRepuesto)>0) out.push({ fecha:f, tipo:'Repuestos para trabajos', detalle:(t.titulo||'').split('|')[0]+(p?' (pres. #'+_rNumP(p)+')':''), proveedor:'', monto:Number(t.costoRepuesto) });
+    if(Number(t.tercerosCosto)>0) out.push({ fecha:f, tipo:'Servicios de terceros', detalle:(t.tercerosTipo?t.tercerosTipo+': ':'')+(t.tercerosDetalle||t.titulo||''), proveedor:t.tercerosProveedor||'', monto:Number(t.tercerosCosto) });
+  });
+  (DB.compras||[]).forEach(c=>out.push({ fecha:c.fecha, tipo:'Compras ('+(c.categoria||'otros')+')', detalle:c.detalle||'', proveedor:c.proveedorNombre||'', monto:Number(c.monto)||0 }));
+  (DB.gastosEstructura||[]).forEach(g=>out.push({ fecha:g.fecha, tipo:'Gastos de estructura / salidas', detalle:g.resumen||(g.items||[]).map(i=>i.categoria||i.descripcion).filter(Boolean).join(', '), proveedor:'', monto:Number(g.total)||0, sinRevisar:!g.confirmado }));
+  (DB.sueldos||[]).filter(s=>s.pagado || !s.fechaPago).forEach(s=>out.push({ fecha:s.fechaPago || (s.mes?s.mes+'-01':''), tipo:'Sueldos / honorarios', detalle:[s.persona,s.rol,s.concepto].filter(Boolean).join(' · '), proveedor:'', monto:Number(s.monto)||0, pendiente:!s.pagado }));
+  (DB.vehiculoServices||[]).forEach(v=>out.push({ fecha:v.fecha, tipo:'Vehículo (service)', detalle:(v.notas||'')+(v.km?' · '+v.km+' km':''), proveedor:'', monto:Number(v.total)||0 }));
+  return out.sort((a,b)=>(_rf(a.fecha)||0)-(_rf(b.fecha)||0));
+}
+
+// ── Resumen mensual (ingresos por rubro, egresos, resultado) ──
+function resumenMensual(cobros, egresos) {
+  const m = {};
+  const g = k => m[k] = m[k] || { ing:0, mo:0, rep:0, mov:0, ter:0, sd:0, cont:0, terc:0, ret:0, eRep:0, eTer:0, eCom:0, eEst:0, eSue:0, eVeh:0, eg:0 };
+  cobros.forEach(c=>{ const k=_rMes(c.fecha); if(!k) return; const x=g(k); x.ing+=c.monto; x.ret+=c.retenciones||0;
+    if(c.origen==='Contrato') x.cont+=c.monto; else if(c.origen==='Terciarizado') x.terc+=c.monto; else { x.mo+=c.mo; x.rep+=c.rep; x.mov+=c.mov; x.ter+=c.ter; x.sd+=c.sd||0; } });
+  egresos.forEach(e=>{ const k=_rMes(e.fecha); if(!k) return; const x=g(k); x.eg+=e.monto;
+    if(/^Repuestos/.test(e.tipo)) x.eRep+=e.monto; else if(/terceros/.test(e.tipo)) x.eTer+=e.monto; else if(/^Compras/.test(e.tipo)) x.eCom+=e.monto;
+    else if(/estructura/.test(e.tipo)) x.eEst+=e.monto; else if(/Sueldos/.test(e.tipo)) x.eSue+=e.monto; else x.eVeh+=e.monto; });
+  return Object.keys(m).sort().map(k=>Object.assign({ mes:k }, m[k]));
+}
+function facturacionAnualizada(cobros) {
+  const hoy = new Date(); const hace12 = new Date(hoy.getFullYear()-1, hoy.getMonth(), hoy.getDate());
+  const ult12 = cobros.filter(c=>{ const f=_rf(c.fecha); return f && f>hace12 && f<=hoy; }).reduce((a,c)=>a+c.monto,0);
+  const fs = cobros.map(c=>_rf(c.fecha)).filter(Boolean).sort((a,b)=>a-b);
+  const desde = fs.length ? (fs[0] > hace12 ? fs[0] : hace12) : hoy;
+  const meses = Math.max(1, (hoy - desde)/(30.44*86400000));
+  const hace3 = new Date(hoy.getFullYear(), hoy.getMonth()-3, hoy.getDate());
+  const ult3 = cobros.filter(c=>{ const f=_rf(c.fecha); return f && f>hace3 && f<=hoy; }).reduce((a,c)=>a+c.monto,0);
+  return { ult12, meses:Math.round(meses*10)/10, anualizado:Math.round(ult12/meses*12), ritmo3m:Math.round(ult3/3*12), ult3 };
+}
+
+// ── Lo que falta cobrar (aprobado sin cobrar), con antigüedad ──
+function porCobrarDetalle() {
+  const hoy = new Date();
+  return DB.presupuestos.filter(p=>p.estado==='aprobado' && !presupCobrado(p)).map(p=>{
+    const t = DB.trabajos.find(x=>x.presupuestoId===p.id); const f = _rf(p.fecha);
+    const sena = t ? Number(t.senaMonto)||0 : 0;
+    const dias = f ? Math.floor((hoy-f)/86400000) : null;
+    return { p, t, cliente:(_rCli(p.clienteId)||{}).nombre||'', monto:Number(p.monto)||0, sena, saldo:(Number(p.monto)||0)-sena, dias,
+      tramo: dias===null?'Sin fecha':dias<=30?'0–30 días':dias<=60?'31–60 días':dias<=90?'61–90 días':'Más de 90 días',
+      repAdelantado:t?Number(t.costoRepuesto)||0:0 };
+  }).sort((a,b)=>(b.dias||0)-(a.dias||0));
+}
+
+// ── Datos a corregir (se regenera en cada reporte) ──
+function datosACorregir() {
+  const out = [], hoy = new Date();
+  const add = (hoja, ref, cliente, problema, accion) => out.push({ 'Hoja / pestaña':hoja, 'N°':ref, 'Cliente':cliente, 'Problema':problema, 'Qué corregir':accion });
+  const fechaOk = s => !!_rf(s);
+  DB.presupuestos.forEach(p=>{
+    const n = '#'+_rNumP(p), cl = (_rCli(p.clienteId)||{}).nombre || p.clienteId || '';
+    const f = _rf(p.fecha);
+    if(!fechaOk(p.fecha)) add('Presupuestos', n, cl, `Fecha inválida ("${p.fecha||'vacía'}")`, 'Poné la fecha completa dd/mm/aaaa (columna FECHA de PRESUPUESTOS)');
+    if(p.estadoCobro==='cobrado') {
+      const fc = _rf(p.fechaCobroReal);
+      if(!fc) add('Presupuestos', n, cl, 'Cobrado sin fecha de cobro', 'Cargá la fecha de cobro (📊 Economía o FECHA_COBRO_REAL)');
+      else if(fc > hoy) add('Presupuestos', n, cl, `Fecha de cobro en el futuro (${_rDMY(p.fechaCobroReal)})`, 'Corregí FECHA_COBRO_REAL');
+      else if(f && fc < f) add('Presupuestos', n, cl, `Cobrado (${_rDMY(p.fechaCobroReal)}) antes de presupuestarlo (${_rDMY(p.fecha)})`, 'Revisá FECHA_COBRO_REAL (probable error de tipeo en el año o el mes)');
+      if(p.estado!=='aprobado') add('Presupuestos', n, cl, `Figura cobrado pero su estado es "${p.estado}"`, 'Si se cobró, pasalo a aprobado; si no, sacale el cobro');
+      const real = Number(p.montoCobradoReal)||0, m = Number(p.monto)||0;
+      if(real>0 && m>0) {
+        const r = real/m;
+        if(r > 8 && r < 12) add('Presupuestos', n, cl, `Cobrado real ${fmtMonto(real)} es 10 veces el presupuesto (${fmtMonto(m)})`, 'Casi seguro sobra un cero en MONTO_COBRADO_REAL');
+        else if(r > 1.15 || r < 0.85) add('Presupuestos', n, cl, `Cobrado real ${fmtMonto(real)} distinto del presupuesto ${fmtMonto(m)} (${Math.round((r-1)*100)}%)`, 'Confirmá el monto cobrado (o anotá en notas por qué cambió: repuestos extra, descuento)');
+      }
+    }
+    if(p.plazoPago && !['contado','30','60','90'].includes(String(p.plazoPago))) add('Presupuestos', n, cl, `Plazo de pago "${p.plazoPago}"`, 'Debe ser contado, 30, 60 o 90 (parece que se cargó el dólar en ese campo)');
+    if(Number(p.tcAlMomento)>5000) add('Presupuestos', n, cl, `Dólar al cotizar ${p.tcAlMomento}`, 'Revisá TC_AL_MOMENTO (parece un dólar con un dígito de más)');
+    if(p.estado==='rechazado') add('Presupuestos', n, cl, 'Estado "rechazado"', 'Pasalo a "no aprobado" y elegí el motivo (así cuenta en las estadísticas)');
+    if(p.estado==='no aprobado' && !p.motivoNoAprobado) add('Presupuestos', n, cl, 'No aprobado sin motivo', 'Elegí el motivo de no aprobación');
+  });
+  DB.trabajos.forEach(t=>{
+    const n = _rNumT(t), cl = (_rCli(t.clienteId)||{}).nombre || '';
+    if(t._tituloCrudo) add('Trabajos', n, cl, `Título con el ítem crudo ("${t._tituloCrudo.slice(0,50)}")`, 'Se arregla solo con el botón "Arreglar títulos" de Trabajos');
+    if(t.tipo && !['Reparación','Mantenimiento','Instalación','Diagnóstico','Fabricación','Otro','Servicio'].includes(t.tipo)) add('Trabajos', n, cl, `Tipo "${t.tipo}"`, 'Elegí Reparación / Diagnóstico / Mantenimiento… ("cancelado" es un estado, no un tipo)');
+    if(['completado','en curso'].includes(t.estado) && !fechaOk(t.fechaInicio)) add('Trabajos', n, cl, 'Sin fecha de inicio', 'Cargá la fecha de inicio (✏️ del trabajo)');
+    if(t.estado==='completado' && !fechaOk(t.fechaFin)) add('Trabajos', n, cl, 'Completado sin fecha de fin', 'Cargá la fecha de fin (sirve para medir tiempos)');
+    const fi=_rf(t.fechaInicio), ff=_rf(t.fechaFin);
+    if(fi && ff && ff < fi) add('Trabajos', n, cl, `Termina (${_rDMY(t.fechaFin)}) antes de empezar (${_rDMY(t.fechaInicio)})`, 'Revisá las fechas');
+    if(t.estado==='completado' && !(Number(t.montoCobrado)>0)) add('Trabajos', n, cl, 'Completado sin monto cobrado', 'Cargá lo cobrado en 📊 Economía');
+    if(t.estado==='completado' && Number(t.precioRepuestoFacturado)>0 && !(Number(t.costoRepuesto)>0)) add('Trabajos', n, cl, 'Repuestos facturados sin costo', 'Cargá lo que pagaste los repuestos (si no, la ganancia sale inflada)');
+  });
+  (DB.contratos||[]).forEach(c=>{
+    const cl = (_rCli(c.clienteId)||{}).nombre||'';
+    const a=_rf(c.fechaInicio), b=_rf(c.fechaVencimiento);
+    if(a && b && (b-a) < 60*86400000) add('Contratos', nombrePlanContrato(c), cl, `Vence ${_rDMY(c.fechaVencimiento)}, a ${Math.round((b-a)/86400000)} días de empezar`, 'Revisá la fecha de vencimiento del contrato');
+    if(c.estado==='activo' && c.estadoCobro!=='cobrado') add('Contratos', nombrePlanContrato(c), cl, 'Contrato activo sin cobro registrado', 'Registrá el cobro o revisá el estado');
+  });
+  DB.clientes.filter(c=>c.estado!=='prospecto' && c.estado!=='inactivo').forEach(c=>{
+    const falta = [];
+    if(!c.cuit) falta.push('CUIT');
+    if(!c.condicionIva) falta.push('condición frente al IVA');
+    if(!c.email) falta.push('email');
+    if(falta.length) add('Clientes', c.id, c.nombre, 'Le falta: '+falta.join(', '), 'Completalo en la ficha del cliente (lo va a pedir la factura electrónica)');
+  });
+  return out;
+}
+
+// ── Indicadores (tablero) ──
+function indicadoresMEB(cobros, egresos) {
+  const hoy = new Date(); const R = [];
+  const add = (grupo, ind, val, nota) => R.push({ 'Área':grupo, 'Indicador':ind, 'Valor':typeof val==='number'?Math.round(val):val, 'Cómo leerlo':nota||'' });
+  const an = facturacionAnualizada(cobros);
+  const meses = resumenMensual(cobros, egresos);
+  const ult = meses.filter(m=>m.mes<=_rMes(hoy.toISOString().slice(0,10))).slice(-1)[0];
+  add('Ingresos','Cobrado últimos 12 meses', an.ult12, 'Suma de todo lo que entró (registro único de cobros)');
+  add('Ingresos','Facturación anual al ritmo actual', an.anualizado, 'Para comparar con el tope del monotributo (lo confirma el contador)');
+  add('Ingresos','Ritmo anual según últimos 3 meses', an.ritmo3m, 'Si es mayor que el de arriba, MEB está acelerando');
+  add('Ingresos','Promedio mensual cobrado', an.meses ? Math.round(an.ult12/an.meses) : 0, '');
+  if(ult) add('Ingresos','Cobrado en '+_rMesTxt(ult.mes), ult.ing, '');
+  const tot = cobros.reduce((a,c)=>a+c.monto,0) || 1;
+  const sum = k => cobros.reduce((a,c)=>a+(c[k]||0),0);
+  add('Ingresos','% mano de obra', Math.round(sum('mo')/tot*100)+'%', 'Lo que depende de las horas de Emmanuel');
+  add('Ingresos','% repuestos', Math.round(sum('rep')/tot*100)+'%', 'Base del futuro negocio de importación');
+  add('Ingresos','% sin desglosar', Math.round(sum('sd')/tot*100)+'%', 'Cobros sin detalle de mano de obra / repuestos: completalos en 📊 Economía para que los % de arriba sean exactos');
+  add('Ingresos','% contratos (ingreso recurrente)', Math.round(cobros.filter(c=>c.origen==='Contrato').reduce((a,c)=>a+c.monto,0)/tot*100)+'%', 'Meta: que suba');
+  const costoRep = egresos.filter(e=>/^Repuestos/.test(e.tipo)).reduce((a,e)=>a+e.monto,0);
+  const repFact = DB.trabajos.reduce((a,t)=>a+(Number(t.precioRepuestoFacturado)||0),0);
+  add('Márgenes','Margen sobre repuestos', costoRep ? Math.round((repFact-costoRep)/costoRep*100)+'%' : '—', 'Cuánto se le gana a cada peso de repuesto comprado');
+  const ingTot = cobros.reduce((a,c)=>a+c.monto,0), egTot = egresos.reduce((a,e)=>a+e.monto,0);
+  add('Márgenes','Resultado (ingresos − todos los egresos cargados)', Math.round(ingTot-egTot), 'Ganancia neta aproximada: solo es real si están cargados todos los gastos');
+  add('Márgenes','Egresos sin revisar (Gastos de estructura)', (DB.gastosEstructura||[]).filter(g=>!g.confirmado).reduce((a,g)=>a+(Number(g.total)||0),0), 'Tickets cargados por Emmanuel que todavía no se confirmaron');
+  const pc = porCobrarDetalle();
+  add('Cobranza','Aprobado sin cobrar', pc.reduce((a,x)=>a+x.saldo,0), pc.length+' presupuestos');
+  ['0–30 días','31–60 días','61–90 días','Más de 90 días'].forEach(tr=>{ const l=pc.filter(x=>x.tramo===tr); add('Cobranza','  · '+tr, l.reduce((a,x)=>a+x.saldo,0), l.length+' presupuestos'); });
+  add('Cobranza','Repuestos ya pagados de trabajos sin cobrar', pc.reduce((a,x)=>a+x.repAdelantado,0), 'Plata propia adelantada que todavía no volvió');
+  const dias = DB.presupuestos.filter(p=>p.estadoCobro==='cobrado').map(p=>{ const a=_rf(p.fecha), b=_rf(p.fechaCobroReal); return (a&&b&&b>=a)?(b-a)/86400000:null; }).filter(x=>x!==null&&x<400).sort((a,b)=>a-b);
+  add('Cobranza','Días reales de cobro (mediana)', dias.length ? Math.round(dias[Math.floor(dias.length/2)]) : '—', 'Desde la fecha del presupuesto hasta que se cobró');
+  const dec = DB.presupuestos.filter(p=>['aprobado','no aprobado','rechazado'].includes(p.estado) && p.motivoNoAprobado!=='duplicado');
+  add('Comercial','Conversión (sin duplicados)', dec.length ? Math.round(dec.filter(p=>p.estado==='aprobado').length/dec.length*100)+'%' : '—', dec.length+' presupuestos con respuesta');
+  const apr = DB.presupuestos.filter(p=>p.estado==='aprobado');
+  add('Comercial','Ticket promedio aprobado', apr.length ? Math.round(apr.reduce((a,p)=>a+(Number(p.monto)||0),0)/apr.length) : 0, '');
+  add('Comercial','Presupuestos esperando respuesta', DB.presupuestos.filter(p=>p.estado==='pendiente').reduce((a,p)=>a+(Number(p.monto)||0),0), DB.presupuestos.filter(p=>p.estado==='pendiente').length+' presupuestos');
+  const porCli = {}; apr.forEach(p=>{ porCli[p.clienteId]=(porCli[p.clienteId]||0)+(Number(p.monto)||0); });
+  const top = Object.entries(porCli).sort((a,b)=>b[1]-a[1]); const totA = top.reduce((a,x)=>a+x[1],0)||1;
+  add('Comercial','Peso de los 3 clientes más grandes', Math.round(top.slice(0,3).reduce((a,x)=>a+x[1],0)/totA*100)+'%', top.slice(0,3).map(x=>(_rCli(x[0])||{}).nombre).join(', '));
+  const cnt = {}; DB.presupuestos.forEach(p=>{ const k=p.clienteId; cnt[k]=cnt[k]||{n:0,a:0}; cnt[k].n++; if(p.estado==='aprobado') cnt[k].a++; });
+  Object.entries(cnt).filter(([k,v])=>v.n>=5 && v.a/v.n<0.4).forEach(([k,v])=>add('Comercial','Presupuesta mucho y aprueba poco: '+((_rCli(k)||{}).nombre||k), v.a+' de '+v.n, 'Candidato a cobrar diagnóstico / visita'));
+  const ho = horasYViajes();
+  const hTrab = ho.reduce((a,h)=>a+h.horasTrabajo,0), hViaje = ho.reduce((a,h)=>a+h.horasViaje,0);
+  add('Capacidad','Horas de trabajo registradas', Math.round(hTrab*10)/10, 'Salen de las salidas cargadas en Gastos (inicio/fin de trabajo) y de "horas trabajadas"');
+  add('Capacidad','Horas de viaje registradas', Math.round(hViaje*10)/10, hTrab ? Math.round(hViaje/(hTrab+hViaje)*100)+'% del tiempo se va en viajar' : '');
+  const conH = DB.trabajos.filter(t=>Number(t.horasTrabajadas)>0 && Number(t.manoObraCobrada)>0);
+  add('Capacidad','Mano de obra cobrada por hora trabajada', conH.length ? Math.round(conH.reduce((a,t)=>a+Number(t.manoObraCobrada),0)/conH.reduce((a,t)=>a+Number(t.horasTrabajadas),0)) : '—', conH.length ? conH.length+' trabajos con horas cargadas' : 'Faltan horas cargadas en los trabajos');
+  const og = {}; DB.trabajos.forEach(t=>{ if(['cancelado','no aprobado'].includes(t.estado)) return; const c=_rCli(t.clienteId); const o = c ? (labelOrigenCliente(origenCliente(c).valor)||'Sin dato') : 'Sin dato'; og[o]=(og[o]||0)+facturadoTrabajo(t); });
+  Object.entries(og).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>add('Clientes','Facturado por canal: '+k, Math.round(v), ''));
+  return R;
+}
+
+// ── Horas y viajes (de las salidas de Gastos + horas cargadas en trabajos) ──
+function horasYViajes() {
+  const out = [];
+  (DB.gastosEstructura||[]).forEach(g=>{
+    const trab = _rHoras(g.inicioTrabajo1, g.finTrabajo1) + _rHoras(g.inicioTrabajo2, g.finTrabajo2);
+    const ida = _rHoras(g.comienzoTrabajo, g.llegadaCliente), vuelta = _rHoras(g.inicioViajeVuelta, g.horaFinalizacion);
+    if(!trab && !ida && !vuelta) return;
+    const t = g.trabajoId ? DB.trabajos.find(x=>x.id===g.trabajoId) : null;
+    const p = g.presupuestoId ? DB.presupuestos.find(x=>x.id===g.presupuestoId) : null;
+    out.push({ fecha:g.fecha, origen:'Salida (Gastos)', cliente:g.clienteVisitado || (t&&(_rCli(t.clienteId)||{}).nombre) || '', ref:p?'#'+_rNumP(p):(t?_rNumT(t):''), horasTrabajo:trab, horasViaje:ida+vuelta, km:0, gastos:Number(g.total)||0 });
+  });
+  DB.trabajos.forEach(t=>{
+    if(!(Number(t.horasTrabajadas)>0) && !(Number(t.horasViaje)>0) && !(Number(t.kmRecorridos)>0)) return;
+    out.push({ fecha:t.fechaInicio, origen:'Trabajo', cliente:(_rCli(t.clienteId)||{}).nombre||'', ref:_rNumT(t), horasTrabajo:Number(t.horasTrabajadas)||0, horasViaje:Number(t.horasViaje)||0, km:Number(t.kmRecorridos)||0, gastos:0, mo:Number(t.manoObraCobrada)||0, mov:Number(t.movilidad)||0 });
+  });
+  return out.sort((a,b)=>(_rf(a.fecha)||0)-(_rf(b.fecha)||0));
+}
+
+// ── Armado del Excel ──
+function _hoja(wb, nombre, filas, anchos, opts) {
+  opts = opts || {};
+  const ws = filas.length ? XLSX.utils.json_to_sheet(filas) : XLSX.utils.aoa_to_sheet([[opts.vacio || 'Sin datos todavía']]);
+  if(anchos) ws['!cols'] = anchos.map(w=>({ wch:w }));
+  if(filas.length) { // formato de miles en columnas de plata
+    const cols = Object.keys(filas[0]); const rng = XLSX.utils.decode_range(ws['!ref']);
+    cols.forEach((c,ci)=>{ if(!/monto|\$|ingres|egres|cobrad|saldo|total|resultado|retenc|seña|valor|factur|mano de obra|repuesto|movilidad|tercero|contrato|terciariz|sueldo|compra|estructura|veh[ií]culo|adelant/i.test(c)) return;
+      for(let r=1;r<=rng.e.r;r++){ const cell = ws[XLSX.utils.encode_cell({r, c:ci})]; if(cell && typeof cell.v==='number') cell.z = '#,##0'; } });
   }
+  XLSX.utils.book_append_sheet(wb, ws, nombre.slice(0,31));
+}
+function exportarExcel() {
+  const viejo = document.getElementById('modal-exportar'); if(viejo) viejo.remove();
+  const m = document.createElement('div'); m.className = 'modal-overlay open'; m.id = 'modal-exportar';
+  const nCorr = (()=>{ try { return datosACorregir().length; } catch(e) { return 0; } })();
+  m.innerHTML = `<div class="modal" style="max-width:520px">
+    <div class="modal-header"><span class="modal-title">EXPORTAR REPORTE</span><button class="modal-close" onclick="document.getElementById('modal-exportar').remove()">✕</button></div>
+    <div class="modal-body">
+      <button class="btn-primary" style="width:100%;padding:14px;margin-bottom:10px;text-align:left" onclick="document.getElementById('modal-exportar').remove();exportarReporteInterno()">
+        📊 <b>Reporte interno</b><div style="font-size:11px;font-weight:400;margin-top:4px;opacity:.85">Todo: indicadores, cobros, gastos, horas y viajes, deuda por antigüedad, presupuestos, trabajos y la lista de datos a corregir${nCorr?' ('+nCorr+')':''}.</div></button>
+      <button class="btn-secondary" style="width:100%;padding:14px;text-align:left;border-color:var(--green);color:var(--text)" onclick="document.getElementById('modal-exportar').remove();exportarReporteContador()">
+        🧾 <b>Reporte para el contador</b><div style="font-size:11px;font-weight:400;margin-top:4px;color:var(--muted)">Prolijo y sin datos internos: ingresos por mes y por rubro, egresos, facturación anualizada, clientes con CUIT y condición frente al IVA, comprobantes y retenciones, y lo pendiente de cobro.</div></button>
+    </div></div>`;
+  document.body.appendChild(m);
+}
+function _chequearXLSX() { if(typeof XLSX === 'undefined') { showToast('No se pudo cargar la librería de Excel — revisá tu conexión e intentá de nuevo', 'error'); return false; } return true; }
+
+function exportarReporteInterno() {
+  if(!_chequearXLSX()) return;
   try {
     const wb = XLSX.utils.book_new();
-    const nombreCliente = id => { const c = DB.clientes.find(x=>String(x.id)===String(id)); return c ? c.nombre : ''; };
+    const cobros = registroCobros(), egresos = registroEgresos();
+    const nomC = id => (_rCli(id)||{}).nombre || id || '';
     const nombreMaquina = id => { const m = DB.maquinas.find(x=>String(x.id)===String(id)); return m ? `${m.marca||''} ${m.modelo||''}`.trim() : ''; };
+    _hoja(wb, 'Indicadores', indicadoresMEB(cobros, egresos), [14,52,18,70]);
+    _hoja(wb, 'Mes a mes', resumenMensual(cobros, egresos).map(m=>({ 'Mes':_rMesTxt(m.mes), 'Ingresos cobrados':Math.round(m.ing), 'Mano de obra':Math.round(m.mo), 'Repuestos':Math.round(m.rep), 'Movilidad':Math.round(m.mov), 'Terceros':Math.round(m.ter), 'Sin desglosar':Math.round(m.sd), 'Contratos':Math.round(m.cont), 'Terciarizado':Math.round(m.terc),
+      'Egresos':Math.round(m.eg), 'Costo repuestos':Math.round(m.eRep), 'Pagado a terceros':Math.round(m.eTer), 'Compras':Math.round(m.eCom), 'Gastos de estructura':Math.round(m.eEst), 'Sueldos':Math.round(m.eSue), 'Vehículo':Math.round(m.eVeh), 'Resultado':Math.round(m.ing-m.eg) })), [10,16,14,13,12,12,12,13,14,15,16,12,18,12,12,14]);
+    _hoja(wb, 'Cobros', cobros.map(c=>({ 'Fecha':_rDMY(c.fecha)||c.fecha, 'Origen':c.origen, 'N°':c.ref, 'Cliente':nomC(c.clienteId), 'Concepto':c.concepto, 'Monto cobrado':Math.round(c.monto),
+      'Mano de obra':c.mo, 'Repuestos':c.rep, 'Movilidad':c.mov, 'Terceros':c.ter, 'Sin desglosar':c.sd||0, 'Seña':c.esSena?'Sí':'', 'Factura':[c.facturaTipo,c.facturaNum].filter(Boolean).join(' '), 'Medio de pago':c.medio, 'Retenciones':c.retenciones||0 })), [11,12,10,26,40,15,13,12,12,12,7,16,14,12]);
+    _hoja(wb, 'Por cobrar', porCobrarDetalle().map(x=>({ 'N°':'#'+_rNumP(x.p), 'Cliente':x.cliente, 'Fecha':_rDMY(x.p.fecha)||x.p.fecha, 'Días':x.dias===null?'':x.dias, 'Antigüedad':x.tramo, 'Monto':x.monto, 'Seña cobrada':x.sena, 'Saldo':x.saldo, 'Repuestos ya pagados':x.repAdelantado, 'Plazo':x.p.plazoPago||'' })), [8,26,11,7,15,14,13,14,18,9], { vacio:'Nada aprobado pendiente de cobro' });
+    _hoja(wb, 'Egresos', egresos.map(e=>({ 'Fecha':_rDMY(e.fecha)||e.fecha, 'Tipo':e.tipo, 'Detalle':e.detalle, 'Proveedor':e.proveedor, 'Monto':Math.round(e.monto), 'Observación':e.sinRevisar?'Sin revisar':(e.pendiente?'Sueldo sin pagar':'') })), [11,28,50,22,14,16]);
+    _hoja(wb, 'Gastos de estructura', (DB.gastosEstructura||[]).map(g=>({ 'Fecha':_rDMY(g.fecha)||g.fecha, 'Cargó':g.usuario, 'Cliente visitado':g.clienteVisitado, 'Detalle':(g.items||[]).map(i=>[i.categoria,i.descripcion,i.monto?('$'+Number(i.monto).toLocaleString('es-AR')):''].filter(Boolean).join(' ')).join(' · ')||g.resumen, 'Total':Number(g.total)||0, 'Revisado':g.confirmado?'Sí':'No' })), [11,12,22,70,13,9], { vacio:'Sin gastos cargados' });
+    _hoja(wb, 'Sueldos', (DB.sueldos||[]).map(s=>({ 'Mes':s.mes, 'Persona':s.persona, 'Rol':s.rol, 'Concepto':s.concepto, 'Monto':Number(s.monto)||0, 'Pagado':s.pagado?'Sí':'No', 'Fecha de pago':_rDMY(s.fechaPago)||s.fechaPago })), [9,18,16,24,13,8,13], { vacio:'Sin sueldos cargados' });
+    _hoja(wb, 'Vehículo', (DB.vehiculoServices||[]).map(v=>({ 'Fecha':_rDMY(v.fecha)||v.fecha, 'Vehículo':((DB.vehiculos||[]).find(x=>x.id===v.vehiculoId)||{}).nombre||'', 'Km':v.km||'', 'Detalle':(v.items||[]).map(i=>i.descripcion||i.concepto||'').filter(Boolean).join(', ')||v.notas, 'Total':Number(v.total)||0 })), [11,18,10,50,13], { vacio:'Sin services de vehículo cargados' });
+    _hoja(wb, 'Horas y viajes', horasYViajes().map(h=>({ 'Fecha':_rDMY(h.fecha)||h.fecha, 'Origen':h.origen, 'Cliente':h.cliente, 'N°':h.ref, 'Horas de trabajo':h.horasTrabajo, 'Horas de viaje':h.horasViaje, 'Km':h.km||'', 'Gastos de la salida':h.gastos||'', 'Mano de obra cobrada':h.mo||'', 'Movilidad cobrada':h.mov||'' })), [11,15,24,9,15,14,8,17,19,17], { vacio:'Todavía no hay horas cargadas: salen de las salidas que carga Emmanuel en Gastos (inicio/fin de trabajo) y de "horas trabajadas" en cada trabajo' });
 
-    // ── PRESUPUESTOS ──
-    const hojaPresup = DB.presupuestos.map(p => ({
-      'N°': p.num||'', 'Cliente': nombreCliente(p.clienteId)||p.clienteId||'',
-      'Descripción': (p.descripcion||'').replace(/\n/g,' | '),
-      'Monto ARS': Number(p.monto)||0, 'Moneda': p.moneda||'ARS',
-      'Monto USD': Number(p.montoUsd)||0, 'TC al cotizar': Number(p.tcAlMomento)||0,
-      'Plazo de pago': p.plazoPago||'contado', 'Recargo %': Number(p.recargoPct)||0,
-      'Estado': p.estado||'', 'Estado de cobro': p.estadoCobro||'pendiente',
-      'Fecha': p.fecha||'', 'Fecha de cobro real': p.fechaCobroReal||'',
-      'TC del cobro': Number(p.tcCobro)||0, 'Monto cobrado real': Number(p.montoCobradoReal)||0,
-      'USD recibido': Number(p.usdRecibido)||0, 'Diferencia USD': Number(p.diferenciaUsd)||0,
-      'Diferencia %': Number(p.diferenciaPct)||0,
-      'Motivo no aprobación': p.motivoNoAprobado ? etiquetaMotivoNoAprobado(p.motivoNoAprobado) : '',
-      'Nota del motivo': p.motivoNota||'',
-      'N° presupuesto vinculado (duplicado)': p.presupVinculadoId ? (DB.presupuestos.find(x=>x.id===p.presupVinculadoId)?.num || '') : '',
-      'Notas': p.notas||''
-    }));
-    if(hojaPresup.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hojaPresup), 'Presupuestos');
-
-    // ── CONTRATOS ──
-    const hojaContratos = (DB.contratos||[]).map(c => ({
-      'Cliente': nombreCliente(c.clienteId)||c.clienteId||'', 'Máquina': nombreMaquina(c.maquinaId)||'',
-      'Plan': nombrePlanContrato(c), 'Fecha inicio': c.fechaInicio||'', 'Fecha vencimiento': c.fechaVencimiento||'',
-      'Precio ARS': Number(c.precioArs)||0, 'Precio USD': Number(c.precioUsd)||0,
-      'TC al cotizar': Number(c.tcAlMomento)||0, 'Plazo de pago': c.plazoPago||'contado',
-      'Recargo %': Number(c.recargoPct)||0, 'Estado': c.estado||'', 'Estado de cobro': c.estadoCobro||'pendiente',
-      'Fecha de cobro real': c.fechaCobroReal||'', 'TC del cobro': Number(c.tcCobro)||0,
-      'Monto cobrado real': Number(c.montoCobradoReal)||0, 'Diferencia USD': Number(c.diferenciaUsd)||0,
-      'Diferencia %': Number(c.diferenciaPct)||0, 'Notas': c.notas||''
-    }));
-    if(hojaContratos.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hojaContratos), 'Contratos');
-
-    // ── TRABAJOS ──
-    const hojaTrabajos = DB.trabajos.map(t => {
-      const ganancia = (Number(t.manoObraCobrada||0)+Number(t.movilidad||0)+(Number(t.precioRepuestoFacturado||0)-Number(t.costoRepuesto||0)))
+    _hoja(wb, 'Presupuestos', DB.presupuestos.map(p => ({
+      'N°': p.num||'', 'Cliente': nomC(p.clienteId)||'', 'Descripción': (p.descripcion||'').replace(/\n/g,' | '),
+      'Monto ARS': Number(p.monto)||0, 'Moneda': p.moneda||'ARS', 'Monto USD': Number(p.montoUsd)||0, 'TC al cotizar': Number(p.tcAlMomento)||0,
+      'Plazo de pago': p.plazoPago||'contado', 'Recargo %': Number(p.recargoPct)||0, 'Estado': p.estado||'', 'Estado de cobro': presupCobrado(p)?'cobrado':'pendiente',
+      'Fecha': p.fecha||'', 'Fecha de cobro real': p.fechaCobroReal||'', 'TC del cobro': Number(p.tcCobro)||0, 'Monto cobrado real': Number(p.montoCobradoReal)||0,
+      'USD recibido': Number(p.usdRecibido)||0, 'Diferencia USD': Number(p.tcAlMomento)>0 ? (Number(p.diferenciaUsd)||0) : '', 'Diferencia %': Number(p.tcAlMomento)>0 ? (Number(p.diferenciaPct)||0) : '',
+      'Motivo no aprobación': p.motivoNoAprobado ? etiquetaMotivoNoAprobado(p.motivoNoAprobado) : '', 'Nota del motivo': p.motivoNota||'',
+      'N° presupuesto vinculado (duplicado)': p.presupVinculadoId ? (DB.presupuestos.find(x=>x.id===p.presupVinculadoId)?.num || '') : '', 'Notas': p.notas||''
+    })), [6,24,50,13,7,10,10,10,8,11,12,11,12,9,15,10,12,10,24,30,10,30]);
+    _hoja(wb, 'Trabajos', DB.trabajos.map(t => {
+      const p = t.presupuestoId ? DB.presupuestos.find(x=>x.id===t.presupuestoId) : null;
+      const ganancia = (Number(t.manoObraCobrada||0)+Number(t.movilidad||0)+(Number(t.precioRepuestoFacturado||0)-Number(t.costoRepuesto||0))+(Number(t.tercerosCobrado||0)-Number(t.tercerosCosto||0)))
         || (Number(t.montoCobrado||0)-Number(t.costoRepuesto||0)-Number(t.montoGastos||0));
-      return {
-        'Cliente': nombreCliente(t.clienteId)||t.clienteId||'', 'Máquina': nombreMaquina(t.maquinaId)||'',
-        'Título': t.titulo||'', 'Tipo': t.tipo||'', 'Estado': t.estado||'', 'Estado máquina': t.estadoMaquina||'',
-        'Fecha inicio': t.fechaInicio||'', 'Fecha fin': t.fechaFin||'',
-        'Monto cobrado': Number(t.montoCobrado)||0, 'Costo repuesto': Number(t.costoRepuesto)||0,
-        'Repuesto facturado': Number(t.precioRepuestoFacturado)||0, 'Mano de obra': Number(t.manoObraCobrada)||0,
-        'Movilidad': Number(t.movilidad)||0, 'Ganancia ARS': Math.round(ganancia),
-        'TC del trabajo': Number(t.tcAlMomento)||0, 'Ganancia USD esperada': Number(t.gananciaUsdEsperada)||0,
-        'Estado de cobro': t.estadoCobro||'pendiente', 'Fecha de cobro real': t.fechaCobroReal||'',
-        'TC del cobro': Number(t.tcCobro)||0, 'Ganancia USD real': Number(t.gananciaUsd)||0,
-        'Diferencia USD': Number(t.diferenciaUsd)||0, 'Diferencia %': Number(t.diferenciaPct)||0,
-        'Notas': t.notas||''
-      };
-    });
-    if(hojaTrabajos.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hojaTrabajos), 'Trabajos');
+      return { 'N°':_rNumT(t), 'N° presupuesto':p?'#'+_rNumP(p):'', 'Cliente':nomC(t.clienteId), 'Máquina':nombreMaquina(t.maquinaId), 'Título':t.titulo||'', 'Tipo':t.tipo||'',
+        'Tipo de trabajo':categoriaTrabajo(t).nombre||'', 'Estado':t.estado||'', 'Fecha inicio':t.fechaInicio||'', 'Fecha fin':t.fechaFin||'',
+        'Monto cobrado':Number(t.montoCobrado)||0, 'Costo repuesto':Number(t.costoRepuesto)||0, 'Repuesto facturado':Number(t.precioRepuestoFacturado)||0,
+        'Mano de obra':Number(t.manoObraCobrada)||0, 'Movilidad':Number(t.movilidad)||0, 'Terceros cobrado':Number(t.tercerosCobrado)||0, 'Terceros pagado':Number(t.tercerosCosto)||0,
+        'Ganancia ARS':Math.round(ganancia), 'Horas trabajadas':Number(t.horasTrabajadas)||'', 'Horas de viaje':Number(t.horasViaje)||'', 'Km':Number(t.kmRecorridos)||'',
+        'Seña':Number(t.senaMonto)||'', 'Factura':[t.facturaTipo,t.facturaNum].filter(Boolean).join(' '), 'Medio de pago':t.medioPago||'', 'Retenciones':Number(t.retenciones)||'',
+        'Estado de cobro':t.estadoCobro||'pendiente', 'Fecha de cobro real':t.fechaCobroReal||'', 'Herramientas':t.herramientas||'', 'Notas':t.notas||'' };
+    }), [8,10,24,18,40,12,22,11,11,11,13,13,13,13,11,12,12,13,9,9,7,11,14,13,11,11,12,20,30]);
+    _hoja(wb, 'Contratos', (DB.contratos||[]).map(c => ({
+      'Cliente': nomC(c.clienteId), 'Máquina': nombreMaquina(c.maquinaId), 'Plan': nombrePlanContrato(c), 'Fecha inicio': c.fechaInicio||'', 'Fecha vencimiento': c.fechaVencimiento||'',
+      'Precio ARS': Number(c.precioArs)||0, 'Precio USD': Number(c.precioUsd)||0, 'Estado': c.estado||'', 'Estado de cobro': c.estadoCobro||'pendiente',
+      'Fecha de cobro real': c.fechaCobroReal||'', 'Monto cobrado real': Number(c.montoCobradoReal)||0, 'Notas': c.notas||'' })), [24,18,16,12,14,13,11,9,13,14,15,40], { vacio:'Sin contratos' });
+    _hoja(wb, 'Compras', (DB.compras||[]).map(c => { const e = estadoPagoCompra(c); return { 'Fecha':c.fecha||'', 'Proveedor':c.proveedorNombre||'', 'Detalle':c.detalle||'', 'Categoría':c.categoria||'', 'Monto ARS':Number(c.monto)||0, 'Pagado':e.estado==='sin'?'':e.pagado, 'Saldo':e.estado==='sin'?'':e.saldo, 'Moneda':c.moneda||'ARS', 'Monto USD':Number(c.montoUsd)||0, 'Notas':c.notas||'' }; }), [11,20,36,13,13,12,12,8,10,30], { vacio:'Sin compras' });
+    _hoja(wb, 'Clientes', DB.clientes.map(c => ({ 'N°':c.id, 'Nombre':c.nombre||'', 'Empresa':c.empresa||'', 'CUIT':c.cuit||'', 'Condición IVA':c.condicionIva||'', 'Zona':c.zona||'', 'Sedes':c.sedes||'',
+      'Teléfono':String(c.telefono||''), 'Email':c.email||'', 'Cómo llegó':labelOrigenCliente(origenCliente(c).valor)||'', 'Estado':c.estado||'', 'Notas':c.notas||'' })), [5,24,24,14,20,16,14,15,24,22,9,40]);
+    _hoja(wb, 'Datos a corregir', datosACorregir(), [16,10,26,60,70], { vacio:'¡No hay nada para corregir!' });
+    XLSX.writeFile(wb, `MEB_Reporte_interno_${new Date().toISOString().slice(0,10)}.xlsx`);
+    showToast('Reporte interno descargado ✓', 'success');
+  } catch(e) { console.error(e); showToast('Error al generar el reporte: ' + e.message, 'error'); }
+}
 
-    // ── COMPRAS ──
-    const hojaCompras = (DB.compras||[]).map(c => ({
-      'Fecha': c.fecha||'', 'Proveedor': c.proveedorNombre||'', 'Detalle': c.detalle||'',
-      'Categoría': c.categoria||'', 'Monto ARS': Number(c.monto)||0, 'Moneda': c.moneda||'ARS',
-      'Monto USD': Number(c.montoUsd)||0, 'TC al momento': Number(c.tcAlMomento)||0, 'Notas': c.notas||''
-    }));
-    if(hojaCompras.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hojaCompras), 'Compras');
+function exportarReporteContador() {
+  if(!_chequearXLSX()) return;
+  try {
+    const wb = XLSX.utils.book_new();
+    const cobros = registroCobros(), egresos = registroEgresos();
+    const an = facturacionAnualizada(cobros);
+    const meses = resumenMensual(cobros, egresos);
+    const hoyTxt = new Date().toLocaleDateString('es-AR');
+    // Resumen
+    const aoa = [
+      ['MEB Machinery Solutions — Resumen para el contador'], ['Generado el '+hoyTxt+' desde el CRM'], [],
+      ['Facturación (cobrado) últimos 12 meses', Math.round(an.ult12)],
+      ['Meses con actividad considerados', an.meses],
+      ['Facturación anual estimada al ritmo actual', an.anualizado],
+      ['Ritmo anual según los últimos 3 meses', an.ritmo3m],
+      ['Pendiente de cobro (aprobado)', Math.round(porCobrarDetalle().reduce((a,x)=>a+x.saldo,0))],
+      ['Retenciones sufridas registradas', Math.round(cobros.reduce((a,c)=>a+(c.retenciones||0),0))], [],
+      ['Composición de los ingresos', 'Monto', '%'],
+    ];
+    const tot = cobros.reduce((a,c)=>a+c.monto,0) || 1;
+    [['Mano de obra / servicio técnico','mo'],['Venta de repuestos','rep'],['Movilidad / traslados','mov'],['Servicios de terceros refacturados','ter'],['Sin desglosar (presupuestos viejos o señas)','sd']].forEach(([l,k])=>{ const v=cobros.filter(c=>c.origen!=='Contrato'&&c.origen!=='Terciarizado').reduce((a,c)=>a+(c[k]||0),0); aoa.push([l, Math.round(v), Math.round(v/tot*1000)/10+'%']); });
+    [['Contratos de mantenimiento','Contrato'],['Trabajos terciarizados','Terciarizado']].forEach(([l,o])=>{ const v=cobros.filter(c=>c.origen===o).reduce((a,c)=>a+c.monto,0); aoa.push([l, Math.round(v), Math.round(v/tot*1000)/10+'%']); });
+    aoa.push([], ['Notas'], ['• Montos en pesos. Los ingresos son lo efectivamente cobrado (no lo presupuestado).'],
+      ['• La venta de repuestos es un rubro propio: se compran y se refacturan al cliente dentro del servicio.'],
+      ['• Se evalúa pasar a responsable inscripto e importar repuestos.']);
+    const ws0 = XLSX.utils.aoa_to_sheet(aoa); ws0['!cols']=[{wch:46},{wch:18},{wch:8}];
+    for(let r=0;r<aoa.length;r++){ const c = ws0[XLSX.utils.encode_cell({r, c:1})]; if(c && typeof c.v==='number' && r!==4) c.z='#,##0'; }
+    XLSX.utils.book_append_sheet(wb, ws0, 'Resumen');
+    _hoja(wb, 'Ingresos por mes', meses.map(m=>({ 'Mes':_rMesTxt(m.mes), 'Total cobrado':Math.round(m.ing), 'Mano de obra':Math.round(m.mo), 'Repuestos':Math.round(m.rep), 'Movilidad':Math.round(m.mov), 'Terceros':Math.round(m.ter), 'Sin desglosar':Math.round(m.sd), 'Contratos':Math.round(m.cont), 'Terciarizado':Math.round(m.terc), 'Retenciones':Math.round(m.ret) })), [10,15,14,13,12,12,14,12,13,12]);
+    _hoja(wb, 'Egresos por mes', meses.map(m=>({ 'Mes':_rMesTxt(m.mes), 'Total egresos':Math.round(m.eg), 'Repuestos':Math.round(m.eRep), 'Servicios de terceros':Math.round(m.eTer), 'Compras':Math.round(m.eCom), 'Gastos de estructura':Math.round(m.eEst), 'Sueldos / honorarios':Math.round(m.eSue), 'Vehículo':Math.round(m.eVeh) })), [10,14,13,20,12,19,19,12]);
+    _hoja(wb, 'Ingresos (detalle)', cobros.map(c=>{ const cl=_rCli(c.clienteId)||{}; return { 'Fecha':_rDMY(c.fecha)||c.fecha, 'Cliente':cl.nombre||(c.origen==='Terciarizado'?'Terciarizado':''), 'CUIT':cl.cuit||'', 'Condición IVA':cl.condicionIva||'', 'Concepto':c.concepto, 'Comprobante':[c.facturaTipo?('Factura '+c.facturaTipo):'', c.facturaNum].filter(Boolean).join(' N° '), 'Medio de pago':c.medio, 'Monto':Math.round(c.monto), 'Retenciones':c.retenciones||0 }; }), [11,26,14,20,40,20,14,14,12]);
+    _hoja(wb, 'Egresos (detalle)', egresos.filter(e=>!e.pendiente).map(e=>({ 'Fecha':_rDMY(e.fecha)||e.fecha, 'Rubro':e.tipo, 'Detalle':e.detalle, 'Proveedor':e.proveedor, 'Monto':Math.round(e.monto) })), [11,28,50,22,14]);
+    _hoja(wb, 'Clientes', DB.clientes.filter(c=>c.estado!=='prospecto' && !/^belen$/i.test(String(c.nombre).trim())).map(c=>{ const f=cobros.filter(x=>String(x.clienteId)===String(c.id)).reduce((a,x)=>a+x.monto,0); return {
+      'Razón social / nombre':c.empresa||c.nombre, 'CUIT':c.cuit||'', 'Condición IVA':c.condicionIva||'', 'Domicilio fiscal':c.domicilioFiscal||'', 'Localidad':c.zona||'', 'Email':c.email||'', 'Teléfono':String(c.telefono||''), 'Total cobrado':Math.round(f) }; }).sort((a,b)=>b['Total cobrado']-a['Total cobrado']), [30,15,22,30,20,26,15,14]);
+    _hoja(wb, 'Pendiente de cobro', porCobrarDetalle().map(x=>{ const cl=_rCli(x.p.clienteId)||{}; return { 'Presupuesto':'#'+_rNumP(x.p), 'Fecha':_rDMY(x.p.fecha)||x.p.fecha, 'Cliente':x.cliente, 'CUIT':cl.cuit||'', 'Monto':x.monto, 'Seña cobrada':x.sena, 'Saldo':x.saldo, 'Antigüedad':x.tramo }; }), [12,11,26,14,13,13,13,14], { vacio:'Nada pendiente de cobro' });
+    XLSX.writeFile(wb, `MEB_Reporte_contador_${new Date().toISOString().slice(0,10)}.xlsx`);
+    showToast('Reporte para el contador descargado ✓', 'success');
+  } catch(e) { console.error(e); showToast('Error al generar el reporte: ' + e.message, 'error'); }
+}
 
-    // ── CLIENTES ──
-    const hojaClientes = DB.clientes.map(c => ({
-      'Nombre': c.nombre||'', 'Empresa': c.empresa||'', 'Zona': c.zona||'',
-      'Teléfono': c.telefono||'', 'Email': c.email||'', 'Estado': c.estado||'', 'Notas': c.notas||''
-    }));
-    if(hojaClientes.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hojaClientes), 'Clientes');
-
-    if(wb.SheetNames.length === 0) {
-      showToast('No hay datos para exportar todavía', 'error');
-      return;
-    }
-
-    const fechaArchivo = new Date().toISOString().slice(0,10);
-    XLSX.writeFile(wb, `MEB_Reporte_${fechaArchivo}.xlsx`);
-    showToast('Excel descargado ✓ — revisá la carpeta de Descargas', 'success');
-  } catch(e) {
-    console.error('Error exportando Excel:', e);
-    showToast('Error al generar el Excel: ' + e.message, 'error');
-  }
+// ── Arreglar títulos crudos de trabajos (ej. "Mano de obra|Mano de obra|1|500000") ──
+function arreglarTitulosTrabajos() {
+  const l = DB.trabajos.filter(t=>t._tituloCrudo);
+  if(!l.length) { showToast('No hay títulos para arreglar','success'); return; }
+  if(!confirm('Se van a corregir '+l.length+' títulos de trabajos en el Sheet (queda solo el nombre del primer ítem). ¿Seguimos?')) return;
+  l.forEach(t=>{ writeToSheet({ action:'setTituloTrabajo', id:t.id, row:{ titulo:t.titulo } }); delete t._tituloCrudo; });
+  saveLocal(); refreshCurrentPage();
+  showToast(l.length+' títulos corregidos ✓','success');
 }
 
 function showToast(msg, type='') {
