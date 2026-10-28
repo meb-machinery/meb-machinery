@@ -102,6 +102,20 @@
   .mini{flex:0 0 auto;background:var(--bg);border:1px solid var(--line);color:var(--tx);border-radius:8px;padding:7px 10px;font-size:13px;font-weight:600;font-family:inherit}
   .foto-btn{display:block;width:100%;text-align:center;background:var(--bg);border:1px dashed var(--y);color:var(--y);border-radius:12px;padding:16px;font-size:15px;font-weight:700}
   .foto-prev{display:block;width:100%;max-height:240px;object-fit:contain;border-radius:10px;margin-top:8px;background:#000}
+  .ag-dia{margin:10px 0}
+  .ag-f{display:flex;justify-content:space-between;align-items:center;font-weight:700;margin-bottom:6px;color:var(--y)}
+  .ag-it{display:flex;gap:10px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:6px}
+  .ag-h{min-width:48px;font-weight:700;font-size:14px}.ag-h span{color:var(--mut);font-size:12px;font-weight:500}
+  .ag-t{flex:1;min-width:0}
+  .ck-cat{background:var(--card2);border:1px solid var(--line);border-radius:12px;margin-bottom:8px;padding:6px 10px}
+  .ck-cat summary{font-weight:700;padding:6px 0;cursor:pointer}
+  .ck-it{border-top:1px solid var(--line);padding:8px 0}
+  .ck-n{font-size:14px;margin-bottom:6px}
+  .ck-b{display:flex;gap:8px}
+  .ck-btn{flex:1;background:var(--bg);border:1px solid var(--line);color:var(--mut);border-radius:10px;padding:10px;font-size:13px;font-weight:600;font-family:inherit}
+  .ck-btn.ok{background:rgba(46,204,113,.15);border-color:var(--ok);color:var(--ok)}
+  .ck-btn.at{background:rgba(231,76,60,.15);border-color:var(--bad);color:var(--bad)}
+  .ck-com{width:100%;margin-top:6px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--tx);padding:8px;font-size:15px;font-family:inherit}
   .inst{background:var(--card2);border:1px dashed var(--line);border-radius:12px;padding:10px 12px;font-size:12px;color:var(--mut);margin-top:10px;display:none}
 </style>
 </head>
@@ -116,10 +130,12 @@
 </header>
 
 <div id="app"></div>
+<div id="vAgenda" style="display:none"></div>
 <div id="vGastos" style="display:none"></div>
 <div id="vCompartir" style="display:none"></div>
 <nav class="nav" id="nav">
   <button type="button" data-v="dia" class="on">📅<span>Mi día</span></button>
+  <button type="button" data-v="agenda">🗓<span>Agenda</span></button>
   <button type="button" data-v="gastos">💸<span>Gastos</span></button>
   <button type="button" data-v="compartir">📣<span>Compartir</span></button>
 </nav>
@@ -184,12 +200,12 @@ function cargar(manual){
     .then(r=>r.json())
     .then(j=>{
       if(!j.ok){ if(!D.visitas.length && !D.prospectos.length) mostrarSinAcceso(); else toast('No se pudo actualizar'); return; }
-      D = { hoy:j.hoy, visitas:j.visitas||[], prospectos:j.prospectos||[], web:j.web||{}, links:j.links||{}, fichas:j.fichas||{}, pendientesHoy:j.pendientesHoy||[] };
+      D = { hoy:j.hoy, visitas:j.visitas||[], prospectos:j.prospectos||[], web:j.web||{}, links:j.links||{}, fichas:j.fichas||{}, pendientesHoy:j.pendientesHoy||[], clientes:j.clientes||[], maquinas:j.maquinas||{} };
       sinConexion = false;
       ultimaCarga = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
       ls(LS_DATA, JSON.stringify({ d:D, t:ultimaCarga, dia:hoyLocal() }));
       aplicarColaLocal();
-      render();
+      render(); if(vista==='agenda') renderAgenda();
       if(manual) toast('Actualizado');
     })
     .catch(()=>{
@@ -204,7 +220,10 @@ function leerCola(){ try{ return JSON.parse(ls(LS_Q)||'[]'); }catch(e){ return [
 function guardarCola(c){ try{ localStorage.setItem(LS_Q, JSON.stringify(c)); return true; }catch(e){ return false; } }
 function postear(p){ return fetch(SCRIPT_URL,{ method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(p) }); }
 function enviar(payload){
-  const cola = leerCola(); cola.push(payload);
+  let cola = leerCola();
+  // v17.80 — el checklist se guarda muchas veces: en la cola queda solo el último estado de cada uno
+  if(payload.action==='guardarChecklist') cola = cola.filter((p,i)=>!(i>0 && p.action==='guardarChecklist' && p.row && p.row.id===payload.row.id));
+  cola.push(payload);
   if(!guardarCola(cola)){
     // v17.68: el celular no tiene lugar para guardar una copia (fotos grandes): se manda directo
     postear(payload).then(()=>{ if(!sinConexion) setTimeout(()=>cargar(false),1500); })
@@ -232,6 +251,8 @@ function aplicarColaLocal(){
       if(r.tipo==='visita' && !r.volver){ const v=D.visitas.find(z=>z.id===r.id); if(v) v.estado='realizada'; }
     }
     if(p.action==='miDiaHorometro') aplicarHorometroLocal(r);
+    if(p.action==='miDiaAgendar') aplicarAgendaLocal(r);
+    if(p.action==='miDiaTiempo'){ const v=D.visitas.find(z=>z.id===r.id); if(v){ if(r.tipo==='fin') v.finReal=r.hora; else v.inicioReal=r.hora; } }
   });
 }
 function aplicarResultado(p, resultado){
@@ -244,10 +265,10 @@ function aplicarResultado(p, resultado){
 function diasDisponibles(){
   const hoy = D.hoy || hoyLocal();
   const set = new Set([hoy, sumarDias(hoy,1)]);
-  D.visitas.forEach(v=>set.add(v.fecha));
+  D.visitas.forEach(v=>{ if(v.estado!=='cancelada' && v.fecha<=sumarDias(hoy,7)) set.add(v.fecha); });
   return [...set].sort();
 }
-function visitasDelDia(f){ return D.visitas.filter(v=>v.fecha===f); }
+function visitasDelDia(f){ return D.visitas.filter(v=>v.fecha===f && v.estado!=='cancelada'); }
 function prospDeVisita(v){ return v.prospectoId ? D.prospectos.find(p=>p.id===v.prospectoId) : null; }
 function direccionVisita(v){
   const p = prospDeVisita(v);
@@ -458,8 +479,10 @@ function setVista(v){
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on', b.dataset.v===v));
   document.getElementById('app').style.display = v==='dia'?'block':'none';
   document.getElementById('vGastos').style.display = v==='gastos'?'block':'none';
+  document.getElementById('vAgenda').style.display = v==='agenda'?'block':'none';
+  if(v==='agenda') renderAgenda();
   document.getElementById('vCompartir').style.display = v==='compartir'?'block':'none';
-  document.getElementById('btnRef').style.display = v==='dia'?'':'none';
+  document.getElementById('btnRef').style.display = (v==='dia'||v==='agenda')?'':'none';
   document.getElementById('fab').style.display = (v==='dia' && TOKEN)?'block':'none';
   if(v==='gastos'){
     const c=document.getElementById('vGastos');
@@ -550,6 +573,8 @@ function tarjetaVisita(v){
       ${dir?`<a class="a p" target="_blank" rel="noopener" href="${esc(mapsBuscar(dir))}">📍 Cómo llegar</a>`:''}
       ${tel?`<a class="a" href="tel:${esc(soloDigitos(tel))}">📞 Llamar</a><a class="a" target="_blank" rel="noopener" href="https://wa.me/${esc(telWA(tel))}">💬</a>`:''}
       ${(!p && v.clienteId)?`<button class="a" type="button" data-hor="${esc(v.id)}|">⏱ Horómetro</button>`:''}
+      ${(!p && (v.clienteId||v.clienteLibre) && (!v.tipo||['visita','operario','terciarizado'].includes(v.tipo)))?`<button class="a" type="button" data-checklist="${esc(v.id)}">📋 Checklist${(()=>{ try{ const g=JSON.parse(ls(chkKey(v.id))||'null'); return g?' ✔':''; }catch(e){ return ''; } })()}</button>`:''}
+      ${(!p && !hecha) ? htmlTiempo(v) : (v.inicioReal&&v.finReal?htmlTiempo(v):'')}
       ${hecha?`<span class="a ok">✔ Hecha</span>`:`<button class="a ok" type="button" data-fui="${p?'p:'+esc(p.id):'v:'+esc(v.id)}">✔ Fui</button>`}
     </div></div>`;
 }
@@ -878,6 +903,187 @@ function prepararInstalacion(){
     document.head.appendChild(l);
   }catch(e){}
 })();
+
+/* ============================================================
+   v17.80 — AGENDA (sincronizada con el calendario del CRM), EMPEZAR / TERMINAR TRABAJO
+   y CHECKLIST DE VISITA con notas y foto de la firma del cliente.
+   ============================================================ */
+const CATEGORIAS = [
+  ['visita','🔧','Visita a cliente','#2ecc71'], ['reunion','🗓️','Reunión','#4A90D9'], ['prospeccion','🧭','Prospección','#f1c40f'],
+  ['terciarizado','🤝','Terciarizado (Matías)','#c792ea'], ['operario','👷','Trabajo con el operario','#e67e22'],
+  ['proveedor','📦','Proveedores / repuestos','#16a085'], ['gestion','📄','Gestión administrativa','#8e6bb0'],
+  ['vehiculo','🚗','Mantenimiento del vehículo','#d35400'], ['libre','☀️','Libre / día libre','#7f8c8d'], ['otro','📌','Otro','#777']
+];
+function catDe(t){ return CATEGORIAS.find(c=>c[0]===t) || CATEGORIAS[CATEGORIAS.length-1]; }
+function idNuevo(pref){ return pref + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function horaAhora(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function minutosEntre(a,b){ const p=x=>{ const m=/^(\d{1,2}):(\d{2})/.exec(x||''); return m?(+m[1])*60+(+m[2]):null; }; const x=p(a), y=p(b); if(x===null||y===null) return null; let d=y-x; if(d<0) d+=1440; return d; }
+function fmtDur(min){ if(min==null) return ''; const h=Math.floor(min/60), m=min%60; return (h?h+' h ':'')+(m?m+' min':(h?'':'0 min')); }
+
+/* ---------- Agenda ---------- */
+function renderAgenda(){
+  const c = document.getElementById('vAgenda'); if(!c) return;
+  const hoy = D.hoy || hoyLocal();
+  const porDia = {};
+  D.visitas.filter(v=>v.estado!=='cancelada').forEach(v=>{ (porDia[v.fecha]=porDia[v.fecha]||[]).push(v); });
+  let h = `<h2 style="margin-top:14px">Agenda</h2>
+    <div class="ayuda">Es la misma agenda del calendario del CRM: lo que agendes acá lo ve Belu, y lo que ella cargue (visitas, prospectos) te aparece acá.</div>
+    <button class="a ok" type="button" data-agendar="" style="width:100%;margin:10px 0 6px">＋ Agendar</button>`;
+  for(let i=0;i<21;i++){
+    const f = sumarDias(hoy,i); const vs = (porDia[f]||[]).sort((a,b)=>String(a.horaInicio).localeCompare(String(b.horaInicio)));
+    if(!vs.length && i>6) continue;
+    h += `<div class="ag-dia"><div class="ag-f">${i===0?'Hoy':(i===1?'Mañana':esc(fechaLarga(f).replace(/^./,x=>x.toUpperCase())))}<button class="mini" type="button" data-agendar="" data-fecha="${f}">＋</button></div>`;
+    h += vs.length ? vs.map(v=>{ const c=catDe(v.tipo); const nom=v.cliente||v.clienteLibre||'';
+      return `<div class="ag-it" style="border-left:4px solid ${c[3]}">
+        <div class="ag-h">${esc(v.horaInicio||'—')}${v.horaFin?'<br><span>'+esc(v.horaFin)+'</span>':''}</div>
+        <div class="ag-t"><b>${c[1]} ${esc(v.titulo||nom||c[2])}</b><div class="sub">${esc([nom&&nom!==v.titulo?nom:'', v.zona].filter(Boolean).join(' · '))}${v.estado==='realizada'?' · ✔ hecha':''}</div></div>
+        <button class="mini" type="button" data-agendar="${esc(v.id)}">✏️</button></div>`; }).join('')
+      : `<div class="sub" style="padding:4px 2px 8px">Libre</div>`;
+    h += `</div>`;
+  }
+  c.innerHTML = h;
+}
+function hojaAgendar(id, fechaPref){
+  const v = id ? D.visitas.find(x=>x.id===id) : null;
+  const clis = D.clientes||[];
+  const zonas = [...new Set([...(D.clientes||[]).map(c=>c.zona), ...D.prospectos.map(p=>p.zona)].filter(Boolean))];
+  abrirHoja(`<h3>${v?'Editar':'Agendar'}</h3>
+    <div class="f"><label>Tipo</label><select id="ag-tipo">${CATEGORIAS.map(c=>`<option value="${c[0]}" ${(v?v.tipo:'visita')===c[0]?'selected':''}>${c[1]} ${c[2]}</option>`).join('')}</select></div>
+    <div class="f"><label>Fecha</label><input id="ag-fecha" type="date" value="${esc(v?v.fecha:(fechaPref||diaSel||D.hoy||hoyLocal()))}"></div>
+    <div class="f" style="display:flex;gap:10px"><div style="flex:1"><label>Desde</label><input id="ag-ini" type="time" value="${esc(v?v.horaInicio:'08:00')}"></div><div style="flex:1"><label>Hasta</label><input id="ag-fin" type="time" value="${esc(v?v.horaFin||'':'')}"></div></div>
+    <div class="f"><label>Cliente</label><select id="ag-cli"><option value="">— Sin cliente / otro —</option>${clis.map(c=>`<option value="${esc(c.id)}" ${v&&String(v.clienteId)===String(c.id)?'selected':''}>${esc(c.nombre)}</option>`).join('')}</select></div>
+    <div class="f"><label>Si no está en la lista (o es para Matías)</label><input id="ag-libre" value="${esc(v?v.clienteLibre||'':'')}" placeholder="Nombre"></div>
+    <div class="f"><label>Qué vas a hacer</label><input id="ag-tit" value="${esc(v?v.titulo||'':'')}" placeholder="Ej: Service 500 hs 310L"></div>
+    <div class="f"><label>Zona / sede (si no es la del cliente)</label><input id="ag-zona" list="ag-zonas" value="${esc(v?v.zonaVisita||'':'')}" placeholder="Ej: Luján"><datalist id="ag-zonas">${zonas.map(z=>`<option value="${esc(z)}">`).join('')}</datalist></div>
+    <div class="f"><label>Notas</label><textarea id="ag-notas" rows="2">${esc(v?v.notas||'':'')}</textarea></div>
+    <div class="acts"><button class="a ok" type="button" id="ag-ok">Guardar</button>${v?'<button class="a" type="button" id="ag-del" style="color:var(--bad)">Cancelar visita</button>':''}<button class="a" type="button" id="ag-c">Cerrar</button></div>`);
+  const guardar = (cancelar)=>{
+    const row = { t:TOKEN, id: v?v.id:idNuevo('md'), fecha:document.getElementById('ag-fecha').value, horaInicio:document.getElementById('ag-ini').value, horaFin:document.getElementById('ag-fin').value,
+      tipo:document.getElementById('ag-tipo').value, clienteId:document.getElementById('ag-cli').value, clienteLibre:document.getElementById('ag-libre').value.trim(),
+      titulo:document.getElementById('ag-tit').value.trim(), zonaVisita:document.getElementById('ag-zona').value.trim(), notas:document.getElementById('ag-notas').value.trim(), estado: cancelar?'cancelada':'planificada' };
+    if(!row.fecha){ toast('Falta la fecha'); return; }
+    if(!row.titulo && !row.clienteId && !row.clienteLibre){ toast('Poné qué vas a hacer o el cliente'); return; }
+    enviar({ action:'miDiaAgendar', usuario:'Emmanuel (Mi día)', row });
+    aplicarAgendaLocal(row); cerrarHoja(); render(); renderAgenda();
+    toast(cancelar?'Visita cancelada':'Agendado ✔ — ya lo ve Belu en el CRM');
+  };
+  document.getElementById('ag-ok').onclick=()=>guardar(false);
+  if(v) document.getElementById('ag-del').onclick=()=>{ if(confirm('¿Cancelar esta visita?')) guardar(true); };
+  document.getElementById('ag-c').onclick=cerrarHoja;
+}
+function aplicarAgendaLocal(r){
+  const cli = (D.clientes||[]).find(c=>String(c.id)===String(r.clienteId));
+  let v = D.visitas.find(x=>x.id===r.id);
+  if(!v){ v = { id:r.id, estado:'planificada', prospectoId:'', acuerdos:'' }; D.visitas.push(v); }
+  Object.assign(v, { fecha:r.fecha, horaInicio:r.horaInicio, horaFin:r.horaFin, tipo:r.tipo, clienteId:r.clienteId, cliente:cli?cli.nombre:'', clienteLibre:r.clienteLibre,
+    titulo:r.titulo || (cli?cli.nombre:''), zonaVisita:r.zonaVisita, zona:r.zonaVisita || (cli?cli.zona:''), notas:r.notas, estado:r.estado==='cancelada'?'cancelada':(v.estado==='realizada'?'realizada':'planificada') });
+  D.visitas.sort((a,b)=>(a.fecha+a.horaInicio) < (b.fecha+b.horaInicio) ? -1 : 1);
+}
+
+/* ---------- Empezar / terminar trabajo ---------- */
+function htmlTiempo(v){
+  if(v.tipo && !['visita','operario','terciarizado'].includes(v.tipo)) return '';
+  const ini = v.inicioReal, fin = v.finReal;
+  if(!ini) return `<button class="a" type="button" data-tiempo="inicio|${esc(v.id)}">▶ Empezar trabajo</button>`;
+  if(!fin){ const min = minutosEntre(ini, horaAhora());
+    return `<button class="a" type="button" data-tiempo="fin|${esc(v.id)}" style="border-color:var(--y);color:var(--y)">■ Terminar (empezó ${esc(ini)} · ${fmtDur(min)})</button>`; }
+  return `<span class="a" style="color:var(--ok)">⏱ ${esc(ini)}–${esc(fin)} · ${fmtDur(minutosEntre(ini,fin))}</span>`;
+}
+function marcarTiempo(tipo, id){
+  const v = D.visitas.find(x=>x.id===id); if(!v) return;
+  const hora = horaAhora();
+  const mandar = (lat,lng)=>{ enviar({ action:'miDiaTiempo', usuario:'Emmanuel (Mi día)', row:{ t:TOKEN, id, tipo, hora, lat, lng } }); };
+  if(tipo==='inicio') v.inicioReal = hora; else v.finReal = hora;
+  render();
+  toast(tipo==='inicio' ? 'Empezaste a las '+hora : 'Terminaste a las '+hora+' · '+fmtDur(minutosEntre(v.inicioReal,hora)));
+  if(navigator.geolocation){ let listo=false; const t=setTimeout(()=>{ if(!listo){ listo=true; mandar(); } },6000);
+    navigator.geolocation.getCurrentPosition(p=>{ if(listo) return; listo=true; clearTimeout(t); mandar(p.coords.latitude,p.coords.longitude); }, ()=>{ if(listo) return; listo=true; clearTimeout(t); mandar(); }, { timeout:5000, maximumAge:300000 }); }
+  else mandar();
+}
+
+/* ---------- Checklist de visita (el mismo del operario) + notas + foto de la firma ---------- */
+const CHECKLIST_ITEMS = {
+  'Motor': ['Nivel de aceite','Pérdidas de aceite','Filtro de aire primario','Filtro de aire secundario','Válvula de descarga de polvo','Nivel de refrigerante','Pérdidas de refrigerante','Correas (tensión/estado)','Trampa de agua del filtro de combustible','Humo de escape anormal'],
+  'Tren rodante': ['Rolos','Cadena (tensión)','Zapatas (desgaste)','Rueda guía / motriz','Piñón'],
+  'Sistema hidráulico': ['Nivel de aceite hidráulico','Pérdidas en cilindros (balde/brazo/pluma)','Pérdidas en mangueras','Indicador de filtro hidráulico obstruido','Juego en bujes y pines'],
+  'Implemento': ['Dientes / filo del balde','Fisuras visibles en brazo o pluma','Soldaduras (estado general)'],
+  'Cabina y comandos': ['Luces (todas encienden)','Alarma de retroceso','Bocina','Aire acondicionado','Testigos de alerta en el tablero','Palancas / joystick'],
+  'Sistema eléctrico': ['Batería (bornes, sulfatación)','Correa de alternador'],
+  'General': ['Horómetro (registrar lectura)','Nivel de combustible','Golpes o daños relevantes en chapa']
+};
+let CHK = null; let _chkTimer = null;
+function chkKey(vid){ return 'meb_midia_chk_'+vid; }
+function abrirChecklist(visitaId){
+  const v = D.visitas.find(x=>x.id===visitaId); if(!v) return;
+  let g = null; try{ g = JSON.parse(ls(chkKey(visitaId))||'null'); }catch(e){}
+  CHK = g || { id:idNuevo('chk_'), visitaId, clienteId:v.clienteId||'', cliente:v.cliente||v.clienteLibre||v.titulo||'', maquina:'', usuario: ls('meb_checklist_usuario')||'Emmanuel', fecha:v.fecha, items:{}, notas:'', firma:'', firmaEnviada:false };
+  renderChecklist();
+}
+function renderChecklist(){
+  const c = CHK; const maqs = ((D.maquinas||{})[c.clienteId]||[]);
+  const total = Object.values(CHECKLIST_ITEMS).reduce((a,l)=>a+l.length,0);
+  const rev = Object.values(c.items).filter(x=>x.estado).length;
+  const aten = Object.entries(c.items).filter(([k,x])=>x.estado==='atencion');
+  let h = `<h3>📋 Checklist — ${esc(c.cliente)}</h3>
+    <div class="f"><label>Máquina</label>${maqs.length?`<select id="ck-maq"><option value="">— Elegí —</option>${maqs.map(m=>`<option ${c.maquina===m.nombre?'selected':''}>${esc(m.nombre)}</option>`).join('')}<option value="__otra" ${c.maquina&&!maqs.some(m=>m.nombre===c.maquina)?'selected':''}>Otra…</option></select>`:''}
+      <input id="ck-maq-txt" placeholder="Ej: Retro John Deere 310L" value="${esc(maqs.some(m=>m.nombre===c.maquina)?'':c.maquina)}" style="${maqs.length&&!(c.maquina&&!maqs.some(m=>m.nombre===c.maquina))?'display:none;':''}margin-top:6px"></div>
+    <div class="sub" style="margin-bottom:8px">Tocá lo que corresponda. Se guarda solo. <b style="color:var(--y)">${rev}</b> de ${total} revisados${aten.length?` · <b style="color:var(--bad)">${aten.length} necesitan atención</b>`:''}</div>`;
+  Object.keys(CHECKLIST_ITEMS).forEach(cat=>{
+    h += `<details class="ck-cat" ${cat==='Motor'?'open':''}><summary>${esc(cat)} <span class="sub">${CHECKLIST_ITEMS[cat].filter(it=>(c.items[cat+'|'+it]||{}).estado).length}/${CHECKLIST_ITEMS[cat].length}</span></summary>`;
+    CHECKLIST_ITEMS[cat].forEach(it=>{ const k=cat+'|'+it; const st=c.items[k]||{};
+      h += `<div class="ck-it"><div class="ck-n">${esc(it)}</div><div class="ck-b">
+        <button type="button" class="ck-btn ${st.estado==='ok'?'ok':''}" data-ck="${esc(k)}|ok">✅ OK</button>
+        <button type="button" class="ck-btn ${st.estado==='atencion'?'at':''}" data-ck="${esc(k)}|atencion">⚠️ Atención</button></div>
+        ${st.estado==='atencion'||st.comentario?`<input class="ck-com" data-ckc="${esc(k)}" value="${esc(st.comentario||'')}" placeholder="Comentario…">`:''}</div>`; });
+    h += `</details>`;
+  });
+  h += `<div class="f" style="margin-top:12px"><label>📝 Notas (si falta algo, lo que pidió el cliente, lo que quedó pendiente)</label><textarea id="ck-notas" rows="3">${esc(c.notas||'')}</textarea></div>
+    <div class="f"><label>✍️ Firma del cliente (foto del papel firmado o de la pantalla)</label>
+      <label class="foto-btn" for="ck-firma">${c.firma?'📷 Cambiar foto de la firma':'📷 Sacar foto de la firma'}</label>
+      <input id="ck-firma" type="file" accept="image/*" capture="environment" style="display:none">
+      ${c.firma?`<img class="foto-prev" src="${c.firma}" alt="Firma">${c.firmaEnviada?'<div class="sub" style="color:var(--ok)">✔ Guardada en Drive</div>':''}`:''}</div>
+    <div class="acts"><button class="a ok" type="button" id="ck-ok">💾 Guardar y cerrar</button><button class="a" type="button" id="ck-pdf">🖨 Respaldo PDF</button></div>`;
+  abrirHoja(h);
+  const sel = document.getElementById('ck-maq'), txt = document.getElementById('ck-maq-txt');
+  if(sel) sel.onchange=()=>{ if(sel.value==='__otra'){ txt.style.display=''; txt.focus(); c.maquina=txt.value; } else { txt.style.display='none'; c.maquina=sel.value; } chkGuardar(); };
+  txt.oninput=()=>{ c.maquina=txt.value.trim(); chkGuardar(); };
+  document.getElementById('ck-notas').oninput=e=>{ c.notas=e.target.value; chkGuardar(); };
+  document.getElementById('ck-firma').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; try{ c.firma = await comprimirFoto(f); c.firmaEnviada=false; chkGuardarLocal();
+      enviar({ action:'miDiaFirmaChecklist', usuario:'Emmanuel (Mi día)', row:{ t:TOKEN, id:c.id, cliente:c.cliente, fotoBase64:c.firma } }); c.firmaEnviada=true; chkGuardarLocal(); renderChecklist(); toast('Firma guardada ✔'); }catch(err){ toast('No se pudo leer la foto'); } };
+  document.getElementById('ck-ok').onclick=()=>{ chkGuardar(true); cerrarHoja(); render(); toast('Checklist guardado ✔'); };
+  document.getElementById('ck-pdf').onclick=chkRespaldo;
+}
+function chkGuardarLocal(){ try{ localStorage.setItem(chkKey(CHK.visitaId), JSON.stringify(CHK)); }catch(e){ const x=Object.assign({},CHK,{firma:''}); try{ localStorage.setItem(chkKey(CHK.visitaId), JSON.stringify(x)); }catch(e2){} } }
+function chkGuardar(ya){
+  ls('meb_checklist_usuario', CHK.usuario||'Emmanuel');
+  chkGuardarLocal();
+  clearTimeout(_chkTimer);
+  const mandar = ()=>{ const c=CHK; const items = Object.keys(c.items).filter(k=>c.items[k].estado||c.items[k].comentario).map(k=>{ const p=k.split('|'); return { categoria:p[0], item:p[1], estado:c.items[k].estado||null, comentario:c.items[k].comentario||'' }; });
+    const [y,m,d] = String(c.fecha||hoyLocal()).split('-');
+    enviar({ action:'guardarChecklist', usuario:'Emmanuel (Mi día)', row:{ id:c.id, cliente:c.cliente, clienteId:c.clienteId, maquina:c.maquina, usuario:c.usuario, fecha:d+'/'+m+'/'+y, itemsJson:JSON.stringify(items), notas:c.notas||'', visitaId:c.visitaId } }); };
+  if(ya) mandar(); else _chkTimer = setTimeout(mandar, 1500);
+}
+function chkRespaldo(){
+  const c=CHK; let filas='';
+  Object.keys(CHECKLIST_ITEMS).forEach(cat=>{ const l=CHECKLIST_ITEMS[cat].filter(it=>{ const s=c.items[cat+'|'+it]; return s&&(s.estado||s.comentario); }); if(!l.length) return;
+    filas += `<tr><td colspan="3" style="background:#F5F2EC;font-weight:700">${esc(cat)}</td></tr>` + l.map(it=>{ const s=c.items[cat+'|'+it]; return `<tr><td>${esc(it)}</td><td style="${s.estado==='atencion'?'color:#c0392b;font-weight:700':''}">${s.estado==='ok'?'OK':s.estado==='atencion'?'NECESITA ATENCIÓN':'—'}</td><td>${esc(s.comentario||'')}</td></tr>`; }).join(''); });
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Checklist ${esc(c.cliente)}</title><style>body{font-family:Arial;max-width:720px;margin:20px auto;padding:0 16px;color:#1A1A1A}table{width:100%;border-collapse:collapse;font-size:12.5px}td,th{padding:6px 8px;border-bottom:1px solid #eee;text-align:left}th{background:#1A1A1A;color:#F4B400;font-size:10px}img{max-width:320px;border:1px solid #ccc;margin-top:6px}@media print{button{display:none}}</style></head><body>
+    <h2>MEB MACHINERY SOLUTIONS — CHECKLIST DE VISITA</h2><p><b>Cliente:</b> ${esc(c.cliente)}${c.maquina?' · <b>Máquina:</b> '+esc(c.maquina):''}<br><b>Fecha:</b> ${esc(c.fecha)} · <b>Completado por:</b> ${esc(c.usuario)}</p>
+    <table><thead><tr><th>Ítem</th><th>Estado</th><th>Comentario</th></tr></thead><tbody>${filas||'<tr><td colspan="3">Sin ítems marcados</td></tr>'}</tbody></table>
+    ${c.notas?`<p><b>Notas:</b> ${esc(c.notas)}</p>`:''}${c.firma?`<p><b>Firma del cliente:</b><br><img src="${c.firma}"></p>`:''}
+    <button onclick="window.print()">Imprimir / Guardar PDF</button></body></html>`;
+  const url = URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'})); window.open(url,'_blank');
+}
+document.addEventListener('click', e=>{
+  const ck = e.target.closest('[data-ck]'); if(ck && CHK){ const p=ck.dataset.ck.split('|'); const est=p.pop(); const k=p.join('|');
+    const st = CHK.items[k] = CHK.items[k] || { estado:null, comentario:'' }; st.estado = st.estado===est ? null : est;
+    const abiertos = [...document.querySelectorAll('.ck-cat')].map(d=>d.open); const y = document.getElementById('sheet').scrollTop;
+    renderChecklist(); document.querySelectorAll('.ck-cat').forEach((d,i)=>d.open=abiertos[i]); document.getElementById('sheet').scrollTop=y; chkGuardar(); return; }
+  const ag = e.target.closest('[data-agendar]'); if(ag){ hojaAgendar(ag.dataset.agendar||'', ag.dataset.fecha||''); return; }
+  const ti = e.target.closest('[data-tiempo]'); if(ti){ const [tipo,id]=ti.dataset.tiempo.split('|'); marcarTiempo(tipo,id); return; }
+  const cl = e.target.closest('[data-checklist]'); if(cl){ abrirChecklist(cl.dataset.checklist); return; }
+});
+document.addEventListener('input', e=>{ const k = e.target.dataset && e.target.dataset.ckc; if(k && CHK){ (CHK.items[k] = CHK.items[k] || {estado:null}).comentario = e.target.value; chkGuardar(); } });
 
 /* ---------- eventos ---------- */
 document.addEventListener('click',e=>{

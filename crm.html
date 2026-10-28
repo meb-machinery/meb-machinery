@@ -2393,7 +2393,7 @@ async function syncAll() {
         id: resolverIdEstable(r,'CHECKLIST_VISITAS'),
         fecha: r.FECHA || '', hora: r.HORA || '',
         cliente: r.CLIENTE || '', maquina: r.MAQUINA || '', usuario: r.USUARIO || '',
-        items: items
+        items: items, notas: r.NOTAS || '', firmaUrl: r.FIRMA_URL || '', visitaId: String(r.VISITA_ID||'').trim()
       };
     });
 
@@ -2507,7 +2507,8 @@ async function syncAll() {
       usuario: r.USUARIO || '',
       clienteLibre: r.CLIENTE_LIBRE || '',
       duracionHoras: parseFloat(r.DURACION_HORAS)||0,
-      notasAcuerdos: r.NOTAS_ACUERDOS || ''
+      notasAcuerdos: r.NOTAS_ACUERDOS || '',
+      inicioReal: String(r.HORA_INICIO_REAL||'').trim(), finReal: String(r.HORA_FIN_REAL||'').trim()
     }));
 
     // Inversiones personales de Emmanuel — GANANCIA_REAL_JSON es un mapa
@@ -4284,7 +4285,7 @@ function renderCalendarioSemanal() {
       const trabajosHora = h===7 ? (trabajosPorFecha[iso]||[]) : []; // trabajos sin hora: mostrar una sola vez, en la primera franja
       html += `<div style="border-top:1px solid var(--border);border-left:1px solid var(--border);min-height:34px;padding:2px;cursor:pointer;position:relative" onclick="calSemNuevaVisita('${iso}',${h})" onmouseover="this.style.background='rgba(244,180,0,0.04)'" onmouseout="this.style.background='transparent'">
         ${visitasHora.map(v=>{const c=catVisita(v.tipo); const nombreCliente=v.cliente||v.clienteLibre; return `<div onclick="event.stopPropagation();openModal('visitaCalendario', DB.calendarioVisitas.find(x=>x.id==='${v.id}'))" style="background:${c.color}33;border-left:3px solid ${c.color};padding:2px 4px;margin-bottom:2px;border-radius:0 3px 3px 0;font-size:10px;color:var(--text);cursor:pointer" title="${(v.titulo||'').replace(/"/g,'&quot;')}">
-          <b>${v.horaInicio}${v.horaFin?'–'+v.horaFin:''}</b> ${c.icon} ${v.titulo}${nombreCliente?' · '+nombreCliente:''}${v.notasAcuerdos?' 📌':''}
+          <b>${v.horaInicio}${v.horaFin?'–'+v.horaFin:''}</b> ${c.icon} ${v.titulo}${nombreCliente?' · '+nombreCliente:''}${v.notasAcuerdos?' 📌':''}${v.inicioReal?` <span style="color:#2ecc71" title="Hora real cargada desde Mi Día">⏱${v.inicioReal}${v.finReal?'–'+v.finReal:''}</span>`:''}
         </div>`;}).join('')}
         ${trabajosHora.map(t=>{const cl=DB.clientes.find(c=>String(c.id)===String(t.clienteId));return `<div style="background:#2ecc7122;border-left:3px solid #2ecc71;padding:2px 4px;margin-bottom:2px;border-radius:0 3px 3px 0;font-size:10px;color:var(--text)" title="Trabajo del CRM — no editable acá">🔧 ${t.titulo}${cl?' · '+cl.nombre:''}</div>`;}).join('')}
       </div>`;
@@ -5456,7 +5457,8 @@ function renderChecklistsVisita() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
         <div>
           <div style="font-size:15px;font-weight:700;color:var(--text)">${c.cliente || '—'}${c.maquina?' <span style="color:var(--muted);font-weight:400">— '+c.maquina+'</span>':''}</div>
-          <div style="font-size:11px;color:var(--muted)">${c.fecha} ${c.hora} · completado por ${c.usuario || '—'}</div>
+          <div style="font-size:11px;color:var(--muted)">${c.fecha} ${c.hora} · completado por ${c.usuario || '—'}${c.firmaUrl?` · <a href="${c.firmaUrl}" target="_blank" style="color:var(--yellow)">✍️ ver firma</a>`:''}</div>
+          ${c.notas?`<div style="font-size:12px;margin-top:4px;color:var(--text)">📝 ${prosEsc(c.notas)}</div>`:''}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           ${conAtencion.length ? `<span class="badge" style="background:rgba(224,122,122,0.15);color:#e07a7a">⚠️ ${conAtencion.length} necesitan atención</span>` : ''}
@@ -15058,6 +15060,11 @@ function horasYViajes() {
     const t = g.trabajoId ? DB.trabajos.find(x=>x.id===g.trabajoId) : null;
     const p = g.presupuestoId ? DB.presupuestos.find(x=>x.id===g.presupuestoId) : null;
     out.push({ fecha:g.fecha, origen:'Salida (Gastos)', cliente:g.clienteVisitado || (t&&(_rCli(t.clienteId)||{}).nombre) || '', ref:p?'#'+_rNumP(p):(t?_rNumT(t):''), horasTrabajo:trab, horasViaje:ida+vuelta, km:0, gastos:Number(g.total)||0 });
+  });
+  (DB.calendarioVisitas||[]).forEach(v=>{
+    if(!v.inicioReal || !v.finReal) return;
+    const h = _rHoras(v.inicioReal, v.finReal); if(!h) return;
+    out.push({ fecha:v.fecha, origen:'Mi Día (empezar/terminar)', cliente:(_rCli(v.clienteId)||{}).nombre || v.cliente || v.clienteLibre || '', ref:v.titulo||'', horasTrabajo:h, horasViaje:0, km:0, gastos:0 });
   });
   DB.trabajos.forEach(t=>{
     if(!(Number(t.horasTrabajadas)>0) && !(Number(t.horasViaje)>0) && !(Number(t.kmRecorridos)>0)) return;
