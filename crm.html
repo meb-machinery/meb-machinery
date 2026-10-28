@@ -243,6 +243,11 @@ select option { background:var(--dark); }
 .gs-item:last-child { border-bottom:none; }
 /* COBRO BADGES */
 .badge-cobro-cobrado { background:rgba(46,204,113,0.15); color:var(--green); border:1px solid rgba(46,204,113,0.3); }
+.chip-fcobro { font-size:10px; background:transparent; border:1px dashed var(--border2); color:var(--muted); border-radius:10px; padding:1px 7px; cursor:pointer; white-space:nowrap; font-family:inherit; }
+.chip-fcobro:hover { border-color:var(--yellow); color:var(--yellow); }
+.chip-fcobro.sin { border-color:var(--orange,#e67e22); color:var(--orange,#e67e22); }
+.pop-fcobro { position:absolute; z-index:5000; background:var(--card,#1f1f1f); border:1px solid var(--yellow); border-radius:8px; padding:10px 12px; box-shadow:0 8px 24px rgba(0,0,0,.45); }
+.pop-fcobro input[type=date] { background:var(--dark); border:1px solid var(--border2); color:var(--text); border-radius:4px; padding:6px 8px; font-size:13px; }
 .badge-cobro-parcial  { background:rgba(244,180,0,0.12); color:var(--yellow); border:1px solid rgba(244,180,0,0.3); }
 .badge-cobro-pendiente{ background:rgba(231,76,60,0.12); color:var(--red); border:1px solid rgba(231,76,60,0.3); }
 
@@ -2359,6 +2364,7 @@ async function syncAll() {
     })();
     // v17.79 — las fechas de inicio y fin del trabajo salen del informe técnico (Emmanuel siempre las completa)
     try { aplicarFechasDeInformes(); } catch(eFi) { console.warn('fechas informes', eFi); }
+    try { alinearFechasCobro(); } catch(eAc) { console.warn('fechas cobro', eAc); }
 
     DB.oportunidadesLog = (opl.length ? opl : []).map(r => ({
       id: r.ID || uid(),
@@ -2827,7 +2833,7 @@ function generarTokenPortal() {
 // (que separa filas por '\n'). Por eso, al escribir al Sheet se reemplaza por
 // este separador seguro, y al leer se vuelve a convertir a '\n'.
 const ITEM_SEP = ' §§ ';
-function today() { return new Date().toISOString().split('T')[0]; }
+function today() { const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); } // v17.82: fecha local (antes UTC: después de las 21 h daba mañana)
 function fmtDate(d) {
   if(!d) return '—';
   // DD/MM/YYYY (formato Sheets argentino)
@@ -5153,7 +5159,7 @@ function badgeCobro(estado, id) {
   const botonEditar = estado==='cobrado' ? `<button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="editarCobroTrabajo('${id}')" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button>` : '';
   return `<div id="${divId}" style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">
     <span id="cobro-badge-${id}" class="badge ${e.cls}">${e.icon} ${e.label}</span>
-    ${_fecha?`<span style="font-size:10px;color:var(--muted)" title="Fecha de cobro">📅 ${_fecha}</span>`:''}
+    ${estado==='cobrado'?chipFechaCobro('trabajos', id, _tf&&_tf.fechaCobroReal):''}
     <select onchange="cambiarCobro('${id}',this.value,'${divId}')" style="font-size:10px;background:var(--dark);border:1px solid var(--border2);color:var(--muted);border-radius:3px;padding:2px 4px;cursor:pointer">
       <option value="pendiente" ${estado==='pendiente'?'selected':''}>🔴 Pendiente</option>
       <option value="parcial"   ${estado==='parcial'  ?'selected':''}>🟡 Parcial</option>
@@ -5166,6 +5172,70 @@ function badgeCobro(estado, id) {
 function editarCobroTrabajo(id) {
   const t = DB.trabajos.find(x=>x.id===id);
   if(t) openModal('cobroTrabajoTC', t);
+}
+
+// v17.82 — "pestañita" de la fecha exacta de cobro: se abre desde el 📅 al lado del cobro
+// (Presupuestos, Trabajos, Contratos). Cambia solo la fecha, sin tocar monto ni dólar, y la
+// escribe en el presupuesto Y en su trabajo (y en el Sheet en las dos hojas), así Dashboard,
+// Estadísticas, Cuentas corrientes y los reportes cuentan el cobro en el mes correcto.
+function chipFechaCobro(tipo, id, fecha) {
+  const f = fmtFechaCobro(fecha);
+  return `<button type="button" class="chip-fcobro${f?'':' sin'}" onclick="abrirFechaCobro('${tipo}','${id}',this);event.stopPropagation()" title="${f?'Fecha en que se cobró — clic para cambiarla':'Falta la fecha de cobro — clic para cargarla'}">📅 ${f||'poner fecha'}</button>`;
+}
+function _itemCobro(tipo, id) {
+  return tipo==='presupuestos' ? DB.presupuestos.find(x=>x.id===id) : tipo==='contratos' ? (DB.contratos||[]).find(x=>x.id===id) : DB.trabajos.find(x=>x.id===id);
+}
+function abrirFechaCobro(tipo, id, btn) {
+  cerrarFechaCobro();
+  const it = _itemCobro(tipo, id); if(!it) return;
+  let fecha = it.fechaCobroReal;
+  if(!fecha && tipo==='presupuestos') { const t = trabajoDePresupuesto(it); fecha = t && t.fechaCobroReal; }
+  const pop = document.createElement('div');
+  pop.id = 'pop-fcobro'; pop.className = 'pop-fcobro';
+  pop.innerHTML = `<div style="font-size:11px;color:var(--muted);margin-bottom:6px">📅 Fecha exacta del cobro</div>
+    <input type="date" id="pfc-fecha" value="${isoParaInput(fecha)||today()}" max="${today()}">
+    <div style="display:flex;gap:6px;margin-top:8px"><button type="button" class="btn-primary" style="font-size:11px;padding:5px 10px" id="pfc-ok">Guardar</button>
+    <button type="button" class="btn-secondary" style="font-size:11px;padding:5px 10px" onclick="cerrarFechaCobro()">Cancelar</button></div>`;
+  document.body.appendChild(pop);
+  const r = btn.getBoundingClientRect();
+  pop.style.top = (window.scrollY + r.bottom + 4) + 'px';
+  pop.style.left = Math.max(8, Math.min(window.scrollX + r.left, window.scrollX + document.documentElement.clientWidth - pop.offsetWidth - 8)) + 'px';
+  const inp = document.getElementById('pfc-fecha'); inp.focus();
+  inp.onkeydown = e => { if(e.key==='Enter') document.getElementById('pfc-ok').click(); if(e.key==='Escape') cerrarFechaCobro(); };
+  document.getElementById('pfc-ok').onclick = () => { if(!inp.value){ showToast('Elegí la fecha','error'); return; } guardarFechaCobro(tipo, id, inp.value); };
+  setTimeout(()=>document.addEventListener('mousedown', _cerrarFcFuera), 0);
+}
+function _cerrarFcFuera(e){ const p=document.getElementById('pop-fcobro'); if(p && !p.contains(e.target)) cerrarFechaCobro(); }
+function cerrarFechaCobro(){ const p=document.getElementById('pop-fcobro'); if(p) p.remove(); document.removeEventListener('mousedown', _cerrarFcFuera); }
+function guardarFechaCobro(tipo, id, fecha) {
+  const it = _itemCobro(tipo, id); if(!it) return;
+  if(fecha > today()) { showToast('La fecha de cobro no puede ser futura','error'); return; }
+  // presupuesto ↔ trabajo: los dos quedan con la misma fecha
+  let presup = null, trabajos = [];
+  if(tipo==='presupuestos') { presup = it; trabajos = DB.trabajos.filter(t=>t.presupuestoId===it.id); const tv = trabajoDePresupuesto(it); if(tv && !trabajos.includes(tv)) trabajos.push(tv); }
+  else if(tipo==='trabajos') { trabajos = [it]; presup = it.presupuestoId ? DB.presupuestos.find(p=>p.id===it.presupuestoId) : (presupDeTrabajo(it) || null); }
+  if(tipo==='contratos') it.fechaCobroReal = fecha;
+  if(presup) presup.fechaCobroReal = fecha;
+  trabajos.forEach(t => { t.fechaCobroReal = fecha;
+    cambiosCobroRecientes[t.id] = { estadoCobro:t.estadoCobro, tcCobro:t.tcCobro||0, montoCobradoUsd:t.montoCobradoUsd||0, gananciaUsd:t.gananciaUsd||0, diferenciaUsd:t.diferenciaUsd||0, diferenciaPct:t.diferenciaPct||0, fechaCobroReal:fecha, ts:Date.now() }; });
+  saveLocal();
+  writeToSheet({ action:'setFechaCobro', tipo, id, fecha, presupuestoId: presup ? presup.id : '', trabajoIds: trabajos.map(t=>t.id) });
+  cerrarFechaCobro();
+  try { renderPresupuestos(); } catch(e) {}
+  try { renderTrabajos(); } catch(e) {}
+  try { if(typeof renderContratos==='function') renderContratos(); } catch(e) {}
+  try { updateBadges(); renderDashboard(); } catch(e) {}
+  try { if(document.getElementById('page-estadisticas') && document.getElementById('page-estadisticas').classList.contains('active') && typeof renderEstadisticas==='function') renderEstadisticas(); } catch(e) {}
+  showToast('Fecha de cobro → ' + fmtFechaCobro(fecha) + ' ✓', 'success');
+}
+// Si alguien cambió la fecha en el Sheet en una sola de las dos hojas, manda la del presupuesto
+// (es la que se ve en la pestaña Presupuestos y la que usan los reportes).
+function alinearFechasCobro() {
+  DB.presupuestos.forEach(p => {
+    if(p.estadoCobro!=='cobrado' || !p.fechaCobroReal) return;
+    const tv = trabajoDePresupuesto(p);
+    DB.trabajos.forEach(t => { if((t.presupuestoId===p.id || t===tv) && t.estadoCobro==='cobrado' && isoParaInput(t.fechaCobroReal)!==isoParaInput(p.fechaCobroReal) && !cambiosCobroRecientes[t.id]) t.fechaCobroReal = p.fechaCobroReal; });
+  });
 }
 
 // ============================================================
@@ -5668,7 +5738,7 @@ function renderPresupuestos() {
         ) : ''}
         ${p.estado!=='no aprobado'?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(244,180,0,0.12);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('economiaPresupuesto',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Cargar lo REAL de este trabajo: cobrado, repuestos cobrados y repuestos pagados → ganancia">📊 Economía${p.estadoCobro==='cobrado'?' ✔':''}</button>`:''}
         ${p.estado==='aprobado'&&p.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Registrar cobro real">💰 Cobro</button>`:''}
-        ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span>${p.fechaCobroReal?` <span style="font-size:10px;color:var(--muted);white-space:nowrap" title="Fecha de cobro">📅 ${fmtFechaCobro(p.fechaCobroReal)}</span>`:''} <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroPresupuesto('${p.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`:''}
+        ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span> ${chipFechaCobro('presupuestos', p.id, p.fechaCobroReal || (trabajoDePresupuesto(p)||{}).fechaCobroReal)} <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroPresupuesto('${p.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`:''}
         <button class="btn-secondary" style="${p.comprobantePago?'background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366':''}" onclick="adjuntarComprobante('presupuestos','${p.id}')" title="${p.comprobantePago?'Comprobante cargado — clic para cambiarlo':'Adjuntar comprobante de pago (captura, ticket)'}">${p.comprobantePago?'📎✔':'📎'}</button>
         <button class="btn-secondary" onclick="duplicarPresupuesto('${p.id}')" title="Duplicar">⧉</button>
         <button class="btn-secondary" onclick="generarPresupuestoPDF('${p.id}')">📄 PDF</button>
@@ -5729,7 +5799,7 @@ function renderContratos() {
         <button class="btn-secondary" title="Editar" onclick="openModal('contrato',DB.contratos.find(x=>x.id==='${c.id}'))">✏️</button>
         <button class="btn-secondary" onclick="cambiarEstado('contratos','${c.id}',['activo','pausado','vencido','no aprobado'])">Estado</button>
         <button class="btn-secondary" style="font-size:10px;padding:3px 8px${diasContratoSinSeguimiento(c)!==null?';background:rgba(230,126,34,0.15);border-color:#e67e22;color:#e67e22':''}" onclick="guardarProximoSeguimientoContrato('${c.id}')" title="${c.proximoSeguimiento?'Próximo seguimiento: '+c.proximoSeguimiento+' — clic para cambiarlo':'Programar próximo seguimiento'}">📅 ${c.proximoSeguimiento||'Seguimiento'}</button>${diasContratoSinSeguimiento(c)!==null&&cl&&cl.telefono?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="seguirContratoWhatsApp('${c.id}')" title="Mandar mensaje de seguimiento por WhatsApp">📲</button>`:''}
-        ${c.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Registrar cobro real">💰 Cobro</button>`:`<span style="font-size:10px;color:${(c.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap">${(c.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${c.diferenciaUsd}</span> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroContrato('${c.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`}
+        ${c.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Registrar cobro real">💰 Cobro</button>`:`<span style="font-size:10px;color:${(c.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap">${(c.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${c.diferenciaUsd}</span> ${chipFechaCobro('contratos', c.id, c.fechaCobroReal)} <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroContrato('${c.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`}
         <button class="btn-secondary" style="${c.comprobantePago?'background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366':''}" onclick="adjuntarComprobante('contratos','${c.id}')" title="${c.comprobantePago?'Comprobante cargado — clic para cambiarlo':'Adjuntar comprobante de pago (captura, ticket)'}">${c.comprobantePago?'📎✔':'📎'}</button>
         <button class="btn-secondary" onclick="generarContratoPDF('${c.id}')">📄 PDF</button>
         <button class="btn-secondary" style="background:rgba(244,180,0,0.15);border-color:var(--yellow);color:var(--yellow)" onclick="generarDocumentoOpcionesPagoContrato('${c.id}')" title="Documento de opciones de pago para el cliente">📑 Opciones pago</button>
@@ -13043,7 +13113,7 @@ function openModal(type, data={}) {
       <div class="form-group"><label>Fecha de cobro real *</label><input id="f-crfecha" type="date" value="${isoParaInput(data.fechaCobroReal)||today()}"/></div>
       <div class="form-group"><label>Monto realmente cobrado (ARS) *</label><input id="f-crmonto" type="number" value="${data.montoCobradoReal||''}" oninput="calcularDiferenciaCobro(${usdEsperado})"/></div>
       <div class="form-group">
-        <label>TC del día del cobro *</label>
+        <label>TC del día del cobro (opcional)</label>
         <div style="display:flex;gap:6px">
           <input id="f-crtc" type="number" value="${data.tcCobro||''}" oninput="calcularDiferenciaCobro(${usdEsperado})" style="flex:1"/>
           <button type="button" class="btn-secondary" onclick="actualizarTCCobro(${usdEsperado})" style="white-space:nowrap;font-size:11px" title="Fuente: Ámbito Financiero — dólar Banco Nación (venta)">↻ En vivo</button>
@@ -13057,9 +13127,10 @@ function openModal(type, data={}) {
     </div>`;
     onSave=()=>{
       const fechaCobroReal=gv('f-crfecha'), montoCobradoReal=parseFloat(gv('f-crmonto'))||0, tcCobro=parseFloat(gv('f-crtc'))||0;
-      if(!montoCobradoReal||!tcCobro){ showToast('Cargá monto y TC del día del cobro','error'); return; }
-      const usdRecibido = montoCobradoReal/tcCobro;
-      const diferenciaUsd = usdEsperado>0 ? usdRecibido - usdEsperado : 0; // v17.77 — sin dólar al cotizar no hay contra qué comparar
+      if(!montoCobradoReal){ showToast('Cargá el monto cobrado','error'); return; }
+      if(!fechaCobroReal){ showToast('Cargá la fecha en que se cobró','error'); return; }
+      const usdRecibido = tcCobro>0 ? montoCobradoReal/tcCobro : 0; // v17.82: el dólar del día es opcional
+      const diferenciaUsd = (usdEsperado>0 && tcCobro>0) ? usdRecibido - usdEsperado : 0; // v17.77 — sin dólar al cotizar no hay contra qué comparar
       const diferenciaPct = usdEsperado>0 ? (diferenciaUsd/usdEsperado*100) : 0;
       const item = DB.presupuestos.find(x=>x.id===p.id);
       if(item){
@@ -13158,7 +13229,7 @@ function openModal(type, data={}) {
       <div class="form-group"><label>Fecha de cobro real *</label><input id="f-ccfecha" type="date" value="${isoParaInput(c.fechaCobroReal)||today()}"/></div>
       <div class="form-group"><label>Monto realmente cobrado (ARS) *</label><input id="f-ccmonto" type="number" value="${c.montoCobradoReal||''}" oninput="calcularDiferenciaCobroContrato(${usdEsperadoCon})"/></div>
       <div class="form-group">
-        <label>TC del día del cobro *</label>
+        <label>TC del día del cobro (opcional)</label>
         <div style="display:flex;gap:6px">
           <input id="f-cctc" type="number" value="${c.tcCobro||''}" oninput="calcularDiferenciaCobroContrato(${usdEsperadoCon})" style="flex:1"/>
           <button type="button" class="btn-secondary" onclick="actualizarTCCobroContrato(${usdEsperadoCon})" style="white-space:nowrap;font-size:11px" title="Fuente: Ámbito Financiero — dólar Banco Nación (venta)">↻ En vivo</button>
@@ -13170,9 +13241,10 @@ function openModal(type, data={}) {
     </div>`;
     onSave=()=>{
       const fechaCC=gv('f-ccfecha'), montoCC=parseFloat(gv('f-ccmonto'))||0, tcCC=parseFloat(gv('f-cctc'))||0;
-      if(!montoCC||!tcCC){ showToast('Cargá monto y TC del día del cobro','error'); return; }
-      const usdRecibidoCC = montoCC/tcCC;
-      const difUsdCC = usdEsperadoCon>0 ? usdRecibidoCC - usdEsperadoCon : 0;
+      if(!montoCC){ showToast('Cargá el monto cobrado','error'); return; }
+      if(!fechaCC){ showToast('Cargá la fecha en que se cobró','error'); return; }
+      const usdRecibidoCC = tcCC>0 ? montoCC/tcCC : 0; // v17.82: dólar opcional
+      const difUsdCC = (usdEsperadoCon>0 && tcCC>0) ? usdRecibidoCC - usdEsperadoCon : 0;
       const difPctCC = usdEsperadoCon>0 ? (difUsdCC/usdEsperadoCon*100) : 0;
       const item = DB.contratos.find(x=>x.id===c.id);
       if(item){
@@ -14965,8 +15037,13 @@ function registroCobros() {
   });
   // trabajos sin presupuesto vinculado que en realidad son el mismo cobro que un presupuesto (mismo cliente, monto parecido)
   const cobradosP = DB.presupuestos.filter(p=>p.estadoCobro==='cobrado');
+  // v17.82: el cliente se compara por id O por nombre (hay presupuestos viejos con el nombre en vez del id), y si el
+  // trabajo tiene el mismo número que un presupuesto cobrado del mismo cliente (T0115 ↔ #0115) es el mismo cobro.
+  const nomCli = id => { const c=_rCli(id); return String(c ? c.nombre : (id||'')).trim().toUpperCase(); };
+  const mismoCli = (p,t) => String(p.clienteId)===String(t.clienteId) || (nomCli(p.clienteId) && nomCli(p.clienteId)===nomCli(t.clienteId));
   const esMismoQuePresup = t => { const m = Number(t.montoCobrado)||0; if(!m) return false;
-    return cobradosP.some(p=>String(p.clienteId)===String(t.clienteId) && [Number(p.monto)||0, Number(p.montoCobradoReal)||0].some(x=>x>0 && Math.abs(x-m)/m < 0.06)); };
+    const nT = numeroTrabajo(t);
+    return cobradosP.some(p=>mismoCli(p,t) && ((nT!==null && Number(p.num)===nT) || [Number(p.monto)||0, Number(p.montoCobradoReal)||0].some(x=>x>0 && Math.abs(x-m)/m < 0.06))); };
   DB.trabajos.forEach(t=>{
     if(vistosT.has(t.id)) return;
     if(!t.presupuestoId && esMismoQuePresup(t)) return;
