@@ -243,9 +243,9 @@ select option { background:var(--dark); }
 .gs-item:last-child { border-bottom:none; }
 /* COBRO BADGES */
 .badge-cobro-cobrado { background:rgba(46,204,113,0.15); color:var(--green); border:1px solid rgba(46,204,113,0.3); }
-.chip-fcobro { font-size:10px; background:transparent; border:1px dashed var(--border2); color:var(--muted); border-radius:10px; padding:1px 7px; cursor:pointer; white-space:nowrap; font-family:inherit; }
-.chip-fcobro:hover { border-color:var(--yellow); color:var(--yellow); }
-.chip-fcobro.sin { border-color:var(--orange,#e67e22); color:var(--orange,#e67e22); }
+.chip-fcobro { font-size:11px !important; font-weight:600; background:rgba(46,204,113,0.12) !important; border:1px solid #25d366 !important; color:#25d366 !important; border-radius:6px; padding:4px 9px !important; cursor:pointer; white-space:nowrap; font-family:inherit; }
+.chip-fcobro:hover { background:rgba(46,204,113,0.25) !important; }
+.chip-fcobro.sin { background:rgba(230,126,34,0.12) !important; border-color:#e67e22 !important; color:#e67e22 !important; }
 .pop-fcobro { position:absolute; z-index:5000; background:var(--card,#1f1f1f); border:1px solid var(--yellow); border-radius:8px; padding:10px 12px; box-shadow:0 8px 24px rgba(0,0,0,.45); }
 .pop-fcobro input[type=date] { background:var(--dark); border:1px solid var(--border2); color:var(--text); border-radius:4px; padding:6px 8px; font-size:13px; }
 .badge-cobro-parcial  { background:rgba(244,180,0,0.12); color:var(--yellow); border:1px solid rgba(244,180,0,0.3); }
@@ -5180,7 +5180,7 @@ function editarCobroTrabajo(id) {
 // Estadísticas, Cuentas corrientes y los reportes cuentan el cobro en el mes correcto.
 function chipFechaCobro(tipo, id, fecha) {
   const f = fmtFechaCobro(fecha);
-  return `<button type="button" class="chip-fcobro${f?'':' sin'}" onclick="abrirFechaCobro('${tipo}','${id}',this);event.stopPropagation()" title="${f?'Fecha en que se cobró — clic para cambiarla':'Falta la fecha de cobro — clic para cargarla'}">📅 ${f||'poner fecha'}</button>`;
+  return `<button type="button" class="chip-fcobro${f?'':' sin'}" onclick="abrirFechaCobro('${tipo}','${id}',this);event.stopPropagation()" title="${f?'Fecha en que se cobró — clic para cambiarla':'Falta la fecha de cobro — clic para cargarla'}">📅 ${f?'Cobrado el '+f+' ✏️':'Poner fecha de cobro'}</button>`;
 }
 function _itemCobro(tipo, id) {
   return tipo==='presupuestos' ? DB.presupuestos.find(x=>x.id===id) : tipo==='contratos' ? (DB.contratos||[]).find(x=>x.id===id) : DB.trabajos.find(x=>x.id===id);
