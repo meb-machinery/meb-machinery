@@ -2393,7 +2393,12 @@ async function syncAll() {
         id: resolverIdEstable(r,'CHECKLIST_VISITAS'),
         fecha: r.FECHA || '', hora: r.HORA || '',
         cliente: r.CLIENTE || '', maquina: r.MAQUINA || '', usuario: r.USUARIO || '',
-        items: items, notas: r.NOTAS || '', firmaUrl: r.FIRMA_URL || '', visitaId: String(r.VISITA_ID||'').trim()
+        items: items, notas: r.NOTAS || '', firmaUrl: r.FIRMA_URL || '', visitaId: String(r.VISITA_ID||'').trim(),
+        // v17.81 — antes/después desde Mi Día
+        clienteId: String(r.CLIENTE_ID||'').trim(), firmaNombre: r.FIRMA_NOMBRE || '', firmaFecha: r.FIRMA_FECHA || '',
+        fotosAntes: String(r.FOTOS_ANTES||'').split(/\n+/).map(x=>x.trim()).filter(Boolean),
+        fotosDespues: String(r.FOTOS_DESPUES||'').split(/\n+/).map(x=>x.trim()).filter(Boolean),
+        conAntesDespues: items.some(it => it.estadoAntes !== undefined || it.estadoDespues !== undefined)
       };
     });
 
@@ -5457,7 +5462,9 @@ function renderChecklistsVisita() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
         <div>
           <div style="font-size:15px;font-weight:700;color:var(--text)">${c.cliente || '—'}${c.maquina?' <span style="color:var(--muted);font-weight:400">— '+c.maquina+'</span>':''}</div>
-          <div style="font-size:11px;color:var(--muted)">${c.fecha} ${c.hora} · completado por ${c.usuario || '—'}${c.firmaUrl?` · <a href="${c.firmaUrl}" target="_blank" style="color:var(--yellow)">✍️ ver firma</a>`:''}</div>
+          <div style="font-size:11px;color:var(--muted)">${c.fecha} ${c.hora} · completado por ${c.usuario || '—'}${c.firmaUrl?` · <a href="${c.firmaUrl}" target="_blank" style="color:var(--yellow)">✍️ ver firma${c.firmaNombre?' ('+prosEsc(c.firmaNombre)+')':''}</a>`:''}${(c.fotosAntes||[]).length+(c.fotosDespues||[]).length?` · 📷 ${(c.fotosAntes||[]).length} al llegar / ${(c.fotosDespues||[]).length} al terminar`:''}</div>
+          ${c.conAntesDespues?(()=>{ const aA=items.filter(it=>it.estadoAntes==='atencion').length, aD=items.filter(it=>it.estadoDespues==='atencion').length, res=items.filter(it=>it.estadoAntes==='atencion'&&it.estadoDespues==='ok').length;
+            return `<div style="font-size:12px;margin-top:4px">🔁 Al llegar <b style="color:#e07a7a">${aA}</b> con atención → al terminar <b style="color:${aD?'#e07a7a':'#25d366'}">${aD}</b> · <b style="color:#25d366">${res}</b> resueltos</div>`; })():''}
           ${c.notas?`<div style="font-size:12px;margin-top:4px;color:var(--text)">📝 ${prosEsc(c.notas)}</div>`:''}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -5479,7 +5486,7 @@ function renderChecklistsVisita() {
       </div>
       <div id="detalle-checklist-${idBase}" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
         ${items.length ? items.map(it => `<div style="font-size:12px;padding:4px 0;display:flex;gap:8px">
-          <span style="min-width:16px">${it.estado==='ok'?'✅':it.estado==='atencion'?'⚠️':'—'}</span>
+          <span style="min-width:16px">${it.estadoAntes!==undefined?`${it.estadoAntes==='ok'?'✅':it.estadoAntes==='atencion'?'⚠️':'—'}→`:''}${it.estado==='ok'?'✅':it.estado==='atencion'?'⚠️':'—'}</span>
           <span style="flex:1"><b>${it.item}</b> <span style="color:var(--muted);font-size:10px">(${it.categoria})</span>${it.comentario?'<br><span style="color:var(--muted)">'+it.comentario+'</span>':''}</span>
         </div>`).join('') : '<p style="font-size:11px;color:var(--muted)">Sin ítems cargados todavía</p>'}
       </div>
@@ -6767,6 +6774,61 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
 }
 
 // Genera el Informe Técnico en ventana nueva
+// v17.81 — Checklist de Mi Día anexado al informe técnico (antes / después + fotos + firma).
+// Las imágenes están en Drive: html2pdf no las puede leer directo, así que se piden en base64 al Apps Script.
+function _fechaChkIso(c){ const p=String(c.fecha||'').split('/'); return p.length===3 ? (p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0')+'T'+(c.hora||'00:00')) : ''; }
+function checklistsDeCliente(cl){
+  if(!cl) return [];
+  return (DB.checklistVisitas||[]).filter(c => (c.clienteId && String(c.clienteId)===String(cl.id))
+      || (()=>{ const r=resolverClientePorNombreLibre(c.cliente); return r && String(r.id)===String(cl.id); })())
+    .sort((a,b)=>_fechaChkIso(b).localeCompare(_fechaChkIso(a)));
+}
+function _opcionesChecklistInforme(cl){
+  return checklistsDeCliente(cl).map(c=>({ id:c.id, label:(c.fecha||'')+(c.maquina?' · '+c.maquina:'')+(c.firmaUrl?' · ✍ firmado':'') }));
+}
+async function _checklistBloqueInforme(id){
+  const c = (DB.checklistVisitas||[]).find(x=>x.id===id); if(!c) return '';
+  const e = s => prosEsc(String(s==null?'':s));
+  let img = { firma:'', antes:[], despues:[], firmaNombre:c.firmaNombre||'' };
+  if(c.firmaUrl || (c.fotosAntes||[]).length || (c.fotosDespues||[]).length){
+    try {
+      const r = await fetch(SCRIPT_URL + '?action=checklistImagenes&s=' + encodeURIComponent(sesionCRM()) + '&id=' + encodeURIComponent(id) + '&_ts=' + Date.now(), { cache:'no-store' });
+      const j = await r.json(); if(j && j.ok) img = Object.assign(img, j); else if(j && j.error==='sesion') sesionVencida();
+    } catch(err) { console.warn('checklistImagenes', err); }
+  }
+  const items = c.items || [];
+  const dos = c.conAntesDespues;
+  const est = v => v==='ok' ? '<span style="color:#1e8449;font-weight:700">\u2714 OK</span>' : v==='atencion' ? '<span style="color:#c0392b;font-weight:700">\u26A0 Atenci\u00F3n</span>' : '<span style="color:#aaa">\u2014</span>';
+  const relevantes = items.filter(it => it.estado==='atencion' || it.estadoAntes==='atencion' || it.comentario || it.comentarioAntes);
+  const okTodos = items.filter(it => !relevantes.includes(it) && (it.estado==='ok'));
+  const aA = items.filter(it=>(dos?it.estadoAntes:it.estado)==='atencion').length;
+  const aD = dos ? items.filter(it=>it.estadoDespues==='atencion').length : null;
+  const res = dos ? items.filter(it=>it.estadoAntes==='atencion' && it.estadoDespues==='ok').length : null;
+  const fila = it => '<tr><td style="padding:5px 8px;border-bottom:1px solid #eee"><b>' + e(it.item) + '</b> <span style="color:#999;font-size:10px">(' + e(it.categoria) + ')</span>'
+      + ((dos ? [it.comentarioAntes, it.comentarioDespues] : [it.comentario]).filter(Boolean).length ? '<br><span style="color:#555;font-size:11px">' + (dos ? [it.comentarioAntes, it.comentarioDespues] : [it.comentario]).filter(Boolean).map(e).join(' \u2192 ') + '</span>' : '') + '</td>'
+      + (dos ? '<td style="padding:5px 8px;border-bottom:1px solid #eee;white-space:nowrap">' + est(it.estadoAntes) + '</td><td style="padding:5px 8px;border-bottom:1px solid #eee;white-space:nowrap">' + est(it.estadoDespues) + '</td>'
+             : '<td style="padding:5px 8px;border-bottom:1px solid #eee;white-space:nowrap">' + est(it.estado) + '</td>') + '</tr>';
+  const fotos = (l, t) => l.length ? '<div style="margin-top:10px;page-break-inside:avoid;break-inside:avoid"><div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555;margin-bottom:6px">' + t + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">' + l.map(d=>'<img src="' + d + '" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:4px;border:1px solid #ddd">').join('') + '</div></div>' : '';
+  return '<div style="font-size:11.5px;color:#555;margin-bottom:8px">Checklist realizado en la visita del <b>' + e(c.fecha) + '</b>' + (c.maquina ? ' \u00B7 M\u00E1quina: <b>' + e(c.maquina) + '</b>' : '') + ' \u00B7 por ' + e(c.usuario||'MEB') + '</div>'
+    + (dos ? '<div style="display:flex;gap:8px;margin-bottom:10px;text-align:center">'
+        + '<div style="flex:1;background:#F5F2EC;border-radius:6px;padding:8px"><div style="font-size:20px;font-weight:700;color:#c0392b">' + aA + '</div><div style="font-size:10px;color:#666">con atenci\u00F3n al llegar</div></div>'
+        + '<div style="flex:1;background:#F5F2EC;border-radius:6px;padding:8px"><div style="font-size:20px;font-weight:700;color:' + (aD?'#c0392b':'#1e8449') + '">' + aD + '</div><div style="font-size:10px;color:#666">con atenci\u00F3n al terminar</div></div>'
+        + '<div style="flex:1;background:#F5F2EC;border-radius:6px;padding:8px"><div style="font-size:20px;font-weight:700;color:#1e8449">' + res + '</div><div style="font-size:10px;color:#666">resueltos</div></div></div>' : '')
+    + (relevantes.length ? '<table style="width:100%;border-collapse:collapse;font-size:11.5px"><thead><tr><th style="background:#1A1A1A;color:#F4B400;font-size:9.5px;text-align:left;padding:5px 8px">PUNTO REVISADO</th>'
+        + (dos ? '<th style="background:#1A1A1A;color:#F4B400;font-size:9.5px;text-align:left;padding:5px 8px">AL LLEGAR</th><th style="background:#1A1A1A;color:#F4B400;font-size:9.5px;text-align:left;padding:5px 8px">AL TERMINAR</th>' : '<th style="background:#1A1A1A;color:#F4B400;font-size:9.5px;text-align:left;padding:5px 8px">ESTADO</th>')
+        + '</tr></thead><tbody>' + relevantes.map(fila).join('') + '</tbody></table>' : '')
+    + (okTodos.length ? '<div style="font-size:11px;color:#1e8449;margin-top:8px">\u2714 Sin observaciones (' + okTodos.length + '): ' + okTodos.map(it=>e(it.item)).join(', ') + '</div>' : '')
+    + (c.notas ? '<div style="font-size:11.5px;margin-top:8px"><b>Notas:</b> ' + e(c.notas) + '</div>' : '')
+    + fotos(img.antes||[], 'C\u00F3mo estaba (al llegar)') + fotos(img.despues||[], 'C\u00F3mo qued\u00F3 (al terminar)')
+    + (img.firma ? '<div style="margin-top:12px;page-break-inside:avoid;break-inside:avoid;text-align:center"><div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555;margin-bottom:4px">Conformidad del cliente</div>'
+        + '<img data-firma-cliente="1" data-nombre="' + e(img.firmaNombre || c.firmaNombre || '') + '" src="' + img.firma + '" style="max-width:260px;max-height:130px;border-bottom:2px solid #1A1A1A">'
+        + '<div style="font-size:11px;color:#333;margin-top:4px">' + e(img.firmaNombre || c.firmaNombre || '') + (c.firmaFecha ? ' \u00B7 ' + e(c.firmaFecha) : '') + '</div></div>'
+      : (c.firmaUrl ? '<div style="font-size:11px;margin-top:8px">Firma del cliente: <a href="' + e(c.firmaUrl) + '">ver en Drive</a></div>' : ''));
+}
+window._opcionesChecklistInforme = _opcionesChecklistInforme;
+window._checklistBloqueInforme = _checklistBloqueInforme;
+
 function generarInformeTecnico(presupId) {
   const p = DB.presupuestos.find(x=>x.id===presupId);
   const cl = p ? (DB.clientes.find(c=>String(c.id)===String(p.clienteId))
@@ -6804,6 +6866,31 @@ function generarInformeTecnico(presupId) {
     'var CLIENTE_EMAIL=' + JSON.stringify(clEmailIT) + ';',
     'var MI_FLOTA_LINK=' + JSON.stringify(miFlotaLinkIT) + ';',
     'var yaGuardado=false;', // se pone true al hacer clic en Guardar — usado por confirmarImprimir()
+    // v17.81 — checklist de Mi Día anexado (antes / después, fotos y firma del cliente)
+    'var CHK_OPCIONES=' + JSON.stringify(_opcionesChecklistInforme(cl)) + ';',
+    // la firma que el cliente hizo en Mi Día va también al pie del informe (Firma del cliente)
+    'var _firmaEspOrig=null, _firmaNomOrig=null;',
+    'function _chkFirmaAbajo(){',
+    '  var esp=document.getElementById("firmaClienteEsp"), nom=document.getElementById("firmaClienteNom"); if(!esp) return;',
+    '  if(_firmaEspOrig===null){ _firmaEspOrig=esp.innerHTML; _firmaNomOrig=nom?nom.innerHTML:""; }',
+    '  var f=document.querySelector("#chkContenido img[data-firma-cliente]");',
+    '  if(f){ esp.innerHTML="<img src=\\""+f.src+"\\" style=\\"max-height:130px;width:auto;max-width:280px;object-fit:contain\\">"; if(nom && f.getAttribute("data-nombre")) nom.textContent=f.getAttribute("data-nombre"); }',
+    '  else { esp.innerHTML=_firmaEspOrig; if(nom) nom.innerHTML=_firmaNomOrig; }',
+    '}',
+    'function _chkCargar(id){',
+    '  var b=document.getElementById("chkBloque"), c=document.getElementById("chkContenido");',
+    '  if(!b||!c) return;',
+    '  if(!id){ c.innerHTML=""; b.setAttribute("data-vacio","1"); _chkFirmaAbajo(); return; }',
+    '  b.removeAttribute("data-vacio"); c.innerHTML="<div style=\\"color:#999;font-size:12px\\">\u231B Trayendo el checklist, las fotos y la firma\u2026</div>";',
+    '  if(!(window.opener && window.opener._checklistBloqueInforme)){ c.innerHTML="<div style=\\"color:#c0392b;font-size:12px\\">Abr\u00ed el informe desde el CRM para traer el checklist.</div>"; return; }',
+    '  window.opener._checklistBloqueInforme(id).then(function(h){ c.innerHTML=h||""; _chkFirmaAbajo(); }).catch(function(){ c.innerHTML="<div style=\\"color:#c0392b;font-size:12px\\">No se pudo traer el checklist.</div>"; });',
+    '}',
+    'document.addEventListener("DOMContentLoaded", function(){',
+    '  var sel=document.getElementById("chkSel"); if(!sel) return;',
+    '  CHK_OPCIONES.forEach(function(o){ var op=document.createElement("option"); op.value=o.id; op.textContent=o.label; sel.appendChild(op); });',
+    '  if(CHK_OPCIONES.length){ sel.value=CHK_OPCIONES[0].id; _chkCargar(sel.value); } else _chkCargar("");',
+    '  sel.onchange=function(){ _chkCargar(sel.value); };',
+    '});',
     '',
     'function envWA_informe() {',
     '  if(!CLIENTE_TEL){alert("Este cliente no tiene tel\\u00e9fono registrado.");return;}',
@@ -6929,6 +7016,8 @@ function generarInformeTecnico(presupId) {
     '  var videosBloque = document.getElementById("videosBloque");',
     '  var videosLista = document.getElementById("videosLista");',
     '  if(videosBloque && videosLista && videosLista.children.length===0){ videosBloque.style.display="none"; oculto.push(videosBloque); }',
+    '  document.querySelectorAll(".chk-elegir").forEach(function(el){ el.style.display="none"; oculto.push(el); });',
+    '  var chkB = document.getElementById("chkBloque"); if(chkB && chkB.getAttribute("data-vacio")){ chkB.style.display="none"; oculto.push(chkB); }',
     '  return oculto;',
     '}',
     'function _restaurarDespuesPDF(oculto){',
@@ -7044,6 +7133,8 @@ function generarInformeTecnico(presupId) {
     '    if(!ed || !(ed.innerText||"").trim()) cap.remove();',
     '  });',
     '  if(videos.length===0){ var videosBloqueTmp = tempDiv.querySelector("#videosBloque"); if(videosBloqueTmp) videosBloqueTmp.remove(); }',
+    '  var chkElegirTmp = tempDiv.querySelector(".chk-elegir"); if(chkElegirTmp) chkElegirTmp.remove();',
+    '  var chkBloqueTmp = tempDiv.querySelector("#chkBloque"); if(chkBloqueTmp && chkBloqueTmp.getAttribute("data-vacio")) chkBloqueTmp.remove();',
     '  var fullHtml = "<!DOCTYPE html>" + tempDiv.innerHTML;',
     '',
     '  // Save to IndexedDB via window.opener',
@@ -7195,7 +7286,7 @@ function generarInformeTecnico(presupId) {
     + '.firma-nombre{font-size:12px;font-weight:700;color:#1A1A1A;margin-top:4px}'
     + '.footer{margin-top:24px;padding-top:10px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;font-size:10px;color:#aaa}'
     + '@media print{'
-    + '.no-print,#fotoHint,#fotoDropZone,#videoDropZone,.foto-caption-label,.salto-label{display:none!important}'
+    + '.no-print,#fotoHint,#fotoDropZone,#videoDropZone,.foto-caption-label,.salto-label,.chk-elegir,#chkBloque[data-vacio]{display:none!important}'
     + '.foto-caption:has(.foto-caption-editable:empty){display:none!important}'
     + '#videosBloque:has(#videosLista:empty){display:none!important}'
     + 'body{padding:16px}.btn-del{display:none!important}'
@@ -7294,6 +7385,15 @@ function generarInformeTecnico(presupId) {
     + '<div class="bloque-body"><div id="obsBox" class="editable-bloque" contenteditable="true" style="outline:none;min-height:60px" data-placeholder="Observaciones o recomendaciones para el cliente..."></div></div>'
     + '</div>'
 
+    + '<div class="bloque" id="chkBloque" data-vacio="1">'
+    + '<div class="bloque-titulo">\uD83D\uDCCB ANEXO \u2014 CHECKLIST DE LA VISITA (ANTES / DESPU\u00C9S)</div>'
+    + '<div class="bloque-body">'
+    + '<div class="chk-elegir no-print-chk" style="background:#fffdf0;border:1px dashed #F4B400;border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:12px">'
+    + '\uD83D\uDCCB Checklist de Mi D\u00EDa para anexar: <select id="chkSel" style="font-size:12px;padding:3px 6px;max-width:100%"><option value="">\u2014 No incluir \u2014</option></select>'
+    + '</div>'
+    + '<div id="chkContenido"></div>'
+    + '</div></div>'
+
     + (miFlotaLinkIT ? (
     '<div class="bloque" style="background:linear-gradient(135deg, rgba(0,59,112,0.06), transparent);border:1px solid rgba(0,59,112,0.25);border-radius:6px;padding:14px 16px">'
     + '<div class="bloque-titulo">\uD83D\uDCF1 MI FLOTA \u2014 SEGUIMIENTO EN TIEMPO REAL</div>'
@@ -7311,10 +7411,10 @@ function generarInformeTecnico(presupId) {
 
     + '<div class="firma-grid">'
     + '<div class="firma-box">'
-    + '<div style="height:130px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:8px"><span style="color:#ccc;font-size:11px">(espacio para firma)</span></div>'
+    + '<div id="firmaClienteEsp" style="height:130px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:8px"><span style="color:#ccc;font-size:11px">(espacio para firma)</span></div>'
     + '<div class="firma-linea"></div>'
     + '<div class="firma-label">Firma del cliente</div>'
-    + '<div class="firma-nombre" contenteditable="true">' + clNombre + '</div>'
+    + '<div class="firma-nombre" id="firmaClienteNom" contenteditable="true">' + clNombre + '</div>'
     + '</div>'
     + '<div class="firma-box">'
     + '<div style="height:130px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:8px"><img src="' + FIRMA_IT + '" style="max-height:130px;width:auto;max-width:280px;object-fit:contain;display:block;" alt="Firma MEB"/></div>'
@@ -16052,4 +16152,4 @@ function closeFotos(e) {
 }
 </script>
 </body>
-</html>
+</html>

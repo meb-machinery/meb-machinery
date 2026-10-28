@@ -116,6 +116,35 @@
   .ck-btn.ok{background:rgba(46,204,113,.15);border-color:var(--ok);color:var(--ok)}
   .ck-btn.at{background:rgba(231,76,60,.15);border-color:var(--bad);color:var(--bad)}
   .ck-com{width:100%;margin-top:6px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--tx);padding:8px;font-size:15px;font-family:inherit}
+  .ck-fases{display:flex;gap:6px;margin:6px 0 4px}
+  .ck-fases button{flex:1;background:var(--bg);border:1px solid var(--line);color:var(--mut);border-radius:10px;padding:10px 4px;font-size:12.5px;font-weight:700;font-family:inherit}
+  .ck-fases button.on{background:var(--y);border-color:var(--y);color:#111}
+  .ck-antes{display:inline-block;font-size:11.5px;margin-left:4px;padding:1px 6px;border-radius:6px;background:var(--bg);color:var(--mut)}
+  .ck-antes.atencion{color:var(--bad)}.ck-antes.ok{color:var(--ok)}
+  .ck-fotos{display:flex;gap:8px;flex-wrap:wrap}
+  .ck-foto{position:relative;width:calc(25% - 6px);min-width:70px;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#000;border:1px solid var(--line)}
+  .ck-foto img{width:100%;height:100%;object-fit:cover;display:block}
+  .ck-foto button{position:absolute;top:3px;right:3px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.7);color:#fff;font-size:13px}
+  .ck-foto .ok{position:absolute;left:4px;bottom:3px;color:var(--ok);font-weight:800;text-shadow:0 0 3px #000}
+  .ck-foto.add{display:flex;align-items:center;justify-content:center;text-align:center;color:var(--y);border:1px dashed var(--y);background:var(--bg);font-weight:700;font-size:13px}
+  .vc{background:#fff;color:#1A1A1A;border-radius:14px;padding:16px 14px;margin-top:10px}
+  .vc-h{border-bottom:3px solid #F4B400;padding-bottom:8px;margin-bottom:12px}.vc-h b{display:block;letter-spacing:1px}.vc-h span{font-size:13px;color:#666}
+  .vc-kp{display:flex;align-items:center;gap:6px;text-align:center}.vc-kp>div{flex:1;background:#F5F2EC;border-radius:10px;padding:10px 4px}
+  .vc-kp b{display:block;font-size:30px;line-height:1}.vc-kp span{font-size:11.5px;color:#666}.vc-kp .vc-flecha{flex:0 0 auto;background:none;font-size:22px;color:#999;padding:0}
+  .vc-sub{font-size:13px;color:#666;margin:8px 0;text-align:center}
+  .vc-t{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}.vc-t th{background:#1A1A1A;color:#F4B400;font-size:11px;padding:7px 6px;text-align:left}
+  .vc-t td{padding:8px 6px;border-bottom:1px solid #eee;vertical-align:top}.vc-t small{display:block;color:#888;font-size:11px}.vc-t .vc-com{color:#444;font-size:12px}
+  .vc-ok{color:#1e8449;font-weight:700;white-space:nowrap}.vc-at{color:#c0392b;font-weight:700;white-space:nowrap}.vc-nd{color:#aaa}
+  .vc-fl{margin-top:12px}.vc-ft{font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+  .vc-fg{display:grid;grid-template-columns:1fr 1fr;gap:6px}.vc-fg img{width:100%;border-radius:8px;aspect-ratio:4/3;object-fit:cover}
+  .vc-notas{margin-top:12px;font-size:14px;background:#F5F2EC;border-radius:8px;padding:10px}
+  .vc-firma{margin-top:14px;border-top:1px solid #ddd;padding-top:12px;text-align:center}
+  .vc-pad{width:100%;height:170px;background:#fff;border:2px dashed #bbb;border-radius:10px;touch-action:none;display:block}
+  .vc-firmaimg{max-width:100%;max-height:180px;border:1px solid #ddd;border-radius:8px}
+  .vc-in{width:100%;margin-top:8px;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:16px;font-family:inherit;color:#111;background:#fff}
+  .vc-bs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.vc-bs>*{flex:1 1 auto}
+  .vc-b1,.vc-b2{border-radius:10px;padding:12px 10px;font-size:14px;font-weight:700;font-family:inherit;text-align:center;display:inline-block}
+  .vc-b1{background:#1e8449;color:#fff;border:0}.vc-b2{background:#F5F2EC;color:#1A1A1A;border:1px solid #ddd;margin-top:6px}
   .inst{background:var(--card2);border:1px dashed var(--line);border-radius:12px;padding:10px 12px;font-size:12px;color:var(--mut);margin-top:10px;display:none}
 </style>
 </head>
@@ -131,11 +160,13 @@
 
 <div id="app"></div>
 <div id="vAgenda" style="display:none"></div>
+<div id="vChecklist" style="display:none"></div>
 <div id="vGastos" style="display:none"></div>
 <div id="vCompartir" style="display:none"></div>
 <nav class="nav" id="nav">
   <button type="button" data-v="dia" class="on">📅<span>Mi día</span></button>
   <button type="button" data-v="agenda">🗓<span>Agenda</span></button>
+  <button type="button" data-v="checklist">📋<span>Checklist</span></button>
   <button type="button" data-v="gastos">💸<span>Gastos</span></button>
   <button type="button" data-v="compartir">📣<span>Compartir</span></button>
 </nav>
@@ -481,6 +512,8 @@ function setVista(v){
   document.getElementById('vGastos').style.display = v==='gastos'?'block':'none';
   document.getElementById('vAgenda').style.display = v==='agenda'?'block':'none';
   if(v==='agenda') renderAgenda();
+  document.getElementById('vChecklist').style.display = v==='checklist'?'block':'none';
+  if(v==='checklist') renderTabChecklist();
   document.getElementById('vCompartir').style.display = v==='compartir'?'block':'none';
   document.getElementById('btnRef').style.display = (v==='dia'||v==='agenda')?'':'none';
   document.getElementById('fab').style.display = (v==='dia' && TOKEN)?'block':'none';
@@ -639,7 +672,8 @@ function htmlParte(v, hecha){
 
 /* ---------- v17.68: horómetro (foto + horas + notas) ---------- */
 let _fotoHor = '';
-function comprimirFoto(file){
+function comprimirFoto(file, maxLado, tope){
+  maxLado = maxLado||1600; tope = tope||600000;
   return new Promise((res,rej)=>{
     const url=URL.createObjectURL(file);
     const img=new Image();
@@ -650,11 +684,11 @@ function comprimirFoto(file){
         const c=document.createElement('canvas'); c.width=w; c.height=h;
         c.getContext('2d').drawImage(img,0,0,w,h);
         let q=0.78, d=c.toDataURL('image/jpeg',q);
-        while(d.length>600000 && q>0.45){ q-=0.1; d=c.toDataURL('image/jpeg',q); }
+        while(d.length>tope && q>0.45){ q-=0.1; d=c.toDataURL('image/jpeg',q); }
         return d;
       };
-      let d=dibujar(1600);
-      if(d.length>600000) d=dibujar(1100);
+      let d=dibujar(maxLado);
+      if(d.length>tope) d=dibujar(Math.round(maxLado*0.7));
       URL.revokeObjectURL(url);
       res(d);
     };
@@ -1001,7 +1035,9 @@ function marcarTiempo(tipo, id){
   else mandar();
 }
 
-/* ---------- Checklist de visita (el mismo del operario) + notas + foto de la firma ---------- */
+/* ---------- v17.81 — Checklist de visita en su propia pestaña: ANTES (al llegar) / DESPUÉS (al terminar),
+   vista "Antes → Ahora" para mostrarle al cliente, fotos de cada etapa y conformidad firmada.
+   Todo queda en CHECKLIST_VISITAS y el CRM lo anexa al informe técnico. ---------- */
 const CHECKLIST_ITEMS = {
   'Motor': ['Nivel de aceite','Pérdidas de aceite','Filtro de aire primario','Filtro de aire secundario','Válvula de descarga de polvo','Nivel de refrigerante','Pérdidas de refrigerante','Correas (tensión/estado)','Trampa de agua del filtro de combustible','Humo de escape anormal'],
   'Tren rodante': ['Rolos','Cadena (tensión)','Zapatas (desgaste)','Rueda guía / motriz','Piñón'],
@@ -1011,79 +1047,248 @@ const CHECKLIST_ITEMS = {
   'Sistema eléctrico': ['Batería (bornes, sulfatación)','Correa de alternador'],
   'General': ['Horómetro (registrar lectura)','Nivel de combustible','Golpes o daños relevantes en chapa']
 };
+const CHK_FASES = { antes:'1 · Al llegar', despues:'2 · Al terminar', cliente:'3 · Mostrar al cliente' };
+const CHK_MAX_FOTOS = 4;
 let CHK = null; let _chkTimer = null;
 function chkKey(vid){ return 'meb_midia_chk_'+vid; }
+function chkIdx(){ try{ return JSON.parse(ls('meb_midia_chk_idx')||'[]'); }catch(e){ return []; } }
+function chkIdxGuardar(c){
+  const l = chkIdx().filter(x=>x.key!==c._key);
+  l.unshift({ key:c._key, id:c.id, cliente:c.cliente, maquina:c.maquina, fecha:c.fecha, ts:Date.now() });
+  ls('meb_midia_chk_idx', JSON.stringify(l.slice(0,30)));
+}
+function chkLeer(key){ try{ return JSON.parse(ls(key)||'null'); }catch(e){ return null; } }
+// Checklists de la versión anterior (un solo estado por ítem) → pasan a "al llegar"
+function chkMigrar(c){
+  c.fase = c.fase || 'antes'; c.fotos = c.fotos || { antes:[], despues:[] };
+  Object.keys(c.items||{}).forEach(k=>{ const it=c.items[k];
+    if(it && !it.antes && !it.despues) c.items[k] = { antes:{ estado:it.estado||null, comentario:it.comentario||'' }, despues:{ estado:null, comentario:'' } }; });
+  return c;
+}
+function chkNuevo(o){
+  return { id:idNuevo('chk_'), visitaId:o.visitaId||'', clienteId:o.clienteId||'', cliente:o.cliente||'', maquina:'', usuario: ls('meb_checklist_usuario')||'Emmanuel',
+    fecha:o.fecha||hoyLocal(), fase:'antes', items:{}, notas:'', firma:'', firmaNombre:'', firmaEnviada:false, fotos:{ antes:[], despues:[] } };
+}
 function abrirChecklist(visitaId){
   const v = D.visitas.find(x=>x.id===visitaId); if(!v) return;
-  let g = null; try{ g = JSON.parse(ls(chkKey(visitaId))||'null'); }catch(e){}
-  CHK = g || { id:idNuevo('chk_'), visitaId, clienteId:v.clienteId||'', cliente:v.cliente||v.clienteLibre||v.titulo||'', maquina:'', usuario: ls('meb_checklist_usuario')||'Emmanuel', fecha:v.fecha, items:{}, notas:'', firma:'', firmaEnviada:false };
-  renderChecklist();
+  const key = chkKey(visitaId);
+  CHK = chkMigrar(chkLeer(key) || chkNuevo({ visitaId, clienteId:v.clienteId, cliente:v.cliente||v.clienteLibre||v.titulo, fecha:v.fecha }));
+  CHK._key = key;
+  if(vista!=='checklist') setVista('checklist'); else renderChecklist();
 }
+function abrirChecklistKey(key){ const g = chkLeer(key); if(!g){ toast('Ese checklist ya no está en este celular'); return; } CHK = chkMigrar(g); CHK._key = key; renderChecklist(); }
+function nuevoChecklistSuelto(){
+  const clis = D.clientes||[];
+  abrirHoja(`<h3>＋ Nuevo checklist</h3>
+    <div class="f"><label>Cliente</label><select id="nc-cli"><option value="">— Elegí —</option>${clis.map(c=>`<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join('')}<option value="__otro">Otro (escribir)…</option></select>
+      <input id="nc-txt" placeholder="Nombre del cliente" style="display:none;margin-top:6px"></div>
+    <div class="acts"><button class="a ok" type="button" id="nc-ok">Empezar</button><button class="a" type="button" id="nc-no">Cancelar</button></div>`);
+  const sel=document.getElementById('nc-cli'), txt=document.getElementById('nc-txt');
+  sel.onchange=()=>{ txt.style.display = sel.value==='__otro'?'':'none'; if(sel.value==='__otro') txt.focus(); };
+  document.getElementById('nc-no').onclick=cerrarHoja;
+  document.getElementById('nc-ok').onclick=()=>{
+    let clienteId='', cliente='';
+    if(sel.value==='__otro'){ cliente=txt.value.trim(); } else if(sel.value){ clienteId=sel.value; const c=clis.find(x=>String(x.id)===sel.value); cliente=c?c.nombre:''; }
+    if(!cliente){ toast('Elegí o escribí el cliente'); return; }
+    CHK = chkNuevo({ clienteId, cliente }); CHK._key = chkKey(CHK.id); cerrarHoja(); chkGuardarLocal(); renderChecklist(); };
+}
+function chkEstado(c,k,fase){ const it=c.items[k]; return (it && it[fase]) || { estado:null, comentario:'' }; }
+function chkConteo(c,fase){ let ok=0, at=0; Object.keys(c.items).forEach(k=>{ const e=chkEstado(c,k,fase).estado; if(e==='ok') ok++; if(e==='atencion') at++; }); return { ok, at, rev:ok+at }; }
+function chkTotal(){ return Object.values(CHECKLIST_ITEMS).reduce((a,l)=>a+l.length,0); }
+
+/* Pestaña: lista (visitas para hacer checklist + recientes) o el checklist abierto */
+function renderTabChecklist(){
+  if(CHK){ renderChecklist(); return; }
+  const c = document.getElementById('vChecklist'); if(!c) return;
+  const hoy = D.hoy || hoyLocal(); const lim = new Date(); lim.setDate(lim.getDate()+7);
+  const limS = lim.getFullYear()+'-'+String(lim.getMonth()+1).padStart(2,'0')+'-'+String(lim.getDate()).padStart(2,'0');
+  const vis = (D.visitas||[]).filter(v=>v.fecha>=hoy && v.fecha<=limS && v.estado!=='cancelada' && (v.clienteId||v.clienteLibre) && (!v.tipo||['visita','operario','terciarizado'].includes(v.tipo)))
+    .sort((a,b)=>(a.fecha+(a.horaInicio||'')).localeCompare(b.fecha+(b.horaInicio||'')));
+  const rec = chkIdx().filter(x=>chkLeer(x.key));
+  const fmtF = f=>{ const [y,m,d]=String(f||'').split('-'); return d?d+'/'+m:''; };
+  let h = `<div style="padding-top:12px">
+    <h2 style="margin:4px 0 4px">📋 Checklist de visita</h2>
+    <div class="sub" style="margin-bottom:12px">Al llegar marcás cómo está la máquina; al terminar, cómo queda. Después se lo mostrás al cliente, firma, y el CRM lo suma al informe técnico.</div>
+    <button class="a ok" type="button" id="ck-nuevo" style="width:100%;margin-bottom:14px">＋ Nuevo checklist (sin visita en la agenda)</button>
+    <div class="ag-f">Visitas de hoy y próximas</div>`;
+  h += vis.length ? vis.map(v=>{ const g=chkLeer(chkKey(v.id)); const est = g ? (g.firma?'✔ firmado':(g.fase==='despues'||g.fase==='cliente')?'al terminar':'empezado') : '';
+      return `<div class="ag-it"><div class="ag-h">${v.fecha===hoy?'Hoy':fmtF(v.fecha)}<br><span>${esc(v.horaInicio||'')}</span></div>
+        <div class="ag-t"><b>${esc(v.cliente||v.clienteLibre||v.titulo||'')}</b>${est?`<div class="sub" style="color:var(--y)">${est}</div>`:''}</div>
+        <button class="mini" type="button" data-checklist="${esc(v.id)}">${g?'Seguir':'Abrir'}</button></div>`; }).join('')
+    : '<div class="sub" style="margin-bottom:10px">No hay visitas a clientes en los próximos 7 días.</div>';
+  if(rec.length){
+    h += `<div class="ag-f" style="margin-top:16px">Checklists en este celular</div>` + rec.map(x=>{ const g=chkLeer(x.key)||{};
+      return `<div class="ag-it"><div class="ag-h">${fmtF(x.fecha)}</div><div class="ag-t"><b>${esc(x.cliente)}</b>${x.maquina?`<div class="sub">${esc(x.maquina)}</div>`:''}<div class="sub" style="color:${g.firma?'var(--ok)':'var(--mut)'}">${g.firma?'✔ firmado por el cliente':'sin firma todavía'}</div></div>
+        <button class="mini" type="button" data-chkkey="${esc(x.key)}">Abrir</button></div>`; }).join('');
+  }
+  c.innerHTML = h + '</div>';
+  document.getElementById('ck-nuevo').onclick = nuevoChecklistSuelto;
+}
+
 function renderChecklist(){
+  const cont = document.getElementById('vChecklist'); if(!cont || !CHK) return;
   const c = CHK; const maqs = ((D.maquinas||{})[c.clienteId]||[]);
-  const total = Object.values(CHECKLIST_ITEMS).reduce((a,l)=>a+l.length,0);
-  const rev = Object.values(c.items).filter(x=>x.estado).length;
-  const aten = Object.entries(c.items).filter(([k,x])=>x.estado==='atencion');
-  let h = `<h3>📋 Checklist — ${esc(c.cliente)}</h3>
+  const fase = c.fase || 'antes';
+  let h = `<div style="padding-top:12px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><button class="mini" type="button" id="ck-volver">← Volver</button>
+      <div style="flex:1;min-width:0"><div style="font-weight:800;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.cliente)}</div><div class="sub">${esc(c.fecha.split('-').reverse().join('/'))}</div></div></div>
     <div class="f"><label>Máquina</label>${maqs.length?`<select id="ck-maq"><option value="">— Elegí —</option>${maqs.map(m=>`<option ${c.maquina===m.nombre?'selected':''}>${esc(m.nombre)}</option>`).join('')}<option value="__otra" ${c.maquina&&!maqs.some(m=>m.nombre===c.maquina)?'selected':''}>Otra…</option></select>`:''}
       <input id="ck-maq-txt" placeholder="Ej: Retro John Deere 310L" value="${esc(maqs.some(m=>m.nombre===c.maquina)?'':c.maquina)}" style="${maqs.length&&!(c.maquina&&!maqs.some(m=>m.nombre===c.maquina))?'display:none;':''}margin-top:6px"></div>
-    <div class="sub" style="margin-bottom:8px">Tocá lo que corresponda. Se guarda solo. <b style="color:var(--y)">${rev}</b> de ${total} revisados${aten.length?` · <b style="color:var(--bad)">${aten.length} necesitan atención</b>`:''}</div>`;
-  Object.keys(CHECKLIST_ITEMS).forEach(cat=>{
-    h += `<details class="ck-cat" ${cat==='Motor'?'open':''}><summary>${esc(cat)} <span class="sub">${CHECKLIST_ITEMS[cat].filter(it=>(c.items[cat+'|'+it]||{}).estado).length}/${CHECKLIST_ITEMS[cat].length}</span></summary>`;
-    CHECKLIST_ITEMS[cat].forEach(it=>{ const k=cat+'|'+it; const st=c.items[k]||{};
-      h += `<div class="ck-it"><div class="ck-n">${esc(it)}</div><div class="ck-b">
-        <button type="button" class="ck-btn ${st.estado==='ok'?'ok':''}" data-ck="${esc(k)}|ok">✅ OK</button>
-        <button type="button" class="ck-btn ${st.estado==='atencion'?'at':''}" data-ck="${esc(k)}|atencion">⚠️ Atención</button></div>
-        ${st.estado==='atencion'||st.comentario?`<input class="ck-com" data-ckc="${esc(k)}" value="${esc(st.comentario||'')}" placeholder="Comentario…">`:''}</div>`; });
-    h += `</details>`;
-  });
-  h += `<div class="f" style="margin-top:12px"><label>📝 Notas (si falta algo, lo que pidió el cliente, lo que quedó pendiente)</label><textarea id="ck-notas" rows="3">${esc(c.notas||'')}</textarea></div>
-    <div class="f"><label>✍️ Firma del cliente (foto del papel firmado o de la pantalla)</label>
-      <label class="foto-btn" for="ck-firma">${c.firma?'📷 Cambiar foto de la firma':'📷 Sacar foto de la firma'}</label>
-      <input id="ck-firma" type="file" accept="image/*" capture="environment" style="display:none">
-      ${c.firma?`<img class="foto-prev" src="${c.firma}" alt="Firma">${c.firmaEnviada?'<div class="sub" style="color:var(--ok)">✔ Guardada en Drive</div>':''}`:''}</div>
-    <div class="acts"><button class="a ok" type="button" id="ck-ok">💾 Guardar y cerrar</button><button class="a" type="button" id="ck-pdf">🖨 Respaldo PDF</button></div>`;
-  abrirHoja(h);
+    <div class="ck-fases">${Object.keys(CHK_FASES).map(f=>`<button type="button" class="${f===fase?'on':''}" data-ckfase="${f}">${CHK_FASES[f]}</button>`).join('')}</div>`;
+  if(fase==='cliente') h += htmlVistaCliente(c);
+  else {
+    const n = chkConteo(c,fase), tot=chkTotal();
+    h += `<div class="sub" style="margin:8px 0">${fase==='antes'?'Cómo <b>encontraste</b> la máquina.':'Cómo <b>queda</b> la máquina después del trabajo.'} Se guarda solo. <b style="color:var(--y)">${n.rev}</b> de ${tot} revisados${n.at?` · <b style="color:var(--bad)">${n.at} con atención</b>`:''}</div>`;
+    if(fase==='despues' && chkConteo(c,'antes').rev) h += `<button class="a" type="button" id="ck-copiar" style="width:100%;margin-bottom:8px">↺ Marcar OK lo que ya estaba OK al llegar</button>`;
+    Object.keys(CHECKLIST_ITEMS).forEach(cat=>{
+      const hechos = CHECKLIST_ITEMS[cat].filter(it=>chkEstado(c,cat+'|'+it,fase).estado).length;
+      const abierto = fase==='despues' ? CHECKLIST_ITEMS[cat].some(it=>chkEstado(c,cat+'|'+it,'antes').estado==='atencion') || cat==='Motor' : cat==='Motor';
+      h += `<details class="ck-cat" data-cat="${esc(cat)}" ${abierto?'open':''}><summary>${esc(cat)} <span class="sub">${hechos}/${CHECKLIST_ITEMS[cat].length}</span></summary>`;
+      CHECKLIST_ITEMS[cat].forEach(it=>{ const k=cat+'|'+it; const st=chkEstado(c,k,fase); const an=chkEstado(c,k,'antes');
+        h += `<div class="ck-it"><div class="ck-n">${esc(it)}${fase==='despues'&&an.estado?` <span class="ck-antes ${an.estado}">al llegar: ${an.estado==='ok'?'OK':'⚠️ atención'}${an.comentario?' — '+esc(an.comentario):''}</span>`:''}</div><div class="ck-b">
+          <button type="button" class="ck-btn ${st.estado==='ok'?'ok':''}" data-ck="${esc(k)}|ok">✅ OK</button>
+          <button type="button" class="ck-btn ${st.estado==='atencion'?'at':''}" data-ck="${esc(k)}|atencion">⚠️ Atención</button></div>
+          ${st.estado==='atencion'||st.comentario||(fase==='despues'&&an.estado==='atencion')?`<input class="ck-com" data-ckc="${esc(k)}" value="${esc(st.comentario||'')}" placeholder="${fase==='antes'?'Qué encontraste…':'Qué se hizo / qué queda pendiente…'}">`:''}</div>`; });
+      h += `</details>`;
+    });
+    const fotos = c.fotos[fase]||[];
+    h += `<div class="f" style="margin-top:12px"><label>📷 Fotos ${fase==='antes'?'al llegar (cómo estaba)':'al terminar (cómo quedó)'} — hasta ${CHK_MAX_FOTOS}</label>
+      <div class="ck-fotos">${fotos.map(f=>`<div class="ck-foto"><img src="${f.d||''}" alt="Foto">${f.enviada?'<span class="ok">✔</span>':''}<button type="button" data-ckborrar="${fase}|${esc(f.id)}">✕</button></div>`).join('')}
+      ${fotos.length<CHK_MAX_FOTOS?`<label class="ck-foto add" for="ck-fotoin">＋<br>Foto</label>`:''}</div>
+      <input id="ck-fotoin" type="file" accept="image/*" capture="environment" style="display:none"></div>
+    <div class="f"><label>📝 Notas (lo que pidió el cliente, lo que quedó pendiente, si falta algo)</label><textarea id="ck-notas" rows="3">${esc(c.notas||'')}</textarea></div>
+    <div class="acts">${fase==='antes'?`<button class="a ok" type="button" data-ckfase="despues">Terminé el trabajo → Al terminar</button>`:`<button class="a ok" type="button" data-ckfase="cliente">Listo → Mostrar al cliente</button>`}</div>`;
+  }
+  h += `<div class="acts" style="margin-top:8px"><button class="a" type="button" id="ck-pdf">🖨 Respaldo PDF</button><button class="a" type="button" id="ck-cerrar">💾 Guardar y cerrar</button></div></div>`;
+  cont.innerHTML = h;
+  document.getElementById('ck-volver').onclick = ()=>{ chkGuardar(true); CHK=null; renderTabChecklist(); window.scrollTo(0,0); };
+  document.getElementById('ck-cerrar').onclick = ()=>{ chkGuardar(true); CHK=null; renderTabChecklist(); render(); toast('Checklist guardado ✔'); window.scrollTo(0,0); };
+  document.getElementById('ck-pdf').onclick = chkRespaldo;
   const sel = document.getElementById('ck-maq'), txt = document.getElementById('ck-maq-txt');
   if(sel) sel.onchange=()=>{ if(sel.value==='__otra'){ txt.style.display=''; txt.focus(); c.maquina=txt.value; } else { txt.style.display='none'; c.maquina=sel.value; } chkGuardar(); };
   txt.oninput=()=>{ c.maquina=txt.value.trim(); chkGuardar(); };
-  document.getElementById('ck-notas').oninput=e=>{ c.notas=e.target.value; chkGuardar(); };
-  document.getElementById('ck-firma').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; try{ c.firma = await comprimirFoto(f); c.firmaEnviada=false; chkGuardarLocal();
-      enviar({ action:'miDiaFirmaChecklist', usuario:'Emmanuel (Mi día)', row:{ t:TOKEN, id:c.id, cliente:c.cliente, fotoBase64:c.firma } }); c.firmaEnviada=true; chkGuardarLocal(); renderChecklist(); toast('Firma guardada ✔'); }catch(err){ toast('No se pudo leer la foto'); } };
-  document.getElementById('ck-ok').onclick=()=>{ chkGuardar(true); cerrarHoja(); render(); toast('Checklist guardado ✔'); };
-  document.getElementById('ck-pdf').onclick=chkRespaldo;
+  const nt=document.getElementById('ck-notas'); if(nt) nt.oninput=e=>{ c.notas=e.target.value; chkGuardar(); };
+  const cp=document.getElementById('ck-copiar'); if(cp) cp.onclick=()=>{ let n=0; Object.keys(c.items).forEach(k=>{ const it=c.items[k]; if(it.antes&&it.antes.estado==='ok'&&!(it.despues&&it.despues.estado)){ it.despues={estado:'ok',comentario:''}; n++; } }); chkGuardar(); chkRerender(); toast(n+' ítems marcados OK'); };
+  const fi=document.getElementById('ck-fotoin'); if(fi) fi.onchange=async e=>{ const f=e.target.files[0]; if(!f) return;
+    try{ const d = await comprimirFoto(f, 1100, 260000); const ft={ id:idNuevo('f'), d, enviada:false }; c.fotos[fase].push(ft); chkGuardarLocal(); chkRerender();
+      enviar({ action:'miDiaFotoChecklist', usuario:'Emmanuel (Mi día)', row:{ t:TOKEN, id:c.id, cliente:c.cliente, tipo:fase, fotoId:ft.id, fotoBase64:d } }); ft.enviada=true; chkGuardar(); chkRerender(); toast('Foto guardada ✔'); }
+    catch(err){ toast('No se pudo leer la foto'); } };
+  if(fase==='cliente') prepararFirma();
 }
-function chkGuardarLocal(){ try{ localStorage.setItem(chkKey(CHK.visitaId), JSON.stringify(CHK)); }catch(e){ const x=Object.assign({},CHK,{firma:''}); try{ localStorage.setItem(chkKey(CHK.visitaId), JSON.stringify(x)); }catch(e2){} } }
+function chkRerender(){
+  const abiertos = {}; document.querySelectorAll('#vChecklist .ck-cat').forEach(d=>abiertos[d.dataset.cat]=d.open);
+  const y = window.scrollY; renderChecklist();
+  document.querySelectorAll('#vChecklist .ck-cat').forEach(d=>{ if(d.dataset.cat in abiertos) d.open=abiertos[d.dataset.cat]; });
+  window.scrollTo(0,y);
+}
+
+/* Vista para el cliente: fondo claro, letra grande, antes → ahora */
+function htmlVistaCliente(c){
+  const A = chkConteo(c,'antes'), B = chkConteo(c,'despues');
+  const filas = []; let resueltos = 0, pendientes = 0;
+  Object.keys(CHECKLIST_ITEMS).forEach(cat=>CHECKLIST_ITEMS[cat].forEach(it=>{ const k=cat+'|'+it; const a=chkEstado(c,k,'antes'), b=chkEstado(c,k,'despues');
+    if(a.estado==='atencion'||b.estado==='atencion'||a.comentario||b.comentario){
+      if(a.estado==='atencion' && b.estado==='ok') resueltos++;
+      if(b.estado==='atencion' || (a.estado==='atencion' && !b.estado)) pendientes++;
+      filas.push({ cat, it, a, b }); } }));
+  const et = e=> e.estado==='ok'?'<span class="vc-ok">✔ OK</span>':e.estado==='atencion'?'<span class="vc-at">⚠ Atención</span>':'<span class="vc-nd">—</span>';
+  const fotosFila = (l,t)=> l.length?`<div class="vc-fl"><div class="vc-ft">${t}</div><div class="vc-fg">${l.map(f=>`<img src="${f.d}" alt="${t}">`).join('')}</div></div>`:'';
+  return `<div class="vc">
+    <div class="vc-h"><b>MEB MACHINERY SOLUTIONS</b><span>Checklist de la máquina — antes y después del servicio</span></div>
+    <div class="vc-kp"><div><b>${A.at}</b><span>con atención<br>al llegar</span></div><div class="vc-flecha">→</div><div><b style="color:${B.at?'#c0392b':'#1e8449'}">${B.at}</b><span>con atención<br>ahora</span></div><div><b style="color:#1e8449">${resueltos}</b><span>resueltos</span></div></div>
+    <div class="vc-sub">${B.rev} de ${chkTotal()} puntos revisados al terminar${c.maquina?' · '+esc(c.maquina):''}</div>
+    ${filas.length?`<table class="vc-t"><thead><tr><th>Punto revisado</th><th>Al llegar</th><th>Ahora</th></tr></thead><tbody>${filas.map(f=>`<tr><td><b>${esc(f.it)}</b><small>${esc(f.cat)}</small>${f.b.comentario||f.a.comentario?`<small class="vc-com">${esc(f.b.comentario||f.a.comentario)}</small>`:''}</td><td>${et(f.a)}</td><td>${et(f.b)}</td></tr>`).join('')}</tbody></table>`
+      :`<div class="vc-sub" style="font-size:16px;color:#1e8449">✔ Todos los puntos revisados están OK</div>`}
+    ${fotosFila(c.fotos.antes||[],'Cómo estaba')}${fotosFila(c.fotos.despues||[],'Cómo quedó')}
+    ${c.notas?`<div class="vc-notas"><b>Notas:</b> ${esc(c.notas)}</div>`:''}
+    <div class="vc-firma"><div class="vc-ft">Conformidad del cliente</div>
+      ${c.firma?`<img src="${c.firma}" alt="Firma" class="vc-firmaimg">${c.firmaNombre?`<div class="vc-sub">${esc(c.firmaNombre)}</div>`:''}<div class="vc-sub" style="color:#1e8449">✔ Firmado${c.firmaEnviada?' y guardado':''}</div>
+        <button type="button" class="vc-b2" id="ck-refirmar">Volver a firmar</button>`
+      :`<div class="vc-sub">Firmá acá con el dedo</div><canvas id="ck-pad" class="vc-pad"></canvas>
+        <input id="ck-fnom" class="vc-in" placeholder="Aclaración (nombre de quien firma)" value="${esc(c.firmaNombre||'')}">
+        <div class="vc-bs"><button type="button" class="vc-b2" id="ck-limpiar">Borrar</button><label class="vc-b2" for="ck-firmafoto">📷 O sacar foto de la firma en papel</label><button type="button" class="vc-b1" id="ck-firmar">✔ Confirmar firma</button></div>
+        <input id="ck-firmafoto" type="file" accept="image/*" capture="environment" style="display:none">`}
+    </div></div>`;
+}
+function prepararFirma(){
+  const c = CHK;
+  const rf = document.getElementById('ck-refirmar'); if(rf) rf.onclick=()=>{ c.firma=''; c.firmaEnviada=false; chkGuardarLocal(); renderChecklist(); };
+  const pad = document.getElementById('ck-pad'); if(!pad) return;
+  const r = pad.getBoundingClientRect(); const k = window.devicePixelRatio||1;
+  pad.width = Math.round(r.width*k); pad.height = Math.round(r.height*k);
+  const g = pad.getContext('2d'); g.scale(k,k); g.lineWidth=2.6; g.lineCap='round'; g.lineJoin='round'; g.strokeStyle='#111';
+  let dib=false, hay=false, ult=null;
+  const pt = e=>{ const b=pad.getBoundingClientRect(); return { x:e.clientX-b.left, y:e.clientY-b.top }; };
+  pad.onpointerdown = e=>{ dib=true; ult=pt(e); pad.setPointerCapture(e.pointerId); e.preventDefault(); };
+  pad.onpointermove = e=>{ if(!dib) return; const p=pt(e); g.beginPath(); g.moveTo(ult.x,ult.y); g.lineTo(p.x,p.y); g.stroke(); ult=p; hay=true; e.preventDefault(); };
+  pad.onpointerup = pad.onpointercancel = ()=>{ dib=false; };
+  document.getElementById('ck-limpiar').onclick=()=>{ g.clearRect(0,0,pad.width,pad.height); hay=false; };
+  const nom = document.getElementById('ck-fnom'); nom.oninput=()=>{ c.firmaNombre=nom.value.trim(); chkGuardarLocal(); };
+  const guardarFirma = d=>{ c.firma=d; c.firmaNombre=nom.value.trim(); c.firmaEnviada=false; chkGuardarLocal();
+    enviar({ action:'miDiaFotoChecklist', usuario:'Emmanuel (Mi día)', row:{ t:TOKEN, id:c.id, cliente:c.cliente, tipo:'firma', fotoId:'firma'+Date.now().toString(36), nombre:c.firmaNombre, fotoBase64:d } });
+    c.firmaEnviada=true; chkGuardar(true); renderChecklist(); toast('Firma guardada ✔'); };
+  document.getElementById('ck-firmar').onclick=()=>{ if(!hay){ toast('Falta la firma'); return; }
+    const o=document.createElement('canvas'); o.width=pad.width; o.height=pad.height; const og=o.getContext('2d'); og.fillStyle='#fff'; og.fillRect(0,0,o.width,o.height); og.drawImage(pad,0,0);
+    guardarFirma(o.toDataURL('image/jpeg',0.85)); };
+  document.getElementById('ck-firmafoto').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; try{ guardarFirma(await comprimirFoto(f, 1100, 260000)); }catch(err){ toast('No se pudo leer la foto'); } };
+}
+
+function chkGuardarLocal(){
+  if(!CHK) return; const key = CHK._key || chkKey(CHK.visitaId||CHK.id); CHK._key = key;
+  try{ localStorage.setItem(key, JSON.stringify(CHK)); }
+  catch(e){ // sin lugar: saco las fotos que ya están en Drive (la firma se queda para mostrarla)
+    const x = JSON.parse(JSON.stringify(CHK)); ['antes','despues'].forEach(f=>x.fotos[f]=x.fotos[f].map(ft=>ft.enviada?Object.assign(ft,{d:''}):ft));
+    try{ localStorage.setItem(key, JSON.stringify(x)); }catch(e2){} }
+  chkIdxGuardar(CHK);
+}
+function chkItemsServidor(c){
+  return Object.keys(c.items).map(k=>{ const p=k.split('|'); const a=chkEstado(c,k,'antes'), b=chkEstado(c,k,'despues');
+    if(!a.estado&&!a.comentario&&!b.estado&&!b.comentario) return null;
+    // "estado" sigue siendo el estado final (lo que lee el CRM de siempre); se suman los de cada etapa
+    return { categoria:p[0], item:p[1], estado:b.estado||a.estado||null, comentario:b.comentario||a.comentario||'',
+      estadoAntes:a.estado||null, comentarioAntes:a.comentario||'', estadoDespues:b.estado||null, comentarioDespues:b.comentario||'' }; }).filter(Boolean);
+}
 function chkGuardar(ya){
+  if(!CHK) return;
   ls('meb_checklist_usuario', CHK.usuario||'Emmanuel');
   chkGuardarLocal();
   clearTimeout(_chkTimer);
-  const mandar = ()=>{ const c=CHK; const items = Object.keys(c.items).filter(k=>c.items[k].estado||c.items[k].comentario).map(k=>{ const p=k.split('|'); return { categoria:p[0], item:p[1], estado:c.items[k].estado||null, comentario:c.items[k].comentario||'' }; });
-    const [y,m,d] = String(c.fecha||hoyLocal()).split('-');
-    enviar({ action:'guardarChecklist', usuario:'Emmanuel (Mi día)', row:{ id:c.id, cliente:c.cliente, clienteId:c.clienteId, maquina:c.maquina, usuario:c.usuario, fecha:d+'/'+m+'/'+y, itemsJson:JSON.stringify(items), notas:c.notas||'', visitaId:c.visitaId } }); };
+  const c = CHK;
+  const mandar = ()=>{ const [y,m,d] = String(c.fecha||hoyLocal()).split('-');
+    enviar({ action:'guardarChecklist', usuario:'Emmanuel (Mi día)', row:{ id:c.id, cliente:c.cliente, clienteId:c.clienteId, maquina:c.maquina, usuario:c.usuario, fecha:d+'/'+m+'/'+y, itemsJson:JSON.stringify(chkItemsServidor(c)), notas:c.notas||'', visitaId:c.visitaId } }); };
   if(ya) mandar(); else _chkTimer = setTimeout(mandar, 1500);
 }
 function chkRespaldo(){
   const c=CHK; let filas='';
-  Object.keys(CHECKLIST_ITEMS).forEach(cat=>{ const l=CHECKLIST_ITEMS[cat].filter(it=>{ const s=c.items[cat+'|'+it]; return s&&(s.estado||s.comentario); }); if(!l.length) return;
-    filas += `<tr><td colspan="3" style="background:#F5F2EC;font-weight:700">${esc(cat)}</td></tr>` + l.map(it=>{ const s=c.items[cat+'|'+it]; return `<tr><td>${esc(it)}</td><td style="${s.estado==='atencion'?'color:#c0392b;font-weight:700':''}">${s.estado==='ok'?'OK':s.estado==='atencion'?'NECESITA ATENCIÓN':'—'}</td><td>${esc(s.comentario||'')}</td></tr>`; }).join(''); });
-  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Checklist ${esc(c.cliente)}</title><style>body{font-family:Arial;max-width:720px;margin:20px auto;padding:0 16px;color:#1A1A1A}table{width:100%;border-collapse:collapse;font-size:12.5px}td,th{padding:6px 8px;border-bottom:1px solid #eee;text-align:left}th{background:#1A1A1A;color:#F4B400;font-size:10px}img{max-width:320px;border:1px solid #ccc;margin-top:6px}@media print{button{display:none}}</style></head><body>
-    <h2>MEB MACHINERY SOLUTIONS — CHECKLIST DE VISITA</h2><p><b>Cliente:</b> ${esc(c.cliente)}${c.maquina?' · <b>Máquina:</b> '+esc(c.maquina):''}<br><b>Fecha:</b> ${esc(c.fecha)} · <b>Completado por:</b> ${esc(c.usuario)}</p>
-    <table><thead><tr><th>Ítem</th><th>Estado</th><th>Comentario</th></tr></thead><tbody>${filas||'<tr><td colspan="3">Sin ítems marcados</td></tr>'}</tbody></table>
-    ${c.notas?`<p><b>Notas:</b> ${esc(c.notas)}</p>`:''}${c.firma?`<p><b>Firma del cliente:</b><br><img src="${c.firma}"></p>`:''}
+  const tx = e=> e.estado==='ok'?'OK':e.estado==='atencion'?'<b style="color:#c0392b">ATENCIÓN</b>':'—';
+  Object.keys(CHECKLIST_ITEMS).forEach(cat=>{ const l=CHECKLIST_ITEMS[cat].filter(it=>{ const a=chkEstado(c,cat+'|'+it,'antes'), b=chkEstado(c,cat+'|'+it,'despues'); return a.estado||b.estado||a.comentario||b.comentario; }); if(!l.length) return;
+    filas += `<tr><td colspan="4" style="background:#F5F2EC;font-weight:700">${esc(cat)}</td></tr>` + l.map(it=>{ const a=chkEstado(c,cat+'|'+it,'antes'), b=chkEstado(c,cat+'|'+it,'despues'); return `<tr><td>${esc(it)}</td><td>${tx(a)}</td><td>${tx(b)}</td><td>${esc([a.comentario,b.comentario].filter(Boolean).join(' → '))}</td></tr>`; }).join(''); });
+  const fotos = (l,t)=> l.filter(f=>f.d).length?`<p><b>${t}</b><br>${l.filter(f=>f.d).map(f=>`<img src="${f.d}" style="width:31%;margin:1%;border-radius:6px">`).join('')}</p>`:'';
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Checklist ${esc(c.cliente)}</title><style>body{font-family:Arial;max-width:760px;margin:20px auto;padding:0 16px;color:#1A1A1A}table{width:100%;border-collapse:collapse;font-size:12.5px}td,th{padding:6px 8px;border-bottom:1px solid #eee;text-align:left}th{background:#1A1A1A;color:#F4B400;font-size:10px}img.f{max-width:320px;border:1px solid #ddd}@media print{button{display:none}}</style></head><body>
+    <h2>MEB MACHINERY SOLUTIONS — CHECKLIST DE VISITA</h2><p><b>Cliente:</b> ${esc(c.cliente)}${c.maquina?' · <b>Máquina:</b> '+esc(c.maquina):''}<br><b>Fecha:</b> ${esc(c.fecha.split('-').reverse().join('/'))} · <b>Completado por:</b> ${esc(c.usuario)}</p>
+    <table><thead><tr><th>Ítem</th><th>Al llegar</th><th>Al terminar</th><th>Comentario</th></tr></thead><tbody>${filas||'<tr><td colspan="4">Sin ítems marcados</td></tr>'}</tbody></table>
+    ${fotos(c.fotos.antes||[],'Cómo estaba (al llegar)')}${fotos(c.fotos.despues||[],'Cómo quedó (al terminar)')}
+    ${c.notas?`<p><b>Notas:</b> ${esc(c.notas)}</p>`:''}${c.firma?`<p><b>Conformidad del cliente:</b><br><img class="f" src="${c.firma}">${c.firmaNombre?'<br>'+esc(c.firmaNombre):''}</p>`:''}
     <button onclick="window.print()">Imprimir / Guardar PDF</button></body></html>`;
   const url = URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'})); window.open(url,'_blank');
 }
 document.addEventListener('click', e=>{
-  const ck = e.target.closest('[data-ck]'); if(ck && CHK){ const p=ck.dataset.ck.split('|'); const est=p.pop(); const k=p.join('|');
-    const st = CHK.items[k] = CHK.items[k] || { estado:null, comentario:'' }; st.estado = st.estado===est ? null : est;
-    const abiertos = [...document.querySelectorAll('.ck-cat')].map(d=>d.open); const y = document.getElementById('sheet').scrollTop;
-    renderChecklist(); document.querySelectorAll('.ck-cat').forEach((d,i)=>d.open=abiertos[i]); document.getElementById('sheet').scrollTop=y; chkGuardar(); return; }
+  const ck = e.target.closest('[data-ck]'); if(ck && CHK){ const p=ck.dataset.ck.split('|'); const est=p.pop(); const k=p.join('|'); const fase=CHK.fase==='despues'?'despues':'antes';
+    const it = CHK.items[k] = CHK.items[k] || { antes:{estado:null,comentario:''}, despues:{estado:null,comentario:''} };
+    const st = it[fase] = it[fase] || { estado:null, comentario:'' }; st.estado = st.estado===est ? null : est;
+    chkRerender(); chkGuardar(); return; }
+  const fs = e.target.closest('[data-ckfase]'); if(fs && CHK){ CHK.fase = fs.dataset.ckfase; chkGuardar(); renderChecklist(); window.scrollTo(0,0); return; }
+  const bo = e.target.closest('[data-ckborrar]'); if(bo && CHK){ const [fase,id]=bo.dataset.ckborrar.split('|'); const ft=(CHK.fotos[fase]||[]).find(f=>f.id===id);
+    CHK.fotos[fase] = (CHK.fotos[fase]||[]).filter(f=>f.id!==id);
+    if(ft && ft.enviada) enviar({ action:'miDiaFotoChecklist', usuario:'Emmanuel (Mi día)', row:{ t:TOKEN, id:CHK.id, cliente:CHK.cliente, tipo:fase, fotoId:id, borrar:true } });
+    chkGuardarLocal(); chkRerender(); return; }
+  const kk = e.target.closest('[data-chkkey]'); if(kk){ abrirChecklistKey(kk.dataset.chkkey); window.scrollTo(0,0); return; }
   const ag = e.target.closest('[data-agendar]'); if(ag){ hojaAgendar(ag.dataset.agendar||'', ag.dataset.fecha||''); return; }
   const ti = e.target.closest('[data-tiempo]'); if(ti){ const [tipo,id]=ti.dataset.tiempo.split('|'); marcarTiempo(tipo,id); return; }
-  const cl = e.target.closest('[data-checklist]'); if(cl){ abrirChecklist(cl.dataset.checklist); return; }
+  const cl = e.target.closest('[data-checklist]'); if(cl){ abrirChecklist(cl.dataset.checklist); window.scrollTo(0,0); return; }
 });
-document.addEventListener('input', e=>{ const k = e.target.dataset && e.target.dataset.ckc; if(k && CHK){ (CHK.items[k] = CHK.items[k] || {estado:null}).comentario = e.target.value; chkGuardar(); } });
+document.addEventListener('input', e=>{ const k = e.target.dataset && e.target.dataset.ckc; if(k && CHK){ const fase=CHK.fase==='despues'?'despues':'antes';
+  const it = CHK.items[k] = CHK.items[k] || { antes:{estado:null,comentario:''}, despues:{estado:null,comentario:''} }; (it[fase] = it[fase] || {estado:null}).comentario = e.target.value; chkGuardar(); } });
 
 /* ---------- eventos ---------- */
 document.addEventListener('click',e=>{
@@ -1147,4 +1352,4 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden && TOKEN 
 })();
 </script>
 </body>
-</html>
+</html>
