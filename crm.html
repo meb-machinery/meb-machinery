@@ -377,6 +377,7 @@ select option { background:var(--dark); }
     <div class="nav-item" onclick="showPage('estadisticas',this)"><span class="nav-icon">📈</span> Estadísticas</div>
     <div class="nav-item" onclick="showPage('repuestos',this)"><span class="nav-icon">🔩</span> Repuestos</div>
     <div class="nav-item" onclick="showPage('proveedores',this)"><span class="nav-icon">🏭</span> Proveedores <span class="nav-badge" id="badge-proveedores">0</span></div>
+    <div class="nav-item" onclick="showPage('cuentas',this)"><span class="nav-icon">📒</span> Cuentas corrientes</div>
     <div class="nav-item" onclick="showPage('gastos',this)"><span class="nav-icon">🧾</span> Gastos de Estructura <span class="nav-badge red" id="badge-gastos">0</span></div>
     <div class="nav-item" onclick="showPage('mapa',this)"><span class="nav-icon">🗺️</span> Mapa clientes</div>
     <div class="nav-item" onclick="showPage('calendario',this)"><span class="nav-icon">📅</span> Calendario</div>
@@ -1116,6 +1117,13 @@ select option { background:var(--dark); }
   </div>
 
   <!-- GASTOS DE ESTRUCTURA -->
+  <!-- v17.79 — CUENTAS CORRIENTES -->
+  <div class="page" id="page-cuentas">
+    <div class="page-header"><div class="page-title">CUENTAS <span>CORRIENTES</span></div></div>
+    <div class="filter-tabs" id="cuentas-tabs" style="margin-bottom:12px"></div>
+    <div id="cuentas-contenido"></div>
+  </div>
+
   <div class="page" id="page-gastos">
     <div class="page-header">
       <div class="page-title">GASTOS <span>DE ESTRUCTURA</span></div>
@@ -2052,7 +2060,7 @@ async function syncAll() {
     if(tr.length) DB.trabajos = tr.map(r=>({
       id:resolverIdEstable(r,'TRABAJOS'), clienteId:String(r.CLIENTE_ID||'').trim(), maquinaId:String(r.MAQUINA_ID||'').trim(),
       presupuestoId:String(r.PRESUPUESTO_ID||'').trim(),
-      titulo:r.TITULO||r.DESCRIPCION||'', tipo:r.TIPO||'', estado:(r.ESTADO||'pendiente').toLowerCase().trim(),
+      titulo:r.TITULO||r.DESCRIPCION||'', tipo:(/^re?pe?s?tos?$|^repuestos?$/i.test(String(r.TIPO||'').trim()) ? 'Repuestos' : (r.TIPO||'')), estado:(r.ESTADO||'pendiente').toLowerCase().trim(),
       estadoMaquina:r.ESTADO_MAQUINA||'', fechaInicio:r.FECHA_INICIO||'',
       fechaFin:r.FECHA_FIN||'', montoCobrado:parseMonto(r.MONTO_COBRADO),
       montoGastos:parseMonto(r.MONTO_GASTOS),
@@ -2267,7 +2275,7 @@ async function syncAll() {
         comprobantePago:r.COMPROBANTE_PAGO||'',
         entregasLog: deserializarEntregas(r.ENTREGAS_LOG||''),
         pagosLog: deserializarPagosCompra(r.PAGOS_LOG||''), pagosRegistrados: r.PAGOS_LOG!==undefined && String(r.PAGOS_LOG||'').trim()!=='',
-        cuotas: parseInt(r.CUOTAS,10)||0
+        cuotas: parseInt(r.CUOTAS,10)||0, plazoDias: parseInt(r.PLAZO_DIAS,10)||0
       }));
     } else { if(!DB.proveedores) DB.proveedores=[]; if(!DB.compras) DB.compras=[]; }
     // Siempre refleja lo que hay en el Sheet (incluso si está vacío) — evita que
@@ -2331,6 +2339,7 @@ async function syncAll() {
       horas: r.HORAS_MAQUINA || '',
       fotosCount: (r.FOTOS||'').split(',').map(s=>s.trim()).filter(Boolean).length,
       driveUrl: r.LINK_DRIVE || '',
+      fechaInicioTrabajo: String(r.FECHA_INICIO_TRABAJO || '').trim(), fechaFinTrabajo: String(r.FECHA_FIN_TRABAJO || '').trim(),
       guardadoPor: r.GUARDADO_POR || '',
       fechaGuardado: r.GUARDADO || r.FECHA_GUARDADO || ''
     }));
@@ -2348,6 +2357,8 @@ async function syncAll() {
       });
       DB.informes = out;
     })();
+    // v17.79 — las fechas de inicio y fin del trabajo salen del informe técnico (Emmanuel siempre las completa)
+    try { aplicarFechasDeInformes(); } catch(eFi) { console.warn('fechas informes', eFi); }
 
     DB.oportunidadesLog = (opl.length ? opl : []).map(r => ({
       id: r.ID || uid(),
@@ -3626,7 +3637,7 @@ function showPage(name, el) {
     dashboard:renderDashboard, clientes:renderClientes, maquinas:renderMaquinas,
     trabajos:renderTrabajos, presupuestos:renderPresupuestos, contratos:renderContratos,
     pipeline:renderPipeline, alertas:renderAlertas, reconectar:renderReconectar, estadisticas:renderEstadisticas,
-    repuestos:renderRepuestos, proveedores:renderProveedores, mapa:renderMapa, calendario:renderCalendario,
+    repuestos:renderRepuestos, proveedores:renderProveedores, cuentas:renderCuentas, mapa:renderMapa, calendario:renderCalendario,
     informes:renderInformes, actividad:renderActividad, movilidad:renderMovilidad, gastos:renderGastos,
     terciarizado:renderTerciarizado, serviciosTerceros:renderServiciosTerceros, gastosPersonales:renderGastosPersonales, prospectos:renderProspectos, postventa:renderPostventa, sueldos:renderSueldos
   };
@@ -3672,7 +3683,7 @@ function refreshCurrentPage() {
     dashboard:renderDashboard, clientes:renderClientes, maquinas:renderMaquinas,
     trabajos:renderTrabajos, presupuestos:renderPresupuestos, contratos:renderContratos,
     pipeline:renderPipeline, alertas:renderAlertas, reconectar:renderReconectar, estadisticas:renderEstadisticas,
-    repuestos:renderRepuestos, proveedores:renderProveedores, mapa:renderMapa, calendario:renderCalendario,
+    repuestos:renderRepuestos, proveedores:renderProveedores, cuentas:renderCuentas, mapa:renderMapa, calendario:renderCalendario,
     actividad:renderActividad, movilidad:renderMovilidad, informes:renderInformes, gastosPersonales:renderGastosPersonales, prospectos:renderProspectos, postventa:renderPostventa, sueldos:renderSueldos
   };
   if(renders[name]) renders[name]();
@@ -4232,7 +4243,7 @@ function renderCalendarioSemanal() {
   if(!DB.calendarioVisitas) DB.calendarioVisitas=[];
   const dias = [];
   for(let i=0;i<7;i++){ const d=new Date(calSemanaBase); d.setDate(d.getDate()+i); dias.push(d); }
-  const HORAS = []; for(let h=7; h<=20; h++) HORAS.push(h);
+  const HORAS = []; for(let h=4; h<=22; h++) HORAS.push(h); // v17.79 — Emmanuel sale a las 4–5 de la mañana
   const DIAS_LABEL = ['LUN','MAR','MIÉ','JUE','VIE','SÁB','DOM'];
   const hoy = calFechaISO(new Date());
 
@@ -4269,7 +4280,7 @@ function renderCalendarioSemanal() {
     html += `<div style="border-top:1px solid var(--border);padding:4px 6px;font-size:10px;color:var(--muted);text-align:right">${String(h).padStart(2,'0')}:00</div>`;
     dias.forEach(d => {
       const iso = calFechaISO(d);
-      const visitasHora = (visitasPorFecha[iso]||[]).filter(v => parseInt((v.horaInicio||'0').split(':')[0],10)===h);
+      const visitasHora = (visitasPorFecha[iso]||[]).filter(v => Math.min(22, Math.max(4, parseInt((v.horaInicio||'7').split(':')[0],10)||7))===h);
       const trabajosHora = h===7 ? (trabajosPorFecha[iso]||[]) : []; // trabajos sin hora: mostrar una sola vez, en la primera franja
       html += `<div style="border-top:1px solid var(--border);border-left:1px solid var(--border);min-height:34px;padding:2px;cursor:pointer;position:relative" onclick="calSemNuevaVisita('${iso}',${h})" onmouseover="this.style.background='rgba(244,180,0,0.04)'" onmouseout="this.style.background='transparent'">
         ${visitasHora.map(v=>{const c=catVisita(v.tipo); const nombreCliente=v.cliente||v.clienteLibre; return `<div onclick="event.stopPropagation();openModal('visitaCalendario', DB.calendarioVisitas.find(x=>x.id==='${v.id}'))" style="background:${c.color}33;border-left:3px solid ${c.color};padding:2px 4px;margin-bottom:2px;border-radius:0 3px 3px 0;font-size:10px;color:var(--text);cursor:pointer" title="${(v.titulo||'').replace(/"/g,'&quot;')}">
@@ -5707,7 +5718,7 @@ function renderContratos() {
       <td><span style="color:${estadoColor};text-transform:capitalize;font-family:'Bebas Neue';letter-spacing:1px">${estadoVisual}</span>${diasPlazoVencidoContrato(c)?`<div style="font-size:9px;color:var(--red);margin-top:2px" title="Venció el plazo de ${c.plazoPago} días sin cobro registrado">⏰ Vencido hace ${diasPlazoVencidoContrato(c)}d</div><button class="btn-secondary" style="font-size:9px;padding:2px 6px;margin-top:3px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="reclamarContratoWhatsApp('${c.id}')" title="Mandar recordatorio por WhatsApp">📲 Reclamar</button>`:''}${diasContratoSinSeguimiento(c)!==null?`<div style="font-size:9px;color:var(--orange);margin-top:2px" title="El seguimiento programado venció hace ${diasContratoSinSeguimiento(c)} días">📅 Seguimiento vencido (${diasContratoSinSeguimiento(c)}d)</div>`:''}</td>
       <td><div class="actions">
         <button class="btn-secondary" title="Editar" onclick="openModal('contrato',DB.contratos.find(x=>x.id==='${c.id}'))">✏️</button>
-        <button class="btn-secondary" onclick="cambiarEstado('contratos','${c.id}',['activo','pausado','vencido'])">Estado</button>
+        <button class="btn-secondary" onclick="cambiarEstado('contratos','${c.id}',['activo','pausado','vencido','no aprobado'])">Estado</button>
         <button class="btn-secondary" style="font-size:10px;padding:3px 8px${diasContratoSinSeguimiento(c)!==null?';background:rgba(230,126,34,0.15);border-color:#e67e22;color:#e67e22':''}" onclick="guardarProximoSeguimientoContrato('${c.id}')" title="${c.proximoSeguimiento?'Próximo seguimiento: '+c.proximoSeguimiento+' — clic para cambiarlo':'Programar próximo seguimiento'}">📅 ${c.proximoSeguimiento||'Seguimiento'}</button>${diasContratoSinSeguimiento(c)!==null&&cl&&cl.telefono?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="seguirContratoWhatsApp('${c.id}')" title="Mandar mensaje de seguimiento por WhatsApp">📲</button>`:''}
         ${c.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Registrar cobro real">💰 Cobro</button>`:`<span style="font-size:10px;color:${(c.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap">${(c.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${c.diferenciaUsd}</span> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroContratoReal',DB.contratos.find(x=>x.id==='${c.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroContrato('${c.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`}
         <button class="btn-secondary" style="${c.comprobantePago?'background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366':''}" onclick="adjuntarComprobante('contratos','${c.id}')" title="${c.comprobantePago?'Comprobante cargado — clic para cambiarlo':'Adjuntar comprobante de pago (captura, ticket)'}">${c.comprobantePago?'📎✔':'📎'}</button>
@@ -6556,7 +6567,7 @@ function idPresupDeNumero(num) {
   const cand = 'P' + String(num).padStart(4,'0');
   return DB.presupuestos.some(x=>String(x.id).toLowerCase()===cand.toLowerCase()) ? null : cand;
 }
-function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail, tipoMaquina, tcDesdePdf, checklistIdOrigen, opcionesOcultasStr, plazoElegido, costoParadaDia, cuitCliente, motivoPresup, tcFechaPdf, maquinaIdSel) {
+function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, modeloMaquina, horometro, clienteIdSel, cliNombre, cliEmpresa, cliZona, cliTelefono, cliEmail, tipoMaquina, tcDesdePdf, checklistIdOrigen, opcionesOcultasStr, plazoElegido, costoParadaDia, cuitCliente, motivoPresup, tcFechaPdf, maquinaIdSel, fechaPresupPdf) {
   presupId = idPresupReal(presupId);
   if (!confirmarMontoPresupuesto(monto)) return;
   let p = DB.presupuestos.find(x=>x.id===presupId);
@@ -6678,6 +6689,12 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
   if (costoParadaDia !== undefined) p.costoParadaDia = Number(costoParadaDia)||0;
   if (cuitCliente !== undefined) p.cuitCliente = String(cuitCliente||'').trim();
   if (motivoPresup !== undefined) p.motivo = String(motivoPresup||'').trim().slice(0,300);
+  if (!esNuevoPresup && p.motivo) {
+    const tMot = trabajoDePresupuesto(p);
+    if (tMot && tituloGenerico(tMot, p) && tMot.titulo !== p.motivo.slice(0,120)) { tMot.titulo = p.motivo.slice(0,120); writeToSheet({ action:'setTituloTrabajo', id:tMot.id, row:{ titulo:tMot.titulo } }); }
+  }
+  // v17.79 — fecha del presupuesto: se mantiene al editar y se puede cambiar desde el PDF
+  if (fechaPresupPdf) { const fIso = _isoFlex(fechaPresupPdf); if (fIso) p.fecha = fIso; }
   if (tcFechaPdf) p.tcFecha = tcFechaPdf;
   const _opcOcultas = (p.opcionesPagoOcultas||[]).join(',');
 
@@ -6709,7 +6726,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
       plazo_pago:p.plazoPago||'contado', recargo_pct:p.recargoPct||0, opciones_pago_ocultas:_opcOcultas, costo_parada_dia:p.costoParadaDia||'', cuit_cliente:p.cuitCliente||'', motivo:p.motivo||'', tc_fecha:p.tcFecha||'',
       serie_maquina:p.serieMaquina||'', modelo_maquina:p.modeloMaquina||'', horometro:p.horometro||'',
       tipo_maquina:p.tipoMaquina||'', maquina_id:p.maquinaId||'',
-      estado:p.estado, notas:notas||p.notas||''
+      estado:p.estado, notas:notas||p.notas||'', fecha:p.fecha||''
     }});
   }
 
@@ -6724,7 +6741,7 @@ function _recibirCambiosPresupuesto(presupId, descripcion, monto, notas, serie, 
   // cuando arranca de verdad, para no ensuciar el gráfico de Estacionalidad
   // con la fecha de armado del presupuesto en vez de la fecha real de inicio.
   if (esNuevoPresup && !DB.trabajos.find(t => t.presupuestoId === p.id)) {
-    const tituloTrabajo = (descripcion||'').split('\n')[0].split('|')[0].trim().slice(0,120) || ('Trabajo — Presupuesto N° '+String(p.num).padStart(4,'0'));
+    const tituloTrabajo = (p.motivo||'').trim().slice(0,120) || (descripcion||'').split('\n')[0].split('|')[0].trim().slice(0,120) || ('Trabajo — Presupuesto N° '+String(p.num).padStart(4,'0'));
     const trabajoAuto = {
       id: siguienteIdTrabajo(p.num), clienteId: p.clienteId, maquinaId: p.maquinaId||'', presupuestoId: p.id,
       titulo: tituloTrabajo, tipo:'Reparación', estado:'pendiente', estadoMaquina:'funcionando',
@@ -9372,6 +9389,8 @@ function showModalCompra(data={}) {
         <div id="mc-conversion" style="font-size:11px;color:var(--blue-light);margin-top:4px">—</div>
       </div>
       <div class="form-group"><label>FECHA</label><input id="mc-fecha" type="date" value="${data.fecha||today}"></div>
+      <div class="form-group"><label>CONDICIÓN DE PAGO</label><select id="mc-plazo">${[[0,'Contado'],[15,'A 15 días'],[30,'A 30 días'],[45,'A 45 días'],[60,'A 60 días'],[90,'A 90 días']].map(([v,l])=>`<option value="${v}" ${(parseInt(data.plazoDias,10)||0)===v?'selected':''}>${l}</option>`).join('')}</select>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">Si es en cuotas, cargá la cantidad abajo: la primera vence en este plazo (o a 30 días si es contado) y las demás cada 30 días. Se ve en 📒 Cuentas corrientes.</div></div>
       ${data.id ? `<div class="form-group"><label>PAGO</label><div style="font-size:12px">${htmlEstadoPagoCompra(data)} <a href="#" onclick="event.preventDefault();document.getElementById('modal-compra').remove();verPagosCompra('${data.id}')" style="color:var(--yellow);margin-left:6px">ver / registrar pagos</a></div></div>` : `
       <div class="form-group"><label>¿CUÁNTO SE ABONÓ? (en pesos)</label>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
@@ -9461,6 +9480,7 @@ function guardarCompra() {
     notas: document.getElementById('mc-notas').value.trim(),
     entregasLog: compraPrevia.entregasLog || [],
     pagosLog: compraPrevia.pagosLog || [], pagosRegistrados: !!compraPrevia.pagosRegistrados, cuotas: compraPrevia.cuotas || 0,
+    plazoDias: parseInt((document.getElementById('mc-plazo')||{}).value,10) || 0,
     _local: esNueva ? true : compraPrevia._local
   };
   if(esNueva) {
@@ -9491,6 +9511,7 @@ function filaCompraSheet(c) {
     montoUsd:c.montoUsd, tcAlMomento:c.tcAlMomento, fecha:c.fecha, notas:c.notas,
     entregasLog: serializarEntregas(c.entregasLog) };
   if(c.pagosRegistrados) { r.pagosLog = serializarPagosCompra(c.pagosLog); r.cuotas = c.cuotas||0; }
+  r.plazoDias = c.plazoDias || 0;
   return r;
 }
 function serializarPagosCompra(lista) { return (lista||[]).length ? lista.map(p=>[p.monto, p.fecha, String(p.nota||'').replace(/[|§]/g,' ')].join('|')).join(' §§ ') : '-'; } // '-' = registrado, sin pagos todavía
@@ -9512,7 +9533,7 @@ function estadoPagoCompra(c) {
 }
 function htmlEstadoPagoCompra(c) {
   const e = estadoPagoCompra(c);
-  const cuotasTxt = c.cuotas ? ` · cuota ${Math.min((c.pagosLog||[]).length, c.cuotas)}/${c.cuotas}` : '';
+  const cuotasTxt = (c.cuotas ? ` · cuota ${Math.min((c.pagosLog||[]).length, c.cuotas)}/${c.cuotas}` : '') + (()=>{ if(e.estado!=='debe') return ''; const q = cronogramaCompra(c).find(q=>q.saldo>0.5); return q ? ` · vence ${_fDMY(q.vence)}` : ''; })();
   const click = `onclick="verPagosCompra('${c.id}')" style="cursor:pointer"`;
   if(e.estado==='sin') return `<span ${click} title="Tocá para registrar cómo se pagó"><span style="font-size:11px;color:var(--muted);border:1px dashed var(--border2);border-radius:10px;padding:2px 8px">💵 cargar pago</span></span>`;
   if(e.estado==='pagado') return `<span ${click} title="Ver pagos"><span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(37,211,102,0.12);border:1px solid var(--green);border-radius:10px;padding:2px 8px">✓ Pagado</span>${c.cuotas?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${c.cuotas} cuotas</div>`:''}</span>`;
@@ -10368,7 +10389,10 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
 
   const numPresup = String(p.num||p.id).padStart(4,'0');
   const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
-  const fechaVence = new Date(Date.now()+15*24*60*60*1000).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  // v17.79 — la fecha del presupuesto es la suya (no la de hoy) y la validez se cuenta desde ahí
+  const _fIsoP = _isoFlex(p.fecha) || today();
+  const fechaPresupTxt = _fIsoP.split('-').reverse().join('/');
+  const fechaVence = new Date(new Date(_fIsoP+'T12:00:00').getTime()+15*24*60*60*1000).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   // Recargos por plazo (30/60/90 días) — se leen del Tarifario vigente y se
   // embeben como constantes en el JS del PDF, para que la tabla de Opciones
   // de Pago pueda recalcularse sola ahí adentro sin depender de esta ventana.
@@ -10918,7 +10942,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     '    return;',
     '  }',
     '  if(window.opener && window.opener._recibirCambiosPresupuesto) {',
-    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro, clienteIdSel, cliNombre, cliEmpresa.replace("—","").trim(), cliZona.replace("—","").trim(), cliTelefono.replace("—","").trim(), cliEmail.replace("—","").trim(), tipoMaq, tcGuardar, CHECKLIST_ID_ORIGEN, tramosPagoOcultos.join(","), PLAZO_ELEGIDO, parse((document.getElementById("pdf-parada")||{innerText:""}).innerText) || 0, ((document.getElementById("pdf-cli-cuit")||{}).innerText || "").replace("\u2014","").trim(), ((document.getElementById("pdf-motivo")||{}).innerText || "").trim(), TC_FECHA, ((document.getElementById("pdf-maq-select")||{}).value || ""));',
+    '    window.opener._recibirCambiosPresupuesto(PRESUP_ID, desc, monto, notas, serie, modeloMaq, horometro, clienteIdSel, cliNombre, cliEmpresa.replace("—","").trim(), cliZona.replace("—","").trim(), cliTelefono.replace("—","").trim(), cliEmail.replace("—","").trim(), tipoMaq, tcGuardar, CHECKLIST_ID_ORIGEN, tramosPagoOcultos.join(","), PLAZO_ELEGIDO, parse((document.getElementById("pdf-parada")||{innerText:""}).innerText) || 0, ((document.getElementById("pdf-cli-cuit")||{}).innerText || "").replace("\u2014","").trim(), ((document.getElementById("pdf-motivo")||{}).innerText || "").trim(), TC_FECHA, ((document.getElementById("pdf-maq-select")||{}).value || ""), ((document.getElementById("pdf-fecha")||{}).innerText || "").trim());',
     '    var sb = document.querySelector(".btn-save");',
     '    if(sb){sb.style.background="#25d366";sb.style.color="#fff";sb.textContent="\\u2714 Guardado";}',
     '    setTimeout(function(){if(sb){sb.style.background="#1A1A1A";sb.style.color="#F4B400";sb.textContent="\\uD83D\\uDCBE GUARDAR";}},2500);',
@@ -11039,7 +11063,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     + '</div></div>'
 
     + '<div class="titulo-doc">PRESUPUESTO '
-    + '<span style="font-size:13px;color:#aaa;font-weight:400">N\u00B0 ' + numPresup + ' &middot; ' + fechaHoy + '</span></div>'
+    + '<span style="font-size:13px;color:#aaa;font-weight:400">N\u00B0 ' + numPresup + ' &middot; <span class="pdf-fecha-eco">' + fechaPresupTxt + '</span></span></div>'
     + '<div class="estado-bar">'
     + '<span contenteditable="true">ESTADO: ' + estadoPresup + '</span>'
     + '<span class="vencimiento" contenteditable="true">\u23F0 V\u00C1LIDO HASTA: ' + fechaVence + '</span>'
@@ -11060,7 +11084,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
     + '</div></div>'
     + '<div class="seccion"><div class="seccion-titulo">Datos del presupuesto</div><div class="seccion-body">'
     + '<div class="campo"><label>N\u00BA Presupuesto</label><span contenteditable="true">' + numPresup + '</span></div>'
-    + '<div class="campo"><label>Fecha</label><span contenteditable="true">' + (p.fecha ? fmtDate(p.fecha) : fechaHoy) + '</span></div>'
+    + '<div class="campo"><label>Fecha</label><span id="pdf-fecha" contenteditable="true" title="Pod\u00E9s cambiarla (dd/mm/aaaa). Se guarda con el presupuesto." oninput="document.querySelectorAll(\'.pdf-fecha-eco\').forEach(function(e){e.innerText=document.getElementById(\'pdf-fecha\').innerText;})">' + fechaPresupTxt + '</span></div>'
     + '<div class="campo"><label>Estado</label><span contenteditable="true">' + estadoPresup + '</span></div>'
     + '<div class="campo solo-pantalla"><label>M\u00E1quina del cliente</label><select id="pdf-maq-select" onchange="onMaquinaSelectChange()" style="width:100%;padding:5px;font-size:12px;border:1px solid #ccc;border-radius:4px;background:#fff;color:#1A1A1A"></select></div>'
     + '<div class="campo"><label>Tipo</label><span id="pdf-tipo" contenteditable="true">' + ph(maqTipo) + '</span></div>'
@@ -11187,7 +11211,7 @@ function generarPresupuestoPDF(presupId, clienteIdPrellenado, checklistIdOrigen)
 
     + '<div class="footer">'
     + '<span>MEB MACHINERY SOLUTIONS &middot; mebmachinerysolutions@gmail.com &middot; +54 11 3392-3254</span>'
-    + '<span>Presupuesto N\u00B0 ' + numPresup + ' &middot; ' + fechaHoy + '</span>'
+    + '<span>Presupuesto N\u00B0 ' + numPresup + ' &middot; <span class="pdf-fecha-eco">' + fechaPresupTxt + '</span></span>'
     + '</div>'
 
     + '<script>' + jsCode + '<\/script>'
@@ -11636,6 +11660,7 @@ function openModal(type, data={}) {
           <option ${data.tipo==='Instalación'?'selected':''}>Instalación</option>
           <option ${data.tipo==='Diagnóstico'?'selected':''}>Diagnóstico</option>
           <option ${data.tipo==='Fabricación'?'selected':''}>Fabricación</option>
+          <option ${data.tipo==='Repuestos'?'selected':''}>Repuestos</option>
           <option ${data.tipo==='Otro'?'selected':''}>Otro</option>
         </select>
       </div>
@@ -12832,7 +12857,7 @@ function openModal(type, data={}) {
       if(t) t.presupuestoId = p.id;
       if(!t){
         t = { id:siguienteIdTrabajo(p.num), clienteId:p.clienteId, maquinaId:p.maquinaId||'', presupuestoId:p.id,
-          titulo:String(p.descripcion||'').split('\n')[0].split('|')[0].slice(0,120)||('Trabajo — Presupuesto N° '+String(p.num).padStart(4,'0')),
+          titulo:(p.motivo||'').trim().slice(0,120)||String(p.descripcion||'').split('\n')[0].split('|')[0].slice(0,120)||('Trabajo — Presupuesto N° '+String(p.num).padStart(4,'0')),
           tipo:'Reparación', estado:'pendiente', estadoMaquina:'funcionando', fechaInicio:'', fechaFin:'',
           repuestosDetalle:'', notas:'Generado desde Economía real del Presupuesto N° '+String(p.num).padStart(4,'0'),
           fotoUrl:'', tcAlMomento:0, gananciaUsdEsperada:0, horasTrabajadas:0, estadoCobro:'pendiente', _local:true };
@@ -14743,6 +14768,48 @@ function closeDetail() {
 // resueltos (no IDs), listo para abrir en Excel/Google Sheets sin tocar el
 // CRM. Todo corre en el navegador — no sube nada a ningún lado.
 // ============================================================
+// v17.79 — fecha de cualquier formato → 'aaaa-mm-dd' (o '' si no se entiende)
+function _isoFlex(v) {
+  const s = String(v||'').trim(); if(!s) return '';
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s); if(m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/.exec(s); if(m) return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2})$/.exec(s); if(m) return '20'+m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  return '';
+}
+function informeDePresupuesto(p) {
+  if(!p) return null;
+  const n = String(p.num||'').replace(/\D/g,'').replace(/^0+/,'');
+  const cl = (DB.clientes.find(c=>String(c.id)===String(p.clienteId))||{}).nombre || '';
+  const norm = x => String(x||'').trim().toUpperCase();
+  return (DB.informes||[]).find(i=>i.id===p.id)
+    || (DB.informes||[]).find(i=>String(i.num||'').replace(/\D/g,'').replace(/^0+/,'')===n && n && (!i.cliente || !cl || norm(i.cliente)===norm(cl) || norm(i.cliente).includes(norm(cl)) || norm(cl).includes(norm(i.cliente))))
+    || null;
+}
+function aplicarFechasDeInformes() {
+  const cambios = [];
+  DB.presupuestos.forEach(p=>{
+    const inf = informeDePresupuesto(p); if(!inf) return;
+    const fi = _isoFlex(inf.fechaInicioTrabajo), ff = _isoFlex(inf.fechaFinTrabajo);
+    if(!fi && !ff) return;
+    const t = trabajoDePresupuesto(p); if(!t) return;
+    let cambio = false;
+    if(fi && _isoFlex(t.fechaInicio)!==fi) { t.fechaInicio = fi; cambio = true; }
+    if(ff && _isoFlex(t.fechaFin)!==ff) { t.fechaFin = ff; cambio = true; }
+    if(cambio) cambios.push(t);
+  });
+  // se guarda una sola vez en el Sheet; en la próxima sincronización ya coinciden
+  cambios.forEach(t=>writeToSheet({ action:'setFechasTrabajo', id:t.id, row:{ fechaInicio:t.fechaInicio||'', fechaFin:t.fechaFin||'' } }));
+  if(cambios.length) console.log('Fechas de trabajos tomadas de los informes:', cambios.map(t=>t.id).join(', '));
+  return cambios.length;
+}
+// v17.79 — el título del trabajo sale del motivo del presupuesto ("Motivo del presupuesto — trabajo a realizar")
+function tituloGenerico(t, p) {
+  const tt = String(t && t.titulo || '').trim(); if(!tt) return true;
+  const primero = String((p && p.descripcion) || '').split('\n')[0].split('|')[0].trim();
+  return tt.includes('|') || (primero && tt.toLowerCase()===primero.toLowerCase()) || /^(mano de obra|trabajo — presupuesto|servicio$)/i.test(tt);
+}
+
+// ============================================================
 // v17.77 — REPORTES: interno (completo) y para el contador (prolijo)
 // ============================================================
 function _rf(d) { // fecha robusta: acepta 'aaaa-mm-dd', 'aaaa-mm-ddT…', 'dd/mm/aaaa'
@@ -14906,7 +14973,7 @@ function datosACorregir() {
   DB.trabajos.forEach(t=>{
     const n = _rNumT(t), cl = (_rCli(t.clienteId)||{}).nombre || '';
     if(t._tituloCrudo) add('Trabajos', n, cl, `Título con el ítem crudo ("${t._tituloCrudo.slice(0,50)}")`, 'Se arregla solo con el botón "Arreglar títulos" de Trabajos');
-    if(t.tipo && !['Reparación','Mantenimiento','Instalación','Diagnóstico','Fabricación','Otro','Servicio'].includes(t.tipo)) add('Trabajos', n, cl, `Tipo "${t.tipo}"`, 'Elegí Reparación / Diagnóstico / Mantenimiento… ("cancelado" es un estado, no un tipo)');
+    if(t.tipo && !['Reparación','Mantenimiento','Instalación','Diagnóstico','Fabricación','Otro','Servicio','Repuestos'].includes(t.tipo)) add('Trabajos', n, cl, `Tipo "${t.tipo}"`, 'Elegí Reparación / Diagnóstico / Mantenimiento… ("cancelado" es un estado, no un tipo)');
     if(['completado','en curso'].includes(t.estado) && !fechaOk(t.fechaInicio)) add('Trabajos', n, cl, 'Sin fecha de inicio', 'Cargá la fecha de inicio (✏️ del trabajo)');
     if(t.estado==='completado' && !fechaOk(t.fechaFin)) add('Trabajos', n, cl, 'Completado sin fecha de fin', 'Cargá la fecha de fin (sirve para medir tiempos)');
     const fi=_rf(t.fechaInicio), ff=_rf(t.fechaFin);
@@ -15118,6 +15185,149 @@ function exportarReporteContador() {
     XLSX.writeFile(wb, `MEB_Reporte_contador_${new Date().toISOString().slice(0,10)}.xlsx`);
     showToast('Reporte para el contador descargado ✓', 'success');
   } catch(e) { console.error(e); showToast('Error al generar el reporte: ' + e.message, 'error'); }
+}
+
+// ============================================================
+// v17.79 — CUENTAS CORRIENTES (clientes y proveedores) + PROYECCIÓN DE CAJA
+// ============================================================
+let _ccVista = (function(){ try { return localStorage.getItem('meb_cc_vista') || 'clientes'; } catch(e) { return 'clientes'; } })();
+function ccVista(v) { _ccVista = v; try { localStorage.setItem('meb_cc_vista', v); } catch(e) {} renderCuentas(); }
+function _diasEntre(a, b) { return Math.floor((b - a) / 86400000); }
+function _sumarDias(f, d) { const x = new Date(f.getTime()); x.setDate(x.getDate()+d); return x; }
+function _fDMY(f) { return f ? f.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—'; }
+function diasMedianosDeCobro() {
+  const d = DB.presupuestos.filter(p=>p.estadoCobro==='cobrado').map(p=>{ const a=_rf(p.fecha), b=_rf(p.fechaCobroReal); return (a&&b&&b>=a)?(b-a)/86400000:null; }).filter(x=>x!==null&&x<400).sort((a,b)=>a-b);
+  return d.length ? Math.round(d[Math.floor(d.length/2)]) : 30;
+}
+
+// ── Clientes: lo facturado (aprobado), lo cobrado y lo que debe, por antigüedad ──
+function cuentasClientes() {
+  const hoy = new Date(); const cobros = registroCobros(); const pend = porCobrarDetalle();
+  const m = {};
+  const g = id => m[id] = m[id] || { clienteId:id, facturado:0, cobrado:0, saldo:0, sena:0, t030:0, t3160:0, t6190:0, t90:0, items:[], ultimoCobro:null };
+  DB.presupuestos.filter(p=>p.estado==='aprobado').forEach(p=>{ g(p.clienteId).facturado += Number(p.monto)||0; });
+  (DB.contratos||[]).filter(c=>c.estado!=='no aprobado').forEach(c=>{ g(c.clienteId).facturado += Number(c.precioArs)||0; });
+  cobros.forEach(c=>{ if(!c.clienteId) return; const x=g(c.clienteId); x.cobrado += c.monto; const f=_rf(c.fecha); if(f && (!x.ultimoCobro || f>x.ultimoCobro)) x.ultimoCobro=f; });
+  pend.forEach(it=>{ const x=g(it.p.clienteId); x.saldo += it.saldo; x.sena += it.sena; x.items.push(it);
+    const d = it.dias||0; if(d<=30) x.t030+=it.saldo; else if(d<=60) x.t3160+=it.saldo; else if(d<=90) x.t6190+=it.saldo; else x.t90+=it.saldo; });
+  (DB.contratos||[]).filter(c=>c.estado==='activo' && c.estadoCobro!=='cobrado').forEach(c=>{
+    const x=g(c.clienteId); const mnt=Number(c.precioArs)||0; const f=_rf(c.fechaInicio); const d=f?_diasEntre(f,hoy):0;
+    x.saldo+=mnt; x.items.push({ contrato:c, monto:mnt, saldo:mnt, sena:0, dias:d }); if(d<=30) x.t030+=mnt; else if(d<=60) x.t3160+=mnt; else if(d<=90) x.t6190+=mnt; else x.t90+=mnt; });
+  return Object.values(m).map(x=>Object.assign(x, { nombre:(_rCli(x.clienteId)||{}).nombre || x.clienteId || '—' }))
+    .filter(x=>x.facturado||x.cobrado||x.saldo).sort((a,b)=>b.saldo-a.saldo || b.facturado-a.facturado);
+}
+
+// ── Proveedores: lo comprado, lo pagado y lo que se debe, con vencimientos (cuotas / 30-60 días) ──
+function cronogramaCompra(c) {
+  // cuotas con su vencimiento; los pagos se aplican a la cuota más vieja primero
+  const total = Number(c.monto)||0; const f0 = _rf(c.fecha) || new Date();
+  const n = Math.max(1, parseInt(c.cuotas,10)||1); const plazo = parseInt(c.plazoDias,10)||0;
+  const cuotas = [];
+  for(let i=0;i<n;i++) cuotas.push({ n:i+1, monto: Math.round(total/n*100)/100, vence: _sumarDias(f0, (plazo||(n>1?30:0)) + 30*i), pagado:0 });
+  let pagado = (c.pagosLog||[]).reduce((a,p)=>a+(Number(p.monto)||0),0);
+  if(!c.pagosRegistrados) pagado = total; // compras viejas sin pagos cargados: se toman como pagadas (no se inventa deuda)
+  cuotas.forEach(q=>{ const a = Math.min(q.monto, pagado); q.pagado = a; pagado -= a; q.saldo = Math.round((q.monto - a)*100)/100; });
+  return cuotas;
+}
+function cuentasProveedores() {
+  const hoy = new Date(); const lim30 = _sumarDias(hoy,30), lim60 = _sumarDias(hoy,60);
+  const m = {};
+  (DB.compras||[]).forEach(c=>{
+    const k = c.proveedorId || c.proveedorNombre || '—';
+    const x = m[k] = m[k] || { proveedorId:c.proveedorId, nombre:c.proveedorNombre || ((DB.proveedores||[]).find(p=>p.id===c.proveedorId)||{}).nombre || '—', comprado:0, pagado:0, saldo:0, vencido:0, v30:0, v60:0, mas:0, compras:[], sinDato:0 };
+    const e = estadoPagoCompra(c); x.comprado += Number(c.monto)||0;
+    if(e.estado==='sin') { x.sinDato++; x.pagado += Number(c.monto)||0; return; }
+    x.pagado += e.pagado;
+    const cr = cronogramaCompra(c).filter(q=>q.saldo>0.5);
+    if(!cr.length) return;
+    x.compras.push({ c, cuotas:cr });
+    cr.forEach(q=>{ x.saldo += q.saldo; if(q.vence < hoy) x.vencido += q.saldo; else if(q.vence <= lim30) x.v30 += q.saldo; else if(q.vence <= lim60) x.v60 += q.saldo; else x.mas += q.saldo; });
+  });
+  return Object.values(m).sort((a,b)=>b.saldo-a.saldo || b.comprado-a.comprado);
+}
+
+// ── Proyección de caja a 30 y 60 días ──
+function proyeccionCaja() {
+  const hoy = new Date(); const lim30 = _sumarDias(hoy,30), lim60 = _sumarDias(hoy,60);
+  const dm = diasMedianosDeCobro();
+  const entradas = [], salidas = [];
+  porCobrarDetalle().forEach(it=>{
+    const f = _rf(it.p.fecha) || hoy; const pl = parseInt(it.p.plazoPago,10) || 0;
+    let esperado = _sumarDias(f, Math.max(pl, dm)); const atrasado = esperado < hoy; if(atrasado) esperado = hoy;
+    entradas.push({ fecha:esperado, monto:it.saldo, detalle:'#'+_rNumP(it.p)+' '+it.cliente, atrasado });
+  });
+  (DB.contratos||[]).filter(c=>c.estado==='activo' && c.estadoCobro!=='cobrado').forEach(c=>entradas.push({ fecha:hoy, monto:Number(c.precioArs)||0, detalle:'Contrato '+((_rCli(c.clienteId)||{}).nombre||''), atrasado:true }));
+  cuentasProveedores().forEach(pv=>pv.compras.forEach(({c,cuotas})=>cuotas.forEach(q=>salidas.push({ fecha: q.vence < hoy ? hoy : q.vence, monto:q.saldo, detalle:(pv.nombre)+' — '+(c.detalle||'')+(cuotas.length>1||c.cuotas>1?' (cuota '+q.n+')':''), vencido:q.vence<hoy }))));
+  (DB.sueldos||[]).filter(s=>!s.pagado && Number(s.monto)>0).forEach(s=>salidas.push({ fecha:hoy, monto:Number(s.monto), detalle:'Sueldo '+[s.persona,s.mes].filter(Boolean).join(' '), vencido:false }));
+  // gastos fijos: promedio mensual de los últimos 3 meses (gastos de estructura + vehículo)
+  const hace90 = _sumarDias(hoy,-90);
+  const gf = (DB.gastosEstructura||[]).filter(g=>{ const f=_rf(g.fecha); return f && f>=hace90; }).reduce((a,g)=>a+(Number(g.total)||0),0)
+    + (DB.vehiculoServices||[]).filter(v=>{ const f=_rf(v.fecha); return f && f>=hace90; }).reduce((a,v)=>a+(Number(v.total)||0),0);
+  const gastoMensual = Math.round(gf/3);
+  const caja = Number((DB.config||{}).caja_actual)||0;
+  const ventana = (desde, hasta) => {
+    const e = entradas.filter(x=>x.fecha>=desde && x.fecha<=hasta).reduce((a,x)=>a+x.monto,0);
+    const s = salidas.filter(x=>x.fecha>=desde && x.fecha<=hasta).reduce((a,x)=>a+x.monto,0);
+    return { e, s };
+  };
+  const w30 = ventana(new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()), lim30), w60 = ventana(_sumarDias(lim30,0.0001), lim60);
+  return { entradas, salidas, gastoMensual, caja, dm, w30, w60,
+    saldo30: caja + w30.e - w30.s - gastoMensual, saldo60: caja + w30.e - w30.s - gastoMensual + w60.e - w60.s - gastoMensual };
+}
+
+function renderCuentas() {
+  const cont = document.getElementById('cuentas-contenido'); if(!cont) return;
+  const tabs = [['clientes','👥 Clientes'],['proveedores','🏭 Proveedores'],['caja','💵 Proyección de caja']];
+  document.getElementById('cuentas-tabs').innerHTML = tabs.map(t=>`<button class="filter-tab ${_ccVista===t[0]?'active':''}" onclick="ccVista('${t[0]}')">${t[1]}</button>`).join('');
+  const card = (l,v,sub,c)=>`<div class="stat-card"><div class="stat-val" ${c?`style="color:${c}"`:''}>${v}</div><div class="stat-label">${l}</div>${sub?`<div class="stat-sub">${sub}</div>`:''}</div>`;
+  if(_ccVista==='clientes') {
+    const l = cuentasClientes(); const sum=k=>l.reduce((a,x)=>a+x[k],0);
+    cont.innerHTML = `<div class="stats-grid" style="margin-bottom:12px">${card('Te deben', fmtMonto(sum('saldo')), l.filter(x=>x.saldo>0).length+' clientes', 'var(--red)')}${card('0–30 días', fmtMonto(sum('t030')))}${card('31–60 días', fmtMonto(sum('t3160')), '', 'var(--orange)')}${card('Más de 60 días', fmtMonto(sum('t6190')+sum('t90')), '', 'var(--red)')}</div>
+      <p style="font-size:11px;color:var(--muted);margin:0 0 10px">Facturado = presupuestos aprobados + contratos. Cobrado = todo lo que entró (registro de cobros). La antigüedad se cuenta desde la fecha del presupuesto. Tocá un cliente para ver qué debe.</p>
+      <div class="card"><div class="table-wrap"><table><thead><tr><th>Cliente</th><th style="text-align:right">Facturado</th><th style="text-align:right">Cobrado</th><th style="text-align:right">Debe</th><th style="text-align:right">0–30</th><th style="text-align:right">31–60</th><th style="text-align:right">61–90</th><th style="text-align:right">+90</th><th>Último cobro</th></tr></thead><tbody id="tabla-cc-clientes">
+      ${l.map((x,i)=>`<tr style="cursor:pointer" onclick="const d=document.getElementById('cc-det-${i}'); d.style.display=d.style.display==='none'?'':'none'">
+        <td class="td-name">${prosEsc(x.nombre)}</td><td style="text-align:right">${fmtMonto(x.facturado)}</td><td style="text-align:right;color:var(--green)">${fmtMonto(x.cobrado)}</td>
+        <td style="text-align:right;font-weight:700;color:${x.saldo>0?'var(--red)':'var(--muted)'}">${x.saldo>0?fmtMonto(x.saldo):'—'}</td>
+        <td style="text-align:right">${x.t030?fmtMonto(x.t030):'—'}</td><td style="text-align:right;color:var(--orange)">${x.t3160?fmtMonto(x.t3160):'—'}</td><td style="text-align:right;color:var(--red)">${x.t6190?fmtMonto(x.t6190):'—'}</td><td style="text-align:right;color:var(--red);font-weight:700">${x.t90?fmtMonto(x.t90):'—'}</td>
+        <td class="td-muted">${_fDMY(x.ultimoCobro)}</td></tr>
+        <tr id="cc-det-${i}" style="display:none"><td colspan="9" style="background:var(--dark);font-size:12px">${x.items.length ? x.items.map(it=>it.contrato
+          ? `· Contrato ${prosEsc(nombrePlanContrato(it.contrato))} — ${fmtMonto(it.saldo)} (${it.dias} días)`
+          : `· <b style="color:var(--yellow);cursor:pointer" onclick="irAPresupuestoPorNum('${it.p.num}')">#${_rNumP(it.p)}</b> ${prosEsc(String(it.p.descripcion||'').split('\n')[0].split('|')[0].slice(0,60))} — ${fmtMonto(it.monto)}${it.sena?` · seña ${fmtMonto(it.sena)}`:''} · <b>debe ${fmtMonto(it.saldo)}</b> · ${it.dias===null?'sin fecha':it.dias+' días'}`).join('<br>') : 'No debe nada ✓'}</td></tr>`).join('') || '<tr><td colspan="9"><div class="empty-state"><p>Sin movimientos</p></div></td></tr>'}
+      </tbody></table></div></div>`;
+  } else if(_ccVista==='proveedores') {
+    const l = cuentasProveedores(); const sum=k=>l.reduce((a,x)=>a+x[k],0); const sinDato = sum('sinDato');
+    cont.innerHTML = `<div class="stats-grid" style="margin-bottom:12px">${card('Le debés a proveedores', fmtMonto(sum('saldo')), l.filter(x=>x.saldo>0).length+' proveedores', 'var(--red)')}${card('Vencido', fmtMonto(sum('vencido')), '', 'var(--red)')}${card('Vence en 30 días', fmtMonto(sum('v30')), '', 'var(--orange)')}${card('Vence en 31–60 días', fmtMonto(sum('v60')))}</div>
+      <p style="font-size:11px;color:var(--muted);margin:0 0 10px">Sale de Proveedores → Historial de compras. Al registrar una compra elegí la <b>condición de pago</b> (contado, 30, 60 días o cuotas) y cargá lo que pagaste con 💵: acá se arman solos los vencimientos.${sinDato?` ${sinDato} compra${sinDato!==1?'s':''} vieja${sinDato!==1?'s':''} sin pagos cargados se toman como pagadas.`:''}</p>
+      <div class="card"><div class="table-wrap"><table><thead><tr><th>Proveedor</th><th style="text-align:right">Comprado</th><th style="text-align:right">Pagado</th><th style="text-align:right">Debés</th><th style="text-align:right">Vencido</th><th style="text-align:right">Próx. 30 días</th><th style="text-align:right">31–60 días</th><th>Próximo vencimiento</th></tr></thead><tbody id="tabla-cc-prov">
+      ${l.map((x,i)=>{ const prox = x.compras.flatMap(cc=>cc.cuotas).sort((a,b)=>a.vence-b.vence)[0];
+        return `<tr style="cursor:pointer" onclick="const d=document.getElementById('ccp-det-${i}'); d.style.display=d.style.display==='none'?'':'none'">
+        <td class="td-name">${prosEsc(x.nombre)}</td><td style="text-align:right">${fmtMonto(x.comprado)}</td><td style="text-align:right;color:var(--green)">${fmtMonto(x.pagado)}</td>
+        <td style="text-align:right;font-weight:700;color:${x.saldo>0?'var(--red)':'var(--muted)'}">${x.saldo>0?fmtMonto(x.saldo):'—'}</td>
+        <td style="text-align:right;color:var(--red);font-weight:700">${x.vencido?fmtMonto(x.vencido):'—'}</td><td style="text-align:right;color:var(--orange)">${x.v30?fmtMonto(x.v30):'—'}</td><td style="text-align:right">${x.v60?fmtMonto(x.v60):'—'}</td>
+        <td class="td-muted">${prox?_fDMY(prox.vence)+' · '+fmtMonto(prox.saldo):'—'}</td></tr>
+        <tr id="ccp-det-${i}" style="display:none"><td colspan="8" style="background:var(--dark);font-size:12px">${x.compras.length ? x.compras.map(({c,cuotas})=>`· ${prosEsc(c.detalle||'')} (${_fDMY(_rf(c.fecha))}) — ${cuotas.map(q=>`${cuotas.length>1||c.cuotas>1?'cuota '+q.n+': ':''}<b style="color:${q.vence<new Date()?'var(--red)':'var(--text)'}">${fmtMonto(q.saldo)}</b> vence ${_fDMY(q.vence)}`).join(' · ')} <button class="btn-secondary" style="font-size:10px;padding:2px 8px" onclick="event.stopPropagation();verPagosCompra('${c.id}')">💵 Pagar</button>`).join('<br>') : 'Nada pendiente ✓'}</td></tr>`; }).join('') || '<tr><td colspan="8"><div class="empty-state"><p>Sin compras registradas</p></div></td></tr>'}
+      </tbody></table></div></div>`;
+  } else {
+    const pr = proyeccionCaja();
+    const fila = (x, tipo) => `<tr><td class="td-muted">${_fDMY(x.fecha)}</td><td>${tipo==='e'?'⬆️ Entra':'⬇️ Sale'}</td><td>${prosEsc(x.detalle)}${x.atrasado?' <span style="font-size:10px;color:var(--orange)">(atrasado — se cuenta para ya)</span>':''}${x.vencido?' <span style="font-size:10px;color:var(--red)">(vencido)</span>':''}</td><td style="text-align:right;color:${tipo==='e'?'var(--green)':'var(--red)'}">${tipo==='e'?'+':'−'}${fmtMonto(x.monto)}</td></tr>`;
+    const hoy = new Date(); const lim60 = _sumarDias(hoy,60);
+    const movs = pr.entradas.map(x=>[x,'e']).concat(pr.salidas.map(x=>[x,'s'])).filter(([x])=>x.fecha<=lim60).sort((a,b)=>a[0].fecha-b[0].fecha);
+    cont.innerHTML = `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;font-size:12px">
+        <label style="color:var(--muted)">Plata disponible hoy (banco + efectivo):</label>
+        <input type="text" inputmode="decimal" class="in-monto" value="${fmtMontoAR(pr.caja)}" placeholder="Ej: 2.500.000" style="max-width:170px" onchange="setCfg('caja_actual', leerMontoAR(this.value)); renderCuentas();">
+        <span style="color:var(--muted)">Se guarda; actualizalo cuando quieras.</span></div>
+      <div class="stats-grid" style="margin-bottom:12px">
+        ${card('Próximos 30 días: entra', fmtMonto(pr.w30.e), 'cobros esperados', 'var(--green)')}
+        ${card('Próximos 30 días: sale', fmtMonto(pr.w30.s + pr.gastoMensual), 'proveedores, sueldos y ~'+fmtMonto(pr.gastoMensual)+' de gastos fijos', 'var(--red)')}
+        ${card('Caja estimada en 30 días', fmtMonto(pr.saldo30), pr.caja?'':'cargá la plata de hoy arriba', pr.saldo30>=0?'var(--yellow)':'var(--red)')}
+        ${card('Caja estimada en 60 días', fmtMonto(pr.saldo60), 'entra '+fmtMonto(pr.w60.e)+' · sale '+fmtMonto(pr.w60.s+pr.gastoMensual)+' entre el día 31 y 60', pr.saldo60>=0?'var(--yellow)':'var(--red)')}
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin:0 0 10px">Cómo se calcula: cada presupuesto aprobado sin cobrar se espera cobrar a los ${pr.dm} días de su fecha (lo que tarda MEB en cobrar de verdad, mediana) o a su plazo si es mayor; si ya pasó esa fecha, se cuenta como "atrasado" para ya. Las salidas son las cuotas y compras a pagar a proveedores según su vencimiento, los sueldos sin pagar y el promedio de gastos fijos de los últimos 3 meses.</p>
+      <div class="card"><div class="card-header"><span class="card-title">MOVIMIENTOS ESPERADOS — PRÓXIMOS 60 DÍAS</span></div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th></th><th>Detalle</th><th style="text-align:right">Monto</th></tr></thead><tbody>
+        ${movs.map(([x,t])=>fila(x,t)).join('') || '<tr><td colspan="4"><div class="empty-state"><p>Sin movimientos esperados</p></div></td></tr>'}
+        ${pr.gastoMensual?`<tr><td class="td-muted">por mes</td><td>⬇️ Sale</td><td>Gastos fijos estimados (promedio últimos 3 meses)</td><td style="text-align:right;color:var(--red)">−${fmtMonto(pr.gastoMensual)}</td></tr>`:''}
+      </tbody></table></div></div>`;
+  }
 }
 
 // ── Arreglar títulos crudos de trabajos (ej. "Mano de obra|Mano de obra|1|500000") ──
