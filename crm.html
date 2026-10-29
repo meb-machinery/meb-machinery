@@ -2084,7 +2084,7 @@ async function syncAll() {
       horasTrabajadas:parseFloat(r.HORAS_TRABAJADAS)||0,
       tercerosCobrado:parseMonto(r.TERCEROS_COBRADO), tercerosCosto:parseMonto(r.TERCEROS_COSTO), tercerosProveedor:r.TERCEROS_PROVEEDOR||'', tercerosTipo:String(r.TERCEROS_TIPO||'').trim(), tercerosDetalle:String(r.TERCEROS_DETALLE||'').trim(),
       categoriaTrabajo:String(r.CATEGORIA_TRABAJO||'').trim(), herramientas:String(r.HERRAMIENTAS||'').trim(),
-      facturaTipo:String(r.FACTURA_TIPO||'').trim(), facturaNum:String(r.FACTURA_NUM||'').trim(), medioPago:String(r.MEDIO_PAGO||'').trim(),
+      facturaTipo:String(r.FACTURA_TIPO||'').trim(), facturaNum:String(r.FACTURA_NUM||'').trim(), facturaUrl:String(r.FACTURA_URL||'').trim(), medioPago:String(r.MEDIO_PAGO||'').trim(),
       retenciones:parseMonto(r.RETENCIONES)||0, senaMonto:parseMonto(r.SENA_MONTO)||0, senaFecha:String(r.SENA_FECHA||'').trim(),
       horasViaje:parseFloat(r.HORAS_VIAJE)||0, kmRecorridos:parseFloat(r.KM_RECORRIDOS)||0,
       _fila:r._rowIndex
@@ -2204,7 +2204,7 @@ async function syncAll() {
             usdRecibido:parseFloat(r.USD_RECIBIDO)||0,
             diferenciaUsd:parseFloat(r.DIFERENCIA_USD)||0,
             diferenciaPct:parseFloat(r.DIFERENCIA_PCT)||0,
-            comprobantePago:r.COMPROBANTE_PAGO||'',
+            comprobantePago:r.COMPROBANTE_PAGO||'', facturaUrl:String(r.FACTURA_URL||'').trim(),
             fecha:r.FECHA||'', notas:r.NOTAS||'',
             serieMaquina:r.SERIE_MAQUINA||'', modeloMaquina:r.MODELO_MAQUINA||'', horometro:r.HOROMETRO||'',
             fechaDescarga:r.FECHA_DESCARGA||'', fechaEnviado:r.FECHA_ENVIADO||'',
@@ -5160,6 +5160,7 @@ function badgeCobro(estado, id) {
   return `<div id="${divId}" style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">
     <span id="cobro-badge-${id}" class="badge ${e.cls}">${e.icon} ${e.label}</span>
     ${estado==='cobrado'?chipFechaCobro('trabajos', id, _tf&&_tf.fechaCobroReal):''}
+    ${_tf&&_tf.facturaUrl?`<a href="${prosEsc(_tf.facturaUrl)}" target="_blank" style="font-size:10px;color:#25d366" title="Ver la factura en Drive">🧾 Factura</a>`:''}
     <select onchange="cambiarCobro('${id}',this.value,'${divId}')" style="font-size:10px;background:var(--dark);border:1px solid var(--border2);color:var(--muted);border-radius:3px;padding:2px 4px;cursor:pointer">
       <option value="pendiente" ${estado==='pendiente'?'selected':''}>🔴 Pendiente</option>
       <option value="parcial"   ${estado==='parcial'  ?'selected':''}>🟡 Parcial</option>
@@ -5172,6 +5173,42 @@ function badgeCobro(estado, id) {
 function editarCobroTrabajo(id) {
   const t = DB.trabajos.find(x=>x.id===id);
   if(t) openModal('cobroTrabajoTC', t);
+}
+
+// v17.82 — FACTURA ADJUNTA: Emmanuel sube el PDF o la foto de la factura y queda guardada en Drive
+// ("MEB FACTURAS/AAAA-MM", nombre con N° de presupuesto, cliente y N° de factura). El link va al
+// presupuesto y a su trabajo (columna FACTURA_URL) y sale en los reportes para el contador.
+function _facturaDe(presupId){ const p=DB.presupuestos.find(x=>x.id===presupId); const t=p?trabajoDePresupuesto(p):null; return { p, t, url:(p&&p.facturaUrl)||(t&&t.facturaUrl)||'' }; }
+function botonFactura(presupId){
+  const f = _facturaDe(presupId); if(!f.p || f.p.estado!=='aprobado') return '';
+  return f.url
+    ? `<span style="white-space:nowrap"><a class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(46,204,113,0.12);border-color:#25d366;color:#25d366;text-decoration:none" href="${prosEsc(f.url)}" target="_blank" title="Ver la factura en Drive">🧾 Factura</a><button type="button" class="btn-secondary" style="font-size:9px;padding:2px 5px" onclick="adjuntarFactura('${presupId}');event.stopPropagation()" title="Reemplazar la factura">↻</button></span>`
+    : `<button type="button" class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="adjuntarFactura('${presupId}');event.stopPropagation()" title="Subir la factura (PDF o foto) — queda en Drive y unida a este presupuesto y su trabajo">🧾 + Factura</button>`;
+}
+function adjuntarFactura(presupId){
+  const f = _facturaDe(presupId); if(!f.p) return;
+  const inp = document.createElement('input'); inp.type='file'; inp.accept='application/pdf,image/*';
+  inp.onchange = () => { const file = inp.files[0]; if(!file) return;
+    if(file.size > 10*1024*1024){ showToast('La factura pesa más de 10 MB — sacale una foto más liviana o comprimí el PDF','error'); return; }
+    const rd = new FileReader();
+    rd.onload = async () => {
+      const t = f.t; const cl = DB.clientes.find(c=>String(c.id)===String(f.p.clienteId));
+      // si en Economía ya está el tipo y N° de factura, va en el nombre del archivo
+      const tipoF = (document.getElementById('f-ecftipo')||{}).value || (t&&t.facturaTipo) || '';
+      const numF = (document.getElementById('f-ecfnum')||{}).value || (t&&t.facturaNum) || '';
+      showToast('Subiendo factura a Drive…','info');
+      const r = await writeToSheet({ action:'subirFactura', row:{ presupuestoId:f.p.id, trabajoId:t?t.id:'', num:String(f.p.num||'').padStart(4,'0'),
+        cliente:cl?cl.nombre:'', facturaTipo:tipoF, facturaNum:numF, fecha:f.p.fechaCobroReal||(t&&t.fechaCobroReal)||today(),
+        mime:file.type||'application/pdf', ext:(file.name.split('.').pop()||'pdf').slice(0,5), base64:String(rd.result).split(',')[1] } });
+      if(!r || !r.ok || !r.url){ showToast('No se pudo subir la factura'+(r&&r.error?' ('+r.error+')':''),'error'); return; }
+      f.p.facturaUrl = r.url; if(t) t.facturaUrl = r.url;
+      saveLocal(); try{ refreshCurrentPage(); }catch(e){}
+      document.querySelectorAll('.fact-slot-'+presupId).forEach(el=>el.innerHTML=botonFactura(presupId));
+      showToast('Factura guardada en Drive ✔','success');
+    };
+    rd.readAsDataURL(file);
+  };
+  inp.click();
 }
 
 // v17.82 — "pestañita" de la fecha exacta de cobro: se abre desde el 📅 al lado del cobro
@@ -5738,7 +5775,7 @@ function renderPresupuestos() {
         ) : ''}
         ${p.estado!=='no aprobado'?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(244,180,0,0.12);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('economiaPresupuesto',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Cargar lo REAL de este trabajo: cobrado, repuestos cobrados y repuestos pagados → ganancia">📊 Economía${p.estadoCobro==='cobrado'?' ✔':''}</button>`:''}
         ${p.estado==='aprobado'&&p.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Registrar cobro real">💰 Cobro</button>`:''}
-        ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span> ${chipFechaCobro('presupuestos', p.id, p.fechaCobroReal || (trabajoDePresupuesto(p)||{}).fechaCobroReal)} <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroPresupuesto('${p.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`:''}
+        ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span> ${chipFechaCobro('presupuestos', p.id, p.fechaCobroReal || (trabajoDePresupuesto(p)||{}).fechaCobroReal)} ${botonFactura(p.id)} <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroPresupuesto('${p.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`:''}
         <button class="btn-secondary" style="${p.comprobantePago?'background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366':''}" onclick="adjuntarComprobante('presupuestos','${p.id}')" title="${p.comprobantePago?'Comprobante cargado — clic para cambiarlo':'Adjuntar comprobante de pago (captura, ticket)'}">${p.comprobantePago?'📎✔':'📎'}</button>
         <button class="btn-secondary" onclick="duplicarPresupuesto('${p.id}')" title="Duplicar">⧉</button>
         <button class="btn-secondary" onclick="generarPresupuestoPDF('${p.id}')">📄 PDF</button>
@@ -12999,7 +13036,7 @@ function openModal(type, data={}) {
       <div class="form-group full" style="border-top:1px solid var(--border);padding-top:10px;margin-top:2px"><label style="color:var(--yellow);font-size:11px;letter-spacing:2px">FACTURA, SEÑA Y COBRO</label></div>
       <div class="form-group"><label>Seña / anticipo cobrado (ARS)</label><input id="f-ecsena" type="text" inputmode="decimal" class="in-monto" value="${fmtMontoAR((t0&&t0.senaMonto)||'')}" placeholder="Ej: 50% del repuesto"/></div>
       <div class="form-group"><label>Fecha de la seña</label><input id="f-ecsenaf" type="date" value="${isoParaInput(t0&&t0.senaFecha)||''}"/></div>
-      <div class="form-group"><label>Factura</label><div style="display:flex;gap:6px"><select id="f-ecftipo" style="width:90px"><option value="">—</option>${['A','B','C','Sin factura'].map(x=>`<option ${(t0&&t0.facturaTipo)===x?'selected':''}>${x}</option>`).join('')}</select><input id="f-ecfnum" value="${prosEsc((t0&&t0.facturaNum)||'')}" placeholder="N° (ej. 0001-00000123)" style="flex:1"/></div></div>
+      <div class="form-group"><label>Factura</label><div style="display:flex;gap:6px"><select id="f-ecftipo" style="width:90px"><option value="">—</option>${['A','B','C','Sin factura'].map(x=>`<option ${(t0&&t0.facturaTipo)===x?'selected':''}>${x}</option>`).join('')}</select><input id="f-ecfnum" value="${prosEsc((t0&&t0.facturaNum)||'')}" placeholder="N° (ej. 0001-00000123)" style="flex:1"/><span class="fact-slot-${p.id}">${botonFactura(p.id)}</span></div></div>
       <div class="form-group"><label>Medio de pago</label><select id="f-ecmedio"><option value="">—</option>${['Transferencia','Efectivo','Cheque','E-cheq','Mercado Pago','Otro'].map(x=>`<option ${(t0&&t0.medioPago)===x?'selected':''}>${x}</option>`).join('')}</select></div>
       <div class="form-group"><label>Retenciones sufridas (ARS)</label><input id="f-ecret" type="text" inputmode="decimal" class="in-monto" value="${fmtMontoAR((t0&&t0.retenciones)||'')}" placeholder="IIBB / Ganancias / IVA que te retuvieron"/></div>
       <div class="form-group full" style="border-top:1px solid var(--border);padding-top:10px;margin-top:2px"><label style="color:var(--yellow);font-size:11px;letter-spacing:2px">TIEMPO Y VIAJE</label></div>
@@ -15017,7 +15054,7 @@ function registroCobros() {
     return { mo:d.mo||0, rep:d.rep||0, mov:d.mov||0, ter:d.ter||0 };
   };
   const push = (o) => out.push(Object.assign({ origen:'', ref:'', clienteId:'', concepto:'', fecha:'', monto:0, mo:0, rep:0, mov:0, ter:0, sd:0,
-    facturaTipo:'', facturaNum:'', medio:'', retenciones:0, esSena:false }, o));
+    facturaTipo:'', facturaNum:'', facturaUrl:'', medio:'', retenciones:0, esSena:false }, o));
   const vistosT = new Set();
   DB.presupuestos.forEach(p=>{
     const t = tDePres(p);
@@ -15026,7 +15063,7 @@ function registroCobros() {
     if(!cobrado && !sena) return;
     if(t) vistosT.add(t.id);
     const base = { origen:'Presupuesto', ref:'#'+_rNumP(p), clienteId:p.clienteId, concepto:(String(p.descripcion||'').split('\n')[0].split('|')[0]||'').slice(0,80),
-      facturaTipo:(t&&t.facturaTipo)||'', facturaNum:(t&&t.facturaNum)||'', medio:(t&&t.medioPago)||'', retenciones:(t&&Number(t.retenciones))||0 };
+      facturaTipo:(t&&t.facturaTipo)||'', facturaNum:(t&&t.facturaNum)||'', facturaUrl:p.facturaUrl||(t&&t.facturaUrl)||'', medio:(t&&t.medioPago)||'', retenciones:(t&&Number(t.retenciones))||0 };
     if(sena) push(Object.assign({}, base, { concepto:'Seña — '+base.concepto, fecha:(t&&t.senaFecha)||p.fecha, monto:sena, sd:sena, esSena:true, retenciones:0 }));
     if(cobrado) {
       const total = Number(p.montoCobradoReal)>0 ? Number(p.montoCobradoReal) : (Number(t&&t.montoCobrado)>0 ? Number(t.montoCobrado) : Number(p.monto)||0);
@@ -15050,7 +15087,7 @@ function registroCobros() {
     const sena = Number(t.senaMonto)||0;
     if(t.estadoCobro!=='cobrado' && !sena) return;
     const base = { origen:'Trabajo', ref:_rNumT(t), clienteId:t.clienteId, concepto:String(t.titulo||'').split('|')[0].slice(0,80),
-      facturaTipo:t.facturaTipo||'', facturaNum:t.facturaNum||'', medio:t.medioPago||'', retenciones:Number(t.retenciones)||0 };
+      facturaTipo:t.facturaTipo||'', facturaNum:t.facturaNum||'', facturaUrl:t.facturaUrl||'', medio:t.medioPago||'', retenciones:Number(t.retenciones)||0 };
     if(sena) push(Object.assign({}, base, { concepto:'Seña — '+base.concepto, fecha:t.senaFecha||t.fechaInicio, monto:sena, sd:sena, esSena:true, retenciones:0 }));
     if(t.estadoCobro==='cobrado') {
       const total = Number(t.montoCobrado)||0;
@@ -15289,7 +15326,7 @@ function exportarReporteInterno() {
     _hoja(wb, 'Mes a mes', resumenMensual(cobros, egresos).map(m=>({ 'Mes':_rMesTxt(m.mes), 'Ingresos cobrados':Math.round(m.ing), 'Mano de obra':Math.round(m.mo), 'Repuestos':Math.round(m.rep), 'Movilidad':Math.round(m.mov), 'Terceros':Math.round(m.ter), 'Sin desglosar':Math.round(m.sd), 'Contratos':Math.round(m.cont), 'Terciarizado':Math.round(m.terc),
       'Egresos':Math.round(m.eg), 'Costo repuestos':Math.round(m.eRep), 'Pagado a terceros':Math.round(m.eTer), 'Compras':Math.round(m.eCom), 'Gastos de estructura':Math.round(m.eEst), 'Sueldos':Math.round(m.eSue), 'Vehículo':Math.round(m.eVeh), 'Resultado':Math.round(m.ing-m.eg) })), [10,16,14,13,12,12,12,13,14,15,16,12,18,12,12,14]);
     _hoja(wb, 'Cobros', cobros.map(c=>({ 'Fecha':_rDMY(c.fecha)||c.fecha, 'Origen':c.origen, 'N°':c.ref, 'Cliente':nomC(c.clienteId), 'Concepto':c.concepto, 'Monto cobrado':Math.round(c.monto),
-      'Mano de obra':c.mo, 'Repuestos':c.rep, 'Movilidad':c.mov, 'Terceros':c.ter, 'Sin desglosar':c.sd||0, 'Seña':c.esSena?'Sí':'', 'Factura':[c.facturaTipo,c.facturaNum].filter(Boolean).join(' '), 'Medio de pago':c.medio, 'Retenciones':c.retenciones||0 })), [11,12,10,26,40,15,13,12,12,12,7,16,14,12]);
+      'Mano de obra':c.mo, 'Repuestos':c.rep, 'Movilidad':c.mov, 'Terceros':c.ter, 'Sin desglosar':c.sd||0, 'Seña':c.esSena?'Sí':'', 'Factura':[c.facturaTipo,c.facturaNum].filter(Boolean).join(' '), 'Archivo factura':c.facturaUrl||'', 'Medio de pago':c.medio, 'Retenciones':c.retenciones||0 })), [11,12,10,26,40,15,13,12,12,12,7,16,30,14,12]);
     _hoja(wb, 'Por cobrar', porCobrarDetalle().map(x=>({ 'N°':'#'+_rNumP(x.p), 'Cliente':x.cliente, 'Fecha':_rDMY(x.p.fecha)||x.p.fecha, 'Días':x.dias===null?'':x.dias, 'Antigüedad':x.tramo, 'Monto':x.monto, 'Seña cobrada':x.sena, 'Saldo':x.saldo, 'Repuestos ya pagados':x.repAdelantado, 'Plazo':x.p.plazoPago||'' })), [8,26,11,7,15,14,13,14,18,9], { vacio:'Nada aprobado pendiente de cobro' });
     _hoja(wb, 'Egresos', egresos.map(e=>({ 'Fecha':_rDMY(e.fecha)||e.fecha, 'Tipo':e.tipo, 'Detalle':e.detalle, 'Proveedor':e.proveedor, 'Monto':Math.round(e.monto), 'Observación':e.sinRevisar?'Sin revisar':(e.pendiente?'Sueldo sin pagar':'') })), [11,28,50,22,14,16]);
     _hoja(wb, 'Gastos de estructura', (DB.gastosEstructura||[]).map(g=>({ 'Fecha':_rDMY(g.fecha)||g.fecha, 'Cargó':g.usuario, 'Cliente visitado':g.clienteVisitado, 'Detalle':(g.items||[]).map(i=>[i.categoria,i.descripcion,i.monto?('$'+Number(i.monto).toLocaleString('es-AR')):''].filter(Boolean).join(' ')).join(' · ')||g.resumen, 'Total':Number(g.total)||0, 'Revisado':g.confirmado?'Sí':'No' })), [11,12,22,70,13,9], { vacio:'Sin gastos cargados' });
@@ -15361,7 +15398,7 @@ function exportarReporteContador() {
     XLSX.utils.book_append_sheet(wb, ws0, 'Resumen');
     _hoja(wb, 'Ingresos por mes', meses.map(m=>({ 'Mes':_rMesTxt(m.mes), 'Total cobrado':Math.round(m.ing), 'Mano de obra':Math.round(m.mo), 'Repuestos':Math.round(m.rep), 'Movilidad':Math.round(m.mov), 'Terceros':Math.round(m.ter), 'Sin desglosar':Math.round(m.sd), 'Contratos':Math.round(m.cont), 'Terciarizado':Math.round(m.terc), 'Retenciones':Math.round(m.ret) })), [10,15,14,13,12,12,14,12,13,12]);
     _hoja(wb, 'Egresos por mes', meses.map(m=>({ 'Mes':_rMesTxt(m.mes), 'Total egresos':Math.round(m.eg), 'Repuestos':Math.round(m.eRep), 'Servicios de terceros':Math.round(m.eTer), 'Compras':Math.round(m.eCom), 'Gastos de estructura':Math.round(m.eEst), 'Sueldos / honorarios':Math.round(m.eSue), 'Vehículo':Math.round(m.eVeh) })), [10,14,13,20,12,19,19,12]);
-    _hoja(wb, 'Ingresos (detalle)', cobros.map(c=>{ const cl=_rCli(c.clienteId)||{}; return { 'Fecha':_rDMY(c.fecha)||c.fecha, 'Cliente':cl.nombre||(c.origen==='Terciarizado'?'Terciarizado':''), 'CUIT':cl.cuit||'', 'Condición IVA':cl.condicionIva||'', 'Concepto':c.concepto, 'Comprobante':[c.facturaTipo?('Factura '+c.facturaTipo):'', c.facturaNum].filter(Boolean).join(' N° '), 'Medio de pago':c.medio, 'Monto':Math.round(c.monto), 'Retenciones':c.retenciones||0 }; }), [11,26,14,20,40,20,14,14,12]);
+    _hoja(wb, 'Ingresos (detalle)', cobros.map(c=>{ const cl=_rCli(c.clienteId)||{}; return { 'Fecha':_rDMY(c.fecha)||c.fecha, 'Cliente':cl.nombre||(c.origen==='Terciarizado'?'Terciarizado':''), 'CUIT':cl.cuit||'', 'Condición IVA':cl.condicionIva||'', 'Concepto':c.concepto, 'Comprobante':[c.facturaTipo?('Factura '+c.facturaTipo):'', c.facturaNum].filter(Boolean).join(' N° '), 'Archivo factura':c.facturaUrl||'', 'Medio de pago':c.medio, 'Monto':Math.round(c.monto), 'Retenciones':c.retenciones||0 }; }), [11,26,14,20,40,20,30,14,14,12]);
     _hoja(wb, 'Egresos (detalle)', egresos.filter(e=>!e.pendiente).map(e=>({ 'Fecha':_rDMY(e.fecha)||e.fecha, 'Rubro':e.tipo, 'Detalle':e.detalle, 'Proveedor':e.proveedor, 'Monto':Math.round(e.monto) })), [11,28,50,22,14]);
     _hoja(wb, 'Clientes', DB.clientes.filter(c=>c.estado!=='prospecto' && !/^belen$/i.test(String(c.nombre).trim())).map(c=>{ const f=cobros.filter(x=>String(x.clienteId)===String(c.id)).reduce((a,x)=>a+x.monto,0); return {
       'Razón social / nombre':c.empresa||c.nombre, 'CUIT':c.cuit||'', 'Condición IVA':c.condicionIva||'', 'Domicilio fiscal':c.domicilioFiscal||'', 'Localidad':c.zona||'', 'Email':c.email||'', 'Teléfono':String(c.telefono||''), 'Total cobrado':Math.round(f) }; }).sort((a,b)=>b['Total cobrado']-a['Total cobrado']), [30,15,22,30,20,26,15,14]);
