@@ -52,6 +52,10 @@
   .zonas::-webkit-scrollbar{display:none}
   .z{flex:0 0 auto;font-size:13px;background:var(--card);border:1px solid var(--line);color:var(--mut);border-radius:999px;padding:6px 12px}
   .z.on{color:#111;background:var(--y);border-color:var(--y);font-weight:700}
+  .sec-p{font-size:13px;font-weight:700;color:var(--y);margin:12px 0 6px}
+  .motivo-sug{display:inline-block;font-size:12px;font-weight:700;color:#111;background:var(--y);border-radius:999px;padding:2px 10px;margin-bottom:6px}
+  .sp-it{display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--line);padding:9px 0}
+  .mini.on{background:var(--ok);border-color:var(--ok);color:#111}
   .chip.f{color:#111;background:var(--y);border-color:var(--y);font-weight:700}
   .chip.pas{color:var(--mut);border-style:dashed}
   details.arch{margin-top:22px;border:1px solid var(--line);border-radius:12px;background:var(--card);padding:0 12px}
@@ -198,12 +202,16 @@ let D = { hoy:'', visitas:[], prospectos:[], web:{}, links:{}, fichas:{}, pendie
 let vista = 'dia';
 let diaSel = '';
 let zonaFiltro = '';
+let verMasZona = false;   // v17.85 — mostrar todos los prospectos de la zona del día
 let enRuta = {};            // prospectoId -> true
 // v17.76 — zonas extra y prospectos sumados a mano por día (ej. el cliente está en Pilar pero hoy fuiste a su sede de Luján)
 function _jsonLs(k){ try{ return JSON.parse(ls(k)||'{}')||{}; }catch(e){ return {}; } }
 function zonasExtra(f){ return (_jsonLs('meb_midia_zonas')[f]||[]); }
 function setZonasExtra(f,arr){ const o=_jsonLs('meb_midia_zonas'); Object.keys(o).forEach(k=>{ if(k<(D.hoy||hoyLocal())) delete o[k]; }); o[f]=arr; ls('meb_midia_zonas',JSON.stringify(o)); }
 function sumadosDia(f){ return (_jsonLs('meb_midia_sumados')[f]||[]); }
+// v17.85 — los que Belu sumó desde el CRM se pueden sacar de la lista en este celular
+function quitadosDia(f){ return (_jsonLs('meb_midia_quitados')[f]||[]); }
+function setQuitadosDia(f,arr){ const o=_jsonLs('meb_midia_quitados'); Object.keys(o).forEach(k=>{ if(k<(D.hoy||hoyLocal())) delete o[k]; }); o[f]=arr; ls('meb_midia_quitados',JSON.stringify(o)); }
 function setSumadosDia(f,arr){ const o=_jsonLs('meb_midia_sumados'); Object.keys(o).forEach(k=>{ if(k<(D.hoy||hoyLocal())) delete o[k]; }); o[f]=arr; ls('meb_midia_sumados',JSON.stringify(o)); }
 let ultimaCarga = '';
 let sinConexion = false;
@@ -331,6 +339,74 @@ function ordenProsp(a,b){
   if(fa!==fb) return fa<fb?-1:1;
   return (PRIO[a.prioridad]??1)-(PRIO[b.prioridad]??1) || a.nombre.localeCompare(b.nombre);
 }
+/* ---------- v17.85 — dónde queda cada zona (aprox.) para sugerir prospectos "en el camino" ---------- */
+const GEO_ZONAS = {
+  'derqui':[-34.494,-58.858],'pilar':[-34.458,-58.914],'astolfi':[-34.480,-58.850],'del viso':[-34.450,-58.800],'villa rosa':[-34.430,-58.870],'fatima':[-34.430,-59.000],
+  'manzanares':[-34.450,-59.020],'matheu':[-34.380,-58.830],'tortuguitas':[-34.470,-58.750],'jose c paz':[-34.520,-58.750],'san miguel':[-34.540,-58.710],'bella vista':[-34.560,-58.690],
+  'escobar':[-34.350,-58.790],'garin':[-34.420,-58.760],'maschwitz':[-34.380,-58.740],'benavidez':[-34.410,-58.690],'villa la nata':[-34.380,-58.610],'nordelta':[-34.400,-58.640],
+  'tigre':[-34.430,-58.580],'pacheco':[-34.450,-58.650],'el talar':[-34.470,-58.650],'don torcuato':[-34.490,-58.620],'san isidro':[-34.470,-58.530],'vicente lopez':[-34.530,-58.480],
+  'hurlingham':[-34.590,-58.630],'moreno':[-34.650,-58.790],'general rodriguez':[-34.610,-58.950],'merlo':[-34.660,-58.730],'moron':[-34.650,-58.620],'castelar':[-34.650,-58.640],
+  'ituzaingo':[-34.660,-58.670],'san justo':[-34.680,-58.560],'marcos paz':[-34.780,-58.840],'open door':[-34.490,-59.070],'lujan':[-34.570,-59.100],'capilla del senor':[-34.290,-59.100],
+  'exaltacion':[-34.290,-59.100],'campana':[-34.160,-58.960],'zarate':[-34.100,-59.030],'san andres de giles':[-34.450,-59.440],'areco':[-34.250,-59.470],'mercedes':[-34.650,-59.430],
+  'suipacha':[-34.770,-59.690],'chivilcoy':[-34.900,-60.020],'navarro':[-35.000,-59.280],'lobos':[-35.180,-59.100],'canuelas':[-35.050,-58.760],'ezeiza':[-34.850,-58.520],
+  'capital':[-34.600,-58.380],'caba':[-34.600,-58.380],'avellaneda':[-34.660,-58.370],'lanus':[-34.700,-58.390],'lomas de zamora':[-34.760,-58.400],'loma de zamora':[-34.760,-58.400],
+  'burzaco':[-34.830,-58.390],'quilmes':[-34.720,-58.250],'berazategui':[-34.760,-58.210],'la plata':[-34.920,-57.950],'brandsen':[-35.170,-58.230],'baradero':[-33.810,-59.500],
+  'san pedro':[-33.680,-59.660],'rojas':[-34.200,-60.730],'pergamino':[-33.890,-60.570],'junin':[-34.590,-60.950],'tandil':[-37.320,-59.130],'azul':[-36.780,-59.860],
+  'olavarria':[-36.890,-60.320],'trenque lauquen':[-35.970,-62.730],'mar del plata':[-38.000,-57.550],'rosario':[-32.950,-60.650]
+};
+const BASE_GEO = GEO_ZONAS['derqui'];
+function geoDe(txt){ const n=norm(txt); if(!n) return null; let k=null; Object.keys(GEO_ZONAS).forEach(z=>{ if(n.includes(z) && (!k || z.length>k.length)) k=z; }); return k ? GEO_ZONAS[k] : null; }
+function kmEntre(a,b){ const R=6371, r=x=>x*Math.PI/180; const dLa=r(b[0]-a[0]), dLo=r(b[1]-a[1]); const h=Math.sin(dLa/2)**2+Math.cos(r(a[0]))*Math.cos(r(b[0]))*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(h))*1.3; } // ×1.3: de línea recta a ruta
+function puntosDelDia(f){
+  const pts=[];
+  visitasDelDia(f).forEach(v=>{ const p=prospDeVisita(v); const g=geoDe([v.zona, p&&p.zona, p&&p.direccion].filter(Boolean).join(' ')); if(g) pts.push(g); });
+  zonasExtra(f).forEach(z=>{ const g=geoDe(z); if(g) pts.push(g); });
+  return pts;
+}
+// cuánto se desvía para pasar por ese prospecto, yendo de cada lugar del día de vuelta a la base (o, sin visitas, desde la base)
+function desvioProsp(p, pts){
+  const g=geoDe((p.zona||'')+' '+(p.direccion||'')); if(!g) return null;
+  if(!pts.length) return { km:kmEntre(BASE_GEO,g), base:true };
+  let best=Infinity; pts.forEach(a=>{ best=Math.min(best, kmEntre(a,g)+kmEntre(g,BASE_GEO)-kmEntre(a,BASE_GEO)); });
+  return { km:Math.max(0,best), base:false };
+}
+function sugeridosProsp(f, lista, n){
+  const pts=puntosDelDia(f);
+  const conDes = lista.map(p=>({ p, d:desvioProsp(p,pts) }));
+  const out=[], usados=new Set();
+  const sumar=(x,motivo)=>{ if(out.length<n && !usados.has(x.p.id)){ usados.add(x.p.id); out.push({p:x.p, motivo}); } };
+  if(pts.length) conDes.filter(x=>x.d && x.d.km<=25).sort((a,b)=>(a.d.km-b.d.km) || ((Number(b.p.puntaje)||0)-(Number(a.p.puntaje)||0)))
+    .forEach(x=>sumar(x, x.d.km<5 ? 'En el camino de vuelta' : 'En el camino de vuelta · desvío de ~'+Math.round(x.d.km)+' km'));
+  conDes.filter(x=>x.d).map(x=>({ x, kb:kmEntre(BASE_GEO, geoDe((x.p.zona||'')+' '+(x.p.direccion||''))) })).filter(o=>o.kb<=35)
+    .sort((a,b)=>((Number(b.x.p.puntaje)||0)-(Number(a.x.p.puntaje)||0)) || (a.kb-b.kb)).forEach(o=>sumar(o.x, 'Cerca de la base · ~'+Math.round(o.kb)+' km'));
+  conDes.slice().sort((a,b)=>((b.p.prioridad==='alta')-(a.p.prioridad==='alta')) || ((Number(b.p.puntaje)||0)-(Number(a.p.puntaje)||0)))
+    .forEach(x=>sumar(x, x.p.prioridad==='alta' ? '★ Prioridad alta' : 'Buen puntaje'));
+  return out;
+}
+// Hoja "Sumar prospectos": todos los pendientes, primero los que quedan en el camino; un toque los suma al día
+function hojaSumarProsp(){
+  const f=diaSel, hoy=D.hoy||hoyLocal(), pts=puntosDelDia(f);
+  const pintar = q => {
+    const sum = sumadosDia(f), nq=norm(q||'');
+    const lst = candidatos(f).filter(p=>!nq || norm([p.nombre,p.zona,p.direccion,p.contacto].join(' ')).includes(nq))
+      .map(p=>({ p, d:desvioProsp(p,pts) })).sort((a,b)=>((a.d?a.d.km:9999)-(b.d?b.d.km:9999)) || ((Number(b.p.puntaje)||0)-(Number(a.p.puntaje)||0))).slice(0,40);
+    document.getElementById('sp-lista').innerHTML = lst.length ? lst.map(x=>{ const ya = sum.includes(x.p.id) || x.p.fechaVisita===f || (x.p.sumadoDia===f && !quitadosDia(f).includes(x.p.id));
+      const det = x.d ? (x.d.base ? '~'+Math.round(x.d.km)+' km de la base' : (x.d.km<5?'en el camino':'desvío ~'+Math.round(x.d.km)+' km')) : 'sin zona reconocida';
+      return `<div class="sp-it"><div style="flex:1;min-width:0"><b>${esc(x.p.nombre)}</b><div class="sub">${esc(x.p.zona||'Sin zona')} · ${det}${x.p.prioridad==='alta'?' · ★':''}</div></div>
+        <button class="mini ${ya?'on':''}" type="button" data-sp="${esc(x.p.id)}" ${x.p.fechaVisita===f&&!sum.includes(x.p.id)?'disabled':''}>${ya?'✔ En la lista':'＋ Sumar'}</button></div>`; }).join('')
+      : '<div class="sub">No encontré prospectos con eso.</div>';
+  };
+  abrirHoja(`<h3>＋ Sumar prospectos a ${f===hoy?'hoy':'este día'}</h3>
+    <div class="ayuda" style="margin-bottom:8px">${pts.length?'Primero los que quedan en el camino de vuelta a la base.':'Primero los más cerca de la base.'} Los que sumes aparecen arriba en “Mi día”.</div>
+    <input id="sp-q" placeholder="Buscar por nombre o zona…" style="width:100%;margin-bottom:8px">
+    <div id="sp-lista"></div>
+    <div class="acts"><button class="a ok" type="button" id="sp-ok">Listo</button></div>`);
+  pintar('');
+  const q=document.getElementById('sp-q'); q.oninput=()=>pintar(q.value);
+  document.getElementById('sp-lista').onclick=e=>{ const b=e.target.closest('[data-sp]'); if(!b) return; const id=b.dataset.sp, arr=sumadosDia(f).slice(); const i=arr.indexOf(id);
+    if(i>=0) arr.splice(i,1); else arr.push(id); setSumadosDia(f,arr); pintar(q.value); };
+  document.getElementById('sp-ok').onclick=()=>{ cerrarHoja(); render(); const n=sumadosDia(f).length; if(n) toast(n+' en tu lista de '+(f===hoy?'hoy':'este día')); };
+}
 function candidatos(f){
   const idsEnVisitas = new Set(visitasDelDia(f).map(v=>v.prospectoId).filter(Boolean));
   return D.prospectos.filter(p=>!idsEnVisitas.has(p.id) && pendiente(p) && !yaPaso(p)).sort(ordenProsp);
@@ -392,27 +468,41 @@ function render(){
   html += `<a class="ruta ${hayRuta?'':'off'}" ${hayRuta?`href="${esc(urlRuta(paradas))}" target="_blank" rel="noopener"`:''}>🧭 Ruta del día (${paradas.length} ${paradas.length===1?'parada':'paradas'})</a>`;
   html += `<div class="ayuda">Abre Google Maps con las visitas en orden y los prospectos que marques con “Sumar a la ruta”. Máximo 10 paradas.</div>`;
 
-  // prospectos cercanos
+  // v17.85 — prospectos: los que sumaste a mano, 3 de la zona del día (con "ver más") y 3 sugeridos
+  // (en el camino de vuelta a la base, o cerca); en un día sin visitas, 6 sugeridos.
   const zonas = zonasDelDia(diaSel);
   const cand = candidatos(diaSel);
-  // v17.76 — van primero los que tienen fecha de visita ese día o se sumaron a mano, estén en la zona que estén
   const sumados = sumadosDia(diaSel);
-  const fijos = cand.filter(p=>p.fechaVisita===diaSel || sumados.includes(p.id));
+  const quitados = quitadosDia(diaSel);
+  const fijos = cand.filter(p=>(p.fechaVisita===diaSel || sumados.includes(p.id) || p.sumadoDia===diaSel) && !quitados.includes(p.id));
   const idsFijos = new Set(fijos.map(p=>p.id));
-  const cerca = fijos.concat(cand.filter(p=>!idsFijos.has(p.id) && coincideZona(p,zonas)).slice(0,6));
+  const deZona = cand.filter(p=>!idsFijos.has(p.id) && coincideZona(p,zonas));
+  const zonaVista = verMasZona ? deZona : deZona.slice(0,3);
+  const sug = sugeridosProsp(diaSel, cand.filter(p=>!idsFijos.has(p.id) && !coincideZona(p,zonas)), vs.length?3:6);
+  const cerca = fijos.concat(zonaVista, sug.map(x=>x.p));
   html += `<h2>Si tenés tiempo, pasá por acá</h2>`;
+  html += `<button class="a p" type="button" data-sumarprosp="1" style="width:100%;margin:2px 0 8px">＋ Sumar prospectos a ${diaSel===hoy?'hoy':'este día'}</button>`;
   const extras = zonasExtra(diaSel);
   const zonasBase = zonas.filter(z=>!extras.includes(z));
   html += `<div class="ayuda">Zonas de este día: ${zonasBase.map(esc).join(', ')||'—'}</div>`;
   html += `<div class="zonas" style="margin-top:4px">${extras.map(z=>`<button class="z on" data-quitarzona="${esc(z)}" type="button" title="Quitar">📍 ${esc(z)} ✕</button>`).join('')}<button class="z" data-sumarzona="1" type="button">＋ Estoy en otra zona</button></div>`;
+  if(fijos.length){ html += `<div class="sec-p">📌 En tu lista de ${diaSel===hoy?'hoy':'este día'} (${fijos.length})</div>`; fijos.forEach(p=>{ html += tarjetaProspecto(p); }); }
+  if(deZona.length){
+    html += `<div class="sec-p">📍 En las zonas de ${diaSel===hoy?'hoy':'este día'}</div>`;
+    zonaVista.forEach(p=>{ html += tarjetaProspecto(p); });
+    if(deZona.length>3) html += `<button class="a" type="button" data-vermaszona="1" style="width:100%;margin-bottom:10px">${verMasZona?'Ver solo 3':'Ver '+(deZona.length-3)+' más de esta zona'}</button>`;
+  }
+  if(sug.length){
+    html += `<div class="sec-p">💡 Sugeridos${vs.length?'':' para un día sin visitas'}</div>`;
+    sug.forEach(x=>{ html += tarjetaProspecto(x.p, x.motivo); });
+  }
   if(!cerca.length){
     const yaEnVisitas = vs.filter(v=>v.prospectoId).length;
     const msg = yaEnVisitas
       ? `Los prospectos de esta zona ya están arriba, como paradas de tu día (${yaEnVisitas}).`
       : 'No hay prospectos cargados en las zonas de este día.';
-    html += `<div class="card vacio">${msg}${cand.length?'<br>Podés buscar en otras zonas más abajo.':''}</div>`;
+    html += `<div class="card vacio">${msg}${cand.length?'<br>Podés buscar en otras zonas más abajo o tocar “Sumar prospectos”.':''}</div>`;
   }
-  cerca.forEach(p=>{ html += tarjetaProspecto(p); });
 
   // otras zonas
   const idsCerca = new Set(cerca.map(p=>p.id));
@@ -782,9 +872,10 @@ function chipsProspecto(p){
   if(p.marcaEquipos) c.push(`<span class="chip">${esc(p.marcaEquipos)}</span>`);
   return c.join('');
 }
-function tarjetaProspecto(p){
+function tarjetaProspecto(p, motivo){
   const dir=[p.direccion,p.zona].filter(Boolean).join(', ');
   return `<div class="card pros ${p.prioridad==='alta'?'alta':''}">
+    ${motivo?`<div class="motivo-sug">${esc(motivo)}</div>`:(p.sumadoDia===diaSel?`<div class="motivo-sug">📌 Lo sumó Belu para ${diaSel===(D.hoy||hoyLocal())?'hoy':'este día'}</div>`:'')}
     <div class="tit">${esc(p.nombre)}</div>
     <div class="sub">${esc(p.contacto||'')}${p.contacto&&p.zona?' · ':''}${esc(p.zona||'')}</div>
     ${p.direccion?`<div class="sub" style="margin-top:4px">📍 ${esc(p.direccion)}</div>`:''}
@@ -798,7 +889,9 @@ function tarjetaProspecto(p){
       <button class="a ok" type="button" data-fui="p:${esc(p.id)}">✔ Fui</button>
     </div>
     <label class="sum"><input type="checkbox" data-ruta="${esc(p.id)}" ${enRuta[p.id]?'checked':''}> Sumar a la ruta</label>
-    ${sumadosDia(diaSel).includes(p.id)
+    ${p.sumadoDia===diaSel && !quitadosDia(diaSel).includes(p.id) && !sumadosDia(diaSel).includes(p.id)
+      ? `<button class="a" type="button" data-quitar="${esc(p.id)}" style="margin-top:6px">✕ Sacar de este día</button>`
+      : sumadosDia(diaSel).includes(p.id)
       ? `<button class="a" type="button" data-pin="${esc(p.id)}" style="margin-top:6px">✕ Sacar de este día</button>`
       : (p.fechaVisita===diaSel ? '' : `<button class="a" type="button" data-pin="${esc(p.id)}" style="margin-top:6px">📌 Sumar a ${diaSel===(D.hoy||hoyLocal())?'hoy':'este día'}</button>`)}
   </div>`;
@@ -1310,6 +1403,9 @@ document.addEventListener('click',e=>{
     if(i>=0) arr.splice(i,1); else arr.push(id); setSumadosDia(diaSel,arr); render(); toast(i>=0?'Sacado de este día':'Sumado ✔ — ahora está arriba, con los de tu día'); return; }
   const qz=e.target.closest('[data-quitarzona]'); if(qz){ setZonasExtra(diaSel, zonasExtra(diaSel).filter(z=>z!==qz.dataset.quitarzona)); render(); return; }
   const sz=e.target.closest('[data-sumarzona]'); if(sz){ hojaZonaExtra(); return; }
+  const sp=e.target.closest('[data-sumarprosp]'); if(sp){ hojaSumarProsp(); return; }
+  const vm=e.target.closest('[data-vermaszona]'); if(vm){ verMasZona=!verMasZona; render(); return; }
+  const qt=e.target.closest('[data-quitar]'); if(qt){ const arr=quitadosDia(diaSel).slice(); if(!arr.includes(qt.dataset.quitar)) arr.push(qt.dataset.quitar); setQuitadosDia(diaSel,arr); render(); toast('Sacado de este día'); return; }
   const hb=e.target.closest('[data-hor]'); if(hb){ const [vid,mid]=hb.dataset.hor.split('|'); hojaHorometro(vid,mid||''); return; }
   const t=e.target.closest('[data-dia],[data-zona],[data-fui]'); if(!t) return;
   if(t.dataset.dia){ diaSel=t.dataset.dia; zonaFiltro=''; render(); }

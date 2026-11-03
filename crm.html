@@ -569,6 +569,7 @@ select option { background:var(--dark); }
         <button class="filter-tab" id="filtertab-presup-vencido" style="border-color:var(--red);color:var(--red)" onclick="setFilter('presup','vencido',this)">⏰ Vencidos <span class="nav-badge red" id="badge-presup-vencidos" style="margin-left:2px">0</span></button>
         <button class="filter-tab" id="filtertab-presup-seguimiento" style="border-color:var(--orange);color:var(--orange)" onclick="setFilter('presup','seguimiento',this)">📅 Seguimiento <span class="nav-badge" id="badge-presup-seguimiento" style="margin-left:2px;background:var(--orange)">0</span></button>
         <button class="filter-tab" id="filtertab-presup-sininforme" style="border-color:#9b59b6;color:#9b59b6" onclick="setFilter('presup','sininforme',this)">📋 Sin informe <span class="nav-badge" id="badge-presup-sininforme" style="margin-left:2px;background:#9b59b6">0</span></button>
+        <button class="filter-tab" id="filtertab-presup-postergado" style="border-color:#e6a23c;color:#e6a23c" onclick="setFilter('presup','postergado',this)">⏸ Postergados <span class="nav-badge" id="badge-presup-postergado" style="margin-left:2px;background:#e6a23c">0</span></button>
         <button class="filter-tab" id="filtertab-presup-sinmotivo" style="border-color:#e07a7a;color:#e07a7a" onclick="setFilter('presup','sinmotivo',this)">❓ Sin motivo <span class="nav-badge red" id="badge-presup-sinmotivo" style="margin-left:2px">0</span></button>
       </div>
       <div style="display:flex;align-items:center;gap:16px">
@@ -844,6 +845,12 @@ select option { background:var(--dark); }
         <thead><tr><th>Cliente</th><th style="text-align:center">Trabajos</th><th style="text-align:right">Cobrado</th><th style="text-align:right">Margen</th><th style="text-align:right">% Margen</th></tr></thead>
         <tbody id="rentabilidad-cliente-tabla"></tbody>
       </table></div>
+    </div>
+    <!-- v17.83 — Hora de Emmanuel -->
+    <div data-est="hora" class="card" style="margin-bottom:12px">
+      <div class="card-header"><span class="card-title">⏱ HORA DE EMMANUEL</span></div>
+      <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">Cuánto vale de verdad su hora: horas cobradas, horas netas, visitas, viaje y km, separado por cada tarifa (US$ 50 hasta agosto, US$ 55 desde el 17/08).</p>
+      <div id="hora-emmanuel"></div>
     </div>
     <!-- Estacionalidad y tiempos de respuesta -->
     <div data-est="tiempos" class="card" style="margin-bottom:12px">
@@ -2222,6 +2229,7 @@ async function syncAll() {
             motivoNota:r.MOTIVO_NOTA||'',
             presupVinculadoId:r.PRESUP_VINCULADO_ID||'',
             proximoSeguimiento:r.PROXIMO_SEGUIMIENTO||'',
+            postergadoHasta:String(r.POSTERGADO_HASTA||'').trim(),
             excepcionPago: (function(){ try { return r.EXCEPCION_PAGO_JSON ? JSON.parse(r.EXCEPCION_PAGO_JSON) : null; } catch(e){ return null; } })()
           };
         } else {
@@ -2553,7 +2561,8 @@ async function syncAll() {
       clienteId: String(r.CLIENTE_ID||'').trim(), visitaCalendarioId: String(r.VISITA_CALENDARIO_ID||'').trim(),
       prioridad: r.PRIORIDAD || 'media', notas: r.NOTAS || '', fechaAlta: r.FECHA_ALTA || '',
       viaAlta: r.VIA_ALTA || '', viaVisita: r.VIA_VISITA || '',
-      flotaEstimada: parseInt(r.FLOTA_ESTIMADA,10)||0, referidoPor: r.REFERIDO_POR || ''
+      flotaEstimada: parseInt(r.FLOTA_ESTIMADA,10)||0, referidoPor: r.REFERIDO_POR || '',
+      sumadoDia: _isoFlex(r.SUMADO_DIA)
     }));
 
     // Configuración (CONFIG: clave/valor) — links de reseña, topes, plazos.
@@ -3141,7 +3150,7 @@ function chipOrigenCliente(c) {
 // ============================================================
 const EST_SECCIONES = [
   ['resumen','📊 Resumen'], ['presupuestos','🎯 Presupuestos'], ['rentabilidad','💹 Rentabilidad'],
-  ['cobros','💱 Cobros y dólar'], ['tiempos','📅 Tiempos'], ['trabajos','🛠 Trabajos y herramientas'],
+  ['cobros','💱 Cobros y dólar'], ['hora','⏱ Hora de Emmanuel'], ['tiempos','📅 Tiempos'], ['trabajos','🛠 Trabajos y herramientas'],
   ['clientes','👥 Clientes y origen'], ['flota','⚙️ Flota'], ['proveedores','📦 Proveedores'], ['todo','Ver todo']
 ];
 function seccionEstElegida() { try { return localStorage.getItem('meb_est_seccion') || 'resumen'; } catch(e) { return 'resumen'; } }
@@ -3215,6 +3224,262 @@ function renderTiposTrabajoYHerramientas() {
         }).join('') + `</tbody></table>`;
     }
   }
+}
+
+// ============================================================
+// v17.83 — ⏱ HORA DE EMMANUEL
+// Junta todo lo que dice cuánto vale de verdad la hora de Emmanuel:
+// · horas facturadas (mano de obra ÷ tarifa del momento ÷ dólar del presupuesto)
+// · horas netas reales (Gastos de estructura: llegada/inicio/fin/vuelta · Mi Día: empezar/terminar ·
+//   📊 Economía: horas trabajadas · notas de trabajos y calendario: "4 hs de trabajo", "2 hs de viaje", "180 km")
+// · visitas, horas de viaje y km (medidos cuando hay datos; si no, aproximados por la zona del cliente)
+// · valor real por hora contando el viaje, y movilidad cobrada por km.
+// La tarifa sale del historial del Tarifario (US$ 50 hasta el 16/08/2026, US$ 55 desde el 17/08/2026),
+// así que cuando cambie se agrega sola como un período nuevo.
+// ============================================================
+const HE_HORAS_POR_VISITA = 5;     // jornada máxima en el cliente (lo que muestran las salidas medidas)
+const HE_KM_ZONAS = [               // km por ruta (ida) desde Derqui — aproximados
+  ['derqui',5],['villa rosa',10],['astolfi',10],['del viso',10],['pilar',15],['tortuguitas',15],['jose c paz',20],['san miguel',25],
+  ['escobar',30],['garin',25],['ingeniero maschwitz',25],['maschwitz',25],['villa la nata',30],['benavidez',30],['don torcuato',30],['el talar',35],['pacheco',35],
+  ['tigre',35],['nordelta',35],['open door',35],['lujan',40],['san isidro',40],['vicente lopez',45],['zarate',70],['campana',50],['corralon municipal',50],
+  ['san andres de giles',65],['mercedes',70],['capilla del senor',60],['exaltacion',55],['san antonio de areco',90],['areco',90],['san justo',55],['moron',45],
+  ['avellaneda',60],['lanus',65],['lomas de zamora',65],['loma de zamora',65],['burzaco',75],['quilmes',75],['canuelas',90],['la plata',105],['berazategui',85],
+  ['suipacha',130],['chivilcoy',140],['rojas',210],['pergamino',200],['san nicolas',190],['san pedro',140],['baradero',110],['junin',230],
+  ['tandil',400],['olavarria',350],['azul',300],['trenque lauquen',440],['bahia blanca',650],['mar del plata',430],['rosario',300]
+];
+function _heNorm(s) { return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9ñ ]/g,' ').replace(/\s+/g,' ').trim(); }
+function heKmZona(texto) {
+  const z = _heNorm(texto); if(!z) return null;
+  let mejor = null;
+  HE_KM_ZONAS.forEach(([k,km]) => { if(z.includes(k) && (!mejor || k.length > mejor[0].length)) mejor = [k,km]; });
+  return mejor ? mejor[1] : null;
+}
+function heKmCliente(cl, zonaVisita) { return heKmZona(zonaVisita) || (cl ? (heKmZona(cl.zona) || heKmZona(cl.notas)) : null); }
+function _heMin(v) { // 'HH:MM' → minutos; Emmanuel no arranca entre 0 y 4 h: "01:20" es 13:20
+  const m = /(\d{1,2}):(\d{2})/.exec(String(v||'')); if(!m) return null;
+  let r = parseInt(m[1],10)*60 + parseInt(m[2],10); if(r < 240) r += 720; return r;
+}
+function _heTarifas() { // [{desde:'aaaa-mm-dd', usd}]
+  const l = (DB.tarifario||[]).filter(t=>t.horaNormal>0 && _isoFlex(t.fecha)).map(t=>({ desde:_isoFlex(t.fecha), usd:t.horaNormal }))
+    .sort((a,b)=>a.desde.localeCompare(b.desde));
+  const out = []; l.forEach(t=>{ if(!out.length || out[out.length-1].usd !== t.usd) out.push(t); });
+  if(!out.length) out.push({ desde:'2000-01-01', usd:50 });
+  out[0] = Object.assign({}, out[0], { desde:'2000-01-01' }); // la primera tarifa vale desde el inicio de MEB
+  return out;
+}
+function _heTarifaEn(iso, tarifas) { let u = tarifas[0]; tarifas.forEach(t=>{ if(iso >= t.desde) u = t; }); return u; }
+function _heTC() { // dólar por fecha, con los TC que se guardaron en los presupuestos
+  const pts = DB.presupuestos.filter(p=>Number(p.tcAlMomento)>0 && _isoFlex(p.fecha)).map(p=>[new Date(_isoFlex(p.fecha)+'T12:00:00').getTime(), Number(p.tcAlMomento)]).sort((a,b)=>a[0]-b[0]);
+  return iso => { if(!pts.length) return 0; const x = new Date(iso+'T12:00:00').getTime();
+    if(x <= pts[0][0]) return pts[0][1]; if(x >= pts[pts.length-1][0]) return pts[pts.length-1][1];
+    for(let i=1;i<pts.length;i++) if(x <= pts[i][0]) { const [a,ya]=pts[i-1], [b,yb]=pts[i]; return ya + (yb-ya)*(x-a)/(b-a); }
+    return pts[pts.length-1][1]; };
+}
+// "4 hs de trabajo", "2,5 h de viaje", "180 km" en notas
+function heHorasDeNotas(texto) {
+  const s = _heNorm(String(texto||'').replace(/(\d),(\d)/g,'$1.$2').replace(/(\d)\.(\d)/g,'$1p$2'));
+  const out = { trabajo:0, viaje:0, km:0, hay:false };
+  const re = /(\d+(?:p\d+)?)\s*(?:h|hs|hrs|hora|horas)\b(?:\s*(?:de|en)?\s*(trabajo|taller|viaje|manejo|ruta|traslado))?/g; let m;
+  while((m = re.exec(s))) { const v = parseFloat(m[1].replace('p','.')); if(!(v>0 && v<24)) continue; out.hay = true;
+    if(/viaje|manejo|ruta|traslado/.test(m[2]||'')) out.viaje += v; else out.trabajo += v; }
+  const rk = /(\d+(?:p\d+)?)\s*km\b/g; while((m = rk.exec(s))) { const v = parseFloat(m[1].replace('p','.')); if(v>0 && v<3000) { out.km += v; out.hay = true; } }
+  return out;
+}
+function _heCliDeTexto(tx) {
+  const c = resolverClientePorNombreLibre(tx); if(c) return c;
+  const n = _heNorm(tx); if(!n) return null;
+  const alias = { 'muni campana':'municipalidad de campana', 'isolde':'isolse' };
+  const n2 = alias[n] || n;
+  return DB.clientes.find(c=>_heNorm(c.nombre)===n2) || DB.clientes.find(c=>{ const cn=_heNorm(c.nombre); return cn && (cn.includes(n2) || n2.includes(cn)); })
+    || DB.clientes.find(c=>{ const p = n2.split(' ').filter(w=>w.length>=5); const cn=_heNorm(c.nombre+' '+(c.empresa||'')); return p.some(w=>cn.includes(w)); }) || null;
+}
+// Trabajo de ese cliente en curso ese día
+function _heTrabajosDelDia(clienteId, iso) {
+  const d = new Date(iso+'T12:00:00').getTime(), dia = 86400000;
+  return DB.trabajos.filter(t=>{ if(String(t.clienteId)!==String(clienteId) || ['no aprobado','cancelado'].includes(t.estado)) return false;
+    const a = _isoFlex(t.fechaInicio), b = _isoFlex(t.fechaFin);
+    if(!a) return false; const ta = new Date(a+'T12:00:00').getTime(), tb = b ? new Date(b+'T12:00:00').getTime() : Date.now();
+    return d >= ta - dia && d <= tb + dia; });
+}
+// Visitas medidas: salidas de Gastos (agrupadas por día + cliente) y Mi Día (empezar / terminar)
+function heVisitasMedidas() {
+  const porDia = {};
+  (DB.gastosEstructura||[]).forEach(g=>{
+    const iso = _isoFlex(g.fecha); if(!iso) return;
+    const t0 = g.trabajoId ? DB.trabajos.find(t=>t.id===g.trabajoId) : null;
+    const cl = t0 ? DB.clientes.find(c=>String(c.id)===String(t0.clienteId)) : _heCliDeTexto(g.clienteVisitado);
+    if(!cl && !String(g.clienteVisitado||'').trim()) return;
+    const k = iso + '|' + (cl ? cl.id : _heNorm(g.clienteVisitado));
+    const v = porDia[k] = porDia[k] || { iso, cliente:cl, texto:g.clienteVisitado, trabajoId:g.trabajoId||'', hitos:{}, fuente:'Gastos', notas:'' };
+    if(g.trabajoId) v.trabajoId = g.trabajoId;
+    [['sal','comienzoTrabajo'],['lle','llegadaCliente'],['i1','inicioTrabajo1'],['f1','finTrabajo1'],['ic','inicioComida'],['fc','finComida'],['i2','inicioTrabajo2'],['f2','finTrabajo2'],['vv','inicioViajeVuelta'],['fin','horaFinalizacion']]
+      .forEach(([k2,campo])=>{ const m = _heMin(g[campo]); if(m===null) return; const cur = v.hitos[k2];
+        v.hitos[k2] = cur===undefined ? m : (['sal','lle','i1'].includes(k2) ? Math.min(cur,m) : Math.max(cur,m)); });
+    // las notas de Gastos son tickets (montos, 'peaje km 35'): no se leen para horas ni km
+  });
+  const out = Object.values(porDia).map(v=>{
+    const h = v.hitos; let neto = 0, hayNeto = false;
+    if(h.i1!==undefined && h.f1!==undefined && h.f1>h.i1) { neto += h.f1-h.i1; hayNeto = true; }
+    if(h.i2!==undefined && h.f2!==undefined && h.f2>h.i2) { neto += h.f2-h.i2; hayNeto = true; }
+    if(!hayNeto) { const a = h.i1!==undefined ? h.i1 : h.lle, b = h.vv; if(a!==undefined && b!==undefined && b>a) { neto = b-a - ((h.fc>h.ic)?(h.fc-h.ic):0); hayNeto = true; } }
+    const ida = (h.sal!==undefined && h.lle!==undefined && h.lle>h.sal) ? (h.lle-h.sal)/60 : null;
+    const vuelta = (h.vv!==undefined && h.fin!==undefined && h.fin>h.vv) ? (h.fin-h.vv)/60 : null;
+    const n = heHorasDeNotas(v.notas);
+    return { iso:v.iso, cliente:v.cliente, texto:v.texto, trabajoId:v.trabajoId, fuente:v.fuente,
+      neto: hayNeto ? neto/60 : (n.trabajo||null), ida, vuelta: vuelta!==null ? vuelta : (ida!==null ? ida : null), viajeNotas:n.viaje||0, kmNotas:n.km||0 };
+  });
+  // Mi Día: empezar / terminar en las visitas del calendario (y horas que se anotaron en las notas)
+  (DB.calendarioVisitas||[]).forEach(cv=>{
+    if(['prospeccion','gestion','libre','proveedor','reunion'].includes(cv.tipo) || cv.estado==='cancelada') return;
+    const iso = _isoFlex(cv.fecha); if(!iso) return;
+    const cl = cv.clienteId ? DB.clientes.find(c=>String(c.id)===String(cv.clienteId)) : _heCliDeTexto(cv.cliente||cv.clienteLibre);
+    if(!cl) return;
+    const a = _heMin(cv.inicioReal), b = _heMin(cv.finReal);
+    const n = heHorasDeNotas([cv.notas, cv.notasAcuerdos, cv.titulo].join(' '));
+    const neto = (a!==null && b!==null && b>a) ? (b-a)/60 : (n.trabajo||null);
+    const ya = out.find(o=>o.iso===iso && o.cliente && String(o.cliente.id)===String(cl.id));
+    if(ya) { if(ya.neto===null && neto) ya.neto = neto; if(!ya.viajeNotas && n.viaje) ya.viajeNotas = n.viaje; if(!ya.kmNotas && n.km) ya.kmNotas = n.km; if(cv.trabajoId && !ya.trabajoId) ya.trabajoId = cv.trabajoId; return; }
+    if(neto===null && cv.estado!=='realizada' && !n.hay) return; // visita planificada sin nada medido: no cuenta
+    out.push({ iso, cliente:cl, texto:cv.cliente, trabajoId:cv.trabajoId||'', fuente:'Mi Día / calendario', neto, ida:null, vuelta:null, viajeNotas:n.viaje||0, kmNotas:n.km||0, zonaVisita:cv.zonaVisita });
+  });
+  return out.sort((a,b)=>a.iso.localeCompare(b.iso));
+}
+function calcularHoraEmmanuel() {
+  const tarifas = _heTarifas(), tcDe = _heTC(), hoy = today();
+  const visitas = heVisitasMedidas();
+  // cada visita medida se reparte entre los trabajos de ese cliente en curso ese día
+  const visPorTrabajo = {};
+  visitas.forEach(v=>{
+    let ts = v.trabajoId ? DB.trabajos.filter(t=>t.id===v.trabajoId) : (v.cliente ? _heTrabajosDelDia(v.cliente.id, v.iso) : []);
+    v.trabajos = ts.map(t=>t.id);
+    ts.forEach(t=>{ (visPorTrabajo[t.id] = visPorTrabajo[t.id] || []).push({ v, parte:1/ts.length }); });
+  });
+  const filas = DB.trabajos.filter(t=>t.estado==='completado' && Number(t.manoObraCobrada)>0).map(t=>{
+    const p = t.presupuestoId ? DB.presupuestos.find(x=>x.id===t.presupuestoId) : (typeof presupDeTrabajo==='function' ? presupDeTrabajo(t) : null);
+    const iso = _isoFlex(p && p.fecha) || _isoFlex(t.fechaInicio) || hoy;
+    const tarifa = _heTarifaEn(iso, tarifas);
+    const tc = Number(t.tcAlMomento) || Number(p && p.tcAlMomento) || tcDe(iso) || 0;
+    const cl = DB.clientes.find(c=>String(c.id)===String(t.clienteId));
+    const kmIda = heKmCliente(cl);
+    const usdMO = tc ? t.manoObraCobrada/tc : 0, usdMov = tc ? (Number(t.movilidad)||0)/tc : 0;
+    const hFact = tarifa.usd ? usdMO/tarifa.usd : 0;
+    const vs = visPorTrabajo[t.id] || [];
+    const notasT = heHorasDeNotas(t.notas);
+    // horas netas: 📊 Economía > visitas medidas > notas del trabajo > (sin dato: las facturadas)
+    let hNeta = null, fuenteH = '';
+    if(t.horasTrabajadas > 0) { hNeta = t.horasTrabajadas; fuenteH = 'Economía'; }
+    else if(vs.some(x=>x.v.neto)) { hNeta = vs.reduce((s,x)=>s+(x.v.neto||0)*x.parte,0); fuenteH = 'medido'; }
+    else if(notasT.trabajo) { hNeta = notasT.trabajo; fuenteH = 'notas'; }
+    // Para las cuentas, las horas de trabajo son las de 📊 Economía o, si no hay, las facturadas: las medidas
+    // suelen ser solo algunas de las visitas (el resto no se cargó), así que se muestran aparte.
+    const hBase = t.horasTrabajadas > 0 ? t.horasTrabajadas : (notasT.trabajo || Math.max(hFact, hNeta||0));
+    const nVis = vs.length ? Math.round(vs.reduce((s,x)=>s+x.parte,0)*10)/10 : null;
+    const visitasUsadas = Math.max(nVis||0, Math.ceil(hBase/HE_HORAS_POR_VISITA), 1);
+    const faltan = Math.max(0, visitasUsadas - (nVis||0));
+    const viajeAprox = kmIda ? 2*(0.5+kmIda/80) : 0;
+    // viaje y km: Economía > notas del trabajo > visitas medidas (+ aproximado para las visitas que no se midieron)
+    let hViaje, km, viajeMedido = false, kmMedido = false;
+    if(t.horasViaje > 0) { hViaje = t.horasViaje; viajeMedido = true; }
+    else if(notasT.viaje) { hViaje = notasT.viaje; viajeMedido = true; }
+    else if(vs.some(x=>x.v.ida!==null || x.v.viajeNotas)) {
+      hViaje = vs.reduce((s,x)=>s+((x.v.viajeNotas) || ((x.v.ida||0)+(x.v.vuelta||x.v.ida||0)) || viajeAprox)*x.parte,0) + faltan*viajeAprox; viajeMedido = true;
+    } else hViaje = kmIda ? visitasUsadas*viajeAprox : null;
+    if(t.kmRecorridos > 0) { km = t.kmRecorridos; kmMedido = true; }
+    else if(notasT.km) { km = notasT.km; kmMedido = true; }
+    else if(vs.some(x=>x.v.kmNotas)) { km = vs.reduce((s,x)=>s+(x.v.kmNotas || (kmIda?kmIda*2:0))*x.parte,0) + faltan*(kmIda||0)*2; kmMedido = true; }
+    else km = kmIda ? visitasUsadas*kmIda*2 : null;
+    const usdHoraReal = (hBase + (hViaje||0)) > 0 ? usdMO/(hBase+(hViaje||0)) : null;
+    return { t, p, cl, iso, tarifa:tarifa.usd, tc, usdMO, usdMov, hFact, hNeta, hBase, fuenteH, visitas:visitasUsadas, visitasMedidas:nVis, hViaje, viajeMedido, km, kmMedido, kmIda,
+      usdHoraReal, usdHoraEnCliente: hNeta ? usdMO/hNeta : null, usdKm: km ? usdMov/km : null, tipo:(categoriaTrabajo(t).nombre||'Sin clasificar') };
+  });
+  // combustible y peajes reales cargados en Gastos (para el costo por km)
+  let combustible = 0, peajes = 0, desdeGastos = '';
+  (DB.gastosEstructura||[]).forEach(g=>{ const iso=_isoFlex(g.fecha); if(iso && (!desdeGastos || iso<desdeGastos)) desdeGastos = iso;
+    (g.items||[]).forEach(i=>{ const c=_heNorm(i.categoria+' '+i.descripcion); const m=Number(i.subtotal)||0; if(/combustible|gasoil|nafta|diesel/.test(c)) combustible+=m; else if(/peaje/.test(c)) peajes+=m; }); });
+  return { tarifas, filas, visitas, combustible, peajes, desdeGastos };
+}
+function _heAgrupar(filas) {
+  const s = { n:filas.length, usdMO:0, usdMov:0, hFact:0, hNetaMed:0, nMed:0, hBase:0, hViaje:0, km:0, visitas:0, visMed:0, nViajeMed:0, nKmMed:0 };
+  filas.forEach(f=>{ s.usdMO+=f.usdMO; s.usdMov+=f.usdMov; s.hFact+=f.hFact; s.hBase+=f.hBase;
+    if(f.hNeta!==null){ s.hNetaMed+=f.hNeta; s.nMed++; } s.hViaje+=f.hViaje||0; s.km+=f.km||0; s.visitas+=f.visitas; if(f.visitasMedidas) s.visMed+=f.visitasMedidas;
+    if(f.viajeMedido) s.nViajeMed++; if(f.kmMedido) s.nKmMed++; });
+  s.usdHoraReal = (s.hBase+s.hViaje)>0 ? s.usdMO/(s.hBase+s.hViaje) : 0;
+  s.usdKm = s.km>0 ? s.usdMov/s.km : 0;
+  s.pctViaje = (s.hBase+s.hViaje)>0 ? s.hViaje/(s.hBase+s.hViaje)*100 : 0;
+  return s;
+}
+function renderHoraEmmanuel() {
+  const cont = document.getElementById('hora-emmanuel'); if(!cont) return;
+  let R; try { R = calcularHoraEmmanuel(); } catch(e) { cont.innerHTML = '<p style="color:var(--red);font-size:12px">No se pudo calcular: '+prosEsc(e.message)+'</p>'; return; }
+  const u = n => 'US$ ' + Math.round(n||0).toLocaleString('es-AR');
+  const h = n => (Math.round((n||0)*10)/10).toLocaleString('es-AR') + ' h';
+  const k = n => Math.round(n||0).toLocaleString('es-AR') + ' km';
+  const dmy = iso => iso==='2000-01-01' ? 'el inicio' : iso.split('-').reverse().join('/');
+  // períodos por tarifa
+  const per = R.tarifas.map((t,i)=>{ const hasta = R.tarifas[i+1] ? R.tarifas[i+1].desde : '9999-12-31';
+    const fl = R.filas.filter(f=>f.iso>=t.desde && f.iso<hasta);
+    const hastaTxt = R.tarifas[i+1] ? (()=>{ const d=new Date(R.tarifas[i+1].desde+'T12:00:00'); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10).split('-').reverse().join('/'); })() : 'hoy';
+    return { t, fl, s:_heAgrupar(fl), titulo:`US$ ${t.usd}/h — de ${dmy(t.desde)} a ${hastaTxt}` }; });
+  const total = _heAgrupar(R.filas);
+  const tarjeta = (tit, s, tarifa, sinCobrar=true) => `<div style="flex:1;min-width:260px;background:var(--dark);border:1px solid var(--border2);border-radius:8px;padding:12px 14px">
+    <div style="font-family:'Bebas Neue';letter-spacing:1px;color:var(--yellow);font-size:17px;margin-bottom:8px">${tit}</div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:12px">
+      <span>Trabajos completados con mano de obra</span><b>${s.n}</b>
+      <span>Mano de obra cobrada</span><b>${u(s.usdMO)}</b>
+      <span>Horas facturadas (MO ÷ tarifa)</span><b>${h(s.hFact)}</b>
+      <span>Horas netas medidas <span style="color:var(--muted)">(${s.nMed} de ${s.n} trabajos)</span></span><b>${s.nMed?h(s.hNetaMed):'—'}</b>
+      <span>Visitas <span style="color:var(--muted)">(${Math.round(s.visMed)} medidas)</span></span><b>${Math.round(s.visitas)}</b>
+      <span>Horas de viaje <span style="color:var(--muted)">(${s.nViajeMed} medidos)</span></span><b>${h(s.hViaje)}</b>
+      <span>Km recorridos <span style="color:var(--muted)">(${s.nKmMed?s.nKmMed+' medidos, resto aprox.':'aprox. por zona'})</span></span><b>${k(s.km)}</b>
+      <span>% del tiempo manejando</span><b>${Math.round(s.pctViaje)}%</b>
+      <span>Movilidad cobrada</span><b>${u(s.usdMov)}${s.km?` <span style="color:var(--muted);font-weight:400">(US$ ${s.usdKm.toFixed(2)}/km)</span>`:''}</b>
+      <span style="border-top:1px solid var(--border2);padding-top:6px"><b>Valor real de la hora</b> <span style="color:var(--muted)">(contando el viaje)</span></span>
+      <b style="border-top:1px solid var(--border2);padding-top:6px;font-size:15px;color:${tarifa && s.usdHoraReal < tarifa*0.8 ? 'var(--red)' : 'var(--green)'}">${s.usdHoraReal?('US$ '+s.usdHoraReal.toFixed(1)+'/h'):'—'}</b>
+      ${tarifa&&sinCobrar?`<span>Horas de viaje sin cobrar, a tarifa</span><b style="color:var(--orange,#e67e22)">${u(s.hViaje*tarifa)}</b>`:''}
+    </div></div>`;
+  // por tipo y por zona
+  const tabla = (titulo, claveFn) => { const g = {}; R.filas.forEach(f=>{ const kk = claveFn(f); (g[kk] = g[kk] || []).push(f); });
+    const med = (arr, fn) => { const v = arr.map(fn).filter(x=>x!==null && !isNaN(x)).sort((a,b)=>a-b); return v.length ? v[Math.floor((v.length-1)/2)] : null; };
+    const filasT = Object.entries(g).map(([kk, fl])=>({ kk, fl, s:_heAgrupar(fl), hMed:med(fl,f=>f.hBase), visMed:med(fl,f=>f.visitas), kmMed:med(fl,f=>f.km) }))
+      .sort((a,b)=>b.s.usdMO-a.s.usdMO);
+    return `<div style="font-size:12px;color:var(--yellow);font-weight:600;margin:16px 0 6px">${titulo}</div>
+      <div class="table-wrap"><table><thead><tr><th></th><th style="text-align:center">Trabajos</th><th style="text-align:right">Horas típicas</th><th style="text-align:right">Visitas típicas</th><th style="text-align:right">Km típicos</th><th style="text-align:right">% manejando</th><th style="text-align:right">US$/h real</th><th style="text-align:right">US$/km cobrado</th></tr></thead>
+      <tbody>${filasT.map(x=>`<tr><td>${prosEsc(x.kk)}</td><td style="text-align:center">${x.s.n}</td><td style="text-align:right">${x.hMed!==null?h(x.hMed):'—'}</td><td style="text-align:right">${x.visMed||'—'}</td><td style="text-align:right">${x.kmMed!==null?k(x.kmMed):'—'}</td><td style="text-align:right">${Math.round(x.s.pctViaje)}%</td><td style="text-align:right;font-weight:700">${x.s.usdHoraReal?x.s.usdHoraReal.toFixed(1):'—'}</td><td style="text-align:right">${x.s.km?x.s.usdKm.toFixed(2):'—'}</td></tr>`).join('')}</tbody></table></div>`; };
+  const banda = f => { const km = f.kmIda; if(km===null) return 'Sin zona cargada'; if(km<=20) return 'Pilar y alrededores (≤20 km)'; if(km<=45) return 'Escobar · Luján · Tigre (20–45 km)'; if(km<=110) return 'La Plata · Campana · Areco · Avellaneda (45–110 km)'; if(km<=250) return 'Suipacha · Rojas (110–250 km)'; return 'Tandil y más lejos (+250 km)'; };
+  // por mes
+  const meses = {}; R.filas.forEach(f=>{ const m=f.iso.slice(0,7); (meses[m]=meses[m]||[]).push(f); });
+  const filasMes = Object.keys(meses).sort().map(m=>({ m, s:_heAgrupar(meses[m]) }));
+  // costo real por km (desde que se cargan gastos)
+  const kmGastos = R.visitas.filter(v=>v.iso>=R.desdeGastos).reduce((s,v)=>{ const km = v.kmNotas || (heKmCliente(v.cliente, v.zonaVisita)||0)*2; return s+km; },0);
+  const tcHoy = _heTC()(today()) || 0;
+  const costoKm = kmGastos>0 ? (R.combustible+R.peajes)/kmGastos : 0;
+  const medidas = R.visitas.filter(v=>v.neto || v.ida);
+  cont.innerHTML = `
+    <div style="display:flex;gap:12px;flex-wrap:wrap">${per.map(x=>tarjeta(x.titulo, x.s, x.t.usd)).join('')}${per.length>1?tarjeta('Desde el inicio de MEB', total, R.tarifas[0].usd, false):''}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5">
+      <b>Cómo se calcula:</b> horas facturadas = mano de obra cobrada ÷ tarifa del momento ÷ dólar del presupuesto. Las horas netas, el viaje y los km salen de 📊 Economía, de las salidas cargadas en Gastos (llegada, inicio, fin y vuelta), de Mi Día (empezar / terminar) y de lo que se anote en las notas de trabajos y del calendario ("4 hs de trabajo", "2 hs de viaje", "180 km"). Lo que no está medido se aproxima: km por la zona del cliente desde Derqui, visitas de hasta ${HE_HORAS_POR_VISITA} h, y el viaje a ~80 km/h + 30 min. <b>Valor real de la hora</b> = mano de obra ÷ (horas de trabajo + horas de viaje).
+    </div>
+    ${tabla('Por tipo de trabajo', f=>f.tipo)}
+    ${tabla('Por distancia desde Derqui', banda)}
+    <div style="font-size:12px;color:var(--yellow);font-weight:600;margin:16px 0 6px">Mes a mes</div>
+    <div class="table-wrap"><table><thead><tr><th>Mes</th><th style="text-align:center">Trabajos</th><th style="text-align:right">Horas facturadas</th><th style="text-align:right">Horas de viaje</th><th style="text-align:right">Km</th><th style="text-align:right">Mano de obra</th><th style="text-align:right">US$/h real</th></tr></thead>
+    <tbody>${filasMes.map(x=>`<tr><td>${x.m.split('-').reverse().join('/')}</td><td style="text-align:center">${x.s.n}</td><td style="text-align:right">${h(x.s.hFact)}</td><td style="text-align:right">${h(x.s.hViaje)}</td><td style="text-align:right">${k(x.s.km)}</td><td style="text-align:right">${u(x.s.usdMO)}</td><td style="text-align:right;font-weight:700">${x.s.usdHoraReal?x.s.usdHoraReal.toFixed(1):'—'}</td></tr>`).join('')}</tbody></table></div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px">
+      <div style="flex:1;min-width:240px;background:var(--dark);border-radius:8px;padding:10px 12px;font-size:12px">
+        <div style="color:var(--yellow);font-weight:600;margin-bottom:4px">⛽ Costo real del km (desde ${R.desdeGastos?R.desdeGastos.split('-').reverse().join('/'):'—'}, con lo cargado en Gastos)</div>
+        Combustible ${fmtMonto(R.combustible)} + peajes ${fmtMonto(R.peajes)} en ~${k(kmGastos)} de salidas medidas
+        → <b>${costoKm?fmtMonto(costoKm)+'/km':'—'}</b>${costoKm&&tcHoy?` (US$ ${(costoKm/tcHoy).toFixed(2)}/km)`:''}. <span style="color:var(--muted)">No incluye desgaste (cubiertas, service), y el combustible también cubre viajes a torneros y proveedores: es aproximado.</span>
+      </div>
+      <div style="flex:1;min-width:240px;background:var(--dark);border-radius:8px;padding:10px 12px;font-size:12px">
+        <div style="color:var(--yellow);font-weight:600;margin-bottom:4px">📏 Datos medidos hasta hoy</div>
+        ${medidas.length} visitas con horarios (Gastos / Mi Día) · ${R.filas.filter(f=>f.fuenteH==='notas').length} trabajos con horas en las notas · ${R.filas.filter(f=>f.fuenteH==='Economía').length} con horas en Economía.
+        <div style="color:var(--muted);margin-top:4px">Cuantas más salidas se carguen con llegada / inicio / fin / vuelta (o Empezar / Terminar en Mi Día), más exacto queda todo esto.</div>
+      </div>
+    </div>
+    <details style="margin-top:12px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">Ver el detalle trabajo por trabajo</summary>
+      <div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>Trabajo</th><th>Cliente</th><th>Tipo</th><th>Fecha</th><th style="text-align:right">Tarifa</th><th style="text-align:right">Mano de obra</th><th style="text-align:right">H. facturadas</th><th style="text-align:right">H. netas</th><th style="text-align:right">Visitas</th><th style="text-align:right">H. viaje</th><th style="text-align:right">Km</th><th style="text-align:right">US$/h real</th></tr></thead>
+      <tbody>${R.filas.slice().sort((a,b)=>b.iso.localeCompare(a.iso)).map(f=>`<tr><td>${_rNumT(f.t)}</td><td>${prosEsc(f.cl?f.cl.nombre:'')}</td><td>${prosEsc(f.tipo)}</td><td>${f.iso.split('-').reverse().join('/')}</td><td style="text-align:right">US$ ${f.tarifa}</td><td style="text-align:right">${u(f.usdMO)}</td><td style="text-align:right">${h(f.hFact)}</td><td style="text-align:right">${f.hNeta!==null?h(f.hNeta)+' <span style="color:var(--muted);font-size:10px">'+f.fuenteH+'</span>':'—'}</td><td style="text-align:right">${f.visitas}${f.visitasMedidas?'':' <span style="color:var(--muted);font-size:10px">aprox</span>'}</td><td style="text-align:right">${f.hViaje!==null?h(f.hViaje)+(f.viajeMedido?'':' <span style="color:var(--muted);font-size:10px">aprox</span>'):'—'}</td><td style="text-align:right">${f.km!==null?k(f.km)+(f.kmMedido?'':' <span style="color:var(--muted);font-size:10px">aprox</span>'):'—'}</td><td style="text-align:right;font-weight:700">${f.usdHoraReal?f.usdHoraReal.toFixed(1):'—'}</td></tr>`).join('')}</tbody></table></div>
+    </details>`;
 }
 
 function renderOrigenClientes() {
@@ -3559,8 +3824,45 @@ const MOTIVOS_NO_APROBADO = {
   fondos: 'Fondos insuficientes',
   comunicacion: 'Demora / mala comunicación',
   no_necesita: 'Cliente ya no necesita el trabajo',
+  postergado: 'Postergado — lo retoma más adelante',
   otro: 'Otro'
 };
+// v17.84 — POSTERGADO: un "no aprobado" que no se perdió, se postergó ("lo dejo para más adelante",
+// "cuando tenga la plata", "recotizame después"). Queda con fecha para volver a contactar y no cuenta como
+// venta perdida. Cuando llega la fecha aparece en "⏸ Postergados" para retomarlo con precio actualizado.
+function esPostergado(p) { return p && p.estado==='no aprobado' && p.motivoNoAprobado==='postergado'; }
+function postergadoVencido(p) { return esPostergado(p) && (!p.postergadoHasta || _isoFlex(p.postergadoHasta) <= today()); }
+// los que todavía no se marcaron pero por la nota parecen postergados
+function parecePostergado(p) {
+  if(!p || p.estado!=='no aprobado' || ['postergado','duplicado'].includes(p.motivoNoAprobado)) return false;
+  return /(m[aá]s adelante|esperar|recotiz|tener (el|los) (dinero|fondos|plata)|por ahora no|dej[oó] para|pidi[oó] esperar)/i.test(String(p.motivoNota||'')+' '+String(p.notas||''));
+}
+function _sumarDiasIso(iso, n) { const d = new Date(iso+'T12:00:00'); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function postergarPresupuesto(id) {
+  const p = DB.presupuestos.find(x=>x.id===id); if(!p) return;
+  if(p.estado!=='no aprobado') { p.estado='no aprobado'; writeToSheet({ action:'updateEstadoPresupuesto', id:p.id, estado:'no aprobado' }); }
+  openModal('motivoNoAprobado', Object.assign(p, { _forzarPostergado:true }));
+}
+function reactivarPresupuesto(id) {
+  const p = DB.presupuestos.find(x=>x.id===id); if(!p) return;
+  if(!confirm('¿Reactivar el presupuesto N° '+(p.num||'')+'? Vuelve a "pendiente" con seguimiento para hoy. Si los precios cambiaron, duplicalo (⧉) y actualizá los montos y el dólar.')) return;
+  pushUndo('Reactivar postergado');
+  p.estado='pendiente'; p.motivoNoAprobado=''; p.postergadoHasta=''; p.proximoSeguimiento=today();
+  const tv = DB.trabajos.find(t=>t.presupuestoId===p.id); if(tv && tv.estado==='no aprobado') { tv.estado='pendiente'; writeToSheet({ action:'updateEstadoTrabajo', id:tv.id, estado:'pendiente' }); }
+  saveLocal(); refreshCurrentPage();
+  writeToSheet({ action:'updateEstadoPresupuesto', id:p.id, estado:'pendiente' });
+  writeToSheet({ action:'updatePresupuesto', id:p.id, row:{ motivo_no_aprobado:'', postergado_hasta:'', proximo_seguimiento:p.proximoSeguimiento } });
+  showToast('Presupuesto reactivado ✔','success');
+}
+function retomarPostergadoWhatsApp(id) {
+  const p = DB.presupuestos.find(x=>x.id===id); if(!p) return;
+  const cl = DB.clientes.find(c=>String(c.id)===String(p.clienteId));
+  const tel = cl ? String(cl.telefono||'').replace(/\D/g,'') : '';
+  if(!tel) { showToast('Este cliente no tiene teléfono cargado','error'); return; }
+  const que = String(p.motivo || (p.descripcion||'').split('|')[0] || 'el trabajo').trim();
+  const msg = `Hola ${cl.nombre}! ¿Cómo andan? Te escribo de MEB por ${que} que habíamos dejado pendiente. Si querés retomarlo te paso el presupuesto actualizado. Quedo atento, saludos!`;
+  window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg), '_blank');
+}
 function etiquetaMotivoNoAprobado(codigo) {
   return MOTIVOS_NO_APROBADO[codigo] || codigo || '—';
 }
@@ -5670,7 +5972,11 @@ function renderPresupuestos() {
     // sospechar de precio o comunicación cuando en realidad es solo que se
     // cotizó la misma máquina dos veces (repuestos originales vs. genéricos).
     const noAprobDuplicados = noAprob.filter(p => p.motivoNoAprobado === 'duplicado');
-    const noAprobReales = noAprob.filter(p => p.motivoNoAprobado !== 'duplicado');
+    const postergados = noAprob.filter(esPostergado);
+    const postergadosYa = postergados.filter(postergadoVencido);
+    const parecenPost = noAprob.filter(parecePostergado);
+    const bpp = document.getElementById('badge-presup-postergado'); if(bpp) bpp.textContent = postergados.length + parecenPost.length;
+    const noAprobReales = noAprob.filter(p => p.motivoNoAprobado !== 'duplicado' && p.motivoNoAprobado !== 'postergado');
     const sinMotivo = noAprob.filter(p => !p.motivoNoAprobado).length;
     const vencidos = DB.presupuestos.filter(p=>diasPlazoVencido(p)!==null);
     const bpv = document.getElementById('badge-presup-vencidos'); if(bpv) bpv.textContent = vencidos.length;
@@ -5689,6 +5995,8 @@ function renderPresupuestos() {
     ${noAprob.length ? `<div style="font-size:11px;color:var(--muted);margin-top:8px;padding:8px 12px;background:var(--card);border-radius:6px">
       De esos ${noAprob.length}: <b style="color:#e07a7a">${noAprobReales.length} son pérdida real</b> (precio, fondos, comunicación, etc.)
       ${noAprobDuplicados.length ? ` · <b style="color:var(--yellow)">${noAprobDuplicados.length} duplicados</b> (se aprobó la otra opción, no cuenta como venta perdida)` : ''}
+      ${postergados.length ? ` · <b style="color:#e6a23c;cursor:pointer" onclick="setFilter('presup','postergado',document.getElementById('filtertab-presup-postergado'))">⏸ ${postergados.length} postergados · ${fmtMonto(sum(postergados))}</b> (para retomar${postergadosYa.length?`, <b>${postergadosYa.length} ya toca</b>`:''})` : ''}
+      ${parecenPost.length ? ` · <span style="color:#e6a23c;cursor:pointer;text-decoration:underline" onclick="setFilter('presup','postergado',document.getElementById('filtertab-presup-postergado'))">${parecenPost.length} parecen postergados por la nota (${fmtMonto(sum(parecenPost))}) — revisalos</span>` : ''}
       ${sinMotivo ? ` · <b style="color:var(--red)">⚠️ ${sinMotivo} sin motivo cargado todavía</b> — usá el botón "❓" en cada uno` : ''}
     </div>` : ''}`;
   }
@@ -5697,6 +6005,7 @@ function renderPresupuestos() {
   else if(filters.presup==='seguimiento') data=data.filter(p=>diasPresupuestoSinSeguimiento(p)!==null);
   else if(filters.presup==='sininforme') data=data.filter(presupuestoSinInforme);
   else if(filters.presup==='sinmotivo') data=data.filter(presupuestoSinMotivo);
+  else if(filters.presup==='postergado') data=data.filter(p=>esPostergado(p) || parecePostergado(p)).sort((a,b)=>(esPostergado(b)-esPostergado(a)) || String(_isoFlex(a.postergadoHasta)).localeCompare(String(_isoFlex(b.postergadoHasta))));
   else if(filters.presup!=='todos') data=data.filter(p=>p.estado===filters.presup);
   // Orden elegible — antes era fijo por N°, y como los N° vienen del Sheet
   // sin garantía de ser secuenciales prolijos, quedaban "desparramados".
@@ -5773,6 +6082,8 @@ function renderPresupuestos() {
           ? `<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(244,180,0,0.1);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('motivoNoAprobado',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Motivo cargado — clic para editar">❓ ${etiquetaMotivoNoAprobado(p.motivoNoAprobado)}</button>`
           : `<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(224,122,122,0.15);border-color:#e07a7a;color:#e07a7a" onclick="openModal('motivoNoAprobado',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Falta cargar el motivo">❓ Falta motivo</button>`
         ) : ''}
+        ${esPostergado(p) ? `<span style="font-size:10px;padding:3px 8px;border:1px solid #e6a23c;border-radius:4px;color:#e6a23c;white-space:nowrap;${postergadoVencido(p)?'background:rgba(230,162,60,0.18);font-weight:700':''}" title="Postergado: volver a contactar">⏸ ${postergadoVencido(p)?'Retomar ya':'Retomar el '+fmtFechaCobro(p.postergadoHasta)}</span><button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="retomarPostergadoWhatsApp('${p.id}')" title="Mensaje por WhatsApp para retomarlo">📲</button><button class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="reactivarPresupuesto('${p.id}')" title="Volver a pendiente para recotizar">↺ Reactivar</button>` : ''}
+        ${parecePostergado(p) ? `<button class="btn-secondary" style="font-size:10px;padding:3px 8px;border-color:#e6a23c;color:#e6a23c" onclick="postergarPresupuesto('${p.id}')" title="Por la nota parece postergado, no perdido">⏸ Postergar</button>` : ''}
         ${p.estado!=='no aprobado'?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px;background:rgba(244,180,0,0.12);border-color:var(--yellow);color:var(--yellow)" onclick="openModal('economiaPresupuesto',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Cargar lo REAL de este trabajo: cobrado, repuestos cobrados y repuestos pagados → ganancia">📊 Economía${p.estadoCobro==='cobrado'?' ✔':''}</button>`:''}
         ${p.estado==='aprobado'&&p.estadoCobro!=='cobrado'?`<button class="btn-secondary" style="background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Registrar cobro real">💰 Cobro</button>`:''}
         ${p.estadoCobro==='cobrado'?`<span style="font-size:10px;color:${(p.diferenciaUsd||0)>=0?'var(--green)':'var(--red)'};white-space:nowrap" title="USD recibido: ${p.usdRecibido} · Esperado con recargo aplicado">${(p.diferenciaUsd||0)>=0?'✔ +':'⚠ '}USD ${p.diferenciaUsd}</span> ${chipFechaCobro('presupuestos', p.id, p.fechaCobroReal || (trabajoDePresupuesto(p)||{}).fechaCobroReal)} ${botonFactura(p.id)} <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="openModal('cobroReal',DB.presupuestos.find(x=>x.id==='${p.id}'))" title="Editar cobro — corregir fecha, monto o TC sin tener que revertir">✏️ Cobro</button> <button class="btn-secondary" style="font-size:9px;padding:2px 6px" onclick="revertirCobroPresupuesto('${p.id}')" title="Deshacer — volver a pendiente de cobro">↩</button>`:''}
@@ -8175,6 +8486,7 @@ function renderEstadisticas() {
   renderEstacionalidadYTiempos();
   try { renderTiposTrabajoYHerramientas(); } catch(eTt) { console.warn(eTt); }
   try { renderOrigenClientes(); } catch(eOc) { console.warn(eOc); }
+  try { renderHoraEmmanuel(); } catch(eHe) { console.warn(eHe); }
   try { renderSeccionesEstadisticas(); } catch(eSe) { console.warn(eSe); }
 }
 
@@ -12390,10 +12702,18 @@ function openModal(type, data={}) {
     body=`<div class="form-grid">
       <div class="form-group full">
         <label>Categoría *</label>
-        <select id="f-motCategoria" onchange="document.getElementById('wrap-motVinculo').style.display = this.value==='duplicado' ? 'block' : 'none'">
+        <select id="f-motCategoria" onchange="document.getElementById('wrap-motVinculo').style.display = this.value==='duplicado' ? 'block' : 'none'; document.getElementById('wrap-motPost').style.display = this.value==='postergado' ? 'block' : 'none'">
           <option value="">Elegir...</option>
-          ${Object.keys(MOTIVOS_NO_APROBADO).map(k => `<option value="${k}" ${data.motivoNoAprobado===k?'selected':''}>${MOTIVOS_NO_APROBADO[k]}</option>`).join('')}
+          ${Object.keys(MOTIVOS_NO_APROBADO).map(k => `<option value="${k}" ${(data._forzarPostergado?k==='postergado':data.motivoNoAprobado===k)?'selected':''}>${MOTIVOS_NO_APROBADO[k]}</option>`).join('')}
         </select>
+      </div>
+      <div class="form-group full" id="wrap-motPost" style="display:${data._forzarPostergado||data.motivoNoAprobado==='postergado'?'block':'none'}">
+        <label>¿Cuándo volver a contactarlo?</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <input type="date" id="f-motPostFecha" value="${isoParaInput(data.postergadoHasta) || _sumarDiasIso(today(), 45)}" style="width:170px">
+          ${[30,60,90,180].map(n=>`<button type="button" class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="document.getElementById('f-motPostFecha').value='${_sumarDiasIso(today(), n)}'">${n===180?'6 meses':n+' días'}</button>`).join('')}
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">No cuenta como venta perdida. Ese día aparece en ⏸ Postergados para retomarlo con el precio actualizado.</div>
       </div>
       <div class="form-group full" id="wrap-motVinculo" style="display:${data.motivoNoAprobado==='duplicado'?'block':'none'}">
         <label>¿Cuál presupuesto se aprobó en su lugar?</label>
@@ -12412,7 +12732,8 @@ function openModal(type, data={}) {
       if(!categoria){ showToast('Elegí una categoría','error'); return; }
       const vinculo = categoria==='duplicado' ? gv('f-motVinculo') : '';
       const nota = gv('f-motNota');
-      guardarMotivoNoAprobado(data.id, categoria, vinculo, nota);
+      delete data._forzarPostergado;
+      guardarMotivoNoAprobado(data.id, categoria, vinculo, nota, categoria==='postergado' ? (gv('f-motPostFecha') || _sumarDiasIso(today(), 45)) : '');
     };
   }
   else if(type==='excepcionPago') {
@@ -13819,16 +14140,17 @@ function sugerirHorasAlCompletar(trabajoId) {
 // porque ese reemplaza el objeto entero, y este modal solo toca 3 campos.
 // Reemplazar todo el presupuesto de paso borraría cliente, monto,
 // descripción, todo lo demás que ya tenía cargado.
-function guardarMotivoNoAprobado(id, categoria, vinculoId, nota) {
+function guardarMotivoNoAprobado(id, categoria, vinculoId, nota, postergadoHasta) {
   const p = DB.presupuestos.find(x => x.id === id);
   if(!p) return;
   pushUndo('Motivo de no aprobación');
   p.motivoNoAprobado = categoria;
   p.presupVinculadoId = vinculoId || '';
   p.motivoNota = nota || '';
+  p.postergadoHasta = postergadoHasta || '';
   saveLocal(); closeModal(); refreshCurrentPage();
   writeToSheet({ action:'updatePresupuesto', id:id, row:{
-    motivo_no_aprobado: categoria, presup_vinculado_id: vinculoId||'', motivo_nota: nota||''
+    motivo_no_aprobado: categoria, presup_vinculado_id: vinculoId||'', motivo_nota: nota||'', postergado_hasta: p.postergadoHasta
   }});
   showToast('Motivo guardado ✔','success');
 }
@@ -14250,6 +14572,19 @@ function renderAlertasExtra() {
         ${m.pct>=85?'<div style="font-size:12px;color:'+col+';margin-top:6px">⚠️ Estás cerca del tope: hablá con el contador antes de pasarte de categoría o de pasar a Responsable Inscripto.</div>':''}
       </div></div>`;
   }
+  // v17.84 — copia de seguridad y postergados para retomar
+  if(pm) {
+    const ub = getCfg('ultimoBackup','');
+    const dias = ub ? Math.floor((Date.now() - new Date(String(ub).replace(' ','T')).getTime())/86400000) : null;
+    const colB = dias===null || dias>10 ? '#e67e22' : '#2ecc71';
+    pm.insertAdjacentHTML('beforeend', `<div class="card" style="border-left:3px solid ${colB};margin-bottom:12px"><div style="padding:10px 14px;font-size:12px">
+      💾 <b>Copia de seguridad:</b> ${ub ? 'la última es del '+esc2(ub)+(dias>10?` — <b style="color:${colB}">hace ${dias} días</b>`:'') : '<b style="color:#e67e22">todavía no se hizo ninguna</b>'}.
+      <span class="td-muted">Se hace desde la planilla: menú 🛠 Mantenimiento CRM → 💾 (activá la copia automática de los domingos una sola vez).</span></div></div>`);
+    const post = DB.presupuestos.filter(postergadoVencido);
+    if(post.length) pm.insertAdjacentHTML('beforeend', `<div class="card" style="border-left:3px solid #e6a23c;margin-bottom:12px"><div class="card-header"><span class="card-title">⏸ POSTERGADOS PARA RETOMAR (${post.length})</span></div>
+      <div style="padding:4px 14px 10px">${post.map(p=>{ const cl=DB.clientes.find(c=>String(c.id)===String(p.clienteId)); return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px"><b>N° ${esc2(p.num||'')}</b> · ${esc2(cl?cl.nombre:'')} · ${fmtMonto(p.monto||0)} <button class="btn-secondary" style="font-size:10px;padding:2px 7px;margin-left:6px;background:rgba(37,211,102,0.15);border-color:#25d366;color:#25d366" onclick="retomarPostergadoWhatsApp('${p.id}')">📲 Retomar</button></div>`; }).join('')}
+      <button class="btn-secondary" style="font-size:11px;margin-top:8px" onclick="showPage('presupuestos');setTimeout(()=>setFilter('presup','postergado',document.getElementById('filtertab-presup-postergado')),50)">Ver en Presupuestos</button></div></div>`);
+  }
   const pt = document.getElementById('alertas-terciarizado-panel');
   if(pt) {
     const venc = tercSinLiquidarVencidos();
@@ -14464,9 +14799,19 @@ function prosPoblarFiltroZona() {
   const zonas = [...new Set((DB.prospectos||[]).map(p=>(p.zona||'').trim()).filter(Boolean))].sort();
   sel.innerHTML = '<option value="">Todas las zonas</option>' + zonas.map(z=>`<option value="${prosEsc(z)}" ${z===actual?'selected':''}>${prosEsc(z)}</option>`).join('');
 }
+// v17.85 — "Sumar a hoy": lo pone en la lista de hoy de Mi Día (sin cambiar la fecha de visita)
+function prosSumarHoy(id) {
+  const p = DB.prospectos.find(x=>x.id===id); if(!p) return;
+  const ya = p.sumadoDia === today();
+  p.sumadoDia = ya ? '' : today();
+  prosGuardar(p); renderProspectos();
+  showToast(ya ? 'Sacado de Mi Día de hoy' : '📌 Sumado a Mi Día de hoy ✔ (Emma lo ve al actualizar)', 'success');
+}
 function prosFilaAcciones(p) {
   const wa = prosLinkWa(p);
-  return `<button class="btn-secondary" style="font-size:10px;padding:3px 8px" title="Editar" onclick="openModal('prospecto', DB.prospectos.find(x=>x.id==='${p.id}'))">✏️</button>
+  const hoyMD = p.sumadoDia === today();
+  return `${!p.visitado && !['ganado','perdido'].includes(p.estado) ? `<button class="btn-secondary" style="font-size:10px;padding:3px 8px;${hoyMD?'background:rgba(46,204,113,0.15);border-color:#25d366;color:#25d366;font-weight:700':'border-color:var(--yellow);color:var(--yellow)'}" title="${hoyMD?'Ya está en Mi Día de hoy — clic para sacarlo':'Que le aparezca a Emma en Mi Día de hoy (no cambia la fecha de visita)'}" onclick="prosSumarHoy('${p.id}')">${hoyMD?'✔ En Mi Día hoy':'📌 Sumar a hoy'}</button>` : ''}
+    <button class="btn-secondary" style="font-size:10px;padding:3px 8px" title="Editar" onclick="openModal('prospecto', DB.prospectos.find(x=>x.id==='${p.id}'))">✏️</button>
     <a class="btn-secondary" style="font-size:10px;padding:3px 8px;text-decoration:none" href="${prosLinkMaps(p)}" target="_blank" rel="noopener" title="Ver en Google Maps">📍</a>
     ${wa?`<a class="btn-secondary" style="font-size:10px;padding:3px 8px;text-decoration:none" href="${wa}" target="_blank" rel="noopener" title="WhatsApp">💬</a>`:''}
     ${p.estado!=='ganado'?`<button class="btn-secondary" style="font-size:10px;padding:3px 8px" title="Convertir en cliente" onclick="convertirProspectoEnCliente('${p.id}')">➕👤</button>`:''}
@@ -14869,7 +15214,7 @@ function prosParaSheet(p) {
     fechaVisita:p.fechaVisita||'', horaVisita:p.horaVisita||'', visitado:p.visitado?'SI':'NO', fechaVisitaReal:p.fechaVisitaReal||'',
     resultado:p.resultado||'', resultadoNotas:p.resultadoNotas||'', proximoContacto:p.proximoContacto||'', clienteId:p.clienteId||'',
     visitaCalendarioId:p.visitaCalendarioId||'', prioridad:p.prioridad||'media', notas:p.notas||'', fechaAlta:p.fechaAlta||'',
-    flotaEstimada:p.flotaEstimada||'', referidoPor:p.referidoPor||'' };
+    flotaEstimada:p.flotaEstimada||'', referidoPor:p.referidoPor||'', sumadoDia:p.sumadoDia||'' };
 }
 // ── Enlace con el Calendario ──────────────────────────────────────────────
 // Si el prospecto tiene fecha de visita, se crea/actualiza su evento en el
