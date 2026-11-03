@@ -3482,6 +3482,150 @@ function renderHoraEmmanuel() {
     </details>`;
 }
 
+// ============================================================
+// v17.86 — 🧮 COTIZADOR: horas de trabajo, viaje y km
+// Dentro del presupuesto. Toma la zona del cliente (km desde Derqui), el tipo de trabajo (horas típicas
+// según los trabajos ya hechos) y arma la mano de obra y la movilidad con tres miradas:
+//   · Cómo se cobra hoy: US$ 0,50 por km de ida, por visita.
+//   · Lo que cuesta de verdad: combustible + peajes (medido en Gastos) + desgaste de la camioneta, ida y vuelta,
+//     más las horas de manejo valuadas a la tarifa (el tiempo al volante también es trabajo).
+//   · Sugerido: km de ida y vuelta × US$/km + horas de viaje × un % de la tarifa (se ajusta en el cotizador).
+// Todo es editable y nada se agrega solo: se elige qué sumar al presupuesto.
+// ============================================================
+const COT_DEF = { kmUsd:0.5, viajePct:50, desgasteUsdKm:0.08, colchonPct:15, horasVisita:5 };
+function cotCfg(k) { const v = parseFloat(getCfg('cot_'+k, '')); return isNaN(v) ? COT_DEF[k] : v; }
+function cotGuardarCfg(k, v) { const n = parseFloat(String(v).replace(',','.')); if(!isNaN(n)) setCfg('cot_'+k, n); }
+let _cotCache = null;
+function cotDatos() { // horas típicas por tipo y costo real del km, con lo que ya hay cargado
+  if(_cotCache && Date.now() - _cotCache.ts < 120000) return _cotCache;
+  let R = null; try { R = calcularHoraEmmanuel(); } catch(e) {}
+  const porTipo = {};
+  (R ? R.filas : []).forEach(f=>{ (porTipo[f.tipo] = porTipo[f.tipo] || []).push(f.hBase); });
+  const q = (arr, p) => { const v = arr.filter(x=>x>0).sort((a,b)=>a-b); if(!v.length) return null; const i = (v.length-1)*p, lo = Math.floor(i), hi = Math.ceil(i); return v[lo] + (v[hi]-v[lo])*(i-lo); };
+  const tipos = {}; Object.keys(porTipo).forEach(t=>{ tipos[t] = { n:porTipo[t].length, med:q(porTipo[t],0.5), p25:q(porTipo[t],0.25), p75:q(porTipo[t],0.75) }; });
+  let kmMed = 0;
+  if(R) { const desde = R.desdeGastos; R.visitas.filter(v=>v.iso>=desde).forEach(v=>{ kmMed += v.kmNotas || (heKmCliente(v.cliente, v.zonaVisita)||0)*2; }); }
+  const tcHoy = _heTC()(today()) || 0;
+  const costoKmUsd = (R && kmMed>0 && tcHoy) ? (R.combustible + R.peajes) / kmMed / tcHoy : 0.24;
+  _cotCache = { ts:Date.now(), tipos, costoKmUsd, tarifa:(_heTarifas().at(-1)||{usd:55}).usd };
+  return _cotCache;
+}
+function cotTC() { return parseFloat((document.getElementById('f-ptc')||{}).value) || _heTC()(today()) || 0; }
+function cotVal(id, def) { const el = document.getElementById(id); const v = el ? parseFloat(String(el.value).replace(',','.')) : NaN; return isNaN(v) ? def : v; }
+function renderCotizador(reset) {
+  const box = document.getElementById('cot-body'); if(!box) return;
+  const d = cotDatos();
+  const cliId = (document.getElementById('f-pcli')||{}).value;
+  const cl = DB.clientes.find(c=>String(c.id)===String(cliId));
+  const kmZona = cl ? heKmCliente(cl) : null;
+  const tipoSel = reset ? '' : ((document.getElementById('cot-tipo')||{}).value || '');
+  const tiposLista = [...new Set(CATEGORIAS_TRABAJO.map(x=>x[0]))];
+  const tt = d.tipos[tipoSel] || null;
+  const km = reset || !document.getElementById('cot-km') ? (kmZona || '') : cotVal('cot-km', kmZona||0);
+  const horas = (reset || !document.getElementById('cot-horas') || document.getElementById('cot-horas')._tipo !== tipoSel) ? (tt && tt.med ? Math.round(tt.med*2)/2 : '') : cotVal('cot-horas', 0);
+  const inp = (id, v, w, extra) => `<input id="${id}" value="${v}" oninput="cotRecalcular()" ${extra||''} style="width:${w||70}px;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:4px 6px;border-radius:4px;font-size:12px;text-align:right">`;
+  box.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;font-size:12px">
+      <div><div class="td-muted">Tipo de trabajo</div><select id="cot-tipo" onchange="renderCotizador()" style="width:100%;background:var(--dark);border:1px solid var(--border2);color:var(--text);padding:5px;border-radius:4px;font-size:12px"><option value="">— Elegí —</option>${tiposLista.map(t=>`<option ${t===tipoSel?'selected':''}>${t}</option>`).join('')}</select>
+        ${tt?`<div class="td-muted" style="margin-top:3px">Con ${tt.n} trabajo${tt.n!==1?'s':''}: lo habitual ${Math.round(tt.med*10)/10} h (entre ${Math.round((tt.p25||tt.med)*10)/10} y ${Math.round((tt.p75||tt.med)*10)/10} h)</div>`:(tipoSel?'<div class="td-muted" style="margin-top:3px">Todavía no hay trabajos de este tipo para comparar</div>':'')}</div>
+      <div><div class="td-muted">Horas de trabajo neto</div>${inp('cot-horas', horas)} h</div>
+      <div><div class="td-muted">Km de ida desde Derqui ${cl?'('+prosEsc(cl.zona||'sin zona')+')':''}</div>${inp('cot-km', km)} km${cl && !kmZona?'<div style="color:var(--orange,#e67e22);margin-top:3px">No reconocí la zona del cliente: cargá los km a mano</div>':''}</div>
+      <div><div class="td-muted">Visitas (jornadas en el cliente)</div>${inp('cot-vis', '', 50, 'placeholder="auto"')}</div>
+    </div>
+    <details style="margin-top:8px"><summary style="cursor:pointer;font-size:11px;color:var(--muted)">⚙️ Valores del cotizador (se guardan para la próxima)</summary>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;font-size:11.5px;margin-top:6px">
+        <div>Hora de trabajo: <b>US$ ${d.tarifa}</b> <span class="td-muted">(Tarifario)</span></div>
+        <div>US$ por km: ${inp('cot-kmusd', cotCfg('kmUsd'), 60, 'onchange="cotGuardarCfg(\'kmUsd\',this.value)"')}</div>
+        <div>Hora de viaje: ${inp('cot-vpct', cotCfg('viajePct'), 50, 'onchange="cotGuardarCfg(\'viajePct\',this.value)"')} % de la tarifa</div>
+        <div>Desgaste camioneta: US$ ${inp('cot-desg', cotCfg('desgasteUsdKm'), 55, 'onchange="cotGuardarCfg(\'desgasteUsdKm\',this.value)"')}/km</div>
+        <div>Margen para imprevistos: ${inp('cot-colchon', cotCfg('colchonPct'), 45, 'onchange="cotGuardarCfg(\'colchonPct\',this.value)"')} %</div>
+        <div>Horas por jornada: ${inp('cot-hvis', cotCfg('horasVisita'), 45, 'onchange="cotGuardarCfg(\'horasVisita\',this.value)"')} h</div>
+        <div class="td-muted" style="grid-column:1/-1">Combustible + peajes reales (medido en Gastos): ~US$ ${d.costoKmUsd.toFixed(2)} por km.</div>
+      </div></details>
+    <div id="cot-res" style="margin-top:10px"></div>`;
+  const h = document.getElementById('cot-horas'); if(h) h._tipo = tipoSel;
+  cotRecalcular();
+}
+function cotCalculo() {
+  const d = cotDatos(), tc = cotTC();
+  const horas = cotVal('cot-horas', 0), km = cotVal('cot-km', 0);
+  const hVis = cotVal('cot-hvis', cotCfg('horasVisita')) || 5;
+  const visAuto = Math.max(1, Math.ceil(horas / hVis));
+  const vis = Math.max(1, Math.round(cotVal('cot-vis', visAuto)));
+  const kmUsd = cotVal('cot-kmusd', cotCfg('kmUsd')), vPct = cotVal('cot-vpct', cotCfg('viajePct')), desg = cotVal('cot-desg', cotCfg('desgasteUsdKm')), colchon = cotVal('cot-colchon', cotCfg('colchonPct'));
+  const hViajeVisita = km ? 2 * (0.5 + km/80) : 0;              // ida y vuelta, ~80 km/h + 30 min de entrada y salida
+  const kmVisita = km * 2;
+  const moUsd = horas * d.tarifa;
+  const hoy = { usdVisita: km * kmUsd };                           // como se cobra hoy: solo la ida
+  const real = { usdVisita: kmVisita * (d.costoKmUsd + desg) + hViajeVisita * d.tarifa };
+  const sug = { usdVisita: kmVisita * kmUsd + hViajeVisita * d.tarifa * vPct/100 };
+  return { d, tc, horas, km, vis, visAuto, kmVisita, hViajeVisita, moUsd, colchon, hoy, real, sug };
+}
+function cotRecalcular() {
+  const el = document.getElementById('cot-res'); if(!el) return;
+  const c = cotCalculo();
+  const visEl = document.getElementById('cot-vis'); if(visEl && !visEl.value) visEl.placeholder = c.visAuto;
+  const ars = usd => c.tc ? fmtMonto(Math.round(usd * c.tc)) : '—';
+  const u = usd => 'US$ ' + Math.round(usd).toLocaleString('es-AR');
+  if(!c.horas && !c.km) { el.innerHTML = '<div class="td-muted" style="font-size:12px">Elegí el tipo de trabajo (o cargá las horas) y revisá los km para ver la cotización.</div>'; return; }
+  const fila = (titulo, sub, x, color, clave) => `<tr><td style="padding:6px 8px"><b style="color:${color||'var(--text)'}">${titulo}</b><div class="td-muted" style="font-size:11px">${sub}</div></td>
+    <td style="padding:6px 8px;text-align:right;white-space:nowrap">${u(x.usdVisita)}<div class="td-muted" style="font-size:11px">${ars(x.usdVisita)}</div></td>
+    <td style="padding:6px 8px;text-align:right;white-space:nowrap"><b>${u(x.usdVisita*c.vis)}</b><div class="td-muted" style="font-size:11px">${ars(x.usdVisita*c.vis)}</div></td>
+    <td style="padding:6px 8px;text-align:center">${clave?`<button type="button" class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="cotAgregarMovilidad('${clave}')">➕ Usar</button>`:''}</td></tr>`;
+  const conColchon = c.moUsd * (1 + c.colchon/100);
+  el.innerHTML = `
+    <div style="background:var(--dark);border:1px solid var(--border2);border-radius:6px;padding:10px 12px;font-size:12px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+        <div><b>Mano de obra:</b> ${c.horas} h × US$ ${c.d.tarifa} = <b style="color:var(--yellow)">${u(c.moUsd)}</b> <span class="td-muted">(${ars(c.moUsd)})</span>
+          ${c.colchon?`<div class="td-muted" style="font-size:11px">Con ${c.colchon}% para imprevistos: ${u(conColchon)} (${ars(conColchon)})</div>`:''}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="cotAgregarMO(false)">➕ Agregar mano de obra</button>${c.colchon?`<button type="button" class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="cotAgregarMO(true)">➕ Con margen</button>`:''}</div>
+      </div>
+      <div class="td-muted" style="font-size:11px;margin-top:6px">${c.vis} visita${c.vis!==1?'s':''} · ${Math.round(c.kmVisita)} km por visita (ida y vuelta) · ~${(Math.round(c.hViajeVisita*10)/10).toLocaleString('es-AR')} h de manejo por visita · total ${Math.round(c.kmVisita*c.vis)} km y ${(Math.round(c.hViajeVisita*c.vis*10)/10).toLocaleString('es-AR')} h de viaje</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="color:var(--muted);font-size:10px;text-align:left"><th style="padding:4px 8px">MOVILIDAD</th><th style="padding:4px 8px;text-align:right">POR VISITA</th><th style="padding:4px 8px;text-align:right">TOTAL (${c.vis})</th><th></th></tr></thead>
+      <tbody>
+        ${fila('Como se cobra hoy', `Solo la ida: ${Math.round(c.km)} km × US$ ${cotVal('cot-kmusd', cotCfg('kmUsd'))}`, c.hoy, 'var(--muted)', 'hoy')}
+        ${fila('Lo que cuesta de verdad', `Combustible y peajes US$ ${c.d.costoKmUsd.toFixed(2)}/km + desgaste US$ ${cotVal('cot-desg', cotCfg('desgasteUsdKm'))}/km, ida y vuelta, + horas de manejo a US$ ${c.d.tarifa}`, c.real, '#e07a7a', '')}
+        ${fila('Sugerido', `Ida y vuelta a US$ ${cotVal('cot-kmusd', cotCfg('kmUsd'))}/km + horas de manejo al ${cotVal('cot-vpct', cotCfg('viajePct'))}% de la tarifa`, c.sug, 'var(--green)', 'sug')}
+      </tbody></table>
+    ${c.hoy.usdVisita < c.real.usdVisita ? `<div style="font-size:11px;color:#e07a7a;margin-top:6px">⚠️ Como se cobra hoy, cada visita a esta zona deja de cubrir ${u(c.real.usdVisita - c.hoy.usdVisita)} de lo que cuesta de verdad.</div>` : ''}
+    <div style="display:flex;gap:8px;align-items:flex-start;font-size:11.5px;margin-top:8px;color:var(--text);text-transform:none;letter-spacing:0"><input type="checkbox" id="cot-aclar" checked style="width:auto;margin-top:2px"><span onclick="const c=document.getElementById('cot-aclar');c.checked=!c.checked" style="cursor:pointer">Al agregar, sumar a las notas la aclaración de horas estimadas (si el trabajo lleva más, se avisa y se envía un presupuesto complementario).</span></div>`;
+}
+function _cotFila(desc, tipo, cant, precio) {
+  agregarItemPresup();
+  const rows = document.querySelectorAll('#items-presup-body .item-row'); const tr = rows[rows.length-1];
+  // si la primera fila quedó vacía (presupuesto nuevo), se usa esa
+  const primera = rows[0];
+  const vacia = primera && primera !== tr && !(primera.querySelector('.item-desc').value||'').trim() && !(primera.querySelector('.item-precio').value||'').trim();
+  const fila = vacia ? primera : tr; if(vacia) tr.remove();
+  fila.querySelector('.item-desc').value = desc; fila.querySelector('.item-tipo').value = tipo;
+  fila.querySelector('.item-cant').value = cant; fila.querySelector('.item-precio').value = Math.round(precio);
+  recalcularTotal();
+}
+function _cotAclaracion(c) {
+  if(!(document.getElementById('cot-aclar')||{}).checked) return;
+  const n = document.getElementById('f-pnotas'); if(!n) return;
+  const txt = `El presupuesto contempla ${c.horas} h de trabajo estimadas${c.vis>1?' en '+c.vis+' visitas':''}. Si el trabajo requiere más tiempo, se informará antes de continuar y se enviará un presupuesto complementario.`;
+  if(!n.value.includes('presupuesto complementario')) n.value = (n.value ? n.value.trim() + '\n' : '') + txt;
+}
+function cotAgregarMO(conMargen) {
+  const c = cotCalculo(); if(!c.tc) { showToast('Cargá el dólar del día (↻ Dólar en vivo) para pasar a pesos','error'); return; }
+  if(!c.horas) { showToast('Cargá las horas de trabajo','error'); return; }
+  const usd = c.moUsd * (conMargen ? 1 + c.colchon/100 : 1);
+  _cotFila(`Mano de obra / Servicio técnico (${c.horas} h estimadas)`, 'Mano de obra', 1, usd * c.tc);
+  _cotAclaracion(c);
+  showToast('Mano de obra agregada ✔','success');
+}
+function cotAgregarMovilidad(clave) {
+  const c = cotCalculo(); if(!c.tc) { showToast('Cargá el dólar del día (↻ Dólar en vivo) para pasar a pesos','error'); return; }
+  const x = clave==='hoy' ? c.hoy : c.sug;
+  const det = clave==='hoy' ? `${Math.round(c.km)} km` : `${Math.round(c.kmVisita)} km ida y vuelta + ${(Math.round(c.hViajeVisita*10)/10).toLocaleString('es-AR')} h de viaje`;
+  _cotFila(`Movilidad (${det} por visita)`, 'Traslado', c.vis, x.usdVisita * c.tc);
+  _cotAclaracion(c);
+  showToast('Movilidad agregada ✔','success');
+}
+
 function renderOrigenClientes() {
   const clientes = DB.clientes.filter(c=>c.estado!=='prospecto');
   const factCli = {};
@@ -12420,7 +12564,7 @@ function openModal(type, data={}) {
 
     body=`<div class="form-grid">
       <div class="form-group full"><label>Cliente *</label>
-        <select id="f-pcli" style="width:100%" onchange="document.getElementById('nuevo-cliente-fields').style.display=this.value==='__nuevo__'?'grid':'none'">
+        <select id="f-pcli" style="width:100%" onchange="document.getElementById('nuevo-cliente-fields').style.display=this.value==='__nuevo__'?'grid':'none'; const cb=document.getElementById('cot-box'); if(cb&&cb.open) renderCotizador(true);">
           <option value="">Seleccionar...</option>
           ${clienteOptions(data.clienteId)}
           <option value="__nuevo__" style="color:var(--yellow);font-weight:700">➕ Crear cliente nuevo</option>
@@ -12483,6 +12627,12 @@ function openModal(type, data={}) {
         <div style="text-align:right;font-size:10px;color:var(--muted);margin-top:2px">
           El valor en dólares está sujeto al tipo de cambio del día de la fecha.
         </div>
+
+        <details id="cot-box" style="margin-top:12px;border:1px solid var(--yellow);border-radius:6px;padding:8px 12px;background:rgba(244,180,0,0.05)" ontoggle="if(this.open) renderCotizador(true)">
+          <summary style="cursor:pointer;font-family:'Bebas Neue';letter-spacing:1px;color:var(--yellow);font-size:15px">🧮 Cotizador: horas, viaje y km</summary>
+          <div class="td-muted" style="font-size:11px;margin:4px 0 8px">Propone la mano de obra según el tipo de trabajo y la movilidad según la zona del cliente. Nada se agrega solo: elegís qué sumar.</div>
+          <div id="cot-body"></div>
+        </details>
 
         <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
           <label style="display:block;margin-bottom:8px">Opciones de pago para el cliente</label>
