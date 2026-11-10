@@ -83,6 +83,7 @@
   .accion-status{font-size:12px; margin-top:4px; padding:10px 12px; border-radius:6px;}
   .accion-status.ok{background:rgba(37,211,102,0.12); border:1px solid rgba(37,211,102,0.35); color:#7fe0a0;}
   .accion-status.error{background:rgba(224,122,122,0.12); border:1px solid rgba(224,122,122,0.35); color:#e07a7a;}
+  .cta-titulo{font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:var(--muted);font-size:15px;margin:28px 0 10px;border-top:1px solid var(--border);padding-top:18px}
 </style>
 </head>
 <body>
@@ -127,8 +128,15 @@ const MEB_LOGO_PDF_B64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEBLAEsAAD/4QC
 
 function fmtDate(d) {
   if (!d) return '—';
-  return d;
+  const s = String(d).trim();
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return s;
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s); if (iso) return iso[3] + '/' + iso[2] + '/' + iso[1];
+  const f = new Date(s); // "Sun Feb 08 2026 00:00:00 GMT-0300 …" (versión anterior del servidor)
+  if (!isNaN(f.getTime())) return String(f.getDate()).padStart(2,'0') + '/' + String(f.getMonth()+1).padStart(2,'0') + '/' + f.getFullYear();
+  return s;
 }
+// v17.89 — "Trabajos realizados" = solo los terminados; los aprobados que todavía se están haciendo van aparte
+function esRealizado(t) { return !t.estado || /^(completado|realizado|terminado)$/i.test(String(t.estado).trim()); }
 
 let _flotaData = null; // se completa en renderFlota() — lo usa descargarPDF()
 
@@ -323,13 +331,63 @@ function renderFlota(data) {
   const btnWrap = document.getElementById('pdf-btn-wrap');
   if (btnWrap) btnWrap.style.display = 'block';
   const cont = document.getElementById('contenido');
-  const totalTrabajos = data.maquinas.reduce(function(s,m){ return s + (m.trabajos?m.trabajos.length:0); }, 0);
+  const totalTrabajos = data.maquinas.reduce(function(s,m){ return s + (m.trabajos?m.trabajos.filter(esRealizado).length:0); }, 0);
 
   let html = '<div class="cliente-box">'
     + '<div class="nombre">' + escHtml(data.cliente.nombre||'') + '</div>'
     + (data.cliente.empresa && data.cliente.empresa !== data.cliente.nombre ? '<div class="empresa">' + escHtml(data.cliente.empresa) + '</div>' : '')
     + '<div class="resumen">' + data.maquinas.length + ' máquina' + (data.maquinas.length!==1?'s':'') + ' registrada' + (data.maquinas.length!==1?'s':'') + ' · ' + totalTrabajos + ' trabajo' + (totalTrabajos!==1?'s':'') + ' realizado' + (totalTrabajos!==1?'s':'') + '</div>'
     + '</div>';
+
+  if (!data.maquinas.length) {
+    html += '<div class="estado">Todavía no tenés máquinas registradas en nuestro sistema.</div>';
+  } else {
+    data.maquinas.forEach(function(m) {
+      html += '<div class="maquina-card">'
+        + '<div class="titulo">' + escHtml((m.marca||'') + ' ' + (m.modelo||'')).trim() + '</div>'
+        + '<div class="sub">' + escHtml(m.tipo||'Máquina') + '</div>';
+
+      html += '<div class="fila"><span class="k">N° de serie</span><span class="v">' + escHtml(m.serie||'—') + '</span></div>';
+      html += '<div class="fila"><span class="k">Horómetro registrado</span><span class="v">' + (m.horometro ? escHtml(m.horometro)+' hs' : '—') + '</span></div>';
+      if (m.horometro) {
+        html += '<div class="fila"><span class="k">Fecha de esa lectura</span><span class="v">' + fmtDate(m.horometroFecha) + '</span></div>';
+      }
+
+      const hechos = (m.trabajos||[]).filter(esRealizado), enCurso = (m.trabajos||[]).filter(function(t){ return !esRealizado(t); });
+      if (enCurso.length) {
+        html += '<div class="trabajos-titulo">EN CURSO (' + enCurso.length + ')</div>';
+        enCurso.forEach(function(t) {
+          html += '<div class="trabajo-item"><span class="t">' + escHtml(t.titulo||'—') + '</span><span class="f">desde ' + fmtDate(t.fecha) + '</span></div>';
+        });
+      }
+      html += '<div class="trabajos-titulo">TRABAJOS REALIZADOS (' + hechos.length + ')</div>';
+      if (hechos.length) {
+        hechos.forEach(function(t) {
+          html += '<div class="trabajo-item"><span class="t">' + escHtml(t.titulo||'—') + '</span><span class="f">' + fmtDate(t.fecha) + '</span></div>';
+        });
+      } else {
+        html += '<div class="sin-trabajos">Sin trabajos terminados todavía.</div>';
+      }
+
+      html += '<div class="nota-informes">Para más información sobre cada trabajo — causa, problema y solución, con fotos — revisá los informes técnicos que te enviamos por email.</div>';
+      html += '</div>';
+    });
+  }
+
+  // v17.89 — primero lo del cliente (máquinas y trabajos), después herramientas y el pedido, y al final la info de MEB
+  if (data.cajas && data.cajas.length) {
+    html += '<div class="cajas-titulo">🧰 Herramientas MEB en tu poder</div>';
+    data.cajas.forEach(function(cj) {
+      const t = tiempoDesdeEntrega(cj.fechaEntrega);
+      html += '<div class="caja-card">'
+        + '<div class="icono">🧰</div>'
+        + '<div class="info">'
+        + '<div class="titulo">' + escHtml(cj.descripcion||'Caja de herramientas') + '</div>'
+        + '<div class="fecha">Entregada el ' + fmtDate(cj.fechaEntrega) + '</div>'
+        + (t ? '<span class="tiempo">En uso hace ' + t + '</span>' : '')
+        + '</div></div>';
+    });
+  }
 
   // ── ¿Necesitás algo? — la única acción que puede tomar el cliente desde
   // acá. Antes el portal era 100% lectura: veía su historial y nada más.
@@ -371,6 +429,7 @@ function renderFlota(data) {
     + '</div>'
     + '</div>';
 
+  html += '<div class="cta-titulo">De MEB para vos</div>';
   html += '<div class="contrato-cta">'
     + '<strong>Prevenir es más barato que reparar — en serio</strong>'
     + '<p>Con un Contrato de Mantenimiento Preventivo, el descuento no es de palabra: queda por escrito en el presupuesto, cada vez. Menos paradas imprevistas, service planificado, precio cerrado. Vale la pena leerlo dos minutos.</p>'
@@ -384,48 +443,6 @@ function renderFlota(data) {
     + '<p>En un minuto ves cuánta plata perdés por cada día que la máquina no trabaja. Si querés, pedís un presupuesto de diagnóstico y reparación sin cargo y te respondemos en el día.</p>'
     + '<a href="https://www.mebmachinerysolutions.ar/calculadora.html?utm_source=mi_flota&utm_campaign=portal" target="_blank" onclick="avisarCalculadora()">Calcular el costo de la parada →</a>'
     + '</div>';
-
-  if (data.cajas && data.cajas.length) {
-    html += '<div class="cajas-titulo">🧰 Herramientas MEB en tu poder</div>';
-    data.cajas.forEach(function(cj) {
-      const t = tiempoDesdeEntrega(cj.fechaEntrega);
-      html += '<div class="caja-card">'
-        + '<div class="icono">🧰</div>'
-        + '<div class="info">'
-        + '<div class="titulo">' + escHtml(cj.descripcion||'Caja de herramientas') + '</div>'
-        + '<div class="fecha">Entregada el ' + fmtDate(cj.fechaEntrega) + '</div>'
-        + (t ? '<span class="tiempo">En uso hace ' + t + '</span>' : '')
-        + '</div></div>';
-    });
-  }
-
-  if (!data.maquinas.length) {
-    html += '<div class="estado">Todavía no tenés máquinas registradas en nuestro sistema.</div>';
-  } else {
-    data.maquinas.forEach(function(m) {
-      html += '<div class="maquina-card">'
-        + '<div class="titulo">' + escHtml((m.marca||'') + ' ' + (m.modelo||'')).trim() + '</div>'
-        + '<div class="sub">' + escHtml(m.tipo||'Máquina') + '</div>';
-
-      html += '<div class="fila"><span class="k">N° de serie</span><span class="v">' + escHtml(m.serie||'—') + '</span></div>';
-      html += '<div class="fila"><span class="k">Horómetro registrado</span><span class="v">' + (m.horometro ? escHtml(m.horometro)+' hs' : '—') + '</span></div>';
-      if (m.horometro) {
-        html += '<div class="fila"><span class="k">Fecha de esa lectura</span><span class="v">' + fmtDate(m.horometroFecha) + '</span></div>';
-      }
-
-      html += '<div class="trabajos-titulo">TRABAJOS REALIZADOS (' + (m.trabajos?m.trabajos.length:0) + ')</div>';
-      if (m.trabajos && m.trabajos.length) {
-        m.trabajos.forEach(function(t) {
-          html += '<div class="trabajo-item"><span class="t">' + escHtml(t.titulo||'—') + '</span><span class="f">' + fmtDate(t.fecha) + '</span></div>';
-        });
-      } else {
-        html += '<div class="sin-trabajos">Sin trabajos registrados todavía.</div>';
-      }
-
-      html += '<div class="nota-informes">Para más información sobre cada trabajo — causa, problema y solución, con fotos — revisá los informes técnicos que te enviamos por email.</div>';
-      html += '</div>';
-    });
-  }
 
   cont.innerHTML = html;
 }
