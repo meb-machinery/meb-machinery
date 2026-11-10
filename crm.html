@@ -944,7 +944,7 @@ select option { background:var(--dark); }
         Toma lo que ya cobraste este mes, le suma todo lo que está aprobado/activo y todavía no cobraste (Presupuestos + Contratos), y lo compara contra los gastos que ya cargaste este mes. No inventa fechas exactas de cobro ni gastos futuros que no cargaste — es un "mejor caso" asumiendo que cobrás todo lo pendiente antes de fin de mes.
       </p>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
-        <div class="stat-card green"><div class="stat-val" id="proy-cobrado-mes">$0</div><div class="stat-label">✅ Ya cobrado este mes</div></div>
+        <div class="stat-card green"><div class="stat-val" id="proy-cobrado-mes">$0</div><div class="stat-label">✅ Ya cobrado este mes</div><div class="stat-sub"><a href="#" onclick="verDesgloseCobros();return false" style="color:#25d366;font-weight:700">🔍 ver desglose</a></div></div>
         <div class="stat-card yellow"><div class="stat-val" id="proy-pendiente">$0</div><div class="stat-label">⏳ Pendiente (aprobado/activo)</div><div class="stat-sub" id="proy-pendiente-n">0 ítems</div></div>
         <div class="stat-card red"><div class="stat-val" id="proy-gastos-mes">$0</div><div class="stat-label">📤 Gastos ya cargados este mes</div></div>
         <div class="stat-card orange"><div class="stat-val" id="proy-resultado">$0</div><div class="stat-label">📊 Resultado si cobro todo</div><div class="stat-sub" id="proy-resultado-actual">Hoy: $0</div></div>
@@ -2372,6 +2372,7 @@ async function syncAll() {
     })();
     // v17.79 — las fechas de inicio y fin del trabajo salen del informe técnico (Emmanuel siempre las completa)
     try { aplicarFechasDeInformes(); } catch(eFi) { console.warn('fechas informes', eFi); }
+    try { normalizarVinculosPresupuesto(); } catch(eNv) { console.warn('vinculos', eNv); }
     try { alinearFechasCobro(); } catch(eAc) { console.warn('fechas cobro', eAc); }
 
     DB.oportunidadesLog = (opl.length ? opl : []).map(r => ({
@@ -4237,8 +4238,10 @@ function renderDashboard() {
     const d = new Date(parts[0], parseInt(parts[1]||0)-1, parts[2]||1);
     return d.getMonth()===mesActual && d.getFullYear()===anioActual;
   });
-  const cobradoMes = trabajosCobradosMes.reduce((s,t)=>s+Number(t.montoCobrado||t.manoObraCobrada||0),0)
-    + presupCobradosSinTrabajo.reduce((s,p)=>s+Number(p.montoCobradoReal||0),0);
+  // v17.87 — el total sale del mismo registro de cobros que los reportes (presupuestos, trabajos sin presupuesto,
+  // contratos, terciarizado, señas) para que el dashboard, la proyección y el Excel digan lo mismo
+  let cobrosMesLista = []; try { cobrosMesLista = cobrosDelMes(anioActual, mesActual); } catch(eC) { console.warn('cobrosDelMes', eC); }
+  const cobradoMes = cobrosMesLista.reduce((s,c)=>s+(Number(c.monto)||0),0);
 
   // Presupuestado del mes: presupuestos aprobados con fecha en este mes
   const presupMes = DB.presupuestos.filter(p => {
@@ -4269,7 +4272,7 @@ function renderDashboard() {
   const elGastosMes = document.getElementById('s-gastos-mes');
   const elGastosMesSub = document.getElementById('s-gastos-mes-sub');
   if(elGanancia) elGanancia.textContent = fmtMonto(cobradoMes);
-  if(elGananciaSub) elGananciaSub.textContent = `${trabajosCobradosMes.length + presupCobradosSinTrabajo.length} cobro${(trabajosCobradosMes.length + presupCobradosSinTrabajo.length)!==1?'s':''} en ${nombreMes}`;
+  if(elGananciaSub) elGananciaSub.innerHTML = `${cobrosMesLista.length} cobro${cobrosMesLista.length!==1?'s':''} en ${nombreMes} · <a href="#" onclick="verDesgloseCobros(${anioActual},${mesActual});return false" style="color:#25d366;font-weight:700">🔍 ver desglose</a>`;
   if(elPresupMes) elPresupMes.textContent = fmtMonto(montoPresupMes);
   if(elPresupMesSub) elPresupMesSub.textContent = `${presupMes.length} presupuesto${presupMes.length!==1?'s':''} aprobados en ${nombreMes}`;
   if(elGastosMes) elGastosMes.textContent = fmtMonto(gastosMes);
@@ -5709,10 +5712,17 @@ function guardarFechaCobro(tipo, id, fecha) {
   try { if(typeof renderContratos==='function') renderContratos(); } catch(e) {}
   try { updateBadges(); renderDashboard(); } catch(e) {}
   try { if(document.getElementById('page-estadisticas') && document.getElementById('page-estadisticas').classList.contains('active') && typeof renderEstadisticas==='function') renderEstadisticas(); } catch(e) {}
+  if(document.getElementById('modal-desglose-cobros') && _desgMes) verDesgloseCobros(_desgMes.anio, _desgMes.mes);
   showToast('Fecha de cobro → ' + fmtFechaCobro(fecha) + ' ✓', 'success');
 }
 // Si alguien cambió la fecha en el Sheet en una sola de las dos hojas, manda la del presupuesto
 // (es la que se ve en la pestaña Presupuestos y la que usan los reportes).
+// v17.87 — hay trabajos que apuntan al presupuesto con otra mayúscula ("p0115" contra "P0115"): sin esto,
+// el cobro del presupuesto y el de su trabajo se contaban dos veces. Se corrige en memoria (el Sheet no cambia).
+function normalizarVinculosPresupuesto() {
+  const porMin = {}; DB.presupuestos.forEach(p=>{ porMin[String(p.id).trim().toLowerCase()] = p.id; });
+  DB.trabajos.forEach(t=>{ const k = String(t.presupuestoId||'').trim().toLowerCase(); if(k && porMin[k] && porMin[k]!==t.presupuestoId) t.presupuestoId = porMin[k]; });
+}
 function alinearFechasCobro() {
   DB.presupuestos.forEach(p => {
     if(p.estadoCobro!=='cobrado' || !p.fechaCobroReal) return;
@@ -9144,8 +9154,9 @@ function renderProyeccionMes() {
   // Ya cobrado este mes
   const presupCobradosMes = DB.presupuestos.filter(p=>p.estadoCobro==='cobrado' && esEsteMes(p.fechaCobroReal));
   const contratosCobradosMes = (DB.contratos||[]).filter(c=>c.estadoCobro==='cobrado' && esEsteMes(c.fechaCobroReal));
-  const cobradoMes = presupCobradosMes.reduce((s,p)=>s+Number(p.montoCobradoReal||p.monto||0),0)
-                    + contratosCobradosMes.reduce((s,c)=>s+Number(c.montoCobradoReal||c.precioArs||0),0);
+  let _cobMes = null; try { _cobMes = cobrosDelMes(anioActual, mesActual); } catch(eC) {}
+  const cobradoMes = _cobMes ? _cobMes.reduce((s,c)=>s+(Number(c.monto)||0),0)   // v17.87 — mismo registro que el dashboard
+                    : presupCobradosMes.reduce((s,p)=>s+Number(p.montoCobradoReal||p.monto||0),0) + contratosCobradosMes.reduce((s,c)=>s+Number(c.montoCobradoReal||c.precioArs||0),0);
 
   // Pendiente: todo lo aprobado/activo que todavía no se cobró (sin importar el mes)
   const presupPend = DB.presupuestos.filter(p=>p.estado==='aprobado' && p.estadoCobro!=='cobrado');
@@ -15529,7 +15540,7 @@ function _rMes(d) { const f = _rf(d); return f ? f.getFullYear()+'-'+String(f.ge
 const _MESES_TXT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 function _rMesTxt(m) { const [y,mm] = String(m).split('-'); return m ? _MESES_TXT[parseInt(mm,10)-1]+' '+y : ''; }
 function _rCli(id) { return DB.clientes.find(c=>String(c.id)===String(id)) || null; }
-function _rNumP(p) { return p && p.num ? String(p.num).padStart(4,'0') : ''; }
+function _rNumP(p) { if(!p || !p.num) return ''; const n = String(p.num).trim(); return (/^\d+(\.0+)?$/.test(n) ? String(parseInt(n,10)) : n).padStart(4,'0'); } // "97.0" → 0097
 function _rNumT(t) { const n = numeroTrabajo(t); return n!==null ? 'T'+String(n).padStart(4,'0') : (t.id||''); }
 function _rHoras(a, b) { // 'HH:MM' → horas entre a y b
   const p = x => { const m = /^(\d{1,2}):(\d{2})/.exec(String(x||'')); return m ? parseInt(m[1],10)*60+parseInt(m[2],10) : null; };
@@ -15557,7 +15568,7 @@ function registroCobros() {
     const sena = t ? Number(t.senaMonto)||0 : 0;
     if(!cobrado && !sena) return;
     if(t) vistosT.add(t.id);
-    const base = { origen:'Presupuesto', ref:'#'+_rNumP(p), clienteId:p.clienteId, concepto:(String(p.descripcion||'').split('\n')[0].split('|')[0]||'').slice(0,80),
+    const base = { origen:'Presupuesto', ref:'#'+_rNumP(p), itemTipo:'presupuestos', itemId:p.id, clienteId:p.clienteId, concepto:(String(p.descripcion||'').split('\n')[0].split('|')[0]||'').slice(0,80),
       facturaTipo:(t&&t.facturaTipo)||'', facturaNum:(t&&t.facturaNum)||'', facturaUrl:p.facturaUrl||(t&&t.facturaUrl)||'', medio:(t&&t.medioPago)||'', retenciones:(t&&Number(t.retenciones))||0 };
     if(sena) push(Object.assign({}, base, { concepto:'Seña — '+base.concepto, fecha:(t&&t.senaFecha)||p.fecha, monto:sena, sd:sena, esSena:true, retenciones:0 }));
     if(cobrado) {
@@ -15581,7 +15592,7 @@ function registroCobros() {
     if(!t.presupuestoId && esMismoQuePresup(t)) return;
     const sena = Number(t.senaMonto)||0;
     if(t.estadoCobro!=='cobrado' && !sena) return;
-    const base = { origen:'Trabajo', ref:_rNumT(t), clienteId:t.clienteId, concepto:String(t.titulo||'').split('|')[0].slice(0,80),
+    const base = { origen:'Trabajo', ref:_rNumT(t), itemTipo:'trabajos', itemId:t.id, clienteId:t.clienteId, concepto:String(t.titulo||'').split('|')[0].slice(0,80),
       facturaTipo:t.facturaTipo||'', facturaNum:t.facturaNum||'', facturaUrl:t.facturaUrl||'', medio:t.medioPago||'', retenciones:Number(t.retenciones)||0 };
     if(sena) push(Object.assign({}, base, { concepto:'Seña — '+base.concepto, fecha:t.senaFecha||t.fechaInicio, monto:sena, sd:sena, esSena:true, retenciones:0 }));
     if(t.estadoCobro==='cobrado') {
@@ -15595,12 +15606,58 @@ function registroCobros() {
   (DB.contratos||[]).forEach(c=>{
     if(c.estadoCobro!=='cobrado') return;
     const m = Number(c.montoCobradoReal)||Number(c.precioArs)||0;
-    push({ origen:'Contrato', ref:nombrePlanContrato(c), clienteId:c.clienteId, concepto:'Contrato de mantenimiento '+nombrePlanContrato(c), fecha:c.fechaCobroReal||c.fechaInicio, monto:m, mo:m });
+    push({ origen:'Contrato', ref:nombrePlanContrato(c), itemTipo:'contratos', itemId:c.id, clienteId:c.clienteId, concepto:'Contrato de mantenimiento '+nombrePlanContrato(c), fecha:c.fechaCobroReal||c.fechaInicio, monto:m, mo:m });
   });
   (DB.terciarizadoLiquidaciones||[]).forEach(l=>{
     push({ origen:'Terciarizado', ref:'', clienteId:'', concepto:'Liquidación trabajos terciarizados'+(l.notas?' — '+l.notas:''), fecha:l.fechaPago, monto:Number(l.montoRecibido)||0, mo:Number(l.montoRecibido)||0 });
   });
   return out.sort((a,b)=>(_rf(a.fecha)||0)-(_rf(b.fecha)||0));
+}
+
+// ── v17.87 — Desglose de lo cobrado en un mes: qué presupuesto / trabajo / contrato suma cada peso ──
+function cobrosDelMes(anio, mes) {
+  return registroCobros().filter(c => { const d = _rf(c.fecha); return d && d.getFullYear()===anio && d.getMonth()===mes; });
+}
+let _desgMes = null;
+function verDesgloseCobros(anio, mes) {
+  const hoy = new Date();
+  if(anio===undefined) { anio = hoy.getFullYear(); mes = hoy.getMonth(); }
+  if(mes < 0) { mes = 11; anio--; } if(mes > 11) { mes = 0; anio++; }
+  _desgMes = { anio, mes };
+  const lista = cobrosDelMes(anio, mes).sort((a,b)=>(_rf(a.fecha)||0)-(_rf(b.fecha)||0));
+  const total = lista.reduce((s,c)=>s+(Number(c.monto)||0),0);
+  const nombreMes = new Date(anio, mes, 1).toLocaleDateString('es-AR',{month:'long', year:'numeric'});
+  const sumar = k => lista.reduce((s,c)=>s+(Number(c[k])||0),0);
+  const porOrigen = {}; lista.forEach(c=>{ porOrigen[c.origen] = (porOrigen[c.origen]||0) + (Number(c.monto)||0); });
+  const dmy = f => { const d = _rf(f); return d ? String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0') : '—'; };
+  const filas = lista.map(c => { const cl = _rCli(c.clienteId);
+    const chip = c.itemTipo && !c.esSena ? chipFechaCobro(c.itemTipo, c.itemId, c.fecha) : '';
+    return `<tr>
+      <td style="white-space:nowrap">${dmy(c.fecha)}</td>
+      <td style="white-space:nowrap;font-weight:700;color:var(--yellow)">${prosEsc(c.ref||'—')}<div class="td-muted" style="font-size:10px;font-weight:400">${prosEsc(c.origen)}${c.esSena?' · seña':''}</div></td>
+      <td>${prosEsc(cl ? cl.nombre : '')}<div class="td-muted" style="font-size:11px">${prosEsc(c.concepto||'')}</div></td>
+      <td style="text-align:right;white-space:nowrap;font-weight:700">${fmtMonto(c.monto)}</td>
+      <td style="white-space:nowrap;font-size:11px">${c.facturaUrl?`<a href="${prosEsc(c.facturaUrl)}" target="_blank" style="color:#25d366">🧾 ${prosEsc([c.facturaTipo,c.facturaNum].filter(Boolean).join(' ')||'ver')}</a>`:(c.facturaNum?prosEsc([c.facturaTipo,c.facturaNum].filter(Boolean).join(' ')):'<span class="td-muted">—</span>')}</td>
+      <td>${chip}</td></tr>`; }).join('');
+  const viejo = document.getElementById('modal-desglose-cobros'); if(viejo) viejo.remove();
+  const m = document.createElement('div'); m.className = 'modal-overlay open'; m.id = 'modal-desglose-cobros';
+  m.innerHTML = `<div class="modal" style="max-width:860px">
+    <div class="modal-header"><span class="modal-title">💰 COBRADO EN ${nombreMes.toUpperCase()}</span><button class="modal-close" onclick="document.getElementById('modal-desglose-cobros').remove()">✕</button></div>
+    <div class="modal-body">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <div style="display:flex;gap:6px"><button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="verDesgloseCobros(${anio},${mes-1})">‹ Mes anterior</button><button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="verDesgloseCobros(${anio},${mes+1})">Mes siguiente ›</button></div>
+        <div style="font-family:'Bebas Neue';font-size:26px;color:#25d366">${fmtMonto(total)} <span style="font-size:14px;color:var(--muted)">· ${lista.length} cobro${lista.length!==1?'s':''}</span></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;margin-bottom:10px">
+        ${[['Mano de obra','mo'],['Repuestos','rep'],['Movilidad','mov'],['Terceros','ter'],['Sin desglosar','sd']].filter(([,k])=>sumar(k)).map(([l,k])=>`<span style="border:1px solid var(--border2);border-radius:10px;padding:3px 9px">${l}: <b>${fmtMonto(sumar(k))}</b></span>`).join('')}
+        ${Object.keys(porOrigen).length>1?Object.entries(porOrigen).map(([o,v])=>`<span style="border:1px dashed var(--border2);border-radius:10px;padding:3px 9px;color:var(--muted)">${prosEsc(o)}: ${fmtMonto(v)}</span>`).join(''):''}
+      </div>
+      ${lista.length ? `<div class="table-wrap"><table><thead><tr><th>FECHA</th><th>N°</th><th>CLIENTE / CONCEPTO</th><th style="text-align:right">MONTO</th><th>FACTURA</th><th>FECHA DE COBRO</th></tr></thead><tbody>${filas}</tbody>
+        <tfoot><tr><td colspan="3" style="text-align:right;font-weight:700">TOTAL</td><td style="text-align:right;font-weight:700;color:#25d366">${fmtMonto(total)}</td><td colspan="2"></td></tr></tfoot></table></div>`
+        : '<div class="td-muted" style="padding:20px;text-align:center">No hay cobros registrados en este mes.</div>'}
+      <div class="td-muted" style="font-size:11px;margin-top:8px">Cada cobro cuenta en el mes de su fecha de cobro. Si alguno está en el mes equivocado, tocá su 📅 y corregí la fecha: se mueve solo al mes correcto.</div>
+    </div></div>`;
+  document.body.appendChild(m);
 }
 
 // ── Egresos: todo lo que salió ──
