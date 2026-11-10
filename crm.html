@@ -1953,7 +1953,17 @@ function parseCSV(text) {
     // para poder escribir un ID de vuelta si la celda vino vacía.
     obj._rowIndex = i+2;
     return obj;
-  }).filter(r=>Object.keys(r).some(k=>k!=='_rowIndex' && r[k] && String(r[k]).trim()));
+  }).filter(r=>{
+    // v17.88 — una fila sin ID que solo tiene ceros, FALSE o guiones (restos de una fila borrada a mano) no es un
+    // registro: antes se le inventaba un ID "legacy_…_rowN" y se escribía en el Sheet. Ahora se ignora.
+    const conDato = Object.keys(r).filter(k=>k!=='_rowIndex' && r[k] && String(r[k]).trim());
+    if(!conDato.length) return false;
+    const vacio = k => /^(0+([.,]0+)?|false|true|-|—|no|si|pendiente|funcionando)$/i.test(String(r[k]).trim());
+    const id = String(r.ID||'').trim();
+    if(!id) return conDato.some(k=>!vacio(k));
+    if(/^legacy_/i.test(id)) return conDato.some(k=>k!=='ID' && !vacio(k));   // "legacy_…" que quedó solo, sin datos
+    return true;
+  });
 }
 
 // Escribir a Google Sheets via Apps Script (requiere deploy)
