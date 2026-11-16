@@ -1902,6 +1902,7 @@ async function fetchSheet(sheetName) {
     return h[sheetName] ? parseCSV(h[sheetName]) : [];
   } catch(e) {
     console.warn('Error leyendo hoja:', sheetName, e);
+    (window._hojasConError = window._hojasConError || []).push(sheetName); // v17.90 — se avisa al terminar de sincronizar
     return [];
   }
 }
@@ -1975,6 +1976,7 @@ async function syncAll() {
   if(status){status.textContent='● Sincronizando...'; status.style.color='var(--yellow)';}
   showLoading('SINCRONIZANDO...');
   _idsParaCorregir = [];
+  window._hojasConError = []; // v17.90
 
   // Preserve local data that may not be in Sheets yet
   const _localClientes    = DB.clientes.filter(x=>x._local);
@@ -2025,6 +2027,10 @@ async function syncAll() {
       fetchSheet('GASTOS_PERSONALES'), fetchSheet('CALENDARIO_VISITAS'), fetchSheet('INVERSIONES'), fetchSheet('STOCK_SIMULADO'), fetchSheet('PROSPECTOS'),
       fetchSheet('CONFIG'), fetchSheet('POSTVENTA'), fetchSheet('SUELDOS'), fetchSheet('REGLAS_SERVICE'), fetchSheet('EVENTOS_WEB'), fetchSheet('ACCESOS_MI_FLOTA'), fetchSheet('MI_DIA_ACCESOS'), fetchSheet('HOROMETROS')
     ]);
+    // v17.90 — si alguna hoja no se pudo leer, se avisa: lo que se ve de esa hoja es lo de la última vez, no lo actual.
+    if(window._hojasConError.length) {
+      showToast(`⚠️ No se pudieron leer: ${window._hojasConError.join(', ')}. Lo que ves ahí puede estar viejo — volvé a Sincronizar antes de cargar algo nuevo.`, 'error');
+    }
 
     // ── Salvavidas: detectar encabezados rotos ──────────────────────────────
     // Si alguien inserta sin querer una fila en blanco arriba de los
@@ -5744,17 +5750,103 @@ function alinearFechasCobro() {
 // ============================================================
 // ESCRITURA AL SHEET (Google Apps Script)
 // ============================================================
-async function writeToSheet(payload) {
-  if (!SCRIPT_URL || SCRIPT_URL === '') return;
+// v17.90 — los cambios salen al Sheet DE A UNO y en orden (antes salían todos a la vez). Así:
+//  • si el Apps Script le da otro número a un cliente / máquina / presupuesto nuevo (porque ese número ya lo usó
+//    otro registro en el Sheet), todo lo que se mande DESPUÉS ya sale con el número nuevo (_idRenombrado);
+//  • si el Sheet está ocupado (otra persona guardando), se reintenta solo, hasta 3 veces;
+//  • cada envío tiene un tiempo máximo (60 s), para que uno colgado no frene a los demás.
+let _colaEscritura = Promise.resolve();
+window._idRenombrado = window._idRenombrado || { clientes:{}, maquinas:{}, presupuestos:{} };
+const _ALTAS_TIPO = { addCliente:'clientes', addMaquina:'maquinas', addPresupuesto:'presupuestos' };
+function writeToSheet(payload) {
+  if (!SCRIPT_URL || SCRIPT_URL === '') return Promise.resolve();
   // Etiqueta quién hizo este cambio, para el registro de actividad. No pisa
   // un valor que la propia función ya haya puesto a propósito.
   if(!payload.usuario) payload.usuario = currentUser || 'Sin identificar';
+  const p = _colaEscritura.then(() => _enviarAlSheet(payload));
+  _colaEscritura = p.catch(() => {});
+  return p;
+}
+async function _enviarAlSheet(payload) {
+  _prepararEnvio(payload);
+  let resp = await _postSheet(payload);
+  for (let i = 0; i < 3 && resp && resp.error === 'ocupado'; i++) {
+    await new Promise(r => setTimeout(r, 4000));
+    resp = await _postSheet(payload);
+  }
+  if (resp && resp.error === 'ocupado') showToast('⚠️ El Sheet estuvo ocupado y un cambio no se guardó. Tocá Sincronizar y fijate si quedó.', 'error');
+  try { _despuesDelEnvio(payload, resp); } catch(e) { console.warn('despuesDelEnvio', e); }
+  return resp;
+}
+// Antes de mandar: los IDs que el Apps Script ya renumeró salen con el número nuevo, y las altas de
+// cliente / máquina / presupuesto llevan nuevo:true para que el Apps Script nunca pise otro registro.
+function _prepararEnvio(payload) {
+  const ren = window._idRenombrado;
+  const m = (tipo, v) => (v !== undefined && v !== null && v !== '' && ren[tipo][String(v)]) ? ren[tipo][String(v)] : v;
+  if (payload.row && typeof payload.row === 'object') {
+    const r = Object.assign({}, payload.row); // copia: nunca tocar el objeto del CRM
+    const tipoAlta = _ALTAS_TIPO[payload.action];
+    if (tipoAlta) {
+      if (r.id !== undefined) r.id = m(tipoAlta, r.id);
+      if (r.ID !== undefined) r.ID = m(tipoAlta, r.ID);
+      if (tipoAlta === 'presupuestos') r.nuevo = true; // addPresupuesto solo se usa para altas
+      else {
+        const o = (DB[tipoAlta] || []).find(x => String(x.id) === String(r.id !== undefined ? r.id : r.ID));
+        r.nuevo = !!(o && o._local); // _local = todavía no lo trajo una sincronización
+      }
+    }
+    ['clienteId','cliente_id'].forEach(k => { if (r[k] !== undefined) r[k] = m('clientes', r[k]); });
+    ['maquinaId','maquina_id'].forEach(k => { if (r[k] !== undefined) r[k] = m('maquinas', r[k]); });
+    ['presupuestoId','presupuesto_id'].forEach(k => { if (r[k] !== undefined) r[k] = m('presupuestos', r[k]); });
+    payload.row = r;
+  }
+  if (payload.presupuestoId !== undefined) payload.presupuestoId = m('presupuestos', payload.presupuestoId);
+  if (payload.id && /Presupuesto$/.test(String(payload.action || ''))) payload.id = m('presupuestos', payload.id);
   payload.s = sesionCRM(); // v17.74 — la sesión viaja con cada cambio
+}
+// Después de mandar: si el Apps Script le dio otro número a un alta, se corrige en el CRM.
+function _despuesDelEnvio(payload, resp) {
+  if (!resp || !resp.idAsignado) return;
+  const tipo = _ALTAS_TIPO[payload.action];
+  if (!tipo || !payload.row) return;
+  const viejo = String(payload.row.id !== undefined ? payload.row.id : (payload.row.ID || ''));
+  renombrarIdLocal(tipo, viejo, String(resp.idAsignado), resp.numAsignado);
+}
+function renombrarIdLocal(tipo, viejo, nuevo, numNuevo) {
+  if (!viejo || !nuevo || viejo === nuevo) return;
+  window._idRenombrado[tipo][viejo] = nuevo;
+  const obj = (DB[tipo] || []).find(x => String(x.id) === viejo);
+  const numViejo = obj ? obj.num : '';
+  if (obj) { obj.id = nuevo; if (tipo === 'presupuestos' && numNuevo) obj.num = numNuevo; }
+  // lo que en el CRM apunta al ID viejo pasa a apuntar al nuevo (lo que se mande después ya sale bien)
+  const refs = {
+    clientes:     { campo:'clienteId',     tablas:['maquinas','trabajos','presupuestos','contratos','calendarioVisitas','prospectos','postventa','cajasHerramientas','gastosEstructura'] },
+    maquinas:     { campo:'maquinaId',     tablas:['trabajos','presupuestos','contratos'] },
+    presupuestos: { campo:'presupuestoId', tablas:['trabajos','gastosEstructura'] }
+  }[tipo];
+  refs.tablas.forEach(t => (DB[t] || []).forEach(x => { if (String(x[refs.campo] || '') === viejo) x[refs.campo] = nuevo; }));
+  if (tipo === 'presupuestos') {
+    window._aliasPresupId[viejo] = nuevo;
+    Object.keys(window._aliasPresupId).forEach(k => { if (window._aliasPresupId[k] === viejo) window._aliasPresupId[k] = nuevo; });
+    if (numNuevo) DB.presupCounter = Math.max(DB.presupCounter || 1, Number(numNuevo) + 1);
+  }
+  saveLocal(); try { refreshCurrentPage(); } catch(e) {}
+  if (tipo === 'presupuestos') {
+    const n4 = x => String(x || '').padStart(4, '0');
+    showToast(`⚠️ El presupuesto #${n4(numViejo)} ya existía en el Sheet (lo cargó otra persona): este quedó como #${n4(numNuevo)}. Si ya descargaste o mandaste el PDF, volvé a descargarlo.`, 'error');
+  } else if (tipo === 'clientes') {
+    showToast(`El N° de cliente ${viejo} ya lo tenía otro cliente en el Sheet — este quedó como ${nuevo}`, 'success');
+  } else {
+    showToast(`El código de máquina ${viejo} ya lo tenía otra máquina en el Sheet — esta quedó como ${nuevo}`, 'success');
+  }
+}
+function _postSheet(payload) {
   return new Promise((resolve) => {
     try {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', SCRIPT_URL, true);
       xhr.setRequestHeader('Content-Type', 'text/plain');
+      xhr.timeout = 60000;
       xhr.onload = () => {
         try {
           const resp = JSON.parse(xhr.responseText);
@@ -5762,6 +5854,8 @@ async function writeToSheet(payload) {
           if (resp && resp.error === 'sesion') { sesionVencida(); return; }
           if (payload.action === 'deleteRow' && resp.encontrado === false) {
             console.warn('⚠️ No se borró nada — no había ninguna fila con ese ID en el Sheet:', payload.tipo, payload.id, '(típico en registros de antes del sistema de ID — hay que borrarlos a mano en el Sheet)');
+          } else if (resp && resp.ok === false) {
+            console.warn('Sheet write con error:', payload.action, payload.id || '', resp.error || '');
           } else {
             console.log('Sheet write OK:', payload.action, payload.id || '');
           }
@@ -5773,6 +5867,10 @@ async function writeToSheet(payload) {
       xhr.onerror = () => {
         console.warn('Sheet write error');
         resolve({ ok: false });
+      };
+      xhr.ontimeout = () => {
+        console.warn('Sheet write: tardó demasiado', payload.action);
+        resolve({ ok: false, error: 'timeout' });
       };
       xhr.send(JSON.stringify(payload));
     } catch(err) {
