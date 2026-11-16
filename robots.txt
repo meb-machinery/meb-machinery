@@ -1,6 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /panel.html
-Disallow: /mi-luz.html
-
-Sitemap: https://luzguia.com.ar/sitemap.xml
