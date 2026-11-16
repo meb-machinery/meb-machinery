@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /crm.html
+Disallow: /MEB_Analizador_Mercado.html
+
+Sitemap: https://www.mebmachinerysolutions.ar/sitemap.xml
