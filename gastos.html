@@ -229,6 +229,24 @@ let items = []; // [{id, categoria, descripcion, cantidad, monto, subtotal, tick
 // v17.69 — vínculo opcional a un presupuesto. Solo cuando la página se abre desde
 // Mi día (trae la clave ?t=): ahí se puede pedir la lista de presupuestos.
 const TOKEN_MIDIA = (new URLSearchParams(location.search).get('t') || '').trim();
+
+// v17.91 — el servidor ahora exige la clave de Mi Día para guardar. Si falta o es vieja, se avisa en grande
+// (antes el guardado se daba por bueno aunque el servidor lo rechazara).
+function avisoRechazo(resp, conAlerta) {
+  const msg = (resp && resp.error === 'Acceso no válido')
+    ? 'No se guardó: este link no tiene la clave vigente. Abrilo desde el link nuevo de Mi Día.'
+    : 'No se guardó en el Sheet (' + ((resp && resp.error) || 'error') + '). Usá "Imprimir / PDF (respaldo)" y avisale a Belu.';
+  let d = document.getElementById('avisoClave');
+  if (!d) {
+    d = document.createElement('div'); d.id = 'avisoClave';
+    d.style.cssText = 'position:sticky;top:0;z-index:999;background:#c0392b;color:#fff;padding:12px 14px;font-size:14px;font-weight:600;text-align:center';
+    document.body.insertBefore(d, document.body.firstChild);
+  }
+  d.textContent = msg;
+  if (conAlerta) alert(msg);
+}
+function leerRespuesta(r) { return r.json().catch(function(){ return { ok: true }; }); }
+if (!TOKEN_MIDIA) window.addEventListener('load', function(){ avisoRechazo({ ok:false, error:'Acceso no v\u00e1lido' }, false); });
 let presupuestoIdActual = '';
 let presupuestoTocado = false;   // solo se manda si se eligió algo (así no pisa un vínculo hecho desde el CRM)
 let listaPresupuestos = [];
@@ -478,7 +496,7 @@ function subirFotoTicket(itemId, dataUrlComprimido) {
   fetch(SCRIPT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action: 'subirTicketGasto', row: { fotoBase64: dataUrlComprimido, usuario: usuarioActual, categoria: it ? it.categoria : '' } })
+    body: JSON.stringify({ action: 'subirTicketGasto', row: { t: TOKEN_MIDIA, fotoBase64: dataUrlComprimido, usuario: usuarioActual, categoria: it ? it.categoria : '' } })
   })
     .then(function(r){ return r.json(); })
     .then(function(resp){
@@ -487,6 +505,7 @@ function subirFotoTicket(itemId, dataUrlComprimido) {
         if (statusEl) statusEl.innerHTML = '<span style="color:var(--green)">✅ Foto cargada</span> — <a href="' + resp.url + '" target="_blank" style="color:var(--yellow)">verla</a>';
         programarGuardado();
       } else {
+        if (resp && resp.error === 'Acceso no válido') avisoRechazo(resp, false);
         if (statusEl) statusEl.innerHTML = '<span style="color:var(--red)">⚠️ No se pudo subir — probá de nuevo</span>';
       }
     })
@@ -569,6 +588,7 @@ function armarPayloadGuardado() {
   const payload = {
     action: 'guardarGasto',
     row: {
+      t: TOKEN_MIDIA, // v17.91 — clave de Mi Día
       id: sesionId, fecha: fechaActual, usuario: usuarioActual,
       valorHora: valorHoraActual, total: total, itemsJson: JSON.stringify(itemsLimpios),
       kmVehiculo: kmVehiculoActual,
@@ -597,7 +617,8 @@ function guardarAhora() {
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(payload)
   })
-    .then(function(){ mostrarGuardado(); })
+    .then(leerRespuesta)
+    .then(function(resp){ if (resp && resp.ok === false) avisoRechazo(resp, false); else mostrarGuardado(); })
     .catch(function(){ /* red inestable — se reintenta solo con el próximo cambio */ });
 }
 
@@ -612,8 +633,10 @@ function guardarManual() {
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(payload)
   })
-    .then(function(){
+    .then(leerRespuesta)
+    .then(function(resp){
       btn.disabled = false;
+      if (resp && resp.ok === false) { btn.innerHTML = '&#128190; Guardar todo'; avisoRechazo(resp, true); return; }
       btn.innerHTML = '&#10003; Guardado';
       mostrarGuardado();
       setTimeout(function(){ btn.innerHTML = '&#128190; Guardar todo'; }, 2000);

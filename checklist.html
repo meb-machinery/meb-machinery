@@ -128,6 +128,26 @@
 
 <script>
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxtclHVxfu4QetFqaqoej42ByNOOqWgdFU2U3xX_p8tlDwKca7kGGbDm7HuF1QIbtzBWw/exec';
+// v17.91 — el checklist se abre con la clave de Mi Día en el link (...checklist.html?t=CLAVE)
+const TOKEN_CHK = (new URLSearchParams(location.search).get('t') || '').trim();
+
+// v17.91 — el servidor ahora exige la clave de Mi Día para guardar. Si falta o es vieja, se avisa en grande
+// (antes el guardado se daba por bueno aunque el servidor lo rechazara).
+function avisoRechazo(resp, conAlerta) {
+  const msg = (resp && resp.error === 'Acceso no válido')
+    ? 'No se guardó: este link no tiene la clave vigente. Abrilo desde el link nuevo de Mi Día.'
+    : 'No se guardó en el Sheet (' + ((resp && resp.error) || 'error') + '). Usá "Imprimir / PDF (respaldo)" y avisale a Belu.';
+  let d = document.getElementById('avisoClave');
+  if (!d) {
+    d = document.createElement('div'); d.id = 'avisoClave';
+    d.style.cssText = 'position:sticky;top:0;z-index:999;background:#c0392b;color:#fff;padding:12px 14px;font-size:14px;font-weight:600;text-align:center';
+    document.body.insertBefore(d, document.body.firstChild);
+  }
+  d.textContent = msg;
+  if (conAlerta) alert(msg);
+}
+function leerRespuesta(r) { return r.json().catch(function(){ return { ok: true }; }); }
+if (!TOKEN_CHK) window.addEventListener('load', function(){ avisoRechazo({ ok:false, error:'Acceso no v\u00e1lido' }, false); });
 
 // ── Contenido del checklist — inspección visual, rápida, general ───────────
 // Si algo necesita más análisis, eso ya no es un checklist, es un
@@ -348,7 +368,8 @@ function guardarAhora() {
     headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS
     body: JSON.stringify(payload)
   })
-    .then(function(){ mostrarGuardado(); })
+    .then(leerRespuesta)
+    .then(function(resp){ if (resp && resp.ok === false) avisoRechazo(resp, false); else mostrarGuardado(); })
     .catch(function(){ /* red inestable en obra — se reintenta solo con el próximo cambio */ });
 }
 
@@ -373,8 +394,10 @@ function guardarManual() {
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(payload)
   })
-    .then(function(){
+    .then(leerRespuesta)
+    .then(function(resp){
       btn.disabled = false;
+      if (resp && resp.ok === false) { btn.innerHTML = '&#128190; Guardar todo'; avisoRechazo(resp, true); return; }
       btn.innerHTML = '&#10003; Guardado';
       mostrarGuardado();
       setTimeout(function(){ btn.innerHTML = '&#128190; Guardar todo'; }, 2000);
@@ -457,6 +480,7 @@ function armarPayloadGuardado() {
   return {
     action: 'guardarChecklist',
     row: {
+      t: TOKEN_CHK, // v17.91 — clave de Mi Día
       id: sesionId,
       cliente: clienteActual,
       maquina: maquinaActual,

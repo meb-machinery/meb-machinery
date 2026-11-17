@@ -265,6 +265,7 @@ function enviar(payload){
   cola.push(payload);
   if(!guardarCola(cola)){
     // v17.68: el celular no tiene lugar para guardar una copia (fotos grandes): se manda directo
+    if(payload.row && TOKEN) payload.row.t = TOKEN; // v17.91
     postear(payload).then(()=>{ if(!sinConexion) setTimeout(()=>cargar(false),1500); })
       .catch(()=>toast('No se pudo enviar: probá de nuevo con señal'));
     return;
@@ -277,6 +278,8 @@ function vaciarCola(){
   const cola = leerCola();
   if(!cola.length) return;
   _enviando = true;
+  // v17.91 — lo que quedó en la cola sale con la clave ACTUAL (si se cambió el link, lo pendiente no se pierde)
+  if(cola[0] && cola[0].row && TOKEN){ cola[0].row.t = TOKEN; guardarCola(cola); }
   postear(cola[0])
     .then(()=>{ _enviando=false; const c=leerCola(); c.shift(); guardarCola(c); if(c.length) vaciarCola(); else if(!sinConexion) setTimeout(()=>cargar(false),1500); })
     .catch(()=>{ _enviando=false; /* queda en la cola; se reintenta al volver la señal */ });
@@ -1348,7 +1351,7 @@ function chkGuardar(ya){
   clearTimeout(_chkTimer);
   const c = CHK;
   const mandar = ()=>{ const [y,m,d] = String(c.fecha||hoyLocal()).split('-');
-    enviar({ action:'guardarChecklist', usuario:'Emmanuel (Mi día)', row:{ id:c.id, cliente:c.cliente, clienteId:c.clienteId, maquina:c.maquina, usuario:c.usuario, fecha:d+'/'+m+'/'+y, itemsJson:JSON.stringify(chkItemsServidor(c)), notas:c.notas||'', visitaId:c.visitaId } }); };
+    enviar({ action:'guardarChecklist', usuario:'Emmanuel (Mi día)', row:{ t:TOKEN, id:c.id, cliente:c.cliente, clienteId:c.clienteId, maquina:c.maquina, usuario:c.usuario, fecha:d+'/'+m+'/'+y, itemsJson:JSON.stringify(chkItemsServidor(c)), notas:c.notas||'', visitaId:c.visitaId } }); };
   if(ya) mandar(); else _chkTimer = setTimeout(mandar, 1500);
 }
 function chkRespaldo(){
