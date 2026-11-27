@@ -5806,6 +5806,11 @@ function _prepararEnvio(payload) {
 }
 // Después de mandar: si el Apps Script le dio otro número a un alta, se corrige en el CRM.
 function _despuesDelEnvio(payload, resp) {
+  // v17.92 — si se editó un presupuesto que no existe en el Sheet, se avisa (antes se perdía sin aviso)
+  if (resp && resp.error === 'no_existe') {
+    showToast('⚠️ El presupuesto ' + (payload.id||'') + ' no está en el Sheet: el cambio no se guardó. Tocá Sincronizar; si sigue sin aparecer, avisá.', 'error');
+    return;
+  }
   if (!resp || !resp.idAsignado) return;
   const tipo = _ALTAS_TIPO[payload.action];
   if (!tipo || !payload.row) return;
@@ -9409,20 +9414,43 @@ function renderBusquedaGlobal(q) {
 // ============================================================
 // DUPLICAR PRESUPUESTO
 // ============================================================
+// v17.92 — Duplicar ahora GUARDA la copia en el Sheet. Antes solo la agregaba en el navegador: se veía en la
+// lista, pero nunca llegaba al Sheet y desaparecía en la siguiente sincronización (caso #0145/#0146 del 26/11).
+// Además la copia ya no arrastra lo que era del original: cobro, factura, envío, informe, postergado, excepción de pago.
 function duplicarPresupuesto(id) {
   const orig = DB.presupuestos.find(p=>p.id===id);
   if (!orig) return;
-  const nuevo = {
-    ...orig,
-    num: DB.presupCounter++,
-    estado: 'pendiente',
-    fecha: new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}).split('/').reverse().join('/'),
-    notas: (orig.notas||'') + ' [Copia]'
-  };
+  const hoy = new Date();
+  const fechaIso = hoy.getFullYear() + '-' + String(hoy.getMonth()+1).padStart(2,'0') + '-' + String(hoy.getDate()).padStart(2,'0');
+  const nuevo = { ...orig };
+  ['estadoCobro','fechaCobroReal','tcCobro','montoCobradoReal','usdRecibido','diferenciaUsd','diferenciaPct','comprobantePago',
+   'facturaUrl','fechaDescarga','fechaEnviado','informeGenerado','informeGuardado','informeDriveUrl','checklistId',
+   'motivoNoAprobado','informeAlertaOk','informeFaltanteMotivo','informeFaltanteNota','motivoNota','presupVinculadoId',
+   'proximoSeguimiento','postergadoHasta','excepcionPago','clienteNombreSheet'].forEach(k => { delete nuevo[k]; });
+  Object.keys(nuevo).forEach(k => { if (/^econ/i.test(k)) delete nuevo[k]; });
+  nuevo.num = DB.presupCounter++;
+  nuevo.estado = 'pendiente';
+  nuevo.fecha = fechaIso;
+  nuevo.notas = (orig.notas||'') + ' [Copia]';
   nuevo.id = idPresupDeNumero(nuevo.num) || uid(); // v17.75 — P0127 en vez de un código al azar
+  nuevo._local = true; // sobrevive a una sincronización hasta que el Sheet la confirme
   DB.presupuestos.push(nuevo);
   saveLocal();
   renderPresupuestos();
+  const clObj = DB.clientes.find(c => String(c.id) === String(nuevo.clienteId));
+  writeToSheet({ action:'addPresupuesto', row:{
+    id:nuevo.id, num:nuevo.num, cliente_id:nuevo.clienteId, cliente:clObj ? clObj.nombre : '',
+    descripcion:(nuevo.descripcion||'').split('\n').join(ITEM_SEP),
+    monto:Number(nuevo.monto)||0, precio_usd:nuevo.montoUsd||0, tc_al_momento:nuevo.tcAlMomento||0,
+    plazo_pago:nuevo.plazoPago||'contado', recargo_pct:nuevo.recargoPct||0,
+    opciones_pago_ocultas:(nuevo.opcionesPagoOcultas||[]).join(','), costo_parada_dia:nuevo.costoParadaDia||'',
+    cuit_cliente:nuevo.cuitCliente||'', motivo:nuevo.motivo||'', tc_fecha:nuevo.tcFecha||'',
+    serie_maquina:nuevo.serieMaquina||'', modelo_maquina:nuevo.modeloMaquina||'', horometro:nuevo.horometro||'',
+    tipo_maquina:nuevo.tipoMaquina||'', maquina_id:nuevo.maquinaId||'',
+    estado:nuevo.estado, fecha:nuevo.fecha, notas:nuevo.notas||''
+  }}).then(resp => {
+    if (resp && resp.ok === false) showToast('⚠️ La copia #' + String(nuevo.num).padStart(4,'0') + ' NO se guardó en el Sheet. Tocá Sincronizar y volvé a duplicar.', 'error');
+  });
   showToast(`Presupuesto duplicado → #${String(nuevo.num).padStart(4,'0')}`, 'success');
 }
 
